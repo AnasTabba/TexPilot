@@ -1,0 +1,47 @@
+# Plausibility knowledge base -- which fibre families each fabric structure admits.
+# Spec section 4.3.
+#
+# Deliberately asymmetric. Some structures pin the fibre hard: fleece is synthetic,
+# tweed is wool, vinyl is plastic. Others are just constructions that any fibre can
+# take -- jersey, knit and twill constrain almost nothing, and claiming otherwise
+# would generate false flags. A structure listing every family never raises a flag,
+# and that is correct behaviour, not a gap.
+#
+# `expected_treatment` is checked only when present.
+
+version: 1
+tolerance:
+  # Minimum visual confidence before a flag may be raised. Tuned for PRECISION:
+  # a scanner that cries wolf gets switched off at the QC desk.
+  min_visual_confidence: 0.70
+  # A stated fibre below this share is ignored (elastane trims etc.).
+  min_component_pct: 15.0
+
+fabrics:
+  canvas:       {families: [cellulosic, synthetic]}
+  chambray:     {families: [cellulosic], expected_treatment: yarn_dyed}
+  chenille:     {families: [cellulosic, synthetic]}
+  chiffon:      {families: [protein, synthetic]}
+  corduroy:     {families: [cellulosic]}
+  crepe:        {families: [protein, synthetic, cellulosic]}
+  denim:        {families: [cellulosic], expected_treatment: yarn_dyed}
+  faux_fur:     {families: [synthetic]}
+  faux_leather: {families: [synthetic]}
+  flannel:      {families: [protein, cellulosic]}
+  fleece:       {families: [synthetic]}
+  gingham:      {families: [cellulosic], expected_treatment: yarn_dyed}
+  jersey:       {families: [cellulosic, protein, synthetic, blend]}
+  knit:         {families: [cellulosic, protein, synthetic, blend]}
+  lace:         {families: [synthetic, cellulosic]}
+  lawn:         {families: [cellulosic]}
+  neoprene:     {families: [synthetic]}
+  organza:      {families: [protein, synthetic]}
+  plush:        {families: [synthetic]}
+  satin:        {families: [protein, synthetic, cellulosic]}
+  serge:        {families: [protein, cellulosic, synthetic]}
+  taffeta:      {families: [protein, synthetic]}
+  tulle:        {families: [synthetic, cellulosic]}
+  tweed:        {families: [protein]}
+  twill:        {families: [cellulosic, protein, synthetic, blend]}
+  velvet:       {families: [protein, synthetic, cellulosic]}
+  vinyl:        {families: [synthetic]}
