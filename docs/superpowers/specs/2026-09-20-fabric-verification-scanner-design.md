@@ -302,7 +302,7 @@ Boundaries are the API contract (§6) and the dataset adapter interface (§5.3).
 | # | Risk | Impact | Mitigation |
 |---|---|---|---|
 | 1 | **Self-collected phone data never materialises** | No phone-domain accuracy claim; headline result lost | Adapter is pluggable (§5.3); augmentation + capture gating reduce dependence; production scans self-replenish by M4. Raise in the M1 proposal. |
-| 2 | **TextileNet `prepare_data.py` link rot** — the repo is from 2023 and re-scrapes images from source URLs | Training set smaller than published | Test the download script in week 1, before anything depends on it. Fall back to the seed zips from Google Drive/OneDrive, which are self-contained. |
+| 2 | **TextileNet link rot — CONFIRMED 2026-09-20** | Scraped corpus is far smaller than published | ~73% of scrape targets are `contestimg.wish.com`; only ~37-45% of sampled fabric URLs and ~65% of fibre URLs still resolve (most failures are HTTP 500). The UCL OneDrive mirrors are dead (403). **Build the training set on the Google Drive seed zips**, which are self-contained and reachable; treat scraped data as a bonus. Re-measure with `make check-data`. |
 | 3 | Catalog→phone domain gap too wide to close | Scanner unusable in real conditions | Measure it early and report it honestly; capture gating narrows the input distribution |
 | 4 | Treatment labels (Head B) too noisy from weak supervision | Head B unusable | Hand-label a stratified subset; fall back to 2-class (printed vs not) if 4-class F1 is poor |
 | 5 | FabricsComposition licence is CC BY **-NC** | Cannot publish/commercialise | Verify the licence before M5 paper submission; the codebook and attribute use is small and replaceable |

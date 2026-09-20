@@ -32,7 +32,7 @@ api: ## Run the API at http://127.0.0.1:8000 (docs at /docs)
 	$(VENV)/bin/uvicorn services.api.main:app --reload --port 8000
 
 check-data: ## Smoke-test TextileNet availability (spec risk #2)
-	$(PY) scripts/check_textilenet.py
+	$(PY) scripts/check_textilenet.py $(ARGS)
 
 clean:
 	rm -rf $(VENV) .pytest_cache .ruff_cache **/__pycache__

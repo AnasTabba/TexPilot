@@ -122,7 +122,13 @@ plausibility KB, the flag engine, the FastAPI app and wire contract.
    swappable evaluation adapter — if it materialises, the catalog→phone accuracy drop
    is the headline result; if not, we report catalog numbers with a stated limitation.
    Nothing else branches on it.
-2. **TextileNet link rot.** Run `make check-data` in week 1.
+2. **TextileNet link rot — confirmed, and it bites.** `prepare_data.py` re-scrapes
+   images from their 2023 source URLs, ~73% of which point at `contestimg.wish.com`.
+   Measured 2026-09-20: only **~37-45%** of sampled fabric URLs and **~65%** of fibre
+   URLs still return an image; most of the rest are HTTP 500. The UCL OneDrive
+   mirrors in TextileNet's README are dead (403).
+   **Plan the training set around the self-contained Google Drive seed zips** and
+   treat anything the scraper recovers as a bonus. Re-measure with `make check-data`.
 3. **FabricsCompositionDataset may be CC BY-NC**, which would block the M5 paper.
    Verify before relying on it.
 
