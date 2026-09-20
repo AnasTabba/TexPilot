@@ -6,8 +6,8 @@ __pycache__/
 node_modules/
 
 # Data & models (never commit)
-data/
-datasets/
+/data/
+/datasets/
 *.zip
 *.pt
 *.pth
