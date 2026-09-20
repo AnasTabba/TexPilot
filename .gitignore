@@ -27,3 +27,8 @@ mlruns/
 .env
 .env.*
 !.env.example
+
+# Build artifacts
+*.egg-info/
+build/
+dist/
