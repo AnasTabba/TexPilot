@@ -27,9 +27,10 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 
+from training.textilenet.data import TextileDataset
 from training.textilenet.metrics import summarize
 from training.textilenet.splits import class_index, read_csv
-from training.textilenet.train import PRESETS, TextileDataset, build_transforms, pick_device
+from training.textilenet.train import PRESETS, build_transforms, pick_device
 
 SHARD = 8192
 

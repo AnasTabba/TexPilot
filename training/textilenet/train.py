@@ -25,7 +25,6 @@ import random
 import subprocess
 import sys
 import time
-from collections import Counter
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -36,13 +35,19 @@ import timm
 import torch
 import torch.nn.functional as F
 from albumentations.pytorch import ToTensorV2
-from PIL import Image, ImageFile
-from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
+from torch.utils.data import DataLoader, WeightedRandomSampler
 
+from training.textilenet.data import TextileDataset, load_rows, seed_worker
 from training.textilenet.metrics import summarize
-from training.textilenet.splits import Record, class_index, read_csv
+from training.textilenet.recipe import (
+    class_balance_weights,
+    lr_at,
+    predict,
+    soft_cross_entropy,
+    split_head,
+)
+from training.textilenet.splits import class_index
 
-ImageFile.LOAD_TRUNCATED_IMAGES = True  # some TextileNet JPEGs are cut short
 cv2.setNumThreads(0)  # DataLoader workers already parallelise; avoid oversubscription
 
 #: Short names -> timm weights + per-model defaults. Any other timm name also works.
@@ -116,65 +121,6 @@ def build_transforms(size: int, mean, std, crop_pct: float) -> tuple[A.Compose, 
     return train, evaluate
 
 
-class TextileDataset(Dataset):
-    def __init__(
-        self,
-        rows: list[Record],
-        data_root: Path,
-        labels: dict[str, int],
-        transform: A.Compose,
-        decode_size: int,
-    ):
-        self.paths = [str(data_root / r.path) for r in rows]
-        self.targets = [labels[r.label] for r in rows]
-        self.transform = transform
-        self.decode_size = decode_size
-
-    def __len__(self) -> int:
-        return len(self.paths)
-
-    def __getitem__(self, i: int):
-        with Image.open(self.paths[i]) as im:
-            # JPEG draft decodes at 1/2..1/8 scale when the file is far larger than we
-            # need; the result is never smaller than decode_size on either side.
-            im.draft("RGB", (self.decode_size, self.decode_size))
-            arr = np.asarray(im.convert("RGB"))
-        return self.transform(image=arr)["image"], self.targets[i]
-
-
-def _seed_worker(_: int) -> None:
-    seed = torch.initial_seed() % 2**32
-    np.random.seed(seed)
-    random.seed(seed)
-    info = torch.utils.data.get_worker_info()
-    tf = getattr(info.dataset, "transform", None)
-    if hasattr(tf, "set_random_seed"):  # albumentations >= 2 keeps its own RNG
-        tf.set_random_seed(seed)
-
-
-def load_rows(args: argparse.Namespace) -> dict[str, list[Record]]:
-    rows = read_csv(args.split_csv)
-    missing = [r for r in rows if not (args.data_root / r.path).exists()]
-    if missing:
-        by_split = Counter(r.split for r in missing)
-        print(
-            f"WARNING: {len(missing)} split rows missing on disk, dropped: {dict(by_split)}. "
-            "Test-set size now differs from the frozen split; results.md records it."
-        )
-        gone = {r.path for r in missing}
-        rows = [r for r in rows if r.path not in gone]
-    out = {s: [r for r in rows if r.split == s] for s in ("train", "val", "test")}
-    if args.limit_per_class:  # smoke tests / quick local runs only
-        for split, rs in out.items():
-            kept, per_label = [], Counter()
-            for r in rs:
-                per_label[r.label] += 1
-                if per_label[r.label] <= args.limit_per_class:
-                    kept.append(r)
-            out[split] = kept
-    return out
-
-
 # --------------------------------------------------------------------------- model
 
 
@@ -207,25 +153,7 @@ def param_groups(model: torch.nn.Module, args: argparse.Namespace) -> list[dict]
             model, weight_decay=args.weight_decay, no_weight_decay_list=no_wd
         )
 
-    head_ids = {id(p) for p in model.get_classifier().parameters()}
-    out = []
-    for g in groups:
-        scale = g.get("lr_scale", 1.0)
-        body = [p for p in g["params"] if id(p) not in head_ids]
-        head = [p for p in g["params"] if id(p) in head_ids]
-        if body:
-            out.append({**g, "params": body, "lr_scale": scale})
-        if head:
-            out.append({**g, "params": head, "lr_scale": scale * args.head_lr_mult})
-    return out
-
-
-def lr_at(step: int, total: int, warmup: int, base: float, final: float = 1e-7) -> float:
-    """Linear warmup, then cosine to ~0 exactly at the last step."""
-    if step < warmup:
-        return base * (step + 1) / warmup
-    progress = (step - warmup) / max(1, total - warmup)
-    return final + 0.5 * (base - final) * (1 + math.cos(math.pi * min(1.0, progress)))
+    return split_head(groups, model.get_classifier().parameters(), args.head_lr_mult)
 
 
 def make_ema(model: torch.nn.Module, decay: float):
@@ -240,46 +168,6 @@ def make_ema(model: torch.nn.Module, decay: float):
 
         ema = ModelEmaV2(model, decay=decay)
         return ema, lambda m, step: ema.update(m)
-
-
-def soft_cross_entropy(logits, target, class_weights=None):
-    """CE against soft (mixup/smoothed) targets, optionally class-weighted."""
-    logp = F.log_softmax(logits.float(), dim=-1)
-    if class_weights is None:
-        return -(target * logp).sum(-1).mean()
-    per_sample = -(target * class_weights * logp).sum(-1)
-    return per_sample.sum() / (target @ class_weights).sum()
-
-
-def class_balance_weights(targets: list[int], n_classes: int, power: float) -> np.ndarray:
-    """Per-class weight count^-power, normalised so the average *sample* weight is 1."""
-    counts = np.bincount(targets, minlength=n_classes).astype(float)
-    w = np.where(counts > 0, np.maximum(counts, 1) ** -power, 0.0)
-    return w * len(targets) / (w * counts).sum()
-
-
-# ----------------------------------------------------------------------------- eval
-
-
-@torch.no_grad()
-def predict(model, loader, device, amp_ctx, tta: bool, channels_last: bool) -> tuple:
-    """Logits (or log mean-probs under TTA) for a loader, on CPU."""
-    model.eval()
-    outs, ys = [], []
-    for x, y in loader:
-        x = x.to(device, non_blocking=True)
-        if channels_last:
-            x = x.contiguous(memory_format=torch.channels_last)
-        with amp_ctx():
-            if tta:  # hflip + rot90s: textures have no canonical orientation
-                views = (x, x.flip(3), x.rot90(1, (2, 3)), x.rot90(3, (2, 3)))
-                probs = torch.stack([model(v).float().softmax(-1) for v in views]).mean(0)
-                out = probs.clamp_min(1e-12).log()
-            else:
-                out = model(x).float()
-        outs.append(out.cpu())
-        ys.append(y)
-    return torch.cat(outs).numpy(), torch.cat(ys).numpy()
 
 
 # ---------------------------------------------------------------------------- train
@@ -297,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
 
     labels = class_index(args.partition)
     classes = sorted(labels, key=labels.get)
-    rows = load_rows(args)
+    rows = load_rows(args.split_csv, args.data_root, args.limit_per_class)
     print({s: len(r) for s, r in rows.items()})
 
     model = create_model(args, len(classes))
@@ -327,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
         train_tf.set_random_seed(args.seed)
     gen = torch.Generator().manual_seed(args.seed)
     common = dict(
-        num_workers=args.workers, pin_memory=device.type == "cuda", worker_init_fn=_seed_worker
+        num_workers=args.workers, pin_memory=device.type == "cuda", worker_init_fn=seed_worker
     )
     keep = dict(persistent_workers=args.workers > 0)  # train/val iterate every epoch
     if args.sampler != "none":
@@ -388,7 +276,8 @@ def main(argv: list[str] | None = None) -> int:
         else min(len(train_loader), args.max_train_steps)
     )
     total_steps = steps_per_epoch * args.epochs
-    warmup_steps = int(steps_per_epoch * args.warmup_epochs)
+    # Short runs (smoke tests, --epochs 2) must still reach the cosine phase.
+    warmup_steps = min(int(steps_per_epoch * args.warmup_epochs), total_steps // 2)
 
     start_epoch, best, stale = 0, {"val_top1": -1.0}, 0
     last_ckpt = run_dir / "last.pt"
@@ -408,6 +297,7 @@ def main(argv: list[str] | None = None) -> int:
         run_dir,
         args,
         lr=lr,
+        device=str(device),
         n=dict((s, len(d)) for s, d in ds.items()),
         data_cfg=data_cfg,
         train_counts=counts.tolist(),
@@ -612,6 +502,7 @@ def write_config(run_dir: Path, args: argparse.Namespace, **extra) -> None:
         },
         "git": {"sha": sha, "dirty": dirty},
         "host": platform.node(),
+        "device": extra.pop("device", None),
         "gpu": torch.cuda.get_device_name() if torch.cuda.is_available() else None,
         **{k: v for k, v in extra.items() if k != "data_cfg"},
         "data_cfg": {
