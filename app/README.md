@@ -23,6 +23,11 @@ make api-lan        # API on 0.0.0.0:8000 so the phone can reach it
 make app            # Expo dev server -- scan the QR code with Expo Go
 ```
 
+Use **Node 24 LTS** (`app/.nvmrc`; `nvm use` picks it up). CI runs the same.
+If `npm ci` says the lockfile is out of sync, regenerate it with a current npm
+(`npm install`) and commit `package-lock.json`. Some npm 11 releases before 11.19 drop
+optional entries that other npm versions require.
+
 **Point the app at your laptop.** On a phone, `127.0.0.1` is the phone itself:
 
 ```bash

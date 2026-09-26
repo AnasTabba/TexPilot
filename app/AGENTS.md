@@ -132,6 +132,10 @@ draft + submit), `verdict` (rendering a result), `history` (persisted results),
   screen loses focus. Keep that behaviour when you touch it.
 - **Camera URIs are temporary** cache files. Copy anything you need to keep into app
   storage (T6).
+- **Node 24 LTS** (`.nvmrc`), matching CI. If you change dependencies, commit the
+  `package-lock.json` your npm produced, and check that `npm ci` still passes. CI fails
+  on an out-of-sync lockfile (some npm 11 releases before 11.19 drop optional
+  `@emnapi/*` entries).
 - **Typed routes** are generated into `.expo/types/` when `expo start` runs. Before
   that, route typing is looser. Use the object form for dynamic routes:
   `router.push({ pathname: '/result/[scanId]', params: { scanId } })`.
