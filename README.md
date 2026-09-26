@@ -98,10 +98,20 @@ plausibility KB, the flag engine, the FastAPI app and wire contract.
 4. Scan persistence (spec §9) — every scan is audit evidence *and* accumulating
    phone-domain training data.
 
-### P3 — App  (`app/`)
-Already here: Expo SDK 57 + Expo Router scaffold, working end-to-end against the API —
-camera with a framing guide, care-label entry, submit, all three verdicts rendered,
-history. API types are generated from `services/api/schemas.py`. `make app-setup && make app`.
+### P3 — Frontend  (`app/`)
+One Expo codebase for the **iOS app, Android app and website**. The website serves
+the scanner, a supervisor dashboard (`/dashboard`) and a landing page (`/`).
+
+The scanner works end-to-end against the API:
+- camera with a framing guide
+- care-label entry
+- submit
+- all three verdicts rendered
+- history
+
+API types are generated from `services/api/schemas.py`. The scanner core
+(`app/src/scanner/`) is kept embeddable for later use in other sites and services.
+Start with `make app-setup && make app`.
 
 The task board is in `app/README.md`. Headline items:
 1. **Capture-quality gating on-device** (T2) — blur (variance of Laplacian), exposure,

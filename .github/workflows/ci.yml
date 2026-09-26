@@ -29,10 +29,13 @@ jobs:
           python-version: "3.10"
       - run: npm ci
       - run: npm run check
+      # One codebase, three targets: prove each still bundles.
+      - name: Bundle iOS, Android and web
+        run: npx expo export --platform all --output-dir dist
       # The app's API types are generated from services/api/schemas.py. If this
       # fails, someone changed the contract without running `npm run gen:api`.
       - name: API types match the Python contract
         run: |
           pip install -e ..
           PYTHON=python npm run gen:api
-          git diff --exit-code src/api/schema.gen.ts
+          git diff --exit-code src/scanner/api/schema.gen.ts

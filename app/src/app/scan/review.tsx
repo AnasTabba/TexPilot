@@ -2,13 +2,15 @@ import { router } from 'expo-router';
 import { Image, StyleSheet } from 'react-native';
 
 import { Button, Card, Screen, Text } from '@/components/ui';
-import { useScanDraft, useSubmitScan } from '@/features/scan';
+import { useHistory } from '@/features/history';
+import { useScanDraft, useSubmitScan } from '@/scanner';
 import { colors, radius } from '@/theme';
 
 export default function ReviewStep() {
   const surface = useScanDraft((s) => s.surface);
   const labelText = useScanDraft((s) => s.labelText);
   const { submit, submitting, error } = useSubmitScan();
+  const addScan = useHistory((s) => s.addScan);
 
   if (!surface) {
     return (
@@ -23,9 +25,13 @@ export default function ReviewStep() {
   async function onSubmit() {
     const outcome = await submit();
     if (outcome.status === 'done') {
-      // Drop the capture steps so Back from the result goes home.
+      addScan(outcome.result);
+      // Drop the capture steps so Back from the result goes to the scanner home.
       router.dismissAll();
-      router.push({ pathname: '/result/[scanId]', params: { scanId: outcome.scanId } });
+      router.push({
+        pathname: '/scan/result/[scanId]',
+        params: { scanId: outcome.result.scan_id },
+      });
     }
   }
 

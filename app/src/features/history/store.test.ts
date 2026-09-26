@@ -1,4 +1,4 @@
-import { abstainResult, flagResult, passResult } from '@/api/fixtures';
+import { abstainResult, flagResult, passResult } from '@/scanner/testing';
 
 import { loadSampleScans } from './samples';
 import { useHistory } from './store';

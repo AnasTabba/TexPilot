@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import type { ScanResult } from '@/api';
+import type { ScanResult } from '@/scanner';
 
 /**
  * Scan results this device has received, newest first, persisted across

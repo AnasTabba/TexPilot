@@ -23,11 +23,13 @@ Don't build anything from it.
 |---|---|---|---|
 | P1 | Vision model, training, evaluation | `services/vision/` | spec §4.1, §5, §8 |
 | P2 | OCR, consistency engine, FastAPI serving | `services/ocr/`, `services/consistency/`, `services/api/` | spec §4.2–4.5 |
-| P3 | **Phone app / frontend / design** | `app/` | **`app/AGENTS.md`**, then `app/DESIGN.md` and `app/README.md` |
+| P3 | **Frontend: iOS app, Android app, website (scanner, supervisor dashboard, landing page)** | `app/` (one Expo codebase) | **`app/AGENTS.md`**, then `app/DESIGN.md` and `app/README.md` |
 
-**Frontend, UI or design work happens in `app/`. Read `app/AGENTS.md` before
-touching anything there.** It has the stack, structure, hard rules, and the task
-board.
+**Frontend, UI or design work, on any platform, happens in `app/`. Read
+`app/AGENTS.md` before touching anything there.** It has the stack, the three
+surfaces, the structure, hard rules, and the task board. The scanner core in
+`app/src/scanner/` is kept embeddable in other websites and services later; its
+boundary rules are in `app/src/scanner/README.md`.
 
 ## Repo-wide rules
 

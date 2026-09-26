@@ -1,8 +1,8 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import type { ScanResult } from '@/api';
+import type { ScanResult } from '@/scanner';
 import { Text } from '@/components/ui';
-import { presentVerdict } from '@/features/verdict';
+import { presentVerdict } from '@/scanner';
 import { colors, radius, spacing } from '@/theme';
 
 export function ScanListItem({ scan, onPress }: { scan: ScanResult; onPress: () => void }) {

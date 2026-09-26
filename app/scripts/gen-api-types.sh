@@ -1,5 +1,5 @@
 #!/bin/sh
-# Regenerate src/api/schema.gen.ts from the FastAPI app's OpenAPI schema.
+# Regenerate src/scanner/api/schema.gen.ts from the FastAPI app's OpenAPI schema.
 #
 # services/api/schemas.py is the source of truth for the wire contract. Never
 # edit schema.gen.ts by hand -- change the Python schema (in a PR all three
@@ -22,4 +22,4 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 SCHEMA="$WORK_DIR/openapi.json"
 
 "$PYTHON" ../scripts/export_openapi.py "$SCHEMA"
-npx --yes openapi-typescript@7.13.0 "$SCHEMA" -o src/api/schema.gen.ts
+npx --yes openapi-typescript@7.13.0 "$SCHEMA" -o src/scanner/api/schema.gen.ts

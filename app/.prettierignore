@@ -3,4 +3,4 @@ node_modules/
 dist/
 coverage/
 package-lock.json
-src/api/schema.gen.ts
+src/scanner/api/schema.gen.ts

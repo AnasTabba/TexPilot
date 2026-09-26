@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 
 import { Button, Screen, Text, TextField } from '@/components/ui';
-import { useScanDraft } from '@/features/scan';
+import { useScanDraft } from '@/scanner';
 
 /**
  * Care-label step. Typed text is a stop-gap: T3 replaces it with a label photo

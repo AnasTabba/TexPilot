@@ -1,7 +1,7 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 
-import { getHealth } from '@/api';
+import { getHealth } from '@/scanner';
 
 export type ApiHealth = 'checking' | 'online' | 'offline';
 

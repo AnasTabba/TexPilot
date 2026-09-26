@@ -1,23 +1,25 @@
-import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Pressable, type PressableProps, StyleSheet } from 'react-native';
 
 import { colors, radius, spacing } from '@/theme';
 
 import { Text } from './Text';
 
-export interface ButtonProps {
+export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
   title: string;
-  onPress: () => void;
   variant?: 'primary' | 'secondary';
-  disabled?: boolean;
   loading?: boolean;
 }
 
+/**
+ * For navigation, wrap it in a Link so the web gets a real <a href>:
+ *   <Link href="/scan" asChild><Button title="Open the scanner" /></Link>
+ */
 export function Button({
   title,
-  onPress,
   variant = 'primary',
   disabled = false,
   loading = false,
+  ...rest
 }: ButtonProps) {
   const primary = variant === 'primary';
   const inactive = disabled || loading;
@@ -26,7 +28,7 @@ export function Button({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled: inactive, busy: loading }}
-      onPress={onPress}
+      {...rest}
       disabled={inactive}
       style={({ pressed }) => [
         styles.base,
