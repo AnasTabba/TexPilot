@@ -146,13 +146,18 @@ Present and tested: `ocr/parser.py`, `ocr/normalizer.py`, `consistency/kb.yaml` 
 4. Scan persistence (spec §9) — audit evidence *and* accumulating phone-domain training data.
 
 ### P3 — App (`app/`)
-Nothing scaffolded; pick your own Expo template.
+One Expo codebase (SDK 57, Expo Router, TypeScript) for **iOS, Android and web**, with three surfaces:
 
-1. `npx create-expo-app@latest . --template blank-typescript`
-2. Camera capture, two shots: surface (10–20 cm) and care label.
-3. **Capture-quality gating on-device** — blur (variance of Laplacian), exposure, framing. Reject before upload. Cheapest accuracy win in the project.
-4. Offline queue.
-5. Render all three verdicts — the abstain state is a normal outcome, not an error screen.
+- the scanner (`/scan`, every platform), working end-to-end: surface photo → typed label text → submit → verdict → history
+- a supervisor dashboard (`/dashboard`, web), which reads local data until T14
+- a landing page (`/`, web)
+
+The scanner core lives in `app/src/scanner/`, behind a lint-enforced boundary, so it can later be embedded in other websites and services. API types are generated from `schemas.py`, and CI fails on drift. CI also bundles all three platforms. The rules are in `app/AGENTS.md`, the design in `app/DESIGN.md`, and the task board (T1–T16) in `app/README.md`.
+
+1. **Capture-quality gating on-device (T2)** — blur (variance of Laplacian), exposure, framing. Reject before upload. Cheapest accuracy win in the project. Stub in `app/src/scanner/capture/quality.ts`.
+2. Offline queue (T5) — contract in `app/src/scanner/queue/types.ts`.
+3. Care-label photo + OCR (T3) — agree on-device vs server-side with P2 first.
+4. The API has no CORS, so the web scanner can't reach it (phones are unaffected). P2 needs to add a dev-only allowance, plus scan storage and a list endpoint for the dashboard (T14).
 
 ---
 
@@ -199,7 +204,7 @@ services/
   vision/       taxonomy, dataset adapters, predictor     (P1)
   ocr/          care-label parsing + fibre normalisation  (P2)
   consistency/  plausibility KB + flag engine             (P2)
-app/            React Native client — not scaffolded      (P3)
+app/            Expo app — see app/README.md               (P3)
 scripts/        check_textilenet.py
 tests/          24 tests
 ```

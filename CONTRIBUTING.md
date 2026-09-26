@@ -39,7 +39,7 @@ services/
   vision/       taxonomy, dataset adapters, predictor     (P1)
   ocr/          care-label parsing + fibre normalisation  (P2)
   consistency/  plausibility KB + flag engine             (P2)
-app/            React Native client                       (P3)
+app/            Expo app — rules in app/AGENTS.md, design in app/DESIGN.md (P3)
 docs/superpowers/specs/   the approved designs — read these first
 scripts/        one-off utilities
 tests/

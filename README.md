@@ -98,13 +98,27 @@ plausibility KB, the flag engine, the FastAPI app and wire contract.
 4. Scan persistence (spec §9) — every scan is audit evidence *and* accumulating
    phone-domain training data.
 
-### P3 — App  (`app/`)
-1. Expo + React Native, camera with a framing guide.
-2. **Capture-quality gating on-device** — blur (variance of Laplacian), exposure,
+### P3 — Frontend  (`app/`)
+One Expo codebase for the **iOS app, Android app and website**. The website serves
+the scanner, a supervisor dashboard (`/dashboard`) and a landing page (`/`).
+
+The scanner works end-to-end against the API:
+- camera with a framing guide
+- care-label entry
+- submit
+- all three verdicts rendered
+- history
+
+API types are generated from `services/api/schemas.py`. The scanner core
+(`app/src/scanner/`) is kept embeddable for later use in other sites and services.
+Start with `make app-setup && make app`.
+
+The task board is in `app/README.md`. Headline items:
+1. **Capture-quality gating on-device** (T2) — blur (variance of Laplacian), exposure,
    framing. Reject bad captures before upload. This is the cheapest accuracy win in
    the whole project and it is product work, not ML.
-3. Offline queue.
-4. Render all three verdicts — including the abstain state.
+2. Offline queue (T5).
+3. Care-label photo + OCR (T3), with P2.
 
 ## Milestones
 
