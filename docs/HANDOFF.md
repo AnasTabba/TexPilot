@@ -146,13 +146,12 @@ Present and tested: `ocr/parser.py`, `ocr/normalizer.py`, `consistency/kb.yaml` 
 4. Scan persistence (spec §9) — audit evidence *and* accumulating phone-domain training data.
 
 ### P3 — App (`app/`)
-Nothing scaffolded; pick your own Expo template.
+Scaffolded (Expo SDK 57, Expo Router, TypeScript) and working end-to-end: surface photo → typed label text → submit → verdict → history. API types are generated from `schemas.py` and CI fails on drift. Structure, conventions and the numbered task board (T1–T10) are in `app/README.md`.
 
-1. `npx create-expo-app@latest . --template blank-typescript`
-2. Camera capture, two shots: surface (10–20 cm) and care label.
-3. **Capture-quality gating on-device** — blur (variance of Laplacian), exposure, framing. Reject before upload. Cheapest accuracy win in the project.
-4. Offline queue.
-5. Render all three verdicts — the abstain state is a normal outcome, not an error screen.
+1. **Capture-quality gating on-device (T2)** — blur (variance of Laplacian), exposure, framing. Reject before upload. Cheapest accuracy win in the project. Stub in `features/capture/quality.ts`.
+2. Offline queue (T5) — contract in `features/queue/index.ts`.
+3. Care-label photo + OCR (T3) — agree on-device vs server-side with P2 first.
+4. The API has no CORS, so web preview can't reach it — phones are unaffected. P2 to add a dev-only allowance.
 
 ---
 
@@ -199,7 +198,7 @@ services/
   vision/       taxonomy, dataset adapters, predictor     (P1)
   ocr/          care-label parsing + fibre normalisation  (P2)
   consistency/  plausibility KB + flag engine             (P2)
-app/            React Native client — not scaffolded      (P3)
+app/            Expo app — see app/README.md               (P3)
 scripts/        check_textilenet.py
 tests/          24 tests
 ```

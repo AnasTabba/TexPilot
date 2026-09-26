@@ -11,3 +11,28 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: pytest
+
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: npm ci
+      - run: npm run check
+      # The app's API types are generated from services/api/schemas.py. If this
+      # fails, someone changed the contract without running `npm run gen:api`.
+      - name: API types match the Python contract
+        run: |
+          pip install -e ..
+          PYTHON=python npm run gen:api
+          git diff --exit-code src/api/schema.gen.ts
