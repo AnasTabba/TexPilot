@@ -32,6 +32,7 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tarfile
@@ -227,6 +228,7 @@ def cmd_extract(args: argparse.Namespace) -> int:
 
 
 def cmd_scrape(args: argparse.Namespace) -> int:
+    _cache_dns()
     base = args.data_root / "scraped" / args.partition
     base.mkdir(parents=True, exist_ok=True)
     status_path = base / "status.csv"
@@ -279,6 +281,43 @@ def cmd_scrape(args: argparse.Namespace) -> int:
                 )
                 return 3
     return 0
+
+
+def _cache_dns() -> None:
+    """Resolve each host once per run. ~73% of URLs share one host; 30 lookups a second
+    for it made the system resolver fail in bursts. Failures are not cached."""
+    real = socket.getaddrinfo
+    cache: dict[tuple, list] = {}
+
+    def getaddrinfo(host, port, *args, **kwargs):
+        key = (host, port, args, tuple(sorted(kwargs.items())))
+        if key not in cache:
+            try:
+                cache[key] = real(host, port, *args, **kwargs)
+            except socket.gaierror:
+                # macOS's resolver can stick on a cached failure for one name while
+                # DNS itself answers fine. Ask DNS directly; TLS still verifies `host`.
+                ips = _dig(host)
+                if not ips:
+                    raise
+                cache[key] = [ai for ip in ips for ai in real(ip, port, *args, **kwargs)]
+        return cache[key]
+
+    socket.getaddrinfo = getaddrinfo
+
+
+def _dig(host: str) -> list[str]:
+    """A records for host via `dig`, following CNAMEs; [] if dig is missing or fails."""
+    try:
+        out = subprocess.run(
+            ["dig", "+short", "+time=3", "+tries=2", host, "A"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return [ln for ln in out.split() if ln.count(".") == 3 and ln.replace(".", "").isdigit()]
 
 
 def _is_network_error(status: str) -> bool:

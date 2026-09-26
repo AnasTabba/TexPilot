@@ -29,6 +29,7 @@ from torch.utils.data import DataLoader, Subset
 
 from training.textilenet.data import TextileDataset
 from training.textilenet.metrics import summarize
+from training.textilenet.recipe import lr_at
 from training.textilenet.splits import class_index, read_csv
 from training.textilenet.train import PRESETS, build_transforms, pick_device
 
@@ -93,16 +94,18 @@ def fit_linear(xtr, ytr, n_classes, lr, wd, epochs, seed, device) -> torch.nn.Li
     torch.manual_seed(seed)
     head = torch.nn.Linear(xtr.shape[1], n_classes).to(device)
     opt = torch.optim.AdamW(head.parameters(), lr=lr, weight_decay=wd)
-    steps = epochs * math.ceil(len(xtr) / 1024)
-    sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=lr, total_steps=steps, pct_start=0.1)
+    total = epochs * math.ceil(len(xtr) / 1024)
+    step = 0
     for _ in range(epochs):
         for idx in torch.randperm(len(xtr), generator=g).split(1024):
+            for group in opt.param_groups:  # same warmup-cosine as train.py; 10% warmup
+                group["lr"] = lr_at(step, total, total // 10, lr)
             idx = idx.to(device)
             loss = F.cross_entropy(head(xtr[idx]), ytr[idx], label_smoothing=0.1)
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
-            sched.step()
+            step += 1
     return head
 
 
