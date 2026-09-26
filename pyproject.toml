@@ -22,6 +22,8 @@ ml = [
     "torchvision>=0.19",
     "timm>=1.0",
     "albumentations>=2.0",
+    # albumentations imports scipy; 1.15.x wheels fail to load on macOS 27 (dyld).
+    "scipy>=1.10,<1.15",
     "opencv-python-headless>=4.9",
     "matplotlib>=3.8",
     "numpy>=1.26",

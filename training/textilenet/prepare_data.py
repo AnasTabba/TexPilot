@@ -52,37 +52,144 @@ MANIFEST_URL = "https://raw.githubusercontent.com/hahashu/TextileNet/main/json/{
 UA = {"User-Agent": "Mozilla/5.0 (TexPilot research; TextileNet rebuild)"}
 IMAGE_MAGIC = (b"\xff\xd8\xff", b"\x89PNG", b"GIF8", b"RIFF", b"BM")
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+QUOTA_WAIT_S = 600  # Drive's per-file download quota usually lifts within a day
 
 
 # --------------------------------------------------------------------------- download
 
 
 def cmd_download(args: argparse.Namespace) -> int:
-    """Resumable Drive download. Drive resets long transfers; curl -C - picks up again."""
+    """Download a seed archive from Drive in fixed-size byte ranges, several at a time.
+
+    Popular Drive files hit a download quota: a plain or open-ended request gets a
+    "Quota exceeded" HTML page, while bounded ranges are still served (HTTP 206).
+    Ranges also make the download resumable: finished chunks are appended to the
+    archive in order, and a restart continues from the archive's current size.
+    """
     out = args.data_root / "raw" / f"{args.partition}.tar.gz"
     out.parent.mkdir(parents=True, exist_ok=True)
-    file_id = DRIVE_IDS[args.partition]
-    for attempt in range(1, args.retries + 1):
-        page = _get(f"https://drive.google.com/uc?export=download&id={file_id}", timeout=30)
-        uuid = _between(page.decode(errors="ignore"), 'name="uuid" value="', '"') if page else None
-        if not uuid:
-            print(f"attempt {attempt}: Drive confirm page unreachable; retrying", flush=True)
-            time.sleep(30)
-            continue
-        have = out.stat().st_size if out.exists() else 0
-        print(f"attempt {attempt}: resuming {out.name} at {have / 1e9:.2f} GB", flush=True)
-        url = (
-            f"https://drive.usercontent.google.com/download?id={file_id}"
-            f"&export=download&confirm=t&uuid={uuid}"
-        )
-        cmd = ["curl", "-sS", "-L", "-C", "-", "--speed-limit", "20000", "--speed-time", "60"]
-        rc = subprocess.call([*cmd, "-o", str(out), url])
-        if rc == 0 and subprocess.call(["gzip", "-t", str(out)]) == 0:
-            print(f"{out} OK ({out.stat().st_size / 1e9:.2f} GB)")
-            return 0
-        time.sleep(30)
-    print(f"{out}: gave up after {args.retries} attempts", file=sys.stderr)
-    return 1
+    # --drive-id: your own Drive copy of the same archive. A copy has a fresh download
+    # quota, and the bytes are identical, so a partial download stays valid.
+    file_id = args.drive_id or DRIVE_IDS[args.partition]
+    total = _drive_total_size(file_id)
+    have = out.stat().st_size if out.exists() else 0
+    if have > total:
+        raise SystemExit(f"{out} is larger than the Drive file ({have} > {total}); delete it")
+
+    chunk = args.chunk_mb << 20
+    starts = list(range(have, total, chunk))
+    parts = out.parent / f"{out.name}.parts"
+    parts.mkdir(exist_ok=True)
+    print(
+        f"{out.name}: {total / 1e9:.2f} GB, have {have / 1e9:.2f} GB, "
+        f"{len(starts)} chunks of {args.chunk_mb} MB x{args.parallel}",
+        flush=True,
+    )
+
+    t0, done = time.time(), 0
+    with ThreadPoolExecutor(args.parallel) as ex, open(out, "ab") as f:
+        futures = [
+            ex.submit(_fetch_range, file_id, s, min(s + chunk, total) - 1, parts, args.retries)
+            for s in starts
+        ]
+        for i, fut in enumerate(futures, 1):  # append strictly in order
+            part = fut.result()
+            f.write(part.read_bytes())
+            f.flush()
+            done += part.stat().st_size
+            part.unlink()
+            if i % 8 == 0 or i == len(futures):
+                rate = done / (time.time() - t0)
+                left = (total - have - done) / max(rate, 1) / 60
+                print(
+                    f"  {(have + done) / 1e9:.2f}/{total / 1e9:.2f} GB  "
+                    f"{rate / 1e6:.1f} MB/s  ~{left:.0f} min left",
+                    flush=True,
+                )
+    parts.rmdir()
+
+    if out.stat().st_size != total or subprocess.call(["gzip", "-t", str(out)]) != 0:
+        print(f"{out}: size or gzip check failed", file=sys.stderr)
+        return 1
+    print(f"{out} OK ({total / 1e9:.2f} GB)")
+    return 0
+
+
+def _drive_url(file_id: str) -> str | None:
+    """Direct-download URL. Needs the uuid from the virus-scan confirm page."""
+    page = _get(f"https://drive.google.com/uc?export=download&id={file_id}", timeout=30)
+    uuid = _between(page.decode(errors="ignore"), 'name="uuid" value="', '"') if page else None
+    if not uuid:
+        return None
+    return (
+        f"https://drive.usercontent.google.com/download?id={file_id}"
+        f"&export=download&confirm=t&uuid={uuid}"
+    )
+
+
+def _drive_total_size(file_id: str) -> int:
+    for _ in range(20):
+        url = _drive_url(file_id)
+        if url:
+            r = subprocess.run(
+                ["curl", "-sS", "-D", "-", "-o", "/dev/null", "-r", "0-0", url],
+                capture_output=True,
+                text=True,
+            )
+            for line in r.stdout.splitlines():
+                if line.lower().startswith("content-range:"):
+                    return int(line.rsplit("/", 1)[1])
+        time.sleep(15)
+    raise SystemExit("could not read the archive size from Drive")
+
+
+_quota_note = {"t": 0.0}
+
+
+def _fetch_range(file_id: str, start: int, end: int, parts: Path, retries: int) -> Path:
+    """One byte range -> parts/<start>-<end>.part. Waits out Drive's download quota."""
+    part = parts / f"{start}-{end}.part"
+    want = end - start + 1
+    if part.exists() and part.stat().st_size == want:  # finished before a restart
+        return part
+    tmp = part.with_suffix(".tmp")
+    for attempt in range(1, retries + 1):
+        url = _drive_url(file_id)
+        wait = min(60, 5 * attempt)
+        if url:
+            r = subprocess.run(
+                [
+                    "curl",
+                    "-sS",
+                    "-r",
+                    f"{start}-{end}",
+                    "--speed-limit",
+                    "20000",
+                    "--speed-time",
+                    "60",
+                    "-o",
+                    str(tmp),
+                    "-w",
+                    "%{http_code}",
+                    url,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if r.stdout.strip() == "206" and tmp.exists() and tmp.stat().st_size == want:
+                tmp.rename(part)
+                return part
+            if tmp.exists() and b"Quota exceeded" in tmp.read_bytes()[:4096]:
+                wait = QUOTA_WAIT_S
+                if time.time() - _quota_note["t"] > QUOTA_WAIT_S:  # say it once per wait
+                    _quota_note["t"] = time.time()
+                    print(
+                        f"  Drive quota exceeded for this file; retrying every "
+                        f"{QUOTA_WAIT_S // 60} min ({time.strftime('%H:%M')})",
+                        flush=True,
+                    )
+        time.sleep(wait)
+    raise RuntimeError(f"range {start}-{end} failed after {retries} attempts")
 
 
 # ---------------------------------------------------------------------------- extract
@@ -326,7 +433,10 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("download", help="fetch the seed archive from Google Drive (resumable)")
     common(p)
-    p.add_argument("--retries", type=int, default=300)
+    p.add_argument("--drive-id", help="file id of your own Drive copy (quota workaround)")
+    p.add_argument("--chunk-mb", type=int, default=64)
+    p.add_argument("--parallel", type=int, default=4)
+    p.add_argument("--retries", type=int, default=200, help="per chunk (~24 h of quota waits)")
 
     p = sub.add_parser("extract", help="unpack the seed archive into <data-root>/<partition>")
     common(p)

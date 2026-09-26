@@ -1,0 +1,19 @@
+# TextileNet benchmark -- exact versions the results were produced with.
+# Verified on macOS 27 / Apple M3 (MPS, Python 3.10.10). On Linux, the torch wheel
+# from PyPI is the CUDA build.
+torch==2.14.0
+torchvision==0.29.0
+timm==1.0.30
+huggingface_hub==2.0.0
+safetensors==0.8.0
+albumentations==2.0.8
+albucore==0.0.24
+opencv-python-headless==5.0.0.93
+numpy==2.2.6
+pillow==12.3.0
+matplotlib==3.10.9
+# 1.15.x wheels fail to load on macOS 27 (dyld rejects the PROPACK extension's
+# __thread_bss section), and albumentations imports scipy at import time.
+scipy==1.14.1
+pydantic==2.13.5
+PyYAML==6.0.3
