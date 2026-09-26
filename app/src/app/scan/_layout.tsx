@@ -14,7 +14,10 @@ export default function ScanLayout() {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'TexPilot scanner' }} />
+      <Stack.Screen
+        name="index"
+        options={{ title: 'TexPilot · Fabric explorer', headerShown: false }}
+      />
       <Stack.Screen name="surface" options={{ title: '1 · Fabric surface' }} />
       <Stack.Screen name="label" options={{ title: '2 · Care label' }} />
       <Stack.Screen name="review" options={{ title: '3 · Review' }} />

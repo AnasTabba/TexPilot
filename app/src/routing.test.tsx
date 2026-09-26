@@ -24,7 +24,7 @@ async function openAt(initialUrl: string) {
 describe('native routing', () => {
   test('the app opens on the scanner, not the web landing page', async () => {
     expect(await openAt('/')).toBe('/scan');
-    expect(await screen.findByText('Fabric verification')).toBeOnTheScreen();
+    expect(await screen.findByText('FABRIC VERIFICATION')).toBeOnTheScreen();
   });
 
   test('the web-only dashboard sends a phone user to the scanner', async () => {

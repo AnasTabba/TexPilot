@@ -4,12 +4,12 @@
  */
 
 export const colors = {
-  background: '#F7F7F5',
+  background: '#F7F9FD',
   surface: '#FFFFFF',
-  border: '#E3E3DF',
-  text: '#1B1B19',
-  textMuted: '#62625C',
-  primary: '#1F4E8C',
+  border: '#E9EDF4',
+  text: '#1C2B46',
+  textMuted: '#526276',
+  primary: '#2860D5',
   onPrimary: '#FFFFFF',
   danger: '#B42318',
 
@@ -67,4 +67,42 @@ export const layout = {
   /** Max width of full-page layouts (landing page, dashboard content). */
   pageMaxWidth: 1200,
   dashboardSidebarWidth: 240,
+} as const;
+
+/** Fabric-library identity and responsive mobile preview. */
+export const fabricTheme = {
+  ink: '#1C2B46',
+  muted: '#788397',
+  blue: '#2860D5',
+  blueDark: '#1E4EB8',
+  blueSoft: '#E9F0FF',
+  stage: '#EDF2FA',
+  white: '#FFFFFF',
+  line: '#E9EDF4',
+  denim: '#E4EDFB',
+  cotton: '#F2F0EB',
+  polyester: '#F4E6E5',
+  grey: '#EBEDF0',
+  red: '#A44844',
+  paleInk: '#526276',
+  heroCircle: '#487AE0',
+  heroLine: '#6892E6',
+  onBlueMuted: '#D9E5FF',
+  shadow: 'rgba(28, 53, 100, 0.08)',
+  transparent: 'transparent',
+  phoneWidth: 326,
+  phoneHeight: 704,
+  phoneRadius: 34,
+  cardRadius: 20,
+  space: { tiny: 2, xs: 4, sm: 8, md: 12, lg: 20, xl: 28, xxl: 40, stage: 48 },
+  type: {
+    micro: 10,
+    small: 11,
+    caption: 12,
+    body: 14,
+    heading: 18,
+    title: 25,
+    hero: 32,
+    brand: 22,
+  },
 } as const;

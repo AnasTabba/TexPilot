@@ -278,3 +278,21 @@ package, or a Web Component. Start with the iframe; it's the least work.
 - CORS for `localhost` in development, so the web scanner can reach the API
 - scan storage and a list endpoint (T14)
 - an HTTPS deployment of the API for the public website (T12)
+
+## Fabric explorer design preview
+
+Open `http://localhost:8081/scan` after `npm run web` to try the redesigned mobile
+experience. On desktop widths it presents the welcome, library and detail screens
+side by side; **Get started** enters the single-screen app. On phones the welcome
+screen leads into the library, then a selected fabric's details.
+
+The library includes blue denim, white cotton and red/grey polyester illustrations,
+category filters, text search, locally persisted favourites, expandable capture
+tips, and links to the existing scanner and device history. Library entries are
+educational references, never model predictions or claimed scan results. The
+scanner backend and its abstention behaviour are unchanged.
+
+Artwork and generation prompts live in `assets/fabrics/`. This completes the
+scanner's visual concept work; T9 app icons, T11 signed native builds, and T12 public
+hosting remain separate tasks. A local browser preview does not require an Expo
+or Apple Developer account.
