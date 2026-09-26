@@ -92,6 +92,12 @@ Measured during setup, not assumed.
 - ⇒ You will likely train on a **smaller set than the paper used** — state that caveat before claiming you beat 67.3%.
 - Re-measure any time: `make check-data`. Exits non-zero below 60% recovery.
 
+### TextileNet layout (verified 2026-09-26, `training/textilenet/`)
+- The Drive "seed zips" are really `fabric.tar.gz` (12.8 GB) and `fibre.tar.gz` (14 GB), already split into `train/` and `test/`. They are **disjoint** from the json manifests: the full dataset is archive + scrape, and link rot only hits the scraped half.
+- Manifests: fabric 155,393 train / 39,157 test; fibre 227,123 / 56,899. Heavily imbalanced (lace 31.7k vs vinyl 225; cotton 75k vs polyolefin 187). `triacetate_acetate` is absent from the fibre manifests, so it comes from the archive only.
+- The archive has byte-identical duplicates (~3% in the classes sampled). `prepare_data.py index` drops train copies of test images and keeps test as shipped.
+- The published baseline scripts keep the checkpoint with the best **test** accuracy. Our numbers select on a val carve-out, which is stricter.
+
 ### Dataset facts
 | Dataset | Reality |
 |---|---|
