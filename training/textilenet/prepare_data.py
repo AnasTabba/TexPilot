@@ -148,13 +148,22 @@ _quota_note = {"t": 0.0}
 
 
 def _fetch_range(file_id: str, start: int, end: int, parts: Path, retries: int) -> Path:
-    """One byte range -> parts/<start>-<end>.part. Waits out Drive's download quota."""
+    """One byte range -> parts/<start>-<end>.part. Resumes inside the chunk, waits out quota.
+
+    Bytes already received are kept in <start>-<end>.tmp; a retry asks only for the rest,
+    so a dropped connection costs seconds, not the whole chunk.
+    """
     part = parts / f"{start}-{end}.part"
     want = end - start + 1
     if part.exists() and part.stat().st_size == want:  # finished before a restart
         return part
-    tmp = part.with_suffix(".tmp")
+    tmp, piece = part.with_suffix(".tmp"), part.with_suffix(".piece")
+    if tmp.exists() and _looks_like_html(tmp):  # a quota page saved by an older version
+        tmp.unlink()
     for attempt in range(1, retries + 1):
+        have = tmp.stat().st_size if tmp.exists() else 0
+        if have >= want:
+            break
         url = _drive_url(file_id)
         wait = min(60, 5 * attempt)
         if url:
@@ -163,13 +172,13 @@ def _fetch_range(file_id: str, start: int, end: int, parts: Path, retries: int) 
                     "curl",
                     "-sS",
                     "-r",
-                    f"{start}-{end}",
+                    f"{start + have}-{end}",
                     "--speed-limit",
-                    "20000",
+                    "2000",
                     "--speed-time",
-                    "60",
+                    "120",
                     "-o",
-                    str(tmp),
+                    str(piece),
                     "-w",
                     "%{http_code}",
                     url,
@@ -177,10 +186,13 @@ def _fetch_range(file_id: str, start: int, end: int, parts: Path, retries: int) 
                 capture_output=True,
                 text=True,
             )
-            if r.stdout.strip() == "206" and tmp.exists() and tmp.stat().st_size == want:
-                tmp.rename(part)
-                return part
-            if tmp.exists() and b"Quota exceeded" in tmp.read_bytes()[:4096]:
+            if r.stdout.strip() == "206" and piece.exists():
+                # A 206 body is a valid prefix of the requested range even if cut short.
+                with open(tmp, "ab") as f:
+                    f.write(piece.read_bytes())
+                piece.unlink()
+                wait = 2
+            elif piece.exists() and b"Quota exceeded" in piece.read_bytes()[:4096]:
                 wait = QUOTA_WAIT_S
                 if time.time() - _quota_note["t"] > QUOTA_WAIT_S:  # say it once per wait
                     _quota_note["t"] = time.time()
@@ -189,8 +201,20 @@ def _fetch_range(file_id: str, start: int, end: int, parts: Path, retries: int) 
                         f"{QUOTA_WAIT_S // 60} min ({time.strftime('%H:%M')})",
                         flush=True,
                     )
+            piece.unlink(missing_ok=True)
+        if tmp.exists() and tmp.stat().st_size == want:
+            tmp.rename(part)
+            return part
         time.sleep(wait)
+    if tmp.exists() and tmp.stat().st_size == want:
+        tmp.rename(part)
+        return part
     raise RuntimeError(f"range {start}-{end} failed after {retries} attempts")
+
+
+def _looks_like_html(path: Path) -> bool:
+    head = path.read_bytes()[:64].lstrip().lower()
+    return head.startswith((b"<!doctype html", b"<html"))
 
 
 # ---------------------------------------------------------------------------- extract
