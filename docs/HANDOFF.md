@@ -10,9 +10,9 @@ Read this first, then `README.md`, then the scanner spec.
 
 ## 1. State in one paragraph
 
-The scanner's AI is being built on branch `feat/vision-textilenet-train`, which is
-not merged yet. The design is `docs/superpowers/specs/2026-09-27-scanner-ai-pipeline-design.md`
-and the plan is `docs/superpowers/plans/2026-09-27-scanner-week1-demo.md`.
+The scanner's AI is on `main`. The design is
+`docs/superpowers/specs/2026-09-27-scanner-ai-pipeline-design.md`; week 1's plan
+(`…-scanner-week1-demo.md`) is done and week 2's (`…-scanner-week2-bakeoff.md`) is in progress.
 
 - **Done:** garment detection (Grounding DINO / OWLv2), SAM 2.1 masks, the garment crop,
   calibrated DINOv2 heads, Apple Vision label OCR, the composition extractor and
@@ -192,11 +192,10 @@ Present and tested: `ocr/parser.py`, `ocr/normalizer.py`, `consistency/kb.yaml` 
 not a close-up. Upload **JPEG**: the API answers HEIC, empty or non-image uploads with a
 **422 in every mode**, stub included.
 
-**When `feat/vision-textilenet-train` and `feat/app-scaffold` merge:**
+**When `feat/app-scaffold` merges into `main`** (the vision work is already there):
 - The app branch adds a CI step checking that `src/scanner/api/schema.gen.ts` matches
-  `schemas.py`. Whichever PR lands **second** must regenerate the types
-  (`cd app && npm run gen:api`) in that same PR, or its CI fails. Agree the order
-  between P1 and P3.
+  `schemas.py`. The app PR must regenerate the types (`cd app && npm run gen:api`) in
+  that same PR, or its CI fails.
 - The new response fields are additive: `garment`, `stated_composition.section`, and
   flags with `severity: "info"`.
 - **`info` flags explain an abstention; they are not mismatches.** Examples are
