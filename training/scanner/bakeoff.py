@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -17,7 +18,7 @@ from pathlib import Path
 from services.vision.datasets.phone import PhoneDataset
 from services.vision.garment import choose_primary
 from services.vision.imageio import decode_image
-from training.scanner.eval_metrics import composition_match, latency, type_accuracy
+from training.scanner.eval_metrics import cer, composition_match, latency, type_accuracy
 
 MARGIN = 0.02  # spec §8.3: within 2 points, the faster backend wins
 
@@ -89,7 +90,7 @@ def run_ocr(name: str, samples, loader, cache_dir: Path) -> list[dict]:
                 ex = read_composition(engine, img)
                 row["seconds"] = time.perf_counter() - t
                 row["fibres"] = [[f.name, f.pct] for f in ex.fibers] if ex.fibers else None
-                row["reason"] = ex.reason
+                row["reason"], row["text"] = ex.reason, ex.text
             except Exception as e:  # noqa: BLE001
                 row["error"] = f"{type(e).__name__}: {e}"
             rows.append(row)
@@ -109,6 +110,50 @@ def pick(results: dict[str, tuple[float, float]]) -> str:
     best = max(score for score, _ in results.values())
     contenders = {n: sec for n, (score, sec) in results.items() if best - score <= MARGIN}
     return min(contenders, key=contenders.get)
+
+
+def row_latency(rows) -> dict:
+    """p50/p95 over the rows that produced a time; infinite when none did, so a backend
+    that never answered can't win the §8.3 speed tie-break."""
+    times = [r["seconds"] for r in rows if r["seconds"] is not None]
+    return latency(times) if times else {"p50": math.inf, "p95": math.inf}
+
+
+def ocr_scorable(samples) -> tuple[list, list[str], list[str]]:
+    """Garments OCR is scored on: a typed label that parses (an unknown fibre such as
+    LUREX leaves the denominator, it is not a miss) and a label photo. Returns
+    (scorable, ids whose label doesn't parse, ids without a label photo)."""
+    from services.vision.datasets.phone import typed_composition
+
+    scorable, unparsed, no_photo = [], [], []
+    for s in samples:
+        if not typed_composition(s.label_text or ""):
+            unparsed.append(s.group_id)
+        elif s.label_image_path is None:
+            no_photo.append(s.group_id)
+        else:
+            scorable.append(s)
+    return scorable, unparsed, no_photo
+
+
+def score_ocr(rows: list[dict], scorable) -> dict:
+    """Spec §8.2 for one engine: exact match, read rate, and character error rate on the
+    composition section (an unread label scores 1.0), plus latency and failures."""
+    from services.ocr.parser import FiberPct
+    from services.vision.datasets.phone import typed_extraction
+
+    by_id = {r["id"]: r for r in rows}
+    exact = read = err = 0.0
+    for s in scorable:
+        r, truth = by_id[s.group_id], typed_extraction(s.label_text)
+        got = [FiberPct(f, pct) for f, pct in (r["fibres"] or [])]
+        exact += composition_match(got, truth.fibers)
+        read += r["fibres"] is not None
+        err += cer(r.get("text") or "", truth.text or "")
+    n = max(1, len(scorable))
+    failures = sum(r["error"] is not None for r in rows)
+    return {"exact": exact / n, "read_rate": read / n, "cer": err / n, **row_latency(rows),
+            "failures": failures}  # fmt: skip
 
 
 def run_vision(tag: str, samples, loader, cache_dir: Path, meta: dict | None = None) -> list[dict]:
@@ -201,7 +246,7 @@ def vision_section(samples, detector: str, bundle: Path, device, out: Path) -> l
         )
         c_acc, c_cov, _ = head_accuracy(rows, single, "family")
         a_acc, _, _ = head_accuracy(rows, fabric, "structure")
-        lat = latency([r["seconds"] for r in rows if r["seconds"] is not None] or [0.0])
+        lat = row_latency(rows)
         results[tag] = (c_acc, lat["p50"], rows)
         md.append(
             f"| {tag} | {c_acc:.3f} | {c_cov:.2f} | {a_acc:.3f} | {lat['p50']:.2f} "
@@ -239,8 +284,6 @@ def vision_section(samples, detector: str, bundle: Path, device, out: Path) -> l
 
 def main(argv: list[str] | None = None) -> int:
     from services.ocr.engines import load_engine
-    from services.ocr.parser import FiberPct
-    from services.vision.datasets.phone import typed_composition
     from services.vision.detectors import load_detector
     from services.vision.runtime import pick_device
 
@@ -258,6 +301,8 @@ def main(argv: list[str] | None = None) -> int:
     md = [f"# Bake-off (domain: phone, n = {len(samples)} garments)", ""]
     if ds.missing:
         md.append(f"Rows without a garment photo, excluded: {', '.join(ds.missing)}\n")
+    if ds.duplicates:
+        md.append(f"Repeated ids, first row kept: {', '.join(ds.duplicates)}\n")
 
     det_scores = {}
     md += [
@@ -269,7 +314,7 @@ def main(argv: list[str] | None = None) -> int:
     for name in args.detectors:
         rows = run_detector(name, samples, lambda n=name: load_detector(n, device), args.out)
         acc = type_accuracy([r["label"] for r in rows], [s.garment_type for s in samples])
-        lat = latency([r["seconds"] for r in rows if r["seconds"] is not None] or [0.0])
+        lat = row_latency(rows)
         det_scores[name] = (acc, lat["p50"])
         md.append(
             f"| {name} | {acc:.3f} | {lat['p50']:.2f} | {lat['p95']:.2f} "
@@ -277,34 +322,25 @@ def main(argv: list[str] | None = None) -> int:
         )
     md.append(f"\n**Default detector (spec §8.3): {pick(det_scores)}**\n")
 
-    def truth(s):
-        return typed_composition(s.label_text or "")
-
-    scored = [s for s in samples if truth(s)]
+    scorable, unparsed, no_photo = ocr_scorable(samples)
     ocr_scores = {}
     md += [
         "## OCR engines",
         "",
-        f"Scored on {len(scored)} garments whose typed label parses "
-        f"({len(samples) - len(scored)} excluded).",
+        f"Scored on {len(scorable)} garments. Excluded: {len(unparsed)} whose typed label "
+        f"doesn't parse, {len(no_photo)} without a label photo. CER is on the composition "
+        "section; an unread label counts 1.0.",
         "",
-        "| Engine | Exact match | p50 s | Failures |",
-        "|---|---|---|---|",
+        "| Engine | Exact match | Read rate | CER | p50 s | Failures |",
+        "|---|---|---|---|---|---|",
     ]
     for name in args.ocr:
-        rows = {r["id"]: r for r in run_ocr(name, scored, lambda n=name: load_engine(n), args.out)}
-        hits = [
-            composition_match(
-                [FiberPct(n, p) for n, p in (rows[s.group_id]["fibres"] or [])], truth(s)
-            )
-            for s in scored
-        ]
-        rate = sum(hits) / max(1, len(hits))
-        lat = latency([r["seconds"] for r in rows.values() if r["seconds"] is not None] or [0.0])
-        ocr_scores[name] = (rate, lat["p50"])
+        rows = run_ocr(name, scorable, lambda n=name: load_engine(n), args.out)
+        sc = score_ocr(rows, scorable)
+        ocr_scores[name] = (sc["exact"], sc["p50"])
         md.append(
-            f"| {name} | {rate:.3f} | {lat['p50']:.2f} "
-            f"| {sum(r['error'] is not None for r in rows.values())} |"
+            f"| {name} | {sc['exact']:.3f} | {sc['read_rate']:.3f} | {sc['cer']:.3f} "
+            f"| {sc['p50']:.2f} | {sc['failures']} |"
         )
     md.append(f"\n**Default OCR engine (spec §8.3): {pick(ocr_scores)}**\n")
     md += vision_section(samples, pick(det_scores), args.bundle, device, args.out)
