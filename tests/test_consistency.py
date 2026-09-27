@@ -95,6 +95,24 @@ def test_structure_and_family_can_both_flag():
     assert {f.code for f in v.flags} == {"COMPOSITION_IMPLAUSIBLE", "FAMILY_MISMATCH"}
 
 
-def test_kb_is_version_two_with_a_family_threshold():
+def test_kb_has_a_family_threshold_and_imitation_exemptions():
     kb = load_kb()
-    assert kb["version"] == 2 and 0.5 < kb["tolerance"]["family_min_confidence"] <= 1.0
+    assert kb["version"] == 3 and 0.5 < kb["tolerance"]["family_min_confidence"] <= 1.0
+    assert set(kb["family_check_exempt"]) <= set(kb["fabrics"])
+
+
+def test_faux_fur_that_looks_like_fur_is_not_a_family_mismatch():
+    # Final review (re-graded to Important): Head C learned real fur, leather and suede as
+    # protein, so a faux-fur coat correctly labelled 100% acrylic read as "protein" would
+    # raise a false FAMILY_MISMATCH. Imitation materials are exempt from the family check.
+    v = evaluate(
+        _family("protein", structure=HeadOutput("faux_fur", 0.95, [])), [FiberPct("acrylic", 100.0)]
+    )
+    assert v.outcome == "PASS" and not v.flags
+
+
+def test_a_real_family_mismatch_still_flags_on_ordinary_fabrics():
+    v = evaluate(
+        _family("protein", structure=HeadOutput("jersey", 0.95, [])), [FiberPct("acrylic", 100.0)]
+    )
+    assert [f.code for f in v.flags] == ["FAMILY_MISMATCH"]

@@ -109,7 +109,13 @@ def evaluate(
             )
 
     f = vision.fibre_family
-    if f is not None and f.confidence >= tol["family_min_confidence"] and f.label not in stated:
+    imitation = structure_checked and s.label in set(kb.get("family_check_exempt", ()))
+    if (
+        f is not None
+        and not imitation
+        and f.confidence >= tol["family_min_confidence"]
+        and f.label not in stated
+    ):
         flags.append(
             Flag(
                 code="FAMILY_MISMATCH",

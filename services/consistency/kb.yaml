@@ -9,7 +9,7 @@
 #
 # `expected_treatment` is checked only when present.
 
-version: 2
+version: 3
 tolerance:
   # Minimum visual confidence before a flag may be raised. Tuned for PRECISION:
   # a scanner that cries wolf gets switched off at the QC desk.
@@ -20,6 +20,11 @@ tolerance:
   # Calibrated confidence, so comparable across models. Tuned for precision in the
   # week-2 bake-off (spec §8.3).
   family_min_confidence: 0.90
+
+# Imitations of animal materials: Head C learned real fur, leather and suede as protein,
+# so on these it reads the look, not the fibre. A faux-fur coat labelled 100% acrylic is
+# correct; FAMILY_MISMATCH is not raised when Head A confidently reads one of these.
+family_check_exempt: [faux_fur, faux_leather]
 
 fabrics:
   canvas:       {families: [cellulosic, synthetic]}
