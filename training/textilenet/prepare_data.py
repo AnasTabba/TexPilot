@@ -53,6 +53,8 @@ MANIFEST_URL = "https://raw.githubusercontent.com/hahashu/TextileNet/main/json/{
 UA = {"User-Agent": "Mozilla/5.0 (TexPilot research; TextileNet rebuild)"}
 IMAGE_MAGIC = (b"\xff\xd8\xff", b"\x89PNG", b"GIF8", b"RIFF", b"BM")
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+#: Top-level folder inside each seed archive. The fibre archive spells it "fiber".
+ARCHIVE_ROOTS = {"fabric": ("fabric",), "fibre": ("fibre", "fiber")}
 QUOTA_WAIT_S = 600  # Drive's per-file download quota usually lifts within a day
 
 
@@ -231,10 +233,10 @@ def cmd_extract(args: argparse.Namespace) -> int:
             parts = parts[1:] if parts and parts[0] == "." else parts
             if not m.isfile() or Path(m.name).name.startswith("."):
                 continue
-            if len(parts) != 4 or parts[0] != args.partition or ".." in parts:
+            if len(parts) != 4 or parts[0] not in ARCHIVE_ROOTS[args.partition] or ".." in parts:
                 print(f"skipping unexpected member {m.name}")
                 continue
-            m.name = "/".join(parts)  # normalised, relative, checked above
+            m.name = "/".join((args.partition, *parts[1:]))  # normalised, relative, checked
             tar.extract(m, args.data_root, set_attrs=False)
             n += 1
             if n % 20000 == 0:
