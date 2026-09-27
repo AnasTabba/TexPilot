@@ -27,6 +27,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 
+from services.vision.backbone import pool_features as pool
 from training.textilenet.data import TextileDataset
 from training.textilenet.feature_cache import FeatureCache
 from training.textilenet.governor import Governor
@@ -36,6 +37,8 @@ from training.textilenet.splits import class_index, read_csv
 from training.textilenet.train import PRESETS, build_transforms, pick_device
 
 SHARD = 4096  # images per cache shard; the unit of resumption
+#: (lr, weight decay) pairs tried on val; shared with training/scanner/fit_heads.py
+GRID = list(itertools.product([1e-3, 3e-3], [1e-4, 1e-3, 1e-2, 5e-2]))
 
 
 @torch.no_grad()
@@ -81,14 +84,6 @@ def extract(args: argparse.Namespace, rows, device) -> np.ndarray:
                 flush=True,
             )
     return cache.assemble([r.path for r in rows])
-
-
-def pool(model, x):
-    tokens = model.forward_features(x)
-    if tokens.ndim == 3:  # ViT family: [CLS ; mean(patches)]
-        prefix = getattr(model, "num_prefix_tokens", 1)
-        return torch.cat([tokens[:, 0], tokens[:, prefix:].mean(1)], dim=1)
-    return model.forward_head(tokens, pre_logits=True)
 
 
 def fit_linear(xtr, ytr, n_classes, lr, wd, epochs, seed, device) -> torch.nn.Linear:
@@ -152,9 +147,8 @@ def main(argv: list[str] | None = None) -> int:
     def logits(head, x):
         return head(x).float().cpu().numpy()
 
-    grid = list(itertools.product([1e-3, 3e-3], [1e-4, 1e-3, 1e-2, 5e-2]))
     scores = {}
-    for lr, wd in grid:
+    for lr, wd in GRID:
         head = fit_linear(xtr, ytr, len(classes), lr, wd, args.epochs, 0, device)
         scores[(lr, wd)] = summarize(logits(head, xva), yva.cpu().numpy(), classes)["top1"]
         print(f"lr {lr:g} wd {wd:g}: val top-1 {scores[(lr, wd)]:.4f}", flush=True)
