@@ -7,6 +7,7 @@ Layout: <root>/ground_truth.csv plus photos anywhere under <root>, named
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 
 from services.ocr.engines.base import TextLine
@@ -19,11 +20,11 @@ MIN_COMPONENT_PCT = 15.0  # same floor as the consistency KB
 
 
 def typed_composition(label_text: str):
-    """A typed label ('/'-separated lines) through the same extractor OCR output goes
-    through, so ground truth and predictions are parsed identically."""
+    """A typed label (lines separated by ' / ' or newlines) through the same extractor
+    OCR output goes through, so ground truth and predictions are parsed identically."""
     lines = [
         TextLine(t.strip(), 1.0, (0.0, 10.0 * i, 100.0, 10.0 * i + 8))
-        for i, t in enumerate(label_text.split(" / "))
+        for i, t in enumerate(re.split(r"\s+/\s+|[\r\n]+", label_text))
         if t.strip()
     ]
     return extract(lines).fibers
@@ -71,7 +72,7 @@ class PhoneDataset(FabricDataset):
                     Sample(
                         image_path=garment,
                         group_id=gid,
-                        fabric=row.get("fabric_structure") or None,
+                        fabric=(row.get("fabric_structure") or "").lower() or None,
                         fibre_family=label_family(text) if text else None,
                         garment_type=(row.get("garment_type") or "").lower() or None,
                         label_image_path=photos.get(f"{gid}_label"),

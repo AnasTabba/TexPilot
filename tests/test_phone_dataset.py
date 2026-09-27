@@ -52,3 +52,13 @@ def test_label_family(text, family):
 def test_typed_composition_reads_the_shell():
     got = typed_composition("LINING: 100% POLYESTER / SHELL: 80% PA 20% EA")
     assert [(f.name, f.pct) for f in got] == [("nylon", 80.0), ("elastane_spandex", 20.0)]
+
+
+def test_fabric_is_lowercased_like_the_checker_does(tmp_path):
+    root = _set(tmp_path, "001_AT,pants,100% COTTON,Denim,AT,x,\n", ["001_AT_garment.jpg"])
+    assert PhoneDataset(root)[0].fabric == "denim"
+
+
+def test_a_label_typed_over_lines_in_one_excel_cell_parses():
+    text = "SHELL: 60% COTTON 40% POLYESTER\nLINING: 100% POLYESTER"  # Alt+Enter
+    assert label_family(text) == "blend"

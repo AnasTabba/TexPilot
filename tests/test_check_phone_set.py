@@ -54,3 +54,11 @@ def test_each_mistake_is_named(tmp_path):
     assert "003_AT: no garment photo" in text
     assert "002_AT_label.heic: HEIC" in text
     assert "009_AT_garment.jpg: photo has no row" in text
+
+
+def test_a_csv_not_saved_as_utf8_is_named_not_a_crash(tmp_path):
+    (tmp_path / "ground_truth.csv").write_bytes(
+        (HEADER + "001_AT,pants,100% ALGODÓN,,AT,x,\n").encode("cp1252")
+    )
+    problems, _ = cps.check(tmp_path)
+    assert any("CSV UTF-8" in p for p in problems)
