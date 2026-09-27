@@ -79,3 +79,9 @@ neoprene, organza, plush, satin, serge, taffeta, tulle, tweed, twill, velvet, vi
 - [ ] Every row's `garment_type` is one of the 14, spelled exactly
 - [ ] `label_text` is copied exactly as printed, including percentages
 - [ ] `fabric_structure` is filled only where you are sure
+
+Whoever has the repo can check a folder in one go; it names every mistake above:
+
+```bash
+.venv/bin/python scripts/check_phone_set.py data/phone
+```
