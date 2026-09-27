@@ -137,7 +137,7 @@ Rationale for multi-task: the three tasks share texture representation, and trea
 
 - **Recogniser:** Apple Vision / ML Kit on-device (free, strong on printed text); PaddleOCR server-side for cross-platform parity.
 - **Parser:** grammar over composition strings — handles `60% COTTON 40% POLYESTER`, `COTTON 60%`, multilingual labels, and OCR noise.
-- **Normaliser:** maps supplier shorthand to canonical fibre names using `fiber_codebook.csv` from FabricsCompositionDataset (`PA`→acrylic, `NY`→polyamide, `EA`/`EL`/`Lycra`→elastane, `PES`/`PL`→polyester).
+- **Normaliser:** maps supplier shorthand to canonical fibre names using `fiber_codebook.csv` from FabricsCompositionDataset (`PA`/`NY`→polyamide (nylon), `PAN`→acrylic, `EA`/`EL`/`Lycra`→elastane, `PES`/`PL`→polyester; codes per ISO 2076 — corrected 2026-09-27, `PA` previously read as acrylic).
 - **Validation:** percentages must sum to 100 ± 2. On failure, return `unreadable` rather than a guess.
 
 ### 4.3 Consistency engine
