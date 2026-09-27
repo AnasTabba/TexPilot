@@ -57,7 +57,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--n", type=int, default=100, help="images this session")
     args = ap.parse_args(argv)
 
-    pool = [r.path for r in read_csv(args.split) if r.split == "train"]
+    # train and val (Head B calibrates on val, spec §6.3); never test
+    pool = [r.path for r in read_csv(args.split) if r.split != "test"]
     queue = todo(pool, load_labels(OUT), args.n)
     plt.rcParams["keymap.save"] = [k for k in plt.rcParams["keymap.save"] if k != "s"]  # s = skip
     fig, ax = plt.subplots(figsize=(6, 6))

@@ -27,7 +27,8 @@ def test_the_four_treatments_have_keys():
     assert set(KEYS.values()) == {"printed", "piece_dyed", "yarn_dyed", "undyed"}
 
 
-def test_keypresses_label_and_skip_without_matplotlib_saving(tmp_path, monkeypatch):
+def _label(tmp_path, monkeypatch, splits: dict[str, str], keys: tuple[str, ...]) -> dict:
+    """Run the tool on images named after ``splits`` (name -> split), pressing ``keys``."""
     mpl = pytest.importorskip("matplotlib")
     Image = pytest.importorskip("PIL.Image")
     mpl.use("Agg")
@@ -36,24 +37,32 @@ def test_keypresses_label_and_skip_without_matplotlib_saving(tmp_path, monkeypat
 
     from training.scanner.label_treatment import main
 
-    for name in ("a", "b"):
-        p = tmp_path / "data" / "fabric" / "train" / "lace" / f"{name}.jpg"
+    rows = ["path,label,split,source,sha1"]
+    for name, split in splits.items():
+        p = tmp_path / "data" / "fabric" / split / "lace" / f"{name}.jpg"
         p.parent.mkdir(parents=True, exist_ok=True)
         Image.new("RGB", (8, 8)).save(p)
-    split = tmp_path / "split.csv"
-    split.write_text(
-        "path,label,split,source,sha1\n"
-        "fabric/train/lace/a.jpg,lace,train,archive,x\n"
-        "fabric/train/lace/b.jpg,lace,train,archive,x\n"
-    )
+        rows.append(f"fabric/{split}/lace/{name}.jpg,lace,{split},archive,x")
+    (tmp_path / "split.csv").write_text("\n".join(rows) + "\n")
     monkeypatch.chdir(tmp_path)
 
     def press_keys():
         assert "s" not in plt.rcParams["keymap.save"]  # else 's' opens a save dialog
         canvas = plt.gcf().canvas
-        for key in ("1", "s"):
+        for key in keys:
             canvas.callbacks.process("key_press_event", KeyEvent("key_press_event", canvas, key))
 
     monkeypatch.setattr(plt, "show", press_keys)
-    main(["--split", str(split), "--data-root", str(tmp_path / "data"), "--n", "2"])
-    assert list(load_labels(tmp_path / "data" / "treatment_labels.csv").values()) == ["printed"]
+    main(["--split", "split.csv", "--data-root", "data", "--n", str(len(splits))])
+    return load_labels(tmp_path / "data" / "treatment_labels.csv")
+
+
+def test_keypresses_label_and_skip_without_matplotlib_saving(tmp_path, monkeypatch):
+    labels = _label(tmp_path, monkeypatch, {"a": "train", "b": "train"}, ("1", "s"))
+    assert list(labels.values()) == ["printed"]
+
+
+def test_val_images_are_queued_too_since_head_b_calibrates_on_val(tmp_path, monkeypatch):
+    splits = {"a": "train", "b": "val", "c": "test"}
+    labels = _label(tmp_path, monkeypatch, splits, ("1", "1"))
+    assert sorted(labels) == ["fabric/train/lace/a.jpg", "fabric/val/lace/b.jpg"]
