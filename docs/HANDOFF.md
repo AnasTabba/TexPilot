@@ -1,6 +1,6 @@
 # Handoff — where TexPilot stands
 
-**Last updated:** 2026-09-20
+**Last updated:** 2026-09-27
 **Repo:** https://github.com/AnasTabba/TexPilot (`main`, 5 commits, CI green)
 **Next milestone:** M1, ~early Nov 2026 — a working scanner on a phone
 
@@ -10,11 +10,18 @@ Read this first, then `README.md`, then the scanner spec.
 
 ## 1. State in one paragraph
 
-The design is settled and approved; the scanner service is scaffolded, tested and
-pushed. There is **no trained model yet** — the API runs end-to-end and deliberately
-returns `INSUFFICIENT_EVIDENCE` for every scan. Nobody is blocked: all three
-workstreams can start in parallel against a live endpoint. Nothing has been built for
-the planning platform beyond its design document.
+The scanner's AI is being built on branch `feat/vision-textilenet-train`, which is
+not merged yet. The design is `docs/superpowers/specs/2026-09-27-scanner-ai-pipeline-design.md`
+and the plan is `docs/superpowers/plans/2026-09-27-scanner-week1-demo.md`.
+
+- **Done:** garment detection (Grounding DINO / OWLv2), SAM 2.1 masks, the garment crop,
+  calibrated DINOv2 heads, Apple Vision label OCR, the composition extractor and
+  `FAMILY_MISMATCH`. The API now accepts a `label_image`.
+- **Stub by default:** `make api` still returns `INSUFFICIENT_EVIDENCE` for every scan,
+  so the app can build anywhere. `make api-scanner` serves the real models on the M3.
+- **First result:** a frozen DINOv2 linear probe already beats the published fabric
+  baseline, **72.0% / 94.5%** against 67.3% / 92.1% (§4).
+- Nothing has been built for the planning platform beyond its design document.
 
 ```bash
 make setup && make test    # 24 passing
@@ -77,6 +84,11 @@ The project changed shape twice. If the two specs look contradictory, this is wh
 | 11 | **Fibre family (4 classes), not fibre (33)** | Families *are* visually separable even though members aren't. Turns a 53%-ceiling problem into one that should clear 80%. |
 | 12 | **Abstention is a real verdict** | A scanner forced to always answer produces confident wrong answers, which is what gets it switched off at a QC desk. |
 | 13 | **Server-side inference for M1**, on-device at M4 | Six weeks is too short to fight model-conversion toolchains; the SRS already mandates a FastAPI backend. |
+| 14 | **Capture = whole garment + label close-up** (was: 10–20 cm fabric close-up) | TextileNet is shopping-site photos of whole garments, so a detected, cut-out garment matches the training data better than a swatch. A close-up still works as a fallback. **App: change shot 1.** |
+| 15 | **Three detector and three OCR backends, chosen by bake-off** | Detection: Grounding DINO / OWLv2 (zero-shot), RT-DETR on Fashionpedia (trained), Florence-2. OCR: PaddleOCR / Apple Vision / Florence-2. The team's phone photos decide the defaults; this becomes a comparison chapter for the report. |
+| 16 | **Local models only** | Works offline at a QC desk, no per-scan cost, and every model can be explained in the viva. No hosted AI APIs. |
+| 17 | **Head C trains 3 families**, not 4 | TextileNet is single-label, so it has no *blend* images; blends come from the label. |
+| 18 | **`PA` = polyamide (nylon)**, not acrylic | ISO 2076 / EU Reg. 1007/2011. The old mapping would have misread swimwear labels and raised false flags. |
 
 ---
 
@@ -98,6 +110,20 @@ Measured during setup, not assumed.
 - The archive has byte-identical duplicates (~3% in the classes sampled). `prepare_data.py index` drops train copies of test images and keeps test as shipped.
 - The published baseline scripts keep the checkpoint with the best **test** accuracy. Our numbers select on a val carve-out, which is stricter.
 
+### Results so far (catalog domain, preliminary split)
+| Model | Fabric top-1 / top-5 | Published best |
+|---|---|---|
+| Frozen DINOv2 ViT-B/14 + linear probe (3 seeds, ±0.01) | **72.0% / 94.5%** | ViT-Tiny from scratch: 67.3% / 92.1% |
+
+The preliminary split uses archive train images plus all recoverable test images (64% of
+the paper's fabric test set). The final split adds the scraped train images when the
+scrape finishes. Macro-F1 is 0.48: the rarest classes (canvas, twill) are weak.
+
+### TextileNet's official split leaks
+**2,388 fabric and 1,988 fibre training images are byte-identical to test images.** The
+published baselines were partly tested on training data. `prepare_data.py index` drops
+those copies from train and keeps test as shipped, so our comparison is the stricter one.
+
 ### Dataset facts
 | Dataset | Reality |
 |---|---|
@@ -111,13 +137,23 @@ Measured during setup, not assumed.
 - **SQL Server has no arm64 image** — runs under Rosetta emulation. Azure SQL Edge (the old arm64 option) is retired. Affects sub-project 3, not the scanner.
 - Python 3.10.10. No conda/uv. `make setup` builds a venv.
 - `.venv` is not committed; `make setup` is ~90s.
+- The laptop is a **fanless MacBook Air (16 GB)**. On 2026-09-27 an ML job plus browser tabs
+  exhausted its memory, and it froze and had to be force-restarted. Long jobs now go
+  through `training/textilenet/governor.py`, which pauses on heat or low memory, and Metal
+  memory is capped. Keep it to ≤ 2 loader workers and one heavy job at a time.
+- macOS 27 cannot load scipy 1.15.x wheels (dyld), and albumentations imports scipy, so
+  scipy is pinned to 1.14.1.
+- PaddleOCR 3.7 installs over our OpenCV, so it lives in its own venv (`make setup-paddle`)
+  behind a worker process.
+- Google Drive rate-limits the TextileNet archives ("Quota exceeded"). A copy in your own
+  Drive gets a fresh quota: `prepare_data.py download --drive-id <copy id>`.
 
 ---
 
 ## 5. Open items
 
 ### Blocking nothing yet, but decide soon
-1. **Phone-photo data collection is unresolved.** Can the team photograph real garments with known fabric type + care labels? Designed around: the self-collected set is a swappable adapter (`services/vision/datasets/base.py`). If it materialises, the catalog→phone accuracy drop is the headline result. If not, catalog numbers ship with a stated limitation. **This is risk #1 in the M1 proposal.**
+1. **Phone photo set: now has a guide, `docs/phone-test-set.md`. Due Oct 4.** About 100 garments from the team's wardrobes: a whole-garment photo plus a label photo each, and one spreadsheet row. It decides the bake-off and gives the headline catalog→phone result. **iPhones: set Camera → Formats → Most Compatible (JPEG).**
 2. **FabricsCompositionDataset may be CC BY-NC**, which would block the M5 paper. Verify before depending on it.
 
 ### Left to the user, deliberately not done
@@ -152,7 +188,10 @@ Present and tested: `ocr/parser.py`, `ocr/normalizer.py`, `consistency/kb.yaml` 
 4. Scan persistence (spec §9) — audit evidence *and* accumulating phone-domain training data.
 
 ### P3 — App (`app/`)
-Nothing scaffolded; pick your own Expo template.
+**Changed by decision 14:** shot 1 is now the **whole garment** (laid flat or on a hanger),
+not a close-up. Upload **JPEG**: the API answers HEIC with a 422. The new optional
+response fields (`garment`, `stated_composition.section`, `info` flags) are additive;
+run `npm run gen:api` after the vision branch merges.
 
 1. `npx create-expo-app@latest . --template blank-typescript`
 2. Camera capture, two shots: surface (10–20 cm) and care label.
