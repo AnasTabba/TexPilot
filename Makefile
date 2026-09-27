@@ -32,10 +32,21 @@ fmt: ## Auto-format
 api: ## Run the API at http://127.0.0.1:8000 (docs at /docs)
 	$(VENV)/bin/uvicorn services.api.main:app --reload --port 8000
 
+api-scanner: ## The real scanner on this Mac, reachable from phones on the same wifi
+	TEXPILOT_VISION=scanner TEXPILOT_GARMENT_DETECTOR=gdino TEXPILOT_OCR_BACKEND=apple \
+	$(VENV)/bin/uvicorn services.api.main:app --host 0.0.0.0 --port 8000
+
 check-data: ## Smoke-test TextileNet availability (spec risk #2)
 	$(PY) scripts/check_textilenet.py $(ARGS)
 
 clean:
 	rm -rf $(VENV) .pytest_cache .ruff_cache **/__pycache__
 
-.PHONY: help setup setup-ml test lint fmt api check-data clean
+.PHONY: help setup setup-ml setup-paddle test lint fmt api api-scanner check-data clean
+
+PADDLE_VENV := .venv-paddle
+
+setup-paddle: ## PaddleOCR in its own venv (its deps clash with the main ML stack)
+	python3 -m venv $(PADDLE_VENV)
+	$(PADDLE_VENV)/bin/pip install -q --upgrade pip
+	$(PADDLE_VENV)/bin/pip install -q paddlepaddle==3.3.1 paddleocr==3.7.0
