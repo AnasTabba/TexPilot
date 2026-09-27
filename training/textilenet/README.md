@@ -61,8 +61,10 @@ training/textilenet/run_all.sh probe
 training/textilenet/run_all.sh report       # -> results.md, checkpoints/<p>_best.pt
 ```
 
-If Drive refuses the archive download on the cloud box ("quota exceeded"), `rsync`
-`data/raw/*.tar.gz` from the laptop instead.
+If Drive refuses an archive ("Quota exceeded"), point the download at your own Drive copy,
+which has a fresh quota: `FABRIC_DRIVE_ID=1h70WtDYAYTZw6WK9chRuEaxtGBnDeovx
+training/textilenet/run_all.sh data` (the fabric copy made on 2026-09-26). The last
+resort is to `rsync` `data/raw/*.tar.gz` from the laptop.
 
 Budget, 30 epochs, one A100: roughly 2–4 h per (model, partition, seed) for the Base
 models and well under 1 h for ViT-Tiny, so ~50–60 GPU-hours for the full grid of

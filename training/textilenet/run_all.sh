@@ -8,7 +8,8 @@
 #   training/textilenet/run_all.sh probe    frozen DINOv2 linear probe, both partitions
 #   training/textilenet/run_all.sh report   results.md + best checkpoint per partition
 #
-# Knobs: PARTITIONS, MODELS, SEEDS, BATCH, EPOCHS, WORKERS (env vars).
+# Knobs: PARTITIONS, MODELS, SEEDS, BATCH, EPOCHS, WORKERS, FABRIC_DRIVE_ID, FIBRE_DRIVE_ID
+# (env vars; the *_DRIVE_ID ones point at your own Drive copy of an archive).
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -41,7 +42,10 @@ case "${1:-}" in
   data)
     for p in $PARTITIONS; do
       if [ ! -d "data/$p/train" ]; then
-        $PY -m training.textilenet.prepare_data download --partition "$p"
+        # A Drive copy has its own download quota; the originals are often over theirs.
+        id_var="$(echo "$p" | tr a-z A-Z)_DRIVE_ID"
+        $PY -m training.textilenet.prepare_data download --partition "$p" \
+          ${!id_var:+--drive-id "${!id_var}"}
         $PY -m training.textilenet.prepare_data extract --partition "$p" --delete-archive
       fi
       $PY -m training.textilenet.prepare_data scrape --partition "$p" --workers 64
