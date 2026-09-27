@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 from services.ocr.engines.base import TextLine
-from services.ocr.extract import extract
+from services.ocr.extract import Extraction, extract
 from services.vision.datasets.base import FabricDataset, Sample
 from services.vision.taxonomy import family_of
 
@@ -19,7 +19,7 @@ PHOTO_EXTS = (".jpg", ".jpeg", ".png")
 MIN_COMPONENT_PCT = 15.0  # same floor as the consistency KB
 
 
-def typed_composition(label_text: str):
+def typed_extraction(label_text: str) -> Extraction:
     """A typed label (lines separated by ' / ' or newlines) through the same extractor
     OCR output goes through, so ground truth and predictions are parsed identically."""
     lines = [
@@ -27,7 +27,11 @@ def typed_composition(label_text: str):
         for i, t in enumerate(re.split(r"\s+/\s+|[\r\n]+", label_text))
         if t.strip()
     ]
-    return extract(lines).fibers
+    return extract(lines)
+
+
+def typed_composition(label_text: str):
+    return typed_extraction(label_text).fibers
 
 
 def label_family(label_text: str) -> str | None:

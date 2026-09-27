@@ -104,3 +104,8 @@ def test_a_sideways_reading_is_skipped_for_the_upright_one():
 
     ex = read_composition(RotatedReader(), np.zeros((40, 20, 3), np.uint8))
     assert fibres(ex) == [("cotton", 100.0)] and ex.section == "shell"
+
+
+def test_the_text_behind_the_composition_is_kept_for_the_error_rate():
+    ex = extract([L("LINING: 100% PES", 0), L("SHELL: 80% PA 20% EA", 1)])
+    assert ex.text == "80% PA 20% EA"

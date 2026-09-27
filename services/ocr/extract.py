@@ -56,6 +56,7 @@ class Extraction:
     section: str | None = None
     confidence: float | None = None
     reason: str | None = None  # "NO_LABEL_TEXT" | "UNREADABLE" when fibers is None
+    text: str | None = None  # the lines the composition was read from, " / "-joined
 
 
 def _cy(line: TextLine) -> float:
@@ -128,7 +129,10 @@ def extract(lines: list[TextLine]) -> Extraction:
             return Extraction(None, reason="UNREADABLE")
         if fibers:
             mean = sum(line.confidence for line in used) / len(used)
-            return Extraction(fibers, section=name, confidence=1 - (1 - mean) ** agreeing)
+            text = " / ".join(line.text.strip() for line in used)
+            return Extraction(
+                fibers, section=name, confidence=1 - (1 - mean) ** agreeing, text=text
+            )
     return Extraction(None, reason="UNREADABLE")
 
 
