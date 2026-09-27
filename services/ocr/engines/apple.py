@@ -21,16 +21,24 @@ class AppleVisionEngine:
 
     def __init__(self, languages: tuple[str, ...] = LANGUAGES):
         import numpy as np
+        import objc
         import Quartz
         import Vision
         from Foundation import NSData
 
+        self._objc = objc
         self._quartz, self._vision, self._nsdata = Quartz, Vision, NSData
         self.languages = list(languages)
         # The first request loads the recognition model (~40 s cold). Pay it at startup.
         self.read(np.full((32, 128, 3), 255, np.uint8))
 
     def read(self, image) -> list[TextLine]:
+        # Objective-C objects made here are autoreleased, and a server thread never drains
+        # a pool on its own: without this, every read leaked its image (~6-7 MB).
+        with self._objc.autorelease_pool():
+            return self._read(image)
+
+    def _read(self, image) -> list[TextLine]:
         from PIL import Image
 
         h, w = image.shape[:2]
