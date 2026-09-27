@@ -42,14 +42,18 @@ def latency(times: list[float]) -> dict:
 
 
 def swap_pairs(families: dict[str, str]) -> list[tuple[str, str, bool]]:
-    """Each garment with its own label (should not flag) and, for every garment of a
-    different family, with that garment's label (should flag). Same-family swaps are
-    left out: a cotton label on a linen shirt is not a mislabel we promise to catch."""
+    """Each garment with its own label (should not flag) and with one other garment's label
+    of a different family (should flag): the next such id in sorted order, wrapping. One
+    swap per garment keeps the two kinds balanced, so false flags on correct labels move
+    precision. Same-family swaps are left out: a cotton label on a linen shirt is not a
+    mislabel we promise to catch."""
     ids = sorted(families)
     pairs = [(g, g, False) for g in ids]
-    pairs += [
-        (g, lab, True) for g in ids for lab in ids if lab != g and families[lab] != families[g]
-    ]
+    for i, g in enumerate(ids):
+        rest = ids[i + 1 :] + ids[:i]
+        lab = next((x for x in rest if families[x] != families[g]), None)
+        if lab is not None:
+            pairs.append((g, lab, True))
     return pairs
 
 

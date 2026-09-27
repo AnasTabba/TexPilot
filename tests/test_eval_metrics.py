@@ -48,3 +48,12 @@ def test_swapped_labels_only_should_flag_across_families():
 def test_precision_and_recall():
     assert precision_recall([True, True, False, False], [True, False, True, False]) == (0.5, 0.5)
     assert precision_recall([False, False], [True, False]) == (1.0, 0.0)  # no flags: vacuous
+
+
+def test_one_swap_per_garment_so_false_flags_on_correct_labels_count():
+    # With every cross-family swap, 100 garments give 6,666 swapped pairs against 100
+    # correct ones, and a scanner that falsely flags 37% of correct labels still scores
+    # 0.99 precision. Spec §8.2: each photo is paired with *another garment's* label.
+    families = {str(i): ("cellulosic", "protein", "synthetic")[i % 3] for i in range(30)}
+    should = [s for _, _, s in swap_pairs(families)]
+    assert should.count(True) == should.count(False) == 30
