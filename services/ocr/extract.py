@@ -132,13 +132,25 @@ def extract(lines: list[TextLine]) -> Extraction:
     return Extraction(None, reason="UNREADABLE")
 
 
+def _mostly_sideways(lines: list[TextLine]) -> bool:
+    """True when most text boxes are taller than wide: the engine read the label rotated,
+    and its reading order (hence which composition belongs to which section) is unreliable."""
+    tall = sum(1 for ln in lines if (ln.box[3] - ln.box[1]) > (ln.box[2] - ln.box[0]))
+    return tall > len(lines) / 2
+
+
 def read_composition(engine, image) -> Extraction:
-    """OCR + extract, retrying at 90°, 180° and 270° when nothing parses."""
+    """OCR + extract, retrying at 90°, 180° and 270° when nothing parses. A reading taken
+    sideways (mostly tall boxes) is skipped, so a scrambled order never reaches the parser."""
     import numpy as np
 
     saw_text = False
     for k in range(4):
-        ex = extract(engine.read(np.ascontiguousarray(np.rot90(image, k))))
+        lines = engine.read(np.ascontiguousarray(np.rot90(image, k)))
+        if lines and _mostly_sideways(lines):
+            saw_text = True
+            continue
+        ex = extract(lines)
         if ex.fibers:
             return ex
         saw_text = saw_text or ex.reason == "UNREADABLE"

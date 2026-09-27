@@ -77,3 +77,30 @@ def test_sideways_label_is_read_after_rotation():
 
     ex = read_composition(SidewaysOnly(), np.zeros((20, 40, 3), np.uint8))
     assert fibres(ex) == [("cotton", 100.0)]
+
+
+def test_a_sideways_reading_is_skipped_for_the_upright_one():
+    # Final review, Important #2: an engine that reads rotated text returns tall boxes in
+    # scrambled order, which parsed as the lining's composition labelled "shell". Readings
+    # whose boxes are mostly taller than wide are skipped, so the upright retry runs.
+    np = pytest.importorskip("numpy")
+    from services.ocr.extract import read_composition
+
+    def tall(text, x):
+        return TextLine(text, 0.95, (x, 0.0, x + 8.0, 30.0))
+
+    class RotatedReader:
+        name = "fake"
+
+        def read(self, image):
+            if image.shape[:2] == (40, 20):  # the label as photographed: sideways
+                return [
+                    tall("LINING:", 0),
+                    tall("100% COTTON", 10),
+                    tall("SHELL:", 20),
+                    tall("100% POLYESTER", 30),
+                ]
+            return [L("SHELL: 100% COTTON", 0), L("LINING: 100% POLYESTER", 1)]  # upright
+
+    ex = read_composition(RotatedReader(), np.zeros((40, 20, 3), np.uint8))
+    assert fibres(ex) == [("cotton", 100.0)] and ex.section == "shell"
