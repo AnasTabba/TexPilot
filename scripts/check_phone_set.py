@@ -26,7 +26,14 @@ def check(root: Path) -> tuple[list[str], dict]:
     for p in files:
         if p.suffix.lower() in (".heic", ".heif"):
             problems.append(f"{p.name}: HEIC photo; set Camera -> Formats -> Most Compatible")
-    photos = {p.stem: p for p in files if p.suffix.lower() in PHOTO_EXTS}
+    photos: dict[str, Path] = {}
+    for p in sorted(files):
+        if p.suffix.lower() not in PHOTO_EXTS:
+            continue
+        if p.stem in photos:
+            first = photos[p.stem].relative_to(root)
+            problems.append(f"{p.stem}: two photos with this name ({first}, {p.relative_to(root)})")
+        photos.setdefault(p.stem, p)
 
     seen: Counter = Counter()
     families: Counter = Counter()
@@ -38,10 +45,12 @@ def check(root: Path) -> tuple[list[str], dict]:
     except UnicodeDecodeError:
         problems.append("ground_truth.csv is not UTF-8: in Excel, Save As -> CSV UTF-8")
         rows = []
-    for row in rows:
+    for n, row in enumerate(rows, 2):  # Excel row numbers: the header is row 1
         row = {k.strip(): (v or "").strip() for k, v in row.items() if k}
         gid = row.get("id", "")
         if not gid:
+            if any(row.values()):  # a fully blank row is Excel's trailing row: ignore it
+                problems.append(f"row {n}: has data but no id")
             continue
         seen[gid] += 1
         if seen[gid] == 2:

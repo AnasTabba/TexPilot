@@ -72,3 +72,18 @@ def test_a_label_we_cannot_parse_is_a_warning_not_a_problem(tmp_path):
     problems, summary = cps.check(_root(tmp_path, rows, photos))
     assert problems == ["002_AT: label_text is empty"]
     assert summary["unparsed"] == ["001_AT"]
+
+
+def test_a_row_with_data_but_no_id_is_named_by_row_number(tmp_path):
+    rows = ",pants,100% COTTON,,AT,x,\n,,,,,,\n"  # the second is Excel's blank trailing row
+    problems, _ = cps.check(_root(tmp_path, rows, []))
+    assert problems == ["row 2: has data but no id"]
+
+
+def test_two_photos_with_the_same_name_are_named(tmp_path):
+    root = _root(tmp_path, "001_AT,pants,100% COTTON,,AT,x,\n",
+                 ["001_AT_garment.jpg", "001_AT_label.jpg"])  # fmt: skip
+    (tmp_path / "old").mkdir()
+    (tmp_path / "old" / "001_AT_garment.png").write_bytes(b"x")
+    text = "\n".join(cps.check(root)[0])
+    assert "001_AT_garment: two photos with this name" in text
