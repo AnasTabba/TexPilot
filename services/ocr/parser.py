@@ -15,14 +15,34 @@ from services.ocr.normalizer import normalize_fiber_name
 #: Percentages must sum to 100 within this tolerance. Care labels round.
 SUM_TOLERANCE = 2.0
 
-_PCT_FIRST = re.compile(r"(\d{1,3})\s*%\s*([A-Za-z][A-Za-z\s\-]{1,24})")
-_NAME_FIRST = re.compile(r"([A-Za-z][A-Za-z\s\-]{1,24}?)\s*[:\-]?\s*(\d{1,3})\s*%")
+_WORD = r"[^\W\d_]"  # any letter, accented included (A-Z missed ALGODÓN)
+_NAME = rf"{_WORD}(?:{_WORD}|[\s\-]){{1,24}}"
+_PCT_FIRST = re.compile(rf"(\d{{1,3}})\s*%\s*({_NAME})")
+_NAME_FIRST = re.compile(rf"({_NAME}?)\s*[:\-]?\s*(\d{{1,3}})\s*%")
+
+#: Words that qualify a fibre without changing it ("RECYCLED POLYESTER" is polyester).
+_QUALIFIERS = frozenset({"recycled", "organic", "combed", "mercerised", "mercerized"})
 
 
 @dataclass(frozen=True)
 class FiberPct:
     name: str
     pct: float
+
+
+def _fibre(name: str) -> str | None:
+    """Canonical fibre at the start of a captured name. Trailing words are dropped one at a
+    time ('COTTON MADE IN PAKISTAN' -> cotton); the first word must still name a fibre, so
+    an unknown fibre still fails."""
+    words = name.split()
+    while words and words[0].lower() in _QUALIFIERS:
+        words.pop(0)
+    while words:
+        canonical = normalize_fiber_name(" ".join(words))
+        if canonical:
+            return canonical
+        words.pop()
+    return None
 
 
 def _collect(text: str) -> list[FiberPct] | None:
@@ -32,7 +52,7 @@ def _collect(text: str) -> list[FiberPct] | None:
         found: list[FiberPct] = []
         for m in pattern.finditer(text):
             name_group = 2 if pct_group == 1 else 1
-            canonical = normalize_fiber_name(m.group(name_group))
+            canonical = _fibre(m.group(name_group))
             if canonical is None:
                 # An unrecognised component makes the whole parse untrustworthy:
                 # dropping it could let the rest sum to 100 and look valid.

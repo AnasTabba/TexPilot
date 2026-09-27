@@ -8,6 +8,8 @@ once the dataset is downloaded.
 
 from __future__ import annotations
 
+import unicodedata
+
 # Canonical names match services.vision.taxonomy.FIBRE_CLASSES where one exists.
 _CODEBOOK: dict[str, str] = {
     "co": "cotton",
@@ -17,7 +19,7 @@ _CODEBOOK: dict[str, str] = {
     "pl": "polyester",
     "poly": "polyester",
     "polyester": "polyester",
-    "pa": "acrylic",
+    "pa": "nylon",  # ISO 2076: PA is polyamide; acrylic is PAN
     "acrylic": "acrylic",
     "pan": "acrylic",
     "ny": "nylon",
@@ -67,7 +69,42 @@ _CODEBOOK: dict[str, str] = {
     "ramie": "ramie",
     "leather": "leather",
     "suede": "suede",
+    # Common label languages (FR, DE, ES, IT, NL, PT). Keys are accent-folded.
+    "coton": "cotton",
+    "baumwolle": "cotton",
+    "algodon": "cotton",
+    "cotone": "cotton",
+    "katoen": "cotton",
+    "poliester": "polyester",
+    "poliestere": "polyester",
+    "elasthanne": "elastane_spandex",
+    "elastano": "elastane_spandex",
+    "elasthan": "elastane_spandex",
+    "laine": "wool",
+    "wolle": "wool",
+    "lana": "wool",
+    "soie": "silk",
+    "seide": "silk",
+    "seta": "silk",
+    "seda": "silk",
+    "leinen": "flax_linen",
+    "lino": "flax_linen",
+    "linho": "flax_linen",
+    "viscosa": "viscose_rayon",
+    "viskose": "viscose_rayon",
+    "poliamida": "nylon",
+    "poliammide": "nylon",
+    "polyamid": "nylon",
+    "acrilico": "acrylic",
+    "acrylique": "acrylic",
+    "polyacryl": "acrylic",
 }
+
+
+def fold_text(text: str) -> str:
+    """Accents stripped and ß expanded, so ALGODÓN and algodon compare equal."""
+    text = text.replace("ß", "ss").replace("ẞ", "SS")
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
 
 
 def normalize_fiber_name(raw: str) -> str | None:
@@ -77,7 +114,7 @@ def normalize_fiber_name(raw: str) -> str | None:
     rather than dropping the component -- silently discarding an unknown fibre
     would let percentages sum to 100 and produce a confident wrong composition.
     """
-    key = " ".join(raw.strip().lower().replace(".", " ").split())
+    key = " ".join(fold_text(raw).strip().lower().replace(".", " ").split())
     if not key:
         return None
     return _CODEBOOK.get(key)
