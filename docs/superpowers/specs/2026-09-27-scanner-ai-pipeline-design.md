@@ -132,10 +132,22 @@ Garment type and fabric are separate outputs: jeans are `pants` + `denim`.
 | **A1** | Grounding DINO-T `IDEA-Research/grounding-dino-tiny` (Apache-2.0) | yes | zero-shot, prompted with the synonyms |
 | **A2** | OWLv2-B `google/owlv2-base-patch16-ensemble` (Apache-2.0) | yes | zero-shot |
 | **B** | RT-DETRv2-R50 `PekingU/rtdetr_v2_r50vd` (Apache-2.0), fine-tuned on Fashionpedia train restricted to the vocabulary | yes | trained on the rented GPU alongside the TextileNet benchmark; Apache-2.0 chosen over Ultralytics YOLO (AGPL-3.0) |
-| **C** | Florence-2-large `microsoft/Florence-2-large` (MIT), phrase grounding | **no** | reports `confidence: null`; the detection threshold cannot apply |
+| **C** | Florence-2-large `florence-community/Florence-2-large` (MIT), phrase grounding | **no** | reports `confidence: null`; the detection threshold cannot apply |
 
 All four load through Hugging Face `transformers` (one new pinned dependency). Only the
 configured backend is loaded at serve time.
+
+**Florence-2 details** (added 2026-09-27 for week 3):
+- The checkpoint is `florence-community/Florence-2-large`: the same MIT weights as
+  `microsoft/Florence-2-large`, converted to the `Florence2ForConditionalGeneration` class
+  that `transformers` ships (≥ 4.56; we pin 5.17). No `trust_remote_code`. 1.55 GB.
+- Detection runs `<CAPTION_TO_PHRASE_GROUNDING>` on one caption built from the §4.1
+  synonyms. Each grounded phrase maps back to its canonical class; phrases outside the
+  vocabulary are dropped.
+- It runs in float16 on MPS/CUDA and float32 on CPU.
+- The detector and the OCR engine share one loaded model per (checkpoint, device) through
+  a weak-reference cache. Loading both costs one model, and dropping both frees it, so the
+  bake-off still holds one backend at a time.
 
 ### 4.3 Primary garment
 
@@ -177,7 +189,7 @@ decided by the bake-off.
 |---|---|---|
 | 1 | PaddleOCR PP-OCRv5 (Apache-2.0) | portable (Linux too), multilingual |
 | 2 | Apple Vision `VNRecognizeTextRequest` via PyObjC | macOS only; accurate mode; **language correction off** — it rewrites fibre codes such as `EA`, `PES` into words |
-| 3 | Florence-2 `<OCR_WITH_REGION>` | shares the detector C model; no extra memory when C is loaded |
+| 3 | Florence-2 `<OCR_WITH_REGION>` | shares the detector C model; no extra memory when C is loaded. Quad boxes become axis-aligned; no per-line confidence |
 
 ### 5.2 Label detection
 
@@ -201,8 +213,9 @@ composition is unreadable.
    that **agree** raise confidence; ones that **disagree** return nothing (unreadable) —
    never a guess.
 5. If nothing parses, retry the OCR at 90°, 180° and 270°.
-6. `ocr_confidence` = mean confidence of the lines used; `section` records which section
-   was read (e.g. `shell`, or `null` when unlabelled).
+6. `ocr_confidence` = mean confidence of the lines used, or `null` when the engine gives
+   none (Florence-2); `section` records which section was read (e.g. `shell`, or `null`
+   when unlabelled).
 
 ### 5.4 Normaliser
 
@@ -411,7 +424,7 @@ benchmark; the final TextileNet split once the manifest scrape completes.
 | 3 | Garment crops from phones differ from TextileNet product photos | white-background crop; phone-simulation augmentation in the fine-tune; measure the gap (the parent's headline result) |
 | 4 | Memory or latency on 16 GB | load only the configured backends; the bake-off runs backends one at a time |
 | 5 | PaddleOCR install friction on macOS arm64 / Python 3.10 | Apple Vision covers M1; Paddle stays optional |
-| 6 | Florence-2 needs a specific `transformers` version or `trust_remote_code` | pin `transformers`; isolate in its backend module |
+| 6 | Florence-2 needs a specific `transformers` version or `trust_remote_code` | resolved: the native class in the pinned `transformers` 5.17 loads `florence-community/Florence-2-large`; the backend module isolates it |
 | 7 | Fashionpedia is several GB over a slow home link | download it on the rented GPU box, not the laptop |
 | 8 | Head B hand labels never made | Head B returns `None`; the treatment check stays off; report it |
 
