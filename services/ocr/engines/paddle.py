@@ -57,5 +57,11 @@ class PaddleEngine:
         self.proc.stdin.flush()
         return decode_reply(self._readline())
 
-    def close(self) -> None:
-        self.proc.terminate()
+    def close(self, timeout_s: float = 10.0) -> None:
+        """Let the worker exit on its own: EOF on stdin ends its loop. A kill signal would
+        land in Paddle's crash handler, which segfaults and pops a macOS crash dialog."""
+        try:
+            self.proc.stdin.close()
+            self.proc.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            self.proc.terminate()

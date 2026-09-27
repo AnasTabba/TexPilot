@@ -46,3 +46,42 @@ def test_worker_takes_its_own_folder_off_the_import_path():
     finally:
         while here in sys.path:
             sys.path.remove(here)
+
+
+class _Proc:
+    def __init__(self, hangs=False):
+        self.hangs, self.stdin_closed, self.terminated = hangs, False, False
+        self.stdin = self
+
+    def close(self):  # stdin.close()
+        self.stdin_closed = True
+
+    def wait(self, timeout=None):
+        import subprocess
+
+        if self.hangs:
+            raise subprocess.TimeoutExpired("worker", timeout)
+        return 0
+
+    def terminate(self):
+        self.terminated = True
+
+
+def test_close_lets_the_worker_exit_instead_of_killing_it():
+    # A kill signal lands in Paddle's own crash handler, which segfaults and pops a macOS
+    # "Python quit unexpectedly" dialog. Closing stdin ends the worker's loop cleanly.
+    from services.ocr.engines.paddle import PaddleEngine
+
+    engine = PaddleEngine.__new__(PaddleEngine)
+    engine.proc = _Proc()
+    engine.close()
+    assert engine.proc.stdin_closed and not engine.proc.terminated
+
+
+def test_close_still_stops_a_worker_that_hangs():
+    from services.ocr.engines.paddle import PaddleEngine
+
+    engine = PaddleEngine.__new__(PaddleEngine)
+    engine.proc = _Proc(hangs=True)
+    engine.close()
+    assert engine.proc.terminated
