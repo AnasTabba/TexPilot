@@ -72,6 +72,17 @@ It will return `INSUFFICIENT_EVIDENCE` with the composition parsed correctly —
 is no trained model yet, so the service abstains. That is the intended behaviour of
 the base, not a broken build.
 
+## Run the real scanner (M1 demo, Apple Silicon Mac)
+
+```bash
+make setup-ml                     # once
+make api-scanner                  # loads ~2 GB of models (~1 min), then serves on :8000
+.venv/bin/python scripts/scan_demo.py --garment shirt.jpg --label label.jpg
+```
+
+Needs `models/scanner-v1` (see `training/scanner/fit_heads.py`). Phones reach the server
+at `http://<this-mac's-ip>:8000`.
+
 ## Where to start
 
 Read `docs/superpowers/specs/2026-09-20-fabric-verification-scanner-design.md` first.
