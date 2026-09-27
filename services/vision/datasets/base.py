@@ -28,6 +28,9 @@ class Sample:
     fabric: str | None = None
     fibre_family: str | None = None
     treatment: str | None = None
+    garment_type: str | None = None  # phone set: services.vision.garment vocabulary
+    label_image_path: Path | None = None  # phone set: the care-label photo
+    label_text: str | None = None  # phone set: composition typed exactly as printed
 
 
 class FabricDataset(ABC):
