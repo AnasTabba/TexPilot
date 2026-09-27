@@ -42,3 +42,25 @@ def test_any_pixel_mode_becomes_rgb(mode):
 def test_undecodable_bytes_raise_unsupported_image(data):
     with pytest.raises(UnsupportedImage):
         decode_image(data)
+
+
+def _png_header(width, height):
+    import struct
+    import zlib
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    chunk = b"IHDR" + ihdr
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + struct.pack(">I", len(ihdr))
+        + chunk
+        + struct.pack(">I", zlib.crc32(chunk))
+        + b"\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+
+
+def test_a_200_megapixel_photo_is_rejected_not_a_server_error():
+    # Final review, Important #4: Pillow's DecompressionBombError is not an OSError, so it
+    # escaped as a 500, and the app's offline queue retries every 5xx forever.
+    with pytest.raises(UnsupportedImage, match="too large"):
+        decode_image(_png_header(16320, 12240))

@@ -22,5 +22,8 @@ def decode_image(data: bytes, max_side: int = MAX_SIDE) -> np.ndarray:
             if max(im.size) > max_side:
                 im.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
             return np.asarray(im).copy()
+    except Image.DecompressionBombError as e:
+        # Not an OSError: uncaught it became a 500, which the app's queue retries forever.
+        raise UnsupportedImage(f"image too large to decode safely: {e}") from e
     except (UnidentifiedImageError, OSError, SyntaxError, ValueError) as e:
         raise UnsupportedImage(f"cannot decode image: {e}") from e
