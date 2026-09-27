@@ -31,6 +31,7 @@ def check(root: Path) -> tuple[list[str], dict]:
     seen: Counter = Counter()
     families: Counter = Counter()
     types: Counter = Counter()
+    unparsed: list[str] = []
     try:
         with open(root / "ground_truth.csv", encoding="utf-8-sig", newline="") as f:
             rows = list(csv.DictReader(f))
@@ -55,9 +56,11 @@ def check(root: Path) -> tuple[list[str], dict]:
         fabric = row.get("fabric_structure", "").lower()
         if fabric and fabric not in FABRIC_CLASSES:
             problems.append(f"{gid}: fabric_structure {fabric!r} is not one of the 27")
-        family = label_family(row.get("label_text", "")) if row.get("label_text") else None
-        if family is None:
-            problems.append(f"{gid}: label_text does not parse; copy it exactly as printed")
+        family = label_family(row["label_text"]) if row.get("label_text") else None
+        if not row.get("label_text"):
+            problems.append(f"{gid}: label_text is empty")
+        elif family is None:
+            unparsed.append(gid)  # a fibre we can't read; left out of scoring, not an error
         else:
             families[family] += 1
         for role in ROLES:
@@ -69,7 +72,12 @@ def check(root: Path) -> tuple[list[str], dict]:
         if gid is None or gid not in seen:
             problems.append(f"{p.name}: photo has no row in ground_truth.csv")
 
-    summary = {"garments": len(seen), "by_family": dict(families), "by_type": dict(types)}
+    summary = {
+        "garments": len(seen),
+        "by_family": dict(families),
+        "by_type": dict(types),
+        "unparsed": unparsed,
+    }
     return problems, summary
 
 
@@ -78,6 +86,9 @@ def main() -> int:
     problems, summary = check(root)
     print(f"{summary['garments']} garments; families {summary['by_family']}")
     print(f"types {summary['by_type']}")
+    for gid in summary["unparsed"]:
+        print(f"  ~ {gid}: label_text does not parse. Fine if it is copied exactly as printed;"
+              " it is left out of OCR and fibre-family scoring.")  # fmt: skip
     for p in problems:
         print("  -", p)
     print("OK" if not problems else f"{len(problems)} problem(s) to fix")

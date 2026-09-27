@@ -46,9 +46,10 @@ def test_each_mistake_is_named(tmp_path):
             "009_AT_garment.jpg",
         ],
     )
-    text = "\n".join(cps.check(root)[0])
+    problems, summary = cps.check(root)
+    text = "\n".join(problems)
     assert "001_AT: garment_type 'trousers' is not one of the 14" in text
-    assert "002_AT: label_text does not parse" in text
+    assert summary["unparsed"] == ["002_AT"]  # a warning, not a problem
     assert "002_AT: fabric_structure 'denimm' is not one of the 27" in text
     assert "002_AT: duplicate id" in text
     assert "003_AT: no garment photo" in text
@@ -62,3 +63,12 @@ def test_a_csv_not_saved_as_utf8_is_named_not_a_crash(tmp_path):
     )
     problems, _ = cps.check(tmp_path)
     assert any("CSV UTF-8" in p for p in problems)
+
+
+def test_a_label_we_cannot_parse_is_a_warning_not_a_problem(tmp_path):
+    # LUREX is copied correctly; the fix is to leave it out of scoring, not to edit it.
+    rows = "001_AT,pants,100% LUREX,,AT,x,\n002_AT,pants,,,AT,x,\n"
+    photos = [f"00{i}_AT_{r}.jpg" for i in (1, 2) for r in ("garment", "label")]
+    problems, summary = cps.check(_root(tmp_path, rows, photos))
+    assert problems == ["002_AT: label_text is empty"]
+    assert summary["unparsed"] == ["001_AT"]
