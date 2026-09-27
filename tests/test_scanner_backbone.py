@@ -20,3 +20,14 @@ def test_preprocess_matches_the_training_eval_transform(shape):
     got = preprocess(img, MEAN, STD)
     assert got.shape == (3, 224, 224)
     assert np.abs(got - expected).max() < 1e-4
+
+
+def test_large_crops_are_shrunk_without_aliasing():
+    # Final review, Important #5: training images were JPEG-draft-decoded (a power-of-two,
+    # area-like reduction) before a small linear resize; serving resized ~1300 px phone
+    # crops straight to 256 with INTER_LINEAR, which aliases fine weaves into moire.
+    x = np.arange(1280, dtype=np.float32)
+    stripes = 127.5 + 100.0 * np.sin(2 * np.pi * x / 2.2)  # period 2.2 px: a fine weave
+    img = np.repeat(np.repeat(stripes[None, :, None], 1280, 0), 3, 2).round().astype(np.uint8)
+    out = preprocess(img, (0.0, 0.0, 0.0), (1 / 255, 1 / 255, 1 / 255))  # back to pixel units
+    assert out.std() < 0.3 * stripes.std(), "fine texture aliased into a strong pattern"

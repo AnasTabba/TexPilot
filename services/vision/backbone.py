@@ -31,6 +31,15 @@ def preprocess(
 
     h, w = view.shape[:2]
     target = int(round(img_size / crop_pct))
+    # Training JPEGs were draft-decoded first: a power-of-two, area-like reduction leaving
+    # the short side in [target, 2*target). Do the same here, or fine weaves in large
+    # phone crops alias into moire that the heads never saw in training.
+    factor = 1
+    while min(h, w) // (factor * 2) >= target:
+        factor *= 2
+    if factor > 1:
+        view = cv2.resize(view, (w // factor, h // factor), interpolation=cv2.INTER_AREA)
+        h, w = view.shape[:2]
     scale = target / min(h, w)
     nh, nw = max(target, int(round(h * scale))), max(target, int(round(w * scale)))
     resized = cv2.resize(view, (nw, nh), interpolation=cv2.INTER_LINEAR)
