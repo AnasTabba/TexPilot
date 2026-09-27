@@ -57,12 +57,18 @@ class PhoneDataset(FabricDataset):
         photos = {p.stem: p for p in self.root.rglob("*") if p.suffix.lower() in PHOTO_EXTS}
         self.samples: list[Sample] = []
         self.missing: list[str] = []
+        self.duplicates: list[str] = []  # repeated ids; the first row is kept
+        seen: set[str] = set()
         with open(self.root / "ground_truth.csv", encoding="utf-8-sig", newline="") as f:
             for row in csv.DictReader(f):
                 row = {k.strip(): (v or "").strip() for k, v in row.items() if k}
                 gid = row.get("id", "")
                 if not gid:
                     continue
+                if gid in seen:
+                    self.duplicates.append(gid)
+                    continue
+                seen.add(gid)
                 garment = photos.get(f"{gid}_garment")
                 if garment is None:
                     self.missing.append(gid)

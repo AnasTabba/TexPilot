@@ -62,3 +62,9 @@ def test_fabric_is_lowercased_like_the_checker_does(tmp_path):
 def test_a_label_typed_over_lines_in_one_excel_cell_parses():
     text = "SHELL: 60% COTTON 40% POLYESTER\nLINING: 100% POLYESTER"  # Alt+Enter
     assert label_family(text) == "blend"
+
+
+def test_a_repeated_id_is_one_garment_and_is_listed(tmp_path):
+    rows = "001_AT,pants,100% COTTON,,AT,x,\n001_AT,dress,100% WOOL,,AT,x,\n"
+    ds = PhoneDataset(_set(tmp_path, rows, ["001_AT_garment.jpg"]))
+    assert len(ds) == 1 and ds[0].garment_type == "pants" and ds.duplicates == ["001_AT"]
