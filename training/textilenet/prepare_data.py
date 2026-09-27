@@ -396,7 +396,7 @@ def _manifest(data_root: Path, partition: str, split: str) -> list[list[str]]:
 
 
 def cmd_index(args: argparse.Namespace) -> int:
-    out = args.data_root / "splits" / f"{args.partition}.csv"
+    out = args.out or args.data_root / "splits" / f"{args.partition}.csv"
     if out.exists() and not args.force:
         raise SystemExit(
             f"{out} exists and is frozen; runs already depend on it. --force rebuilds."
@@ -418,6 +418,8 @@ def cmd_index(args: argparse.Namespace) -> int:
                     continue
                 if label_dir.name not in classes:
                     unknown.add(label_dir.name)
+                    continue
+                if split == "train" and source not in args.train_sources:
                     continue
                 for p in label_dir.iterdir():
                     if p.suffix.lower() in IMAGE_EXTS and not p.name.startswith("."):
@@ -525,6 +527,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--val-frac", type=float, default=0.1)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--force", action="store_true", help="overwrite an existing split")
+    p.add_argument(
+        "--train-sources",
+        nargs="+",
+        default=["archive", "scraped"],
+        choices=["archive", "scraped"],
+        help="where train images come from; test always uses both",
+    )
+    p.add_argument("--out", type=Path, help="default: <data-root>/splits/<partition>.csv")
 
     args = ap.parse_args(argv)
     if shutil.which("curl") is None and args.cmd == "download":

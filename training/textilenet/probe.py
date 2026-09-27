@@ -28,57 +28,51 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 
 from training.textilenet.data import TextileDataset
+from training.textilenet.feature_cache import FeatureCache
 from training.textilenet.metrics import summarize
 from training.textilenet.recipe import lr_at
 from training.textilenet.splits import class_index, read_csv
 from training.textilenet.train import PRESETS, build_transforms, pick_device
 
-SHARD = 8192
+SHARD = 4096  # images per cache shard; the unit of resumption
 
 
 @torch.no_grad()
 def extract(args: argparse.Namespace, rows, device) -> np.ndarray:
-    out_dir = args.feature_dir / args.partition / f"{args.model}_{args.img_size}"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    manifest = out_dir / "paths.txt"
-    paths = [r.path for r in rows]
-    if manifest.exists() and manifest.read_text().splitlines() != paths:
-        raise SystemExit(f"{out_dir} was built from a different split; delete it to rebuild")
-    manifest.write_text("\n".join(paths))
-
-    name = PRESETS.get(args.model, {"timm_name": args.model})["timm_name"]
-    kw = {"img_size": args.img_size} if name.startswith(("vit_", "eva")) else {}
-    model = timm.create_model(name, pretrained=True, num_classes=0, **kw).eval().to(device)
-    half = device.type in ("cuda", "mps")
-    if half:
-        model.half()
-    cfg = timm.data.resolve_model_data_config(model)
-    _, tf = build_transforms(args.img_size, cfg["mean"], cfg["std"], args.crop_pct)
-    ds = TextileDataset(
-        rows,
-        args.data_root,
-        class_index(args.partition),
-        tf,
-        decode_size=math.ceil(args.img_size / args.crop_pct),
-    )
-
-    n_shards = math.ceil(len(rows) / SHARD)
-    for k in range(n_shards):
-        shard = out_dir / f"shard_{k:04d}.npy"
-        if shard.exists():
-            continue
-        idx = range(k * SHARD, min((k + 1) * SHARD, len(rows)))
-        loader = DataLoader(Subset(ds, idx), args.batch_size, num_workers=args.workers)
-        feats, t0 = [], time.time()
-        for x, _ in loader:
-            x = x.to(device)
-            feats.append(pool(model, x.half() if half else x).float().cpu().numpy())
-        np.save(shard.with_suffix(".tmp.npy"), np.concatenate(feats).astype(np.float16))
-        shard.with_suffix(".tmp.npy").rename(shard)
-        rate = len(idx) / (time.time() - t0)
-        eta_min = (n_shards - k - 1) * SHARD / rate / 60
-        print(f"shard {k + 1}/{n_shards}: {rate:.0f} img/s, ~{eta_min:.0f} min left", flush=True)
-    return np.concatenate([np.load(out_dir / f"shard_{k:04d}.npy") for k in range(n_shards)])
+    """Features for ``rows`` in order; only images not already cached are computed."""
+    cache = FeatureCache(args.feature_dir / args.partition / f"{args.model}_{args.img_size}")
+    todo = [r for r in rows if r.path in set(cache.missing([r.path for r in rows]))]
+    if todo:
+        print(f"extracting {len(todo)} of {len(rows)} images (rest cached)", flush=True)
+        name = PRESETS.get(args.model, {"timm_name": args.model})["timm_name"]
+        kw = {"img_size": args.img_size} if name.startswith(("vit_", "eva")) else {}
+        model = timm.create_model(name, pretrained=True, num_classes=0, **kw).eval().to(device)
+        half = device.type in ("cuda", "mps")
+        if half:
+            model.half()
+        cfg = timm.data.resolve_model_data_config(model)
+        _, tf = build_transforms(args.img_size, cfg["mean"], cfg["std"], args.crop_pct)
+        ds = TextileDataset(
+            todo,
+            args.data_root,
+            class_index(args.partition),
+            tf,
+            decode_size=math.ceil(args.img_size / args.crop_pct),
+        )
+        n_shards = math.ceil(len(todo) / SHARD)
+        t_all = time.time()
+        for k in range(n_shards):
+            idx = range(k * SHARD, min((k + 1) * SHARD, len(todo)))
+            loader = DataLoader(Subset(ds, idx), args.batch_size, num_workers=args.workers)
+            feats, t0 = [], time.time()
+            for x, _ in loader:
+                x = x.to(device)
+                feats.append(pool(model, x.half() if half else x).float().cpu().numpy())
+            cache.add([todo[i].path for i in idx], np.concatenate(feats))
+            rate = len(idx) / (time.time() - t0)
+            left = (len(todo) - idx.stop) / max(idx.stop / (time.time() - t_all), 1e-9) / 60
+            print(f"shard {k + 1}/{n_shards}: {rate:.0f} img/s, ~{left:.0f} min left", flush=True)
+    return cache.assemble([r.path for r in rows])
 
 
 def pool(model, x):
@@ -116,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--img-size", type=int, default=224)
     ap.add_argument("--crop-pct", type=float, default=0.875)
     ap.add_argument("--data-root", type=Path, default=Path("data"))
+    ap.add_argument("--split-csv", type=Path, help="default: <data-root>/splits/<partition>.csv")
+    ap.add_argument("--tag", help="run name (default: probe_<model>)")
     ap.add_argument("--feature-dir", type=Path, default=Path("data/features"))
     ap.add_argument("--out", type=Path, default=Path("runs"))
     ap.add_argument("--batch-size", type=int, default=64)
@@ -128,11 +124,8 @@ def main(argv: list[str] | None = None) -> int:
     device = pick_device(args.device)
     labels = class_index(args.partition)
     classes = sorted(labels, key=labels.get)
-    rows = [
-        r
-        for r in read_csv(args.data_root / "splits" / f"{args.partition}.csv")
-        if (args.data_root / r.path).exists()
-    ]
+    split_csv = args.split_csv or args.data_root / "splits" / f"{args.partition}.csv"
+    rows = [r for r in read_csv(split_csv) if (args.data_root / r.path).exists()]
     feats = extract(args, rows, device)
 
     split = np.array([r.split for r in rows])
@@ -159,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     lr, wd = max(scores, key=scores.get)
     print(f"selected on val: lr {lr:g} wd {wd:g}")
 
-    tag = f"probe_{args.model}"
+    tag = args.tag or f"probe_{args.model}"
     for seed in args.seeds:
         head = fit_linear(xtr, ytr, len(classes), lr, wd, args.epochs, seed, device)
         val = summarize(logits(head, xva), yva.cpu().numpy(), classes)
