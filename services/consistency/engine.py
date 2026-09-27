@@ -58,58 +58,68 @@ def evaluate(
     composition: list[FiberPct] | None,
     kb_path: Path = DEFAULT_KB_PATH,
 ) -> Verdict:
-    """Compare vision output against a stated composition."""
+    """Compare vision output against a stated composition.
+
+    PASS needs the structure check to have run. The family check can only add a flag:
+    a confident family that the label does not mention is evidence of a mislabel, but a
+    matching family alone is too coarse to vouch for the label.
+    """
     kb = load_kb(kb_path)
     tol = kb["tolerance"]
     version = int(kb["version"])
 
-    # No structure prediction, or no label read -> nothing to cross-check.
-    if vision.structure is None or composition is None:
+    if composition is None:
         return Verdict("INSUFFICIENT_EVIDENCE", kb_version=version)
-
-    if vision.structure.confidence < tol["min_visual_confidence"]:
-        return Verdict("INSUFFICIENT_EVIDENCE", kb_version=version)
-
-    entry = kb["fabrics"].get(vision.structure.label)
-    if entry is None:
-        return Verdict("INSUFFICIENT_EVIDENCE", kb_version=version)
-
-    plausible = set(entry["families"])
     stated = _dominant_families(composition, tol["min_component_pct"])
     if not stated:
         return Verdict("INSUFFICIENT_EVIDENCE", kb_version=version)
 
     flags: list[Flag] = []
-
-    if not (stated & plausible):
-        flags.append(
-            Flag(
-                code="COMPOSITION_IMPLAUSIBLE",
-                message=(
-                    f"Label states {'/'.join(sorted(stated))} but the fabric reads as "
-                    f"{vision.structure.label}, which is normally "
-                    f"{'/'.join(sorted(plausible))}."
-                ),
-                severity="high",
+    structure_checked = False
+    s = vision.structure
+    entry = kb["fabrics"].get(s.label) if s is not None else None
+    if s is not None and entry is not None and s.confidence >= tol["min_visual_confidence"]:
+        structure_checked = True
+        plausible = set(entry["families"])
+        if not (stated & plausible):
+            flags.append(
+                Flag(
+                    code="COMPOSITION_IMPLAUSIBLE",
+                    message=(
+                        f"Label states {'/'.join(sorted(stated))} but the fabric reads as "
+                        f"{s.label}, which is normally {'/'.join(sorted(plausible))}."
+                    ),
+                    severity="high",
+                )
             )
-        )
+        expected = entry.get("expected_treatment")
+        t = vision.treatment
+        if (
+            expected
+            and t is not None
+            and t.confidence >= tol["min_visual_confidence"]
+            and t.label != expected
+        ):
+            flags.append(
+                Flag(
+                    code="TREATMENT_UNEXPECTED",
+                    message=f"{s.label} is normally {expected}, but this reads as {t.label}.",
+                    severity="medium",
+                )
+            )
 
-    expected = entry.get("expected_treatment")
-    if (
-        expected
-        and vision.treatment is not None
-        and vision.treatment.confidence >= tol["min_visual_confidence"]
-        and vision.treatment.label != expected
-    ):
+    f = vision.fibre_family
+    if f is not None and f.confidence >= tol["family_min_confidence"] and f.label not in stated:
         flags.append(
             Flag(
-                code="TREATMENT_UNEXPECTED",
+                code="FAMILY_MISMATCH",
                 message=(
-                    f"{vision.structure.label} is normally {expected}, "
-                    f"but this reads as {vision.treatment.label}."
+                    f"Label states {'/'.join(sorted(stated))} but the fabric reads as {f.label}."
                 ),
                 severity="medium",
             )
         )
 
-    return Verdict("FLAG" if flags else "PASS", tuple(flags), version)
+    if flags:
+        return Verdict("FLAG", tuple(flags), version)
+    return Verdict("PASS" if structure_checked else "INSUFFICIENT_EVIDENCE", kb_version=version)

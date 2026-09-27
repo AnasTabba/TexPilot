@@ -9,13 +9,17 @@
 #
 # `expected_treatment` is checked only when present.
 
-version: 1
+version: 2
 tolerance:
   # Minimum visual confidence before a flag may be raised. Tuned for PRECISION:
   # a scanner that cries wolf gets switched off at the QC desk.
   min_visual_confidence: 0.70
   # A stated fibre below this share is ignored (elastane trims etc.).
   min_component_pct: 15.0
+  # Head C (fibre family) must be at least this confident to raise FAMILY_MISMATCH.
+  # Calibrated confidence, so comparable across models. Tuned for precision in the
+  # week-2 bake-off (spec §8.3).
+  family_min_confidence: 0.90
 
 fabrics:
   canvas:       {families: [cellulosic, synthetic]}

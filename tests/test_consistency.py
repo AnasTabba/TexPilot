@@ -1,4 +1,4 @@
-from services.consistency.engine import evaluate
+from services.consistency.engine import evaluate, load_kb
 from services.ocr.parser import FiberPct
 from services.vision.predictor import HeadOutput, VisionOutput
 
@@ -55,3 +55,46 @@ def test_unexpected_treatment_is_flagged():
     )
     assert v.outcome == "FLAG"
     assert any(f.code == "TREATMENT_UNEXPECTED" for f in v.flags)
+
+
+def _family(label, conf=0.95, structure=None):
+    return VisionOutput(
+        structure=structure, treatment=None, fibre_family=HeadOutput(label, conf, [])
+    )
+
+
+def test_confident_family_mismatch_flags_even_without_a_structure():
+    v = evaluate(_family("synthetic"), [FiberPct("cotton", 100.0)])
+    assert v.outcome == "FLAG"
+    assert [f.code for f in v.flags] == ["FAMILY_MISMATCH"]
+    assert v.flags[0].severity == "medium"
+    assert "cellulosic" in v.flags[0].message and "synthetic" in v.flags[0].message
+
+
+def test_unsure_family_does_not_flag():
+    v = evaluate(_family("synthetic", conf=0.6), [FiberPct("cotton", 100.0)])
+    assert v.outcome == "INSUFFICIENT_EVIDENCE"
+
+
+def test_blend_label_that_includes_the_family_does_not_flag():
+    v = evaluate(_family("synthetic"), [FiberPct("cotton", 60.0), FiberPct("polyester", 40.0)])
+    assert v.outcome == "INSUFFICIENT_EVIDENCE" and not v.flags
+
+
+def test_family_agreement_with_a_checked_structure_passes():
+    v = evaluate(
+        _family("cellulosic", structure=HeadOutput("denim", 0.95, [])), [FiberPct("cotton", 100.0)]
+    )
+    assert v.outcome == "PASS"
+
+
+def test_structure_and_family_can_both_flag():
+    v = evaluate(
+        _family("synthetic", structure=HeadOutput("tweed", 0.95, [])), [FiberPct("cotton", 100.0)]
+    )
+    assert {f.code for f in v.flags} == {"COMPOSITION_IMPLAUSIBLE", "FAMILY_MISMATCH"}
+
+
+def test_kb_is_version_two_with_a_family_threshold():
+    kb = load_kb()
+    assert kb["version"] == 2 and 0.5 < kb["tolerance"]["family_min_confidence"] <= 1.0
