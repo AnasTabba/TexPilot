@@ -3,7 +3,7 @@
 from services.consistency.engine import evaluate, load_kb
 from services.ocr.parser import FiberPct
 from services.vision.predictor import HeadOutput, VisionOutput
-from training.scanner.tune_thresholds import choose, sweep
+from training.scanner.tune_thresholds import choose, evidence_grid, sweep
 
 
 def _rec(conf, family, stated_family, should):
@@ -37,3 +37,10 @@ def test_faux_fur_is_exempt_from_the_family_check_like_the_engine():
     vision = VisionOutput(HeadOutput("faux_fur", 0.95, []), None, HeadOutput("protein", 0.95, []))
     assert evaluate(vision, [FiberPct("polyester", 100.0)]).outcome != "FLAG"
     assert row["flags"] == 0
+
+
+def test_grid_starts_at_the_lowest_confidence_the_data_shows():
+    # Heads abstain below their own threshold, so every grid value under the lowest
+    # observed confidence flags the same pairs; choosing one would claim untested ground.
+    assert evidence_grid([0.934, 0.97], [0.5, 0.9, 0.95], current=0.9) == [0.93, 0.95]
+    assert evidence_grid([], [0.5, 0.9], current=0.7) == [0.7]  # no evidence: keep kb value

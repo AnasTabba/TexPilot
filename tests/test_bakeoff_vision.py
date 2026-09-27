@@ -52,3 +52,29 @@ def test_threshold_records_pair_vision_with_labels_and_skip_failures():
         (("synthetic",), False),
         (("cellulosic",), True),
     }
+
+
+def test_vision_section_reports_n_and_chooses_thresholds_from_the_data(tmp_path, monkeypatch):
+    import json
+
+    import services.vision.scanner as scanner
+    from training.scanner.bakeoff import vision_section
+
+    labels = {"1": "100% COTTON", "2": "100% POLYESTER", "3": "100% WOOL"}
+    reads = {"1": "cellulosic", "2": "synthetic", "3": "protein"}  # every head is right
+    samples = []
+    for (gid, text), colour in zip(labels.items(), ("red", "green", "blue"), strict=True):
+        p = tmp_path / f"{gid}_garment.jpg"
+        Image.new("RGB", (20, 20), colour).save(p)  # distinct bytes, so the fake can tell
+        samples.append(Sample(image_path=p, group_id=gid, label_text=text))
+
+    class ByPhoto:
+        def predict(self, data):
+            gid = next(s.group_id for s in samples if s.image_path.read_bytes() == data)
+            return VisionOutput(None, None, HeadOutput(reads[gid], 0.93, []))
+
+    monkeypatch.setattr(scanner, "build_scanner", lambda *a, **k: ByPhoto())
+    md = "\n".join(vision_section(samples, "gdino", tmp_path, "cpu", tmp_path))
+    assert "Domain: phone; n = 3 correct-label and 3 swapped-label pairs." in md
+    best = json.loads((tmp_path / "thresholds.json").read_text())["best"]
+    assert best["family_min_confidence"] == 0.93 and best["precision"] == 1.0

@@ -7,6 +7,7 @@ outputs recorded once. Thresholds are then swept without re-running any model.
 from __future__ import annotations
 
 import itertools
+import math
 
 from training.scanner.eval_metrics import precision_recall
 
@@ -49,6 +50,16 @@ def sweep(
             }
         )
     return rows
+
+
+def evidence_grid(confs: list[float], grid: list[float], current: float) -> list[float]:
+    """Raise grid values below the lowest observed confidence to it (rounded down): heads
+    abstain below their own threshold, so lower values flag the same pairs and choosing
+    one would claim ground the data never tested. No observations: keep ``current``."""
+    if not confs:
+        return [current]
+    lo = math.floor(min(confs) * 100) / 100
+    return sorted({max(g, lo) for g in grid})
 
 
 def choose(rows: list[dict], target: float = 0.90) -> dict | None:

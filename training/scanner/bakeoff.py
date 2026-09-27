@@ -161,7 +161,7 @@ def vision_section(samples, detector: str, bundle: Path, device, out: Path) -> l
     from services.consistency.engine import load_kb
     from services.vision.datasets.phone import label_family
     from services.vision.scanner import build_scanner
-    from training.scanner.tune_thresholds import choose, sweep
+    from training.scanner.tune_thresholds import choose, evidence_grid, sweep
 
     single = {
         s.group_id: f
@@ -195,11 +195,20 @@ def vision_section(samples, detector: str, bundle: Path, device, out: Path) -> l
     md.append(f"\n**Views (spec §8.3): {views}**\n")
 
     kb = load_kb()
+    tol = kb["tolerance"]
     grid = [round(0.5 + 0.05 * i, 2) for i in range(10)]
-    rows = sweep(threshold_records(results[views][2], single), grid, grid,
+    records = threshold_records(results[views][2], single)
+    visual = evidence_grid([r["structure"][1] for r in records if r["structure"]], grid,
+                           tol["min_visual_confidence"])  # fmt: skip
+    family = evidence_grid([r["family"][1] for r in records if r["family"]], grid,
+                           tol["family_min_confidence"])  # fmt: skip
+    rows = sweep(records, visual, family,
                  kb_fabrics=kb["fabrics"], exempt=kb.get("family_check_exempt", ()))  # fmt: skip
     best = choose(rows, target=0.90)
-    md += ["## KB thresholds (flag precision on swapped labels)", ""]
+    n_own = sum(not r["should_flag"] for r in records)
+    md += ["## KB thresholds (flag precision on swapped labels)", "",
+           f"Domain: phone; n = {n_own} correct-label and {len(records) - n_own} "
+           "swapped-label pairs.", ""]  # fmt: skip
     if best is None:
         md.append("No threshold pair reaches 0.90 precision; keep the current kb.yaml values.")
     else:
