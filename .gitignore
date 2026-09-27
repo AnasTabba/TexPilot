@@ -32,3 +32,8 @@ mlruns/
 *.egg-info/
 build/
 dist/
+
+# Scanner model bundles, the isolated PaddleOCR venv, and plan-execution scratch
+/models/
+.venv-paddle/
+/.superpowers/

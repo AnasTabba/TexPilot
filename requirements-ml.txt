@@ -1,0 +1,6 @@
+# Scanner + benchmark stack, exact versions. `make setup-ml` installs this.
+-r training/textilenet/requirements.txt
+transformers==5.17.0
+tokenizers==0.23.2
+pyobjc-framework-Vision==12.2.2; sys_platform == "darwin"
+pyobjc-framework-Quartz==12.2.2; sys_platform == "darwin"

@@ -24,6 +24,10 @@ ml = [
     "albumentations>=2.0",
     # albumentations imports scipy; 1.15.x wheels fail to load on macOS 27 (dyld).
     "scipy>=1.10,<1.15",
+    "transformers==5.17.0",
+    "huggingface_hub>=1.33,<2",
+    "pyobjc-framework-Vision>=12; sys_platform == 'darwin'",
+    "pyobjc-framework-Quartz>=12; sys_platform == 'darwin'",
     "opencv-python-headless>=4.9",
     "matplotlib>=3.8",
     "numpy>=1.26",
@@ -41,7 +45,8 @@ include = ["services*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q"
+addopts = "-q -m 'not slow'"
+markers = ["slow: loads real model weights or local data; run with `pytest -m slow`"]
 
 [tool.ruff]
 line-length = 100

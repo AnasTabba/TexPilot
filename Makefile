@@ -16,6 +16,7 @@ setup: $(VENV) ## Install core + dev deps (fast, no torch)
 
 setup-ml: setup ## Additionally install the ML stack (large download)
 	$(PIP) install -q -e ".[ml]"
+	$(PIP) install -q -r requirements-ml.txt
 
 test: ## Run the test suite
 	$(VENV)/bin/pytest
