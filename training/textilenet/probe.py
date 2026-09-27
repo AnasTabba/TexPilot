@@ -41,7 +41,8 @@ SHARD = 4096  # images per cache shard; the unit of resumption
 def extract(args: argparse.Namespace, rows, device) -> np.ndarray:
     """Features for ``rows`` in order; only images not already cached are computed."""
     cache = FeatureCache(args.feature_dir / args.partition / f"{args.model}_{args.img_size}")
-    todo = [r for r in rows if r.path in set(cache.missing([r.path for r in rows]))]
+    missing = set(cache.missing([r.path for r in rows]))
+    todo = [r for r in rows if r.path in missing]
     if todo:
         print(f"extracting {len(todo)} of {len(rows)} images (rest cached)", flush=True)
         name = PRESETS.get(args.model, {"timm_name": args.model})["timm_name"]
