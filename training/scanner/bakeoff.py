@@ -104,6 +104,114 @@ def pick(results: dict[str, tuple[float, float]]) -> str:
     return min(contenders, key=contenders.get)
 
 
+def run_vision(tag: str, samples, loader, cache_dir: Path) -> list[dict]:
+    """The full scanner (detector -> SAM -> crop -> heads) per garment photo, cached."""
+
+    def compute():
+        predictor, rows = loader(), []
+        for s in samples:
+            row = {"id": s.group_id, "garment": None, "structure": None, "family": None,
+                   "seconds": None, "error": None}  # fmt: skip
+            try:
+                data = s.image_path.read_bytes()
+                t = time.perf_counter()
+                out = predictor.predict(data)
+                row["seconds"] = time.perf_counter() - t
+                row["garment"] = out.garment.label if out.garment else None
+                if out.structure:
+                    row["structure"] = [out.structure.label, out.structure.confidence]
+                if out.fibre_family:
+                    row["family"] = [out.fibre_family.label, out.fibre_family.confidence]
+            except Exception as e:  # noqa: BLE001
+                row["error"] = f"{type(e).__name__}: {e}"
+            rows.append(row)
+        del predictor
+        _free()
+        return rows
+
+    return _cached(Path(cache_dir) / f"vision_{tag}.json", compute)
+
+
+def head_accuracy(rows: list[dict], truth: dict[str, str], key: str) -> tuple[float, float, int]:
+    """(accuracy, abstentions counted wrong; coverage; n) over the ids in ``truth``."""
+    scored = [r for r in rows if r["id"] in truth]
+    answered = [r for r in scored if r.get(key)]
+    correct = sum(r[key][0] == truth[r["id"]] for r in answered)
+    n = len(scored)
+    return correct / max(1, n), len(answered) / max(1, n), n
+
+
+def threshold_records(rows: list[dict], families: dict[str, str]) -> list[dict]:
+    from training.scanner.eval_metrics import swap_pairs
+
+    by_id = {r["id"]: r for r in rows if not r.get("error")}
+    return [
+        {
+            "structure": by_id[g]["structure"],
+            "family": by_id[g]["family"],
+            "stated": [families[lab]],
+            "should_flag": should,
+        }  # fmt: skip
+        for g, lab, should in swap_pairs(families)
+        if g in by_id
+    ]
+
+
+def vision_section(samples, detector: str, bundle: Path, device, out: Path) -> list[str]:
+    from services.consistency.engine import load_kb
+    from services.vision.datasets.phone import label_family
+    from services.vision.scanner import build_scanner
+    from training.scanner.tune_thresholds import choose, sweep
+
+    single = {
+        s.group_id: f
+        for s in samples
+        if s.label_text and (f := label_family(s.label_text)) not in (None, "blend")
+    }
+    fabric = {s.group_id: s.fabric for s in samples if s.fabric}
+    md = [
+        "## Heads on the phone set (domain: phone)",
+        "",
+        f"Head C scored on {len(single)} single-family garments; Head A on {len(fabric)} "
+        "with a known fabric. Abstentions count as wrong.",
+        "",
+        "| Views | Head C acc | Head C coverage | Head A acc | p50 s | p95 s |",
+        "|---|---|---|---|---|---|",
+    ]
+    results = {}
+    for tag, patches in (("crop", False), ("crop+patches", True)):
+        rows = run_vision(
+            tag, samples, lambda p=patches: build_scanner(bundle, detector, device, patches=p), out
+        )
+        c_acc, c_cov, _ = head_accuracy(rows, single, "family")
+        a_acc, _, _ = head_accuracy(rows, fabric, "structure")
+        lat = latency([r["seconds"] for r in rows if r["seconds"] is not None] or [0.0])
+        results[tag] = (c_acc, lat["p50"], rows)
+        md.append(
+            f"| {tag} | {c_acc:.3f} | {c_cov:.2f} | {a_acc:.3f} | {lat['p50']:.2f} "
+            f"| {lat['p95']:.2f} |"
+        )
+    views = pick({t: (acc, sec) for t, (acc, sec, _) in results.items()})
+    md.append(f"\n**Views (spec §8.3): {views}**\n")
+
+    kb = load_kb()
+    grid = [round(0.5 + 0.05 * i, 2) for i in range(10)]
+    rows = sweep(threshold_records(results[views][2], single), grid, grid,
+                 kb_fabrics=kb["fabrics"], exempt=kb.get("family_check_exempt", ()))  # fmt: skip
+    best = choose(rows, target=0.90)
+    md += ["## KB thresholds (flag precision on swapped labels)", ""]
+    if best is None:
+        md.append("No threshold pair reaches 0.90 precision; keep the current kb.yaml values.")
+    else:
+        md.append(
+            f"min_visual_confidence **{best['min_visual_confidence']}**, "
+            f"family_min_confidence **{best['family_min_confidence']}**: precision "
+            f"{best['precision']:.3f}, recall {best['recall']:.3f}."
+        )
+    (out / "thresholds.json").write_text(json.dumps({"best": best, "sweep": rows}, indent=1))
+    return md
+
+
 def main(argv: list[str] | None = None) -> int:
     from services.ocr.engines import load_engine
     from services.ocr.parser import FiberPct
@@ -174,6 +282,7 @@ def main(argv: list[str] | None = None) -> int:
             f"| {sum(r['error'] is not None for r in rows.values())} |"
         )
     md.append(f"\n**Default OCR engine (spec §8.3): {pick(ocr_scores)}**\n")
+    md += vision_section(samples, pick(det_scores), args.bundle, device, args.out)
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "bakeoff.md").write_text("\n".join(md) + "\n")
