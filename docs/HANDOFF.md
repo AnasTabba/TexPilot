@@ -189,14 +189,28 @@ Present and tested: `ocr/parser.py`, `ocr/normalizer.py`, `consistency/kb.yaml` 
 
 ### P3 — App (`app/`)
 **Changed by decision 14:** shot 1 is now the **whole garment** (laid flat or on a hanger),
-not a close-up. Upload **JPEG**: the API answers HEIC with a 422. The new optional
-response fields (`garment`, `stated_composition.section`, `info` flags) are additive;
-run `npm run gen:api` after the vision branch merges.
+not a close-up. Upload **JPEG**: the API answers HEIC, empty or non-image uploads with a
+**422 in every mode**, stub included.
+
+**When `feat/vision-textilenet-train` and `feat/app-scaffold` merge:**
+- The app branch adds a CI step checking that `src/scanner/api/schema.gen.ts` matches
+  `schemas.py`. Whichever PR lands **second** must regenerate the types
+  (`cd app && npm run gen:api`) in that same PR, or its CI fails. Agree the order
+  between P1 and P3.
+- The new response fields are additive: `garment`, `stated_composition.section`, and
+  flags with `severity: "info"`.
+- **`info` flags explain an abstention; they are not mismatches.** Examples are
+  `NO_GARMENT_DETECTED`, `NO_LABEL_TEXT`, `LABEL_UNREADABLE` and `COMPONENT_FAILED`.
+  Show them apart from "Why it was flagged", which is only for `high` / `medium` flags.
+- A scan can carry two flags with the same `code` (e.g. `COMPONENT_FAILED` from both
+  vision and OCR). **Key flag rows by index, not by `code`.**
+- `services/ocr/`, `services/consistency/` and `services/api/` changed in the vision
+  branch, so P2 reviews that PR too (AGENTS.md rules 3–4).
 
 1. `npx create-expo-app@latest . --template blank-typescript`
-2. Camera capture, two shots: surface (10–20 cm) and care label.
+2. Camera capture, two shots: the **whole garment** and the **care label** (decision 14).
 3. **Capture-quality gating on-device** — blur (variance of Laplacian), exposure, framing. Reject before upload. Cheapest accuracy win in the project.
-4. Offline queue.
+4. Offline queue. Don't retry 4xx responses: a 422 will never succeed.
 5. Render all three verdicts — the abstain state is a normal outcome, not an error screen.
 
 ---
