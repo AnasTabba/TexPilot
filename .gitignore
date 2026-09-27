@@ -37,3 +37,6 @@ dist/
 /models/
 .venv-paddle/
 /.superpowers/
+
+# Bake-off prediction caches (bakeoff.md is committed)
+/results/bakeoff/*.json

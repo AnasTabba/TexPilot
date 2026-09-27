@@ -1,7 +1,7 @@
 # Handoff — where TexPilot stands
 
 **Last updated:** 2026-09-27
-**Repo:** https://github.com/AnasTabba/TexPilot (`main`, 5 commits, CI green)
+**Repo:** https://github.com/AnasTabba/TexPilot (`main`, CI green)
 **Next milestone:** M1, ~early Nov 2026 — a working scanner on a phone
 
 Read this first, then `README.md`, then the scanner spec.
@@ -24,7 +24,7 @@ The scanner's AI is on `main`. The design is
 - Nothing has been built for the planning platform beyond its design document.
 
 ```bash
-make setup && make test    # 24 passing
+make setup && make test
 make api                   # http://127.0.0.1:8000/docs
 ```
 
@@ -203,8 +203,6 @@ not a close-up. Upload **JPEG**: the API answers HEIC, empty or non-image upload
   Show them apart from "Why it was flagged", which is only for `high` / `medium` flags.
 - A scan can carry two flags with the same `code` (e.g. `COMPONENT_FAILED` from both
   vision and OCR). **Key flag rows by index, not by `code`.**
-- `services/ocr/`, `services/consistency/` and `services/api/` changed in the vision
-  branch, so P2 reviews that PR too (AGENTS.md rules 3–4).
 
 1. `npx create-expo-app@latest . --template blank-typescript`
 2. Camera capture, two shots: the **whole garment** and the **care label** (decision 14).
@@ -258,8 +256,8 @@ services/
   ocr/          care-label parsing + fibre normalisation  (P2)
   consistency/  plausibility KB + flag engine             (P2)
 app/            React Native client — not scaffolded      (P3)
-scripts/        check_textilenet.py
-tests/          24 tests
+scripts/        check_textilenet.py, check_phone_set.py, scan_demo.py
+tests/          pytest; `-m ''` adds the slow model tests
 ```
 
 `services/api/schemas.py` is the contract across all three workstreams — change it in a PR all three review.
