@@ -29,6 +29,7 @@ from torch.utils.data import DataLoader, Subset
 
 from training.textilenet.data import TextileDataset
 from training.textilenet.feature_cache import FeatureCache
+from training.textilenet.governor import Governor
 from training.textilenet.metrics import summarize
 from training.textilenet.recipe import lr_at
 from training.textilenet.splits import class_index, read_csv
@@ -61,18 +62,24 @@ def extract(args: argparse.Namespace, rows, device) -> np.ndarray:
             decode_size=math.ceil(args.img_size / args.crop_pct),
         )
         n_shards = math.ceil(len(todo) / SHARD)
+        gov = Governor()  # pauses when the laptop runs hot or short of memory
         t_all = time.time()
         for k in range(n_shards):
             idx = range(k * SHARD, min((k + 1) * SHARD, len(todo)))
             loader = DataLoader(Subset(ds, idx), args.batch_size, num_workers=args.workers)
             feats, t0 = [], time.time()
             for x, _ in loader:
+                gov.pause_if_needed()
                 x = x.to(device)
                 feats.append(pool(model, x.half() if half else x).float().cpu().numpy())
             cache.add([todo[i].path for i in idx], np.concatenate(feats))
             rate = len(idx) / (time.time() - t0)
             left = (len(todo) - idx.stop) / max(idx.stop / (time.time() - t_all), 1e-9) / 60
-            print(f"shard {k + 1}/{n_shards}: {rate:.0f} img/s, ~{left:.0f} min left", flush=True)
+            print(
+                f"shard {k + 1}/{n_shards}: {rate:.0f} img/s, ~{left:.0f} min left, "
+                f"{gov.paused_s:.0f}s paused so far",
+                flush=True,
+            )
     return cache.assemble([r.path for r in rows])
 
 
@@ -115,8 +122,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tag", help="run name (default: probe_<model>)")
     ap.add_argument("--feature-dir", type=Path, default=Path("data/features"))
     ap.add_argument("--out", type=Path, default=Path("runs"))
-    ap.add_argument("--batch-size", type=int, default=64)
-    ap.add_argument("--workers", type=int, default=6)
+    # Kept small on purpose: 6 workers x 0.3 GB + batch 64 helped freeze a 16 GB laptop.
+    ap.add_argument("--batch-size", type=int, default=32)
+    ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--epochs", type=int, default=30)
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     ap.add_argument("--device", default="auto")

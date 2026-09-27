@@ -38,6 +38,7 @@ from albumentations.pytorch import ToTensorV2
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from training.textilenet.data import TextileDataset, load_rows, seed_worker
+from training.textilenet.governor import Governor
 from training.textilenet.metrics import summarize
 from training.textilenet.recipe import (
     class_balance_weights,
@@ -305,6 +306,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     head_ids = {id(p) for p in model.get_classifier().parameters()}
+    gov = Governor()  # pauses local runs when the laptop runs hot; no-op on Linux GPUs
     for epoch in range(start_epoch, args.epochs):
         frozen = epoch < args.probe_epochs  # optional stage 1: head only
         if args.probe_epochs:
@@ -316,6 +318,7 @@ def main(argv: list[str] | None = None) -> int:
         for i, (x, y) in enumerate(train_loader):
             if i >= steps_per_epoch:
                 break
+            gov.pause_if_needed()
             step = epoch * steps_per_epoch + i
             cur = lr_at(step, total_steps, warmup_steps, lr)
             for g in optimizer.param_groups:
