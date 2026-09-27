@@ -2,7 +2,8 @@
 
     .venv/bin/python -m training.scanner.label_treatment --split data/splits/fabric.csv
 
-Keys: 1 printed · 2 piece-dyed · 3 yarn-dyed · 4 undyed · s skip · q quit.
+Keys: 1 printed · 2 piece-dyed · 3 yarn-dyed · 4 undyed · s skip · u back · q quit.
+A relabelled image keeps its last label; skipped images are not queued again.
 Head B ships once every class has >= 100 labels.
 """
 
@@ -19,6 +20,7 @@ from services.vision.taxonomy import TREATMENT_CLASSES
 
 KEYS = {str(i): c for i, c in enumerate(TREATMENT_CLASSES, 1)}
 OUT = Path("data/treatment_labels.csv")
+SKIPS = Path("data/treatment_skips.csv")  # kept apart so OUT holds only labels
 
 
 def load_labels(csv_path: Path) -> dict[str, str]:
@@ -59,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # train and val (Head B calibrates on val, spec §6.3); never test
     pool = [r.path for r in read_csv(args.split) if r.split != "test"]
-    queue = todo(pool, load_labels(OUT), args.n)
+    queue = todo(pool, {**load_labels(SKIPS), **load_labels(OUT)}, args.n)
     plt.rcParams["keymap.save"] = [k for k in plt.rcParams["keymap.save"] if k != "s"]  # s = skip
     fig, ax = plt.subplots(figsize=(6, 6))
     state = {"i": 0}
@@ -70,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
         counts = Counter(load_labels(OUT).values())
         ax.set_title(
             f"{state['i'] + 1}/{len(queue)}  1 printed · 2 piece · 3 yarn · 4 undyed"
-            f" · s skip · q quit\n{dict(counts)}",
+            f" · s skip · u back · q quit\n{dict(counts)}",
             fontsize=8,
         )
         ax.axis("off")
@@ -80,8 +82,15 @@ def main(argv: list[str] | None = None) -> int:
         if event.key == "q":
             plt.close(fig)
             return
+        if event.key == "u":  # back one image; its next key replaces the label
+            if state["i"] > 0:
+                state["i"] -= 1
+                show()
+            return
         if event.key in KEYS:
             append_label(OUT, queue[state["i"]], KEYS[event.key])
+        elif event.key == "s":
+            append_label(SKIPS, queue[state["i"]], "skip")
         if event.key in KEYS or event.key == "s":
             state["i"] += 1
             if state["i"] >= len(queue):

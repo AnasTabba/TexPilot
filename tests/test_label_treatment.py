@@ -66,3 +66,16 @@ def test_val_images_are_queued_too_since_head_b_calibrates_on_val(tmp_path, monk
     splits = {"a": "train", "b": "val", "c": "test"}
     labels = _label(tmp_path, monkeypatch, splits, ("1", "1"))
     assert sorted(labels) == ["fabric/train/lace/a.jpg", "fabric/val/lace/b.jpg"]
+
+
+def test_skipped_images_are_not_queued_again(tmp_path, monkeypatch):
+    splits = {"a": "train", "b": "train"}
+    _label(tmp_path, monkeypatch, splits, ("s",))
+    labels = _label(tmp_path, monkeypatch, splits, ("1",))  # a second session
+    skipped = load_labels(tmp_path / "data" / "treatment_skips.csv")
+    assert len(skipped) == 1 and len(labels) == 1 and not set(skipped) & set(labels)
+
+
+def test_u_goes_back_so_a_wrong_key_can_be_fixed(tmp_path, monkeypatch):
+    labels = _label(tmp_path, monkeypatch, {"a": "train", "b": "train"}, ("1", "u", "2"))
+    assert list(labels.values()) == ["piece_dyed"]
