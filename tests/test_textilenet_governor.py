@@ -1,5 +1,10 @@
 """The governor that keeps long jobs from freezing the laptop. Pure logic, fake sensors."""
 
+import subprocess
+import sys
+
+import pytest
+
 from training.textilenet import governor as gv
 from training.textilenet.governor import FAIR, NOMINAL, SERIOUS, Governor
 
@@ -71,3 +76,18 @@ def test_sensors_are_read_at_most_once_per_interval():
 def test_off_macos_thermal_reads_nominal(monkeypatch):
     monkeypatch.setattr(gv.platform, "system", lambda: "Linux")
     assert gv.thermal_state() == NOMINAL
+
+
+def test_mps_memory_cap_is_accepted_by_torch():
+    # The package sets PYTORCH_MPS_*_WATERMARK_RATIO on import; an inconsistent pair
+    # (low above high) makes every MPS allocation raise. Skipped off Apple GPUs.
+    torch = pytest.importorskip("torch")
+    if not torch.backends.mps.is_available():
+        pytest.skip("no MPS device")
+    code = (
+        "import training.textilenet, torch;"
+        "assert torch.backends.mps.is_available();"
+        "torch.ones(4, device='mps').sum().item()"
+    )
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[-400:]

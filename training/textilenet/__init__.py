@@ -6,5 +6,8 @@ os.environ.setdefault("NO_ALBUMENTATIONS_UPDATE", "1")
 
 # Cap PyTorch's Metal (MPS) memory at half the recommended working set (~5 GB of 16 GB):
 # a runaway job then fails with an out-of-memory error instead of dragging the whole
-# laptop into swap until it freezes (which is what happened on 2026-09-27).
+# laptop into swap until it freezes (which is what happened on 2026-09-27). The low
+# watermark (where the allocator starts freeing its cache) must not exceed the high one;
+# its default of 1.4 would, so it is set with it.
 os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.5")
+os.environ.setdefault("PYTORCH_MPS_LOW_WATERMARK_RATIO", "0.4")
