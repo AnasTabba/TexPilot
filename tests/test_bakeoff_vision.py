@@ -92,3 +92,17 @@ def test_vision_cache_is_redone_for_a_new_bundle(tmp_path):
     run_vision("crop", samples, loader, tmp_path / "c", meta={"bundle": "models/scanner-v1"})
     run_vision("crop", samples, loader, tmp_path / "c", meta={"bundle": "models/scanner-v2"})
     assert len(loads) == 2
+
+
+def test_a_component_crash_inside_the_scanner_is_a_failure_not_an_abstention(tmp_path):
+    from services.vision.predictor import Note
+
+    class OutOfMemory:
+        def predict(self, data):
+            note = Note("COMPONENT_FAILED", "heads: RuntimeError: MPS out of memory")
+            return VisionOutput(None, None, None, notes=(note,))
+
+    p = tmp_path / "1_garment.jpg"
+    Image.new("RGB", (20, 20)).save(p)
+    [row] = run_vision("crop", [Sample(image_path=p, group_id="1")], OutOfMemory, tmp_path / "c")
+    assert "MPS out of memory" in row["error"]

@@ -129,6 +129,10 @@ def run_vision(tag: str, samples, loader, cache_dir: Path, meta: dict | None = N
                     row["structure"] = [out.structure.label, out.structure.confidence]
                 if out.fibre_family:
                     row["family"] = [out.fibre_family.label, out.fibre_family.confidence]
+                # the scanner turns a crashed component into a note, not an exception
+                crashed = [n.message for n in out.notes if n.code == "COMPONENT_FAILED"]
+                if crashed:
+                    row["error"] = "; ".join(crashed)
             except Exception as e:  # noqa: BLE001
                 row["error"] = f"{type(e).__name__}: {e}"
             rows.append(row)
@@ -183,8 +187,8 @@ def vision_section(samples, detector: str, bundle: Path, device, out: Path) -> l
         f"Head C scored on {len(single)} single-family garments; Head A on {len(fabric)} "
         "with a known fabric. Abstentions count as wrong.",
         "",
-        "| Views | Head C acc | Head C coverage | Head A acc | p50 s | p95 s |",
-        "|---|---|---|---|---|---|",
+        "| Views | Head C acc | Head C coverage | Head A acc | p50 s | p95 s | Failures |",
+        "|---|---|---|---|---|---|---|",
     ]
     results = {}
     for tag, patches in (("crop", False), ("crop+patches", True)):
@@ -201,7 +205,7 @@ def vision_section(samples, detector: str, bundle: Path, device, out: Path) -> l
         results[tag] = (c_acc, lat["p50"], rows)
         md.append(
             f"| {tag} | {c_acc:.3f} | {c_cov:.2f} | {a_acc:.3f} | {lat['p50']:.2f} "
-            f"| {lat['p95']:.2f} |"
+            f"| {lat['p95']:.2f} | {sum(r['error'] is not None for r in rows)} |"
         )
     views = pick({t: (acc, sec) for t, (acc, sec, _) in results.items()})
     md.append(f"\n**Views (spec §8.3): {views}**\n")
