@@ -78,3 +78,17 @@ def test_vision_section_reports_n_and_chooses_thresholds_from_the_data(tmp_path,
     assert "Domain: phone; n = 3 correct-label and 3 swapped-label pairs." in md
     best = json.loads((tmp_path / "thresholds.json").read_text())["best"]
     assert best["family_min_confidence"] == 0.93 and best["precision"] == 1.0
+
+
+def test_vision_cache_is_redone_for_a_new_bundle(tmp_path):
+    p = tmp_path / "1_garment.jpg"
+    Image.new("RGB", (20, 20)).save(p)
+    samples, loads = [Sample(image_path=p, group_id="1")], []
+
+    def loader():
+        loads.append(1)
+        return FakeScanner()
+
+    run_vision("crop", samples, loader, tmp_path / "c", meta={"bundle": "models/scanner-v1"})
+    run_vision("crop", samples, loader, tmp_path / "c", meta={"bundle": "models/scanner-v2"})
+    assert len(loads) == 2

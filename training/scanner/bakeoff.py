@@ -33,12 +33,17 @@ def _free() -> None:
         pass
 
 
-def _cached(path: Path, compute):
+def _cached(path: Path, key: dict, compute):
+    """Rows from ``path`` if they were computed for this ``key`` (the garment ids, plus
+    whatever else shaped them); otherwise recompute, so a grown set or a new bundle is
+    never scored on stale predictions."""
     if path.exists():
-        return json.loads(path.read_text())
+        saved = json.loads(path.read_text())
+        if isinstance(saved, dict) and saved.get("key") == key:
+            return saved["rows"]
     rows = compute()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(rows, indent=1))
+    path.write_text(json.dumps({"key": key, "rows": rows}, indent=1))
     return rows
 
 
@@ -63,7 +68,8 @@ def run_detector(name: str, samples, loader, cache_dir: Path) -> list[dict]:
         _free()
         return rows
 
-    return _cached(Path(cache_dir) / f"det_{name}.json", compute)
+    ids = [s.group_id for s in samples]
+    return _cached(Path(cache_dir) / f"det_{name}.json", {"ids": ids}, compute)
 
 
 def run_ocr(name: str, samples, loader, cache_dir: Path) -> list[dict]:
@@ -94,7 +100,8 @@ def run_ocr(name: str, samples, loader, cache_dir: Path) -> list[dict]:
         _free()
         return rows
 
-    return _cached(Path(cache_dir) / f"ocr_{name}.json", compute)
+    ids = [s.group_id for s in samples]
+    return _cached(Path(cache_dir) / f"ocr_{name}.json", {"ids": ids}, compute)
 
 
 def pick(results: dict[str, tuple[float, float]]) -> str:
@@ -104,7 +111,7 @@ def pick(results: dict[str, tuple[float, float]]) -> str:
     return min(contenders, key=contenders.get)
 
 
-def run_vision(tag: str, samples, loader, cache_dir: Path) -> list[dict]:
+def run_vision(tag: str, samples, loader, cache_dir: Path, meta: dict | None = None) -> list[dict]:
     """The full scanner (detector -> SAM -> crop -> heads) per garment photo, cached."""
 
     def compute():
@@ -129,7 +136,8 @@ def run_vision(tag: str, samples, loader, cache_dir: Path) -> list[dict]:
         _free()
         return rows
 
-    return _cached(Path(cache_dir) / f"vision_{tag}.json", compute)
+    key = {"ids": [s.group_id for s in samples], **(meta or {})}
+    return _cached(Path(cache_dir) / f"vision_{tag}.json", key, compute)
 
 
 def head_accuracy(rows: list[dict], truth: dict[str, str], key: str) -> tuple[float, float, int]:
@@ -181,7 +189,11 @@ def vision_section(samples, detector: str, bundle: Path, device, out: Path) -> l
     results = {}
     for tag, patches in (("crop", False), ("crop+patches", True)):
         rows = run_vision(
-            tag, samples, lambda p=patches: build_scanner(bundle, detector, device, patches=p), out
+            tag,
+            samples,
+            lambda p=patches: build_scanner(bundle, detector, device, patches=p),
+            out,
+            meta={"detector": detector, "bundle": str(bundle)},
         )
         c_acc, c_cov, _ = head_accuracy(rows, single, "family")
         a_acc, _, _ = head_accuracy(rows, fabric, "structure")

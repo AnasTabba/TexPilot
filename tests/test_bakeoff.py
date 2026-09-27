@@ -46,9 +46,16 @@ def test_predictions_are_cached_and_reused(tmp_path):
     loads = []
     rows = run_detector("fake", samples, lambda: loads.append(1) or Fake(), tmp_path / "cache")
     assert loads == [] and len(rows) == 3
-    assert json.loads((tmp_path / "cache" / "det_fake.json").read_text())[0]["id"] == "0"
+    assert json.loads((tmp_path / "cache" / "det_fake.json").read_text())["rows"][0]["id"] == "0"
 
 
 def test_pick_prefers_the_faster_within_two_points():
     assert pick({"gdino": (0.81, 0.9), "owlv2": (0.80, 0.4)}) == "owlv2"
     assert pick({"gdino": (0.85, 0.9), "owlv2": (0.80, 0.4)}) == "gdino"
+
+
+def test_a_grown_set_is_recomputed_not_served_stale(tmp_path):
+    samples = _samples(tmp_path, n=3)
+    run_detector("fake", samples[:2], lambda: Fake(), tmp_path / "cache")
+    rows = run_detector("fake", samples, lambda: Fake(), tmp_path / "cache")
+    assert [r["id"] for r in rows] == ["0", "1", "2"]
