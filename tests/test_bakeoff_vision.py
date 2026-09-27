@@ -106,3 +106,10 @@ def test_a_component_crash_inside_the_scanner_is_a_failure_not_an_abstention(tmp
     Image.new("RGB", (20, 20)).save(p)
     [row] = run_vision("crop", [Sample(image_path=p, group_id="1")], OutOfMemory, tmp_path / "c")
     assert "MPS out of memory" in row["error"]
+
+
+def test_threshold_records_carry_the_treatment_head_for_the_treatment_flag():
+    rows = [{"id": "a", "structure": ["denim", 0.9], "treatment": ["printed", 0.9],
+             "family": None, "error": None}]  # fmt: skip
+    [rec] = threshold_records(rows, {"a": "cellulosic"})
+    assert rec["treatment"] == ["printed", 0.9]

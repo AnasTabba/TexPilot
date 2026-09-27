@@ -21,6 +21,9 @@ def _flags(rec: dict, visual: float, family: float, kb_fabrics: dict | None, exe
         entry = kb_fabrics.get(label)
         if entry and conf >= visual:
             raised = not (stated & set(entry["families"]))
+            expected, t = entry.get("expected_treatment"), rec.get("treatment")
+            if expected and t and t[1] >= visual and t[0] != expected:
+                raised = True  # TREATMENT_UNEXPECTED, e.g. printed denim
             imitation = label in exempt  # faux fur/leather: the family head is fooled
     if rec.get("family") and not imitation:
         label, conf = rec["family"]

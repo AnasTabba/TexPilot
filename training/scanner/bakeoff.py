@@ -162,8 +162,8 @@ def run_vision(tag: str, samples, loader, cache_dir: Path, meta: dict | None = N
     def compute():
         predictor, rows = loader(), []
         for s in samples:
-            row = {"id": s.group_id, "garment": None, "structure": None, "family": None,
-                   "seconds": None, "error": None}  # fmt: skip
+            row = {"id": s.group_id, "garment": None, "structure": None, "treatment": None,
+                   "family": None, "seconds": None, "error": None}  # fmt: skip
             try:
                 data = s.image_path.read_bytes()
                 t = time.perf_counter()
@@ -172,6 +172,8 @@ def run_vision(tag: str, samples, loader, cache_dir: Path, meta: dict | None = N
                 row["garment"] = out.garment.label if out.garment else None
                 if out.structure:
                     row["structure"] = [out.structure.label, out.structure.confidence]
+                if out.treatment:
+                    row["treatment"] = [out.treatment.label, out.treatment.confidence]
                 if out.fibre_family:
                     row["family"] = [out.fibre_family.label, out.fibre_family.confidence]
                 # the scanner turns a crashed component into a note, not an exception
@@ -205,6 +207,7 @@ def threshold_records(rows: list[dict], families: dict[str, str]) -> list[dict]:
     return [
         {
             "structure": by_id[g]["structure"],
+            "treatment": by_id[g].get("treatment"),
             "family": by_id[g]["family"],
             "stated": [families[lab]],
             "should_flag": should,
