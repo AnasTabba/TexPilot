@@ -16,6 +16,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from services.api.config import Settings, build_ocr, build_predictor
 from services.api.pipeline import run_scan
 from services.api.schemas import ScanResult
+from services.api.uploads import check_upload
 from services.vision.errors import UnsupportedImage
 from services.vision.predictor import Predictor, StubPredictor
 
@@ -56,6 +57,9 @@ async def scan(
     data = await surface_image.read()
     label = await label_image.read() if label_image is not None else None
     try:
+        check_upload(data, "surface_image")
+        if label is not None:
+            check_upload(label, "label_image")
         return run_scan(
             get_predictor(),
             data,

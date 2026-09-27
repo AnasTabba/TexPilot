@@ -10,6 +10,7 @@ from services.vision.errors import UnsupportedImage
 from services.vision.predictor import GarmentOutput, Note, StubPredictor, VisionOutput
 
 client = TestClient(app)
+JPEG = b"\xff\xd8\xff\xe0 stub never decodes this"
 
 
 def test_health():
@@ -19,7 +20,7 @@ def test_health():
 def test_scan_abstains_with_the_stub_predictor():
     r = client.post(
         "/api/v1/scan",
-        files={"surface_image": ("a.jpg", b"not-a-real-image", "image/jpeg")},
+        files={"surface_image": ("a.jpg", JPEG, "image/jpeg")},
         data={"label_text": "60% COTTON 40% POLYESTER"},
     )
     assert r.status_code == 200
@@ -32,7 +33,7 @@ def test_scan_abstains_with_the_stub_predictor():
 def test_scan_still_parses_the_label_without_a_model():
     r = client.post(
         "/api/v1/scan",
-        files={"surface_image": ("a.jpg", b"x", "image/jpeg")},
+        files={"surface_image": ("a.jpg", JPEG, "image/jpeg")},
         data={"label_text": "60% COTTON 40% POLYESTER"},
     )
     comp = r.json()["stated_composition"]
@@ -83,7 +84,7 @@ def test_label_photo_is_read_by_ocr(state):
     r = client.post(
         "/api/v1/scan",
         files={
-            "surface_image": ("g.jpg", b"x", "image/jpeg"),
+            "surface_image": ("g.jpg", JPEG, "image/jpeg"),
             "label_image": ("l.png", _png(), "image/png"),
         },
     )
@@ -100,7 +101,7 @@ def test_typed_label_text_overrides_the_photo(state):
     r = client.post(
         "/api/v1/scan",
         files={
-            "surface_image": ("g.jpg", b"x", "image/jpeg"),
+            "surface_image": ("g.jpg", JPEG, "image/jpeg"),
             "label_image": ("l.png", _png(), "image/png"),
         },
         data={"label_text": "100% COTTON"},
@@ -114,7 +115,7 @@ def test_unreadable_label_explains_itself(state):
     r = client.post(
         "/api/v1/scan",
         files={
-            "surface_image": ("g.jpg", b"x", "image/jpeg"),
+            "surface_image": ("g.jpg", JPEG, "image/jpeg"),
             "label_image": ("l.png", _png(), "image/png"),
         },
     )
@@ -128,7 +129,7 @@ def test_failing_ocr_is_an_info_flag_not_a_500(state):
     r = client.post(
         "/api/v1/scan",
         files={
-            "surface_image": ("g.jpg", b"x", "image/jpeg"),
+            "surface_image": ("g.jpg", JPEG, "image/jpeg"),
             "label_image": ("l.png", _png(), "image/png"),
         },
     )
@@ -147,7 +148,7 @@ def test_garment_and_notes_reach_the_response(state):
         )
     )
     body = client.post(
-        "/api/v1/scan", files={"surface_image": ("g.jpg", b"x", "image/jpeg")}
+        "/api/v1/scan", files={"surface_image": ("g.jpg", JPEG, "image/jpeg")}
     ).json()
     assert body["garment"] == {"label": "pants", "confidence": 0.8, "box": [0.1, 0.2, 0.9, 0.95]}
     assert body["flags"][0]["severity"] == "info"
@@ -156,9 +157,35 @@ def test_garment_and_notes_reach_the_response(state):
 def test_undecodable_photo_is_a_422(state):
     # Review Focus 3: an iPhone HEIC upload must be a clear client error.
     state["predictor"] = FakePredictor(error=UnsupportedImage("cannot decode image: heic"))
-    r = client.post("/api/v1/scan", files={"surface_image": ("g.heic", b"x", "image/heic")})
+    r = client.post("/api/v1/scan", files={"surface_image": ("g.jpg", JPEG, "image/jpeg")})
     assert r.status_code == 422 and "decode" in r.json()["detail"]
 
 
 def test_stub_is_still_the_default(state):
     assert isinstance(main._state["predictor"], StubPredictor)
+
+
+HEIC = b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic" + b"\x00" * 32
+
+
+def test_heic_is_a_422_even_against_the_stub():
+    # Final review, Important #3: the app team builds against the stub, so it must reject
+    # what production rejects, or the 422 first appears in the demo.
+    r = client.post("/api/v1/scan", files={"surface_image": ("g.heic", HEIC, "image/heic")})
+    assert r.status_code == 422 and "HEIC" in r.json()["detail"]
+
+
+def test_a_junk_label_photo_is_a_422_even_against_the_stub():
+    r = client.post(
+        "/api/v1/scan",
+        files={
+            "surface_image": ("g.jpg", JPEG, "image/jpeg"),
+            "label_image": ("l.png", b"not an image", "image/png"),
+        },
+    )
+    assert r.status_code == 422 and "label_image" in r.json()["detail"]
+
+
+def test_an_empty_upload_is_a_422():
+    r = client.post("/api/v1/scan", files={"surface_image": ("g.jpg", b"", "image/jpeg")})
+    assert r.status_code == 422
