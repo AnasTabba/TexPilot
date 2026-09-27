@@ -29,6 +29,12 @@ class HeadPrediction(BaseModel):
     topk: list[tuple[str, float]] = []
 
 
+class GarmentPrediction(BaseModel):
+    label: str  # services.vision.garment vocabulary, e.g. "pants"
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)  # None: scoreless detector
+    box: tuple[float, float, float, float]  # normalised 0-1 (x0, y0, x1, y1)
+
+
 class FiberComponent(BaseModel):
     name: str
     pct: float = Field(ge=0.0, le=100.0)
@@ -38,12 +44,13 @@ class StatedComposition(BaseModel):
     source: CompositionSource | None = None
     fibers: list[FiberComponent] = []
     ocr_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    section: str | None = None  # e.g. "shell"; None when the label is unsectioned
 
 
 class FlagModel(BaseModel):
     code: str
     message: str
-    severity: str
+    severity: str  # "high" | "medium" | "info" (info explains an abstention)
 
 
 class CaptureQuality(BaseModel):
@@ -58,6 +65,7 @@ class ScanResult(BaseModel):
     structure: HeadPrediction | None = None
     treatment: HeadPrediction | None = None
     fibre_family: HeadPrediction | None = None
+    garment: GarmentPrediction | None = None
     stated_composition: StatedComposition = StatedComposition()
     flags: list[FlagModel] = []
     capture_quality: CaptureQuality = CaptureQuality()

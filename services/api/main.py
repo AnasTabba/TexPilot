@@ -1,27 +1,40 @@
 """TexPilot scanner API.
 
-Run: make api   ->   http://127.0.0.1:8000/docs
+    make api           # stub: every scan abstains; the app can build against it anywhere
+    make api-scanner   # the real models, on the M3 (TEXPILOT_VISION=scanner)
 
-Ships with StubPredictor, so every scan returns INSUFFICIENT_EVIDENCE until a
-trained checkpoint is wired in. That is deliberate -- the service is honest, not
-broken, and P3 can build the app against a live endpoint today.
+Configuration is by environment (services/api/config.py). With the scanner, models load
+at startup; if any fails, the server does not start.
 """
 
 from __future__ import annotations
 
-from fastapi import FastAPI, File, Form, UploadFile
+from contextlib import asynccontextmanager
 
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+
+from services.api.config import Settings, build_ocr, build_predictor
 from services.api.pipeline import run_scan
 from services.api.schemas import ScanResult
+from services.vision.errors import UnsupportedImage
 from services.vision.predictor import Predictor, StubPredictor
 
-app = FastAPI(title="TexPilot Scanner", version="0.1.0")
+_state: dict = {"predictor": StubPredictor(), "ocr": None, "model_version": "stub-0"}
 
-_predictor: Predictor = StubPredictor()
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    settings = Settings.from_env()
+    predictor, version = build_predictor(settings)
+    _state.update(predictor=predictor, ocr=build_ocr(settings), model_version=version)
+    yield
+
+
+app = FastAPI(title="TexPilot Scanner", version="0.2.0", lifespan=lifespan)
 
 
 def get_predictor() -> Predictor:
-    return _predictor
+    return _state["predictor"]
 
 
 @app.get("/health")
@@ -32,13 +45,24 @@ def health() -> dict[str, str]:
 @app.post("/api/v1/scan", response_model=ScanResult)
 async def scan(
     surface_image: UploadFile = File(...),
+    label_image: UploadFile | None = File(default=None),
     label_text: str | None = Form(default=None),
 ) -> ScanResult:
-    """Scan a fabric surface, optionally cross-checked against care-label text.
+    """Scan a garment (or a fabric close-up), cross-checked against its care label.
 
-    ``label_text`` is a stop-gap: OCR currently runs on-device in the app and
-    posts its text here. When the server-side OCR backend lands it will accept a
-    ``label_image`` upload instead.
+    ``label_image`` is read by server-side OCR; ``label_text``, if given, overrides it.
+    Undecodable images (e.g. HEIC) are a 422.
     """
     data = await surface_image.read()
-    return run_scan(get_predictor(), data, label_text)
+    label = await label_image.read() if label_image is not None else None
+    try:
+        return run_scan(
+            get_predictor(),
+            data,
+            label_text,
+            label_image=label,
+            ocr=_state["ocr"],
+            model_version=_state["model_version"],
+        )
+    except UnsupportedImage as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e

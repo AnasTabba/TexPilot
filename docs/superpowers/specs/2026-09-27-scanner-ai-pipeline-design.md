@@ -311,6 +311,7 @@ StatedComposition.section: str | None = None      # e.g. "shell"
 | `NO_GARMENT_DETECTED` | info | §4.4 |
 | `NO_LABEL_TEXT` | info | §5.2 |
 | `COMPONENT_FAILED` | info | a model raised during this scan; message names the component |
+| `LABEL_UNREADABLE` | info | label text found, but no single valid composition (§5.3) |
 
 `info` is a new severity value: notes that explain an abstention, not mismatches.
 
@@ -321,7 +322,7 @@ StatedComposition.section: str | None = None      # e.g. "shell"
 | `TEXPILOT_VISION` | `scanner`, `stub` | `stub` |
 | `TEXPILOT_MODEL_BUNDLE` | path | `models/scanner-v1` |
 | `TEXPILOT_GARMENT_DETECTOR` | `gdino`, `owlv2`, `rtdetr`, `florence2` | `gdino` until the bake-off picks (§8.3) |
-| `TEXPILOT_OCR_BACKEND` | `apple`, `paddle`, `florence2` | `apple` until the bake-off picks (§8.3) |
+| `TEXPILOT_OCR_BACKEND` | `none`, `apple`, `paddle`, `florence2` | `apple` with `TEXPILOT_VISION=scanner`, else `none` |
 
 **Errors**
 - **Startup:** with `TEXPILOT_VISION=scanner`, every configured model loads at startup. Any
