@@ -33,15 +33,22 @@ class FiberPct:
 def _fibre(name: str) -> str | None:
     """Canonical fibre at the start of a captured name. Trailing words are dropped one at a
     time ('COTTON MADE IN PAKISTAN' -> cotton); the first word must still name a fibre, so
-    an unknown fibre still fails."""
+    an unknown fibre still fails. A dropped word that names a *different* fibre ('POLY
+    COTTON', 'WOOL SILK') means the split is unknown, so that fails too rather than guess.
+    Only whole words of 4+ letters count, so 'ABC CO LTD' does not read as cotton."""
     words = name.split()
     while words and words[0].lower() in _QUALIFIERS:
         words.pop(0)
+    dropped: list[str] = []
     while words:
         canonical = normalize_fiber_name(" ".join(words))
         if canonical:
+            if any(
+                len(w) >= 4 and normalize_fiber_name(w) not in (None, canonical) for w in dropped
+            ):
+                return None
             return canonical
-        words.pop()
+        dropped.append(words.pop())
     return None
 
 

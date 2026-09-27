@@ -103,3 +103,11 @@ def test_leading_qualifiers_are_ignored():
 
 def test_an_unknown_fibre_still_fails_the_whole_parse():
     assert parse_composition("70% ZZZFIBRE COTTON 30% COTTON") is None
+
+
+@pytest.mark.parametrize("text", ["100% POLY COTTON", "100% WOOL SILK", "100% CO POLYESTER"])
+def test_a_second_fibre_in_one_component_is_not_dropped(text):
+    # Final review, Important #1: the trailing-word rule turned "100% POLY COTTON" (a blend)
+    # into 100% polyester. A dropped word that itself names a fibre means we do not know
+    # the split, so the parse must fail rather than guess.
+    assert parse_composition(text) is None
