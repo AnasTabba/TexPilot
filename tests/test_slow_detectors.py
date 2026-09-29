@@ -5,7 +5,11 @@ from pathlib import Path
 import pytest
 
 pytestmark = pytest.mark.slow
-SAMPLE = next(iter(sorted(Path("data/fabric/test/denim").glob("*.jp*g"))), None)
+# A whole-garment catalog photo (denim skirt and a blouse). The first file in the folder
+# was an 81x1200 banner strip, which proved little. Which class wins is the bake-off's
+# question, not this smoke test's.
+_PHOTO = Path("data/fabric/test/denim/0221-7151-1144l00-freida-denim-skirt-blue_02.jpg")
+SAMPLE = _PHOTO if _PHOTO.exists() else None
 
 
 @pytest.fixture(scope="module")
