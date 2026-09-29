@@ -1,4 +1,5 @@
-"""Calibrated linear heads on DINOv2 features. Spec §6.
+"""Calibrated heads: linear heads on DINOv2 features, and optionally a fine-tuned Head A.
+Spec §6, §10 (week 5).
 
 Below its threshold a head returns None: the scan abstains rather than guess.
 """
@@ -33,14 +34,65 @@ def softmax(logits: np.ndarray, t: float = 1.0) -> np.ndarray:
     return e / e.sum(-1, keepdims=True)
 
 
+def decide(probs: np.ndarray, classes, threshold: float, k: int = 5) -> HeadOutput | None:
+    """Calibrated class probabilities -> the answer, or None below the head's threshold."""
+    i = int(probs.argmax())
+    if probs[i] < threshold:
+        return None
+    topk = [(classes[j], float(probs[j])) for j in np.argsort(-probs, kind="stable")[:k]]
+    return HeadOutput(classes[i], float(probs[i]), topk)
+
+
 def apply_head(features: np.ndarray, spec: HeadSpec, k: int = 5) -> HeadOutput | None:
     """Features (V, D) of one garment's views -> calibrated prediction, or None if unsure."""
     probs = softmax(features @ spec.weight.T + spec.bias, spec.temperature).mean(0)
-    i = int(probs.argmax())
-    if probs[i] < spec.threshold:
-        return None
-    topk = [(spec.classes[j], float(probs[j])) for j in np.argsort(-probs, kind="stable")[:k]]
-    return HeadOutput(spec.classes[i], float(probs[i]), topk)
+    return decide(probs, spec.classes, spec.threshold, k)
+
+
+def timm_classifier(timm_name: str, n_classes: int, img_size: int, pretrained: bool = False):
+    """The classifier training.textilenet.train builds: ViT-style models are made at the
+    training size (their position embeddings are resampled to it), CNNs take any size."""
+    import timm
+
+    kwargs = {"img_size": img_size} if timm_name.startswith(("vit_", "eva", "deit", "beit")) else {}
+    return timm.create_model(timm_name, pretrained=pretrained, num_classes=n_classes, **kwargs)
+
+
+class FineTunedHead:
+    """A fine-tuned TextileNet classifier as a scanner head: runs on the garment's views,
+    averages calibrated probabilities over them, abstains below its threshold."""
+
+    def __init__(self, head_dir: Path, device):
+        import torch
+        from safetensors.torch import load_file
+
+        head_dir = Path(head_dir)
+        self.meta = json.loads((head_dir / "head.json").read_text())
+        self.classes = tuple(self.meta["classes"])
+        self.device, self._torch = device, torch
+        self.half = device.type in ("mps", "cuda")
+        model = timm_classifier(self.meta["timm_name"], len(self.classes), self.meta["img_size"])
+        model.load_state_dict(load_file(str(head_dir / "model.safetensors")))
+        model = model.eval().to(device)
+        self.model = model.half() if self.half else model
+
+    def predict(self, views: list[np.ndarray]) -> HeadOutput | None:
+        from services.vision.backbone import preprocess
+
+        m = self.meta
+        x = np.stack(
+            [preprocess(v, m["mean"], m["std"], m["img_size"], m["crop_pct"]) for v in views]
+        )
+        t = self._torch.from_numpy(x).to(self.device)
+        with self._torch.no_grad():
+            logits = self.model(t.half() if self.half else t).float().cpu().numpy()
+        return decide(softmax(logits, m["temperature"]).mean(0), self.classes, m["threshold"])
+
+
+def load_structure_model(bundle_dir: Path, meta: dict, device) -> FineTunedHead | None:
+    """The bundle's fine-tuned Head A (training/scanner/install_head_a.py), if it names one."""
+    ref = meta.get("structure_model")
+    return FineTunedHead(Path(bundle_dir) / ref["dir"], device) if ref else None
 
 
 def save_bundle(out_dir: Path, meta: dict, specs: dict[str, HeadSpec]) -> None:
@@ -104,6 +156,7 @@ class LinearHeads:
             .to(device)
         )
         self.model = model.half() if self.half else model
+        self.structure_model = load_structure_model(bundle_dir, self.meta, device)
 
     def predict(self, views: list[np.ndarray]) -> VisionOutput:
         from services.vision.backbone import pool_features, preprocess
@@ -115,4 +168,6 @@ class LinearHeads:
         with self._torch.no_grad():
             f = pool_features(self.model, t.half() if self.half else t).float().cpu().numpy()
         out = {n: (apply_head(f, self.specs[n]) if n in self.specs else None) for n in HEAD_NAMES}
+        if self.structure_model is not None:  # the fine-tuned Head A replaces the linear one
+            out["structure"] = self.structure_model.predict(views)
         return VisionOutput(**out)
