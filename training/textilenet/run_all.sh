@@ -7,6 +7,7 @@
 #   training/textilenet/run_all.sh train    every model x partition x seed (skips finished runs)
 #   training/textilenet/run_all.sh probe    frozen DINOv2 linear probe, both partitions
 #   training/textilenet/run_all.sh report   results.md + best checkpoint per partition
+#   training/textilenet/run_all.sh headA    the best fabric run (by val) as a calibrated scanner Head A
 #
 # Knobs: PARTITIONS, MODELS, SEEDS, BATCH, EPOCHS, WORKERS, FABRIC_DRIVE_ID, FIBRE_DRIVE_ID
 # (env vars; the *_DRIVE_ID ones point at your own Drive copy of an archive).
@@ -72,7 +73,13 @@ case "${1:-}" in
   report)
     $PY -m training.textilenet.aggregate
     ;;
+  headA)
+    $PY -m training.scanner.export_head_a --runs runs/fabric --workers "$WORKERS" \
+      2>&1 | tee -a runs/logs/head_a.log
+    echo "Copy runs/head_a/ to the Mac, then install it as a new bundle version:"
+    echo "  python -m training.scanner.install_head_a --bundle models/scanner-v2 --head runs/head_a --out models/scanner-v3"
+    ;;
   *)
-    sed -n '2,11p' "$0"; exit 2
+    sed -n '2,12p' "$0"; exit 2
     ;;
 esac
