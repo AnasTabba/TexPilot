@@ -16,7 +16,8 @@ The scanner's AI is on `main`. The design is
 
 - **Done:** garment detection (Grounding DINO / OWLv2), SAM 2.1 masks, the garment crop,
   calibrated DINOv2 heads, Apple Vision label OCR, the composition extractor and
-  `FAMILY_MISMATCH`. The API now accepts a `label_image`.
+  `FAMILY_MISMATCH`. The API now accepts a `label_image`. Florence-2 (backend C) is a third
+  detector and OCR engine sharing one model.
 - **Stub by default:** `make api` still returns `INSUFFICIENT_EVIDENCE` for every scan,
   so the app can build anywhere. `make api-scanner` serves the real models on the M3.
 - **First result:** a frozen DINOv2 linear probe already beats the published fabric

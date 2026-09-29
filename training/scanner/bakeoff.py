@@ -2,7 +2,7 @@
 prediction cached to JSON so reruns and report tweaks never reload a model.
 
     .venv/bin/python -m training.scanner.bakeoff --phone data/phone \
-        --detectors gdino owlv2 --ocr apple paddle --bundle models/scanner-v1
+        --detectors gdino owlv2 florence2 --ocr apple paddle florence2 --bundle models/scanner-v1
 """
 
 from __future__ import annotations
@@ -292,8 +292,8 @@ def main(argv: list[str] | None = None) -> int:
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--phone", type=Path, default=Path("data/phone"))
-    ap.add_argument("--detectors", nargs="+", default=["gdino", "owlv2"])
-    ap.add_argument("--ocr", nargs="+", default=["apple", "paddle"])
+    ap.add_argument("--detectors", nargs="+", default=["gdino", "owlv2", "florence2"])
+    ap.add_argument("--ocr", nargs="+", default=["apple", "paddle", "florence2"])
     ap.add_argument("--out", type=Path, default=Path("results/bakeoff"))
     ap.add_argument("--bundle", type=Path, default=Path("models/scanner-v1"))
     args = ap.parse_args(argv)
