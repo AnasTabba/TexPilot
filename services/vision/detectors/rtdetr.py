@@ -7,11 +7,13 @@ runs/rtdetr/best/ folder here as models/rtdetr-fashionpedia/. Real scores, so τ
 from __future__ import annotations
 
 from pathlib import Path
-
-import numpy as np
+from typing import TYPE_CHECKING
 
 from services.vision.garment import Detection, to_detections
 from services.vision.runtime import to_device
+
+if TYPE_CHECKING:
+    import numpy as np
 
 CHECKPOINT = Path("models/rtdetr-fashionpedia")
 
