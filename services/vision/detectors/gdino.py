@@ -48,6 +48,8 @@ class GroundingDinoDetector:
             text_threshold=self.text_threshold,
             target_sizes=[(h, w)],
         )[0]
+        if not len(res["scores"]):  # nothing passed: transformers then gives text_labels ['']
+            return []
         return to_detections(
             res["text_labels"], res["scores"].tolist(), res["boxes"].tolist(), w, h
         )
