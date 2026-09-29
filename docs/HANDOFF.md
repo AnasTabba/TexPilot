@@ -18,6 +18,10 @@ The scanner's AI is on `main`. The design is
   calibrated DINOv2 heads, Apple Vision label OCR, the composition extractor and
   `FAMILY_MISMATCH`. The API now accepts a `label_image`. Florence-2 (backend C) is a third
   detector and OCR engine sharing one model.
+- **Ready for the GPU:** backend B, RT-DETRv2-R50 fine-tuned on Fashionpedia's 14 garment
+  classes: `training/detector/run_cloud.sh setup | data | smoke | train | report` (about 2–3 h on
+  an A100). Copy `runs/rtdetr/best/` to the Mac as `models/rtdetr-fashionpedia/`, then the
+  bake-off can take `--detectors ... rtdetr`.
 - **Stub by default:** `make api` still returns `INSUFFICIENT_EVIDENCE` for every scan,
   so the app can build anywhere. `make api-scanner` serves the real models on the M3.
 - **First result:** a frozen DINOv2 linear probe already beats the published fabric
