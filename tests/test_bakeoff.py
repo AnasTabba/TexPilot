@@ -140,6 +140,9 @@ def test_main_writes_a_report_end_to_end_with_fake_backends(tmp_path, monkeypatc
                  "--out", str(out)]) == 0  # fmt: skip
     md = (out / "bakeoff.md").read_text()
     assert "domain: phone, n = 2 garments" in md
+    # Fake answers pants every time, so it also claims a garment in both label close-ups
+    # (and crashes on the second garment photo): florence2 never says "no garment".
+    assert "| gdino | 0.500 | 1.000 |" in md
     assert "Scored on 1 garments. Excluded: 1 whose typed label doesn't parse" in md
     assert "| apple | 1.000 | 1.000 | 0.000 |" in md
     assert "**Views (spec §8.3):" in md and "## KB thresholds" in md

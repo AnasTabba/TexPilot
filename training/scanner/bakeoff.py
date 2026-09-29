@@ -13,6 +13,7 @@ import json
 import math
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from services.vision.datasets.phone import PhoneDataset
@@ -307,20 +308,31 @@ def main(argv: list[str] | None = None) -> int:
     if ds.duplicates:
         md.append(f"Repeated ids, first row kept: {', '.join(ds.duplicates)}\n")
 
+    # Label close-ups hold no whole garment: a detector that "finds" one there can't say
+    # "no garment" (Florence-2 grounds its caption somewhere in any photo).
+    closeups = [replace(s, image_path=s.label_image_path, group_id=f"{s.group_id}#label")
+                for s in samples if s.label_image_path]  # fmt: skip
     det_scores = {}
     md += [
         "## Garment detectors",
         "",
-        "| Backend | Type accuracy | p50 s | p95 s | Failures |",
-        "|---|---|---|---|---|",
+        f"Garment in label close-ups: how often a detector claims a garment in the "
+        f"{len(closeups)} label photos (lower is better; not part of the §8.3 rule).",
+        "",
+        "| Backend | Type accuracy | Garment in label close-ups | p50 s | p95 s | Failures |",
+        "|---|---|---|---|---|---|",
     ]
     for name in args.detectors:
-        rows = run_detector(name, samples, lambda n=name: load_detector(n, device), args.out)
+        both = run_detector(
+            name, samples + closeups, lambda n=name: load_detector(n, device), args.out
+        )
+        rows, on_labels = both[: len(samples)], both[len(samples) :]
         acc = type_accuracy([r["label"] for r in rows], [s.garment_type for s in samples])
+        claimed = sum(r["label"] is not None for r in on_labels) / max(1, len(on_labels))
         lat = row_latency(rows)
         det_scores[name] = (acc, lat["p50"])
         md.append(
-            f"| {name} | {acc:.3f} | {lat['p50']:.2f} | {lat['p95']:.2f} "
+            f"| {name} | {acc:.3f} | {claimed:.3f} | {lat['p50']:.2f} | {lat['p95']:.2f} "
             f"| {sum(r['error'] is not None for r in rows)} |"
         )
     md.append(f"\n**Default detector (spec §8.3): {pick(det_scores)}**\n")

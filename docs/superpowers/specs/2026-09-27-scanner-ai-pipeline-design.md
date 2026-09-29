@@ -368,7 +368,7 @@ is measured on real photos without extra labelling.
 
 | Component | Metric |
 |---|---|
-| Garment detectors | type top-1 accuracy on the phone set; latency; B also Fashionpedia val mAP |
+| Garment detectors | type top-1 accuracy on the phone set; how often a garment is claimed in the label close-ups (a no-garment control: Florence-2 grounds its caption in any photo); latency; B also Fashionpedia val mAP |
 | OCR engines | composition exact-match rate (after normalisation); character error rate on the composition section; read rate |
 | Head A | TextileNet test top-1 / top-5 / macro-F1 vs the 67.32 baseline; phone accuracy where `fabric_structure` is known |
 | Head C | TextileNet fibre test (3-family) accuracy / macro-F1; phone accuracy against the label's family |
