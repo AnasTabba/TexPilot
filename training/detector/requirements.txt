@@ -1,0 +1,3 @@
+# Backend B training on the GPU box: the pinned ML stack plus COCO scoring.
+-r ../../requirements-ml.txt
+pycocotools==2.0.11

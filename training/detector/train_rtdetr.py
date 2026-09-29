@@ -77,11 +77,40 @@ def find_images(root: Path) -> dict[str, Path]:
     return {p.name: p for p in Path(root).rglob("*") if p.suffix.lower() in (".jpg", ".jpeg")}
 
 
+class Frames:
+    """Map-style dataset: one photo and its target, as the processor encodes them. Defined
+    at module level so DataLoader workers can receive it pickled."""
+
+    def __init__(self, examples: list[Example], images: dict[str, Path], processor, flip: bool):
+        self.examples, self.images, self.processor, self.flip = examples, images, processor, flip
+
+    def __len__(self) -> int:
+        return len(self.examples)
+
+    def __getitem__(self, i: int) -> dict:
+        from PIL import Image
+
+        e = self.examples[i]
+        img = Image.open(self.images[e.file_name]).convert("RGB")
+        boxes = e.boxes
+        if self.flip and random.random() < 0.5:
+            img, boxes = img.transpose(Image.FLIP_LEFT_RIGHT), hflip(boxes, img.width)
+        enc = self.processor(images=img, annotations=coco_target(e, boxes), return_tensors="pt")
+        return {"pixel_values": enc["pixel_values"][0], "labels": enc["labels"][0]}
+
+
+def collate(batch: list[dict]) -> dict:
+    import torch
+
+    return {"pixel_values": torch.stack([b["pixel_values"] for b in batch]),
+            "labels": [b["labels"] for b in batch]}  # fmt: skip
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     import torch
     from PIL import Image
-    from torch.utils.data import DataLoader, Dataset
+    from torch.utils.data import DataLoader
     from transformers import RTDetrImageProcessor, RTDetrV2ForObjectDetection
 
     random.seed(args.seed)
@@ -98,26 +127,6 @@ def main(argv: list[str] | None = None) -> int:
     print(f"train {len(train)}, hold-out {len(held)}, test (val) {len(test)} photos", flush=True)
 
     processor = RTDetrImageProcessor.from_pretrained(args.model)
-
-    class Frames(Dataset):
-        def __init__(self, examples: list[Example]):
-            self.examples = examples
-
-        def __len__(self) -> int:
-            return len(self.examples)
-
-        def __getitem__(self, i: int) -> dict:
-            e = self.examples[i]
-            img = Image.open(images[e.file_name]).convert("RGB")
-            boxes = e.boxes
-            if random.random() < 0.5:
-                img, boxes = img.transpose(Image.FLIP_LEFT_RIGHT), hflip(boxes, img.width)
-            enc = processor(images=img, annotations=coco_target(e, boxes), return_tensors="pt")
-            return {"pixel_values": enc["pixel_values"][0], "labels": enc["labels"][0]}
-
-    def collate(batch: list[dict]) -> dict:
-        return {"pixel_values": torch.stack([b["pixel_values"] for b in batch]),
-                "labels": [b["labels"] for b in batch]}  # fmt: skip
 
     def predict(model, examples: list[Example]) -> list[dict]:
         model.eval()
@@ -145,9 +154,13 @@ def main(argv: list[str] | None = None) -> int:
         ignore_mismatched_sizes=True,  # a new 14-class head on the COCO-trained model
     ).to(device)
     loader = DataLoader(
-        Frames(train), batch_size=args.batch_size, shuffle=True, num_workers=args.workers,
-        collate_fn=collate, drop_last=len(train) > args.batch_size,
-    )  # fmt: skip
+        Frames(train, images, processor, flip=True),
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.workers,
+        collate_fn=collate,
+        drop_last=len(train) > args.batch_size,
+    )
     backbone = [p for n, p in model.named_parameters() if "backbone" in n]
     rest = [p for n, p in model.named_parameters() if "backbone" not in n]
     opt = torch.optim.AdamW(

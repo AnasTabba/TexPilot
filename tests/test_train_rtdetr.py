@@ -41,3 +41,14 @@ def test_no_detections_score_zero_not_a_crash():
     pytest.importorskip("pycocotools")
     e = Example(7, "7.jpg", 100, 200, ((10.0, 10.0, 50.0, 80.0),), (2,))
     assert coco_map([e], []) == {"map": 0.0, "ap50": 0.0}
+
+
+def test_the_dataset_and_collate_survive_being_sent_to_loader_workers():
+    # DataLoader workers started with spawn/forkserver (macOS, Python 3.14 on Linux) get
+    # the dataset pickled; a class defined inside main() cannot be.
+    import pickle
+
+    from training.detector.train_rtdetr import Frames, collate
+
+    frames = pickle.loads(pickle.dumps(Frames([], {}, processor=None, flip=True)))
+    assert len(frames) == 0 and pickle.loads(pickle.dumps(collate)) is collate

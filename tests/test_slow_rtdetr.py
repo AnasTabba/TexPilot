@@ -51,7 +51,7 @@ def test_a_training_epoch_saves_a_checkpoint_detector_b_can_serve(tmp_path, monk
     monkeypatch.setattr(tr, "coco_map", fake_map)
     out = tmp_path / "run"
     args = ["--data", str(data), "--out", str(out), "--epochs", "1", "--batch-size", "2",
-            "--workers", "0", "--device", "cpu", "--holdout-frac", "0.5"]  # fmt: skip
+            "--workers", "2", "--device", "cpu", "--holdout-frac", "0.5"]  # fmt: skip
     assert tr.main(args) == 0
     assert [n for n, _ in scored] == [2, 2]  # the hold-out after the epoch, then val once
     metrics = json.loads((out / "metrics.json").read_text())
