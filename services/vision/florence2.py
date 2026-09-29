@@ -35,8 +35,9 @@ class Florence2:
             .to(device)
         )
 
-    def run(self, image: np.ndarray, task: str, text: str = "") -> dict:
-        """One Florence-2 task on an RGB array; the processor's parsed answer, in pixels."""
+    def run(self, image: np.ndarray, task: str, text: str = "", **generate) -> dict:
+        """One Florence-2 task on an RGB array; the processor's parsed answer, in pixels.
+        ``generate`` overrides the checkpoint's generation settings for this call."""
         from PIL import Image
 
         h, w = image.shape[:2]
@@ -51,6 +52,7 @@ class Florence2:
                 max_new_tokens=MAX_NEW_TOKENS,
                 num_beams=NUM_BEAMS,
                 do_sample=False,
+                **generate,
             )
         raw = self.processor.batch_decode(ids, skip_special_tokens=False)[0]
         return self.processor.post_process_generation(raw, task=task, image_size=(w, h))[task]

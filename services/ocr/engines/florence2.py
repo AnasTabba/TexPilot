@@ -34,7 +34,9 @@ class Florence2Engine:
         self.model = model
 
     def read(self, image: np.ndarray) -> list[TextLine]:
-        res = self.model.run(image, TASK)
+        # The checkpoint bans repeated 3-grams, but a care label repeats its composition
+        # once per language: with the ban, the repeats came back garbled or dropped.
+        res = self.model.run(image, TASK, no_repeat_ngram_size=0)
         return [
             TextLine(text.strip(), None, quad_to_box(q))
             for q, text in zip(res["quad_boxes"], res["labels"], strict=True)

@@ -15,8 +15,8 @@ class FakeModel:
     def __init__(self, answer):
         self.answer, self.calls = answer, []
 
-    def run(self, image, task, text=""):
-        self.calls.append((task, text))
+    def run(self, image, task, text="", **generate):
+        self.calls.append((task, text, generate))
         return self.answer
 
 
@@ -26,7 +26,7 @@ def test_regions_become_axis_aligned_lines_without_confidence():
     assert Florence2Engine(model=model).read(IMAGE) == [
         TextLine("SHELL: 80% PA 20% EA", None, (29.0, 30.0, 400.0, 70.0))
     ]
-    assert model.calls == [(TASK, "")]
+    assert model.calls == [(TASK, "", {"no_repeat_ngram_size": 0})]  # labels repeat per language
 
 
 def test_blank_regions_are_dropped():

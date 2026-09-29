@@ -55,3 +55,22 @@ def test_engine_reads_a_rendered_label_into_its_composition(backends):
     ex = read_composition(backends[1], _label())
     assert [(f.name, f.pct) for f in ex.fibers] == [("nylon", 80.0), ("elastane_spandex", 20.0)]
     assert ex.section == "shell" and ex.confidence is None
+
+
+def test_engine_reads_a_label_that_repeats_its_composition_in_three_languages(backends):
+    # Care labels repeat one composition per language, and the checkpoint's generation
+    # config bans repeated 3-grams, which can garble exactly those repeats.
+    from PIL import Image, ImageDraw, ImageFont
+
+    from services.ocr.extract import read_composition
+
+    img = Image.new("RGB", (900, 300), "white")
+    d, font = ImageDraw.Draw(img), ImageFont.load_default(size=40)
+    for i, line in enumerate(("95% COTTON 5% ELASTANE", "95% COTON 5% ELASTANE",
+                              "95% BAUMWOLLE 5% ELASTHAN")):  # fmt: skip
+        d.text((30, 30 + 90 * i), line, fill="black", font=font)
+    import numpy as np
+
+    ex = read_composition(backends[1], np.asarray(img))
+    assert [(f.name, f.pct) for f in ex.fibers] == [("cotton", 95.0), ("elastane_spandex", 5.0)]
+    assert ex.text.count("ELAST") == 3  # all three languages were read, not collapsed
