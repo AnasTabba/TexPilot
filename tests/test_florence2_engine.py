@@ -44,12 +44,20 @@ def test_its_lines_parse_into_a_composition_with_no_confidence():
     assert ex.confidence is None
 
 
-def test_the_api_loads_it_on_the_configured_device_so_it_shares_the_detectors(monkeypatch):
+@pytest.mark.parametrize("device", ["cpu", "cpu:0", "auto"])
+def test_the_api_gives_detector_and_engine_one_shared_model(monkeypatch, device):
+    # build_predictor hands the detector pick_device(s.device); build_ocr must land on the
+    # same cache key, or the API loads Florence-2 twice.
     pytest.importorskip("torch")
+    import weakref
+
     import services.vision.florence2 as f2
     from services.api.config import Settings, build_ocr
+    from services.vision.detectors import load_detector
+    from services.vision.runtime import pick_device
 
-    seen = []
-    monkeypatch.setattr(f2, "load", lambda device: seen.append(str(device)) or FakeModel({}))
-    engine = build_ocr(Settings(vision="scanner", ocr="florence2", device="cpu"))
-    assert engine.name == "florence2" and seen == ["cpu"]
+    monkeypatch.setattr(f2, "Florence2", lambda device, model_id=f2.MODEL_ID: FakeModel({}))
+    monkeypatch.setattr(f2, "_shared", weakref.WeakValueDictionary())
+    s = Settings(vision="scanner", detector="florence2", ocr="florence2", device=device)
+    det = load_detector(s.detector, pick_device(s.device))
+    assert build_ocr(s).model is det.model
