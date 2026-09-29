@@ -22,6 +22,11 @@ The scanner's AI is on `main`. The design is
   classes: `training/detector/run_cloud.sh setup | data | smoke | train | report` (about 2–3 h on
   an A100). Copy `runs/rtdetr/best/` to the Mac as `models/rtdetr-fashionpedia/`, then the
   bake-off can take `--detectors ... rtdetr`.
+- **Ready for the GPU:** a fine-tuned Head A. After the TextileNet benchmark,
+  `training/textilenet/run_all.sh headA` exports the best fabric run (chosen on val) as a
+  calibrated head. On the Mac, `python -m training.scanner.install_head_a --bundle
+  models/scanner-v2 --head runs/head_a --out models/scanner-v3` prints it beside the linear
+  Head A and writes a new bundle version; old bundles never change.
 - **Stub by default:** `make api` still returns `INSUFFICIENT_EVIDENCE` for every scan,
   so the app can build anywhere. `make api-scanner` serves the real models on the M3.
 - **First result:** a frozen DINOv2 linear probe already beats the published fabric
