@@ -18,7 +18,7 @@ class Settings:
     vision: str = "stub"  # stub | scanner
     bundle: Path = Path("models/scanner-v1")
     detector: str = "gdino"  # gdino | owlv2 | florence2
-    ocr: str = "none"  # none | apple | paddle
+    ocr: str = "none"  # none | apple | paddle | florence2
     device: str = "auto"
 
     @classmethod
@@ -51,4 +51,4 @@ def build_ocr(s: Settings):
         return None
     from services.ocr.engines import load_engine
 
-    return load_engine(s.ocr)
+    return load_engine(s.ocr, s.device)
