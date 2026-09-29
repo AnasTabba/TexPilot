@@ -26,4 +26,8 @@ def load_detector(name: str, device) -> GarmentDetector:
         from services.vision.detectors.owlv2 import Owlv2Detector
 
         return Owlv2Detector(device)
-    raise ValueError(f"unknown garment detector {name!r}; week 1 ships 'gdino' and 'owlv2'")
+    if name == "florence2":
+        from services.vision.detectors.florence2 import Florence2Detector
+
+        return Florence2Detector(device)
+    raise ValueError(f"unknown garment detector {name!r}; choose 'gdino', 'owlv2' or 'florence2'")
