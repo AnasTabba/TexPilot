@@ -7,7 +7,9 @@ from services.ocr.engines.base import OcrEngine, TextLine
 __all__ = ["OcrEngine", "TextLine", "load_engine"]
 
 
-def load_engine(name: str) -> OcrEngine:
+def load_engine(name: str, device="auto") -> OcrEngine:
+    """``device`` matters only to engines on torch (Florence-2); pass the API's setting so
+    a Florence-2 engine shares the Florence-2 detector's model."""
     if name == "apple":
         from services.ocr.engines.apple import AppleVisionEngine
 
@@ -16,4 +18,8 @@ def load_engine(name: str) -> OcrEngine:
         from services.ocr.engines.paddle import PaddleEngine
 
         return PaddleEngine()
-    raise ValueError(f"unknown OCR engine {name!r}; week 1 ships 'apple' and 'paddle'")
+    if name == "florence2":
+        from services.ocr.engines.florence2 import Florence2Engine
+
+        return Florence2Engine(device)
+    raise ValueError(f"unknown OCR engine {name!r}; choose 'apple', 'paddle' or 'florence2'")
