@@ -19,6 +19,13 @@ NUM_BEAMS = 3  # the model card's setting; the bake-off measures what it costs
 MAX_NEW_TOKENS = 1024
 
 
+def dtype_for(device):
+    """Half precision on the GPU: ~1.5 GB instead of 3 GB on a 16 GB laptop."""
+    import torch
+
+    return torch.float32 if torch.device(device).type == "cpu" else torch.float16
+
+
 class Florence2:
     def __init__(self, device, model_id: str = MODEL_ID):
         import torch
@@ -26,8 +33,7 @@ class Florence2:
 
         self._no_grad = torch.no_grad
         self.device = device
-        # Half precision on the GPU: ~1.5 GB instead of 3 GB on a 16 GB laptop.
-        self.dtype = torch.float32 if str(device) == "cpu" else torch.float16
+        self.dtype = dtype_for(device)
         self.processor = AutoProcessor.from_pretrained(model_id)
         self.model = (
             Florence2ForConditionalGeneration.from_pretrained(model_id, dtype=self.dtype)

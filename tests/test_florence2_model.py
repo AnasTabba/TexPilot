@@ -33,3 +33,10 @@ def test_the_model_is_freed_once_nothing_uses_it(monkeypatch):
     gc.collect()
     f2.load("mps")
     assert FakeModel.made == 2  # the bake-off holds one backend at a time
+
+
+def test_any_cpu_device_gets_float32_and_the_gpu_float16():
+    torch = __import__("pytest").importorskip("torch")
+    assert f2.dtype_for("cpu:0") is torch.float32  # TEXPILOT_DEVICE=cpu:0 was float16
+    assert f2.dtype_for(torch.device("cpu")) is torch.float32
+    assert f2.dtype_for("mps") is torch.float16
