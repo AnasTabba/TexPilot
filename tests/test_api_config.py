@@ -32,3 +32,11 @@ def test_scans_are_kept_with_the_scanner_and_not_in_stub_mode(tmp_path):
     assert Settings.from_env({"TEXPILOT_VISION": "scanner"}).store == "data/scans"
     s = Settings.from_env({"TEXPILOT_SCAN_STORE": str(tmp_path / "scans")})
     assert build_store(s).root == tmp_path / "scans"  # on in stub mode too, if asked for
+
+
+def test_the_default_bundle_is_scanner_v2():
+    # v2 (final split, +54.7k fabric / +77k fibre scraped train photos) beats v1 on every
+    # head: test top-1, coverage at the 90% target, macro-F1 and calibration (docs/results.md).
+    from pathlib import Path
+
+    assert Settings.from_env({"TEXPILOT_VISION": "scanner"}).bundle == Path("models/scanner-v2")

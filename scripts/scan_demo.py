@@ -23,7 +23,7 @@ def main() -> int:
         "--detector", default="gdino", choices=["gdino", "owlv2", "rtdetr", "florence2"]
     )
     ap.add_argument("--ocr", default="apple", choices=["apple", "paddle", "florence2"])
-    ap.add_argument("--bundle", type=Path, default=Path("models/scanner-v1"))
+    ap.add_argument("--bundle", type=Path, default=Path("models/scanner-v2"))
     ap.add_argument("--repeat", type=int, default=3)
     args = ap.parse_args()
 

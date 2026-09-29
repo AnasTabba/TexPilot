@@ -8,8 +8,8 @@ Full tables, per-class results and caveats go to `training/textilenet/results.md
 
 | Partition | Selected (best mean val top-1) | Test top-1 | Seeds | Test n | Best published | Δ top-1 |
 |---|---|---|---|---|---|---|
-| fabric | probe_dinov2_vitb14_prelim | 71.99 ± 0.01 | 3 | 40,970 | ViT-Tiny/16, scratch: 67.32 | +4.67 |
-| fibre | probe_dinov2_vitb14_prelim | 54.91 ± 0.07 | 3 | 47,805 | ViT-Tiny/16, scratch: 53.32 | +1.59 |
+| fabric | probe_dinov2_vitb14 | 74.48 ± 0.03 | 3 | 40,970 | ViT-Tiny/16, scratch: 67.32 | +7.16 |
+| fibre | probe_dinov2_vitb14 | 58.45 ± 0.04 | 3 | 47,805 | ViT-Tiny/16, scratch: 53.32 | +5.13 |
 
 ## 2. Scanner heads (domain: catalog; calibrated on val, reported on test)
 
@@ -19,6 +19,8 @@ Coverage is the share of val images a head answers at its 90% accuracy target; b
 |---|---|---|---|---|---|
 | scanner-v1 | structure | 0.720 | 40,970 | 49% | 0.077 → 0.013 |
 | scanner-v1 | fibre_family | 0.725 | 47,805 | 34% | 0.041 → 0.012 |
+| scanner-v2 | structure | 0.744 | 40,970 | 58% | 0.086 → 0.012 |
+| scanner-v2 | fibre_family | 0.745 | 47,805 | 44% | 0.048 → 0.009 |
 
 ## 3. Garment detector B: RT-DETRv2 on Fashionpedia (domain: catalog)
 

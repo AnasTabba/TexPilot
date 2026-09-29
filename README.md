@@ -80,7 +80,7 @@ make api-scanner                  # loads ~2 GB of models (~1 min), then serves 
 .venv/bin/python scripts/scan_demo.py --garment shirt.jpg --label label.jpg
 ```
 
-Needs `models/scanner-v1` (see `training/scanner/fit_heads.py`). Phones reach the server
+Needs `models/scanner-v2` (see `training/scanner/fit_heads.py`). Phones reach the server
 at `http://<this-mac's-ip>:8000`.
 
 ## Where to start

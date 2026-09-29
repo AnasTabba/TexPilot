@@ -333,7 +333,7 @@ StatedComposition.section: str | None = None      # e.g. "shell"
 | Variable | Values | Default |
 |---|---|---|
 | `TEXPILOT_VISION` | `scanner`, `stub` | `stub` |
-| `TEXPILOT_MODEL_BUNDLE` | path | `models/scanner-v1` |
+| `TEXPILOT_MODEL_BUNDLE` | path | `models/scanner-v2` (final split; v1 was the preliminary one) |
 | `TEXPILOT_GARMENT_DETECTOR` | `gdino`, `owlv2`, `rtdetr`, `florence2` | `gdino` until the bake-off picks (§8.3) |
 | `TEXPILOT_OCR_BACKEND` | `none`, `apple`, `paddle`, `florence2` | `apple` with `TEXPILOT_VISION=scanner`, else `none` |
 
