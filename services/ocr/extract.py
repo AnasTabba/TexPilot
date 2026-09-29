@@ -128,11 +128,10 @@ def extract(lines: list[TextLine]) -> Extraction:
         if conflict:
             return Extraction(None, reason="UNREADABLE")
         if fibers:
-            mean = sum(line.confidence for line in used) / len(used)
+            confs = [line.confidence for line in used]
+            confidence = None if None in confs else 1 - (1 - sum(confs) / len(confs)) ** agreeing
             text = " / ".join(line.text.strip() for line in used)
-            return Extraction(
-                fibers, section=name, confidence=1 - (1 - mean) ** agreeing, text=text
-            )
+            return Extraction(fibers, section=name, confidence=confidence, text=text)
     return Extraction(None, reason="UNREADABLE")
 
 

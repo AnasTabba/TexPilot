@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class TextLine:
     text: str
-    confidence: float  # 0-1
+    confidence: float | None  # 0-1; None when the engine gives none (Florence-2)
     box: tuple[float, float, float, float]  # pixels (x0, y0, x1, y1), origin top-left
 
 

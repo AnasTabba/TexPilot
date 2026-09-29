@@ -109,3 +109,9 @@ def test_a_sideways_reading_is_skipped_for_the_upright_one():
 def test_the_text_behind_the_composition_is_kept_for_the_error_rate():
     ex = extract([L("LINING: 100% PES", 0), L("SHELL: 80% PA 20% EA", 1)])
     assert ex.text == "80% PA 20% EA"
+
+
+def test_lines_without_confidence_give_a_composition_with_no_confidence():
+    ex = extract([L("80% PA 20% EA", 0, conf=None)])
+    assert fibres(ex) == [("nylon", 80.0), ("elastane_spandex", 20.0)]
+    assert ex.confidence is None  # Florence-2 gives none; the API reports null, not a guess
