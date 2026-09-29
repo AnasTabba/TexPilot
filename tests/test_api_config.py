@@ -22,3 +22,13 @@ def test_scanner_mode_defaults_to_grounding_dino_and_apple_vision():
 def test_unknown_vision_mode_fails_at_startup():
     with pytest.raises(ValueError, match="TEXPILOT_VISION"):
         build_predictor(Settings.from_env({"TEXPILOT_VISION": "magic"}))
+
+
+def test_scans_are_kept_with_the_scanner_and_not_in_stub_mode(tmp_path):
+    from services.api.config import build_store
+
+    assert Settings.from_env({}).store == "none"
+    assert build_store(Settings.from_env({})) is None
+    assert Settings.from_env({"TEXPILOT_VISION": "scanner"}).store == "data/scans"
+    s = Settings.from_env({"TEXPILOT_SCAN_STORE": str(tmp_path / "scans")})
+    assert build_store(s).root == tmp_path / "scans"  # on in stub mode too, if asked for

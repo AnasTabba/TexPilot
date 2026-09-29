@@ -20,6 +20,7 @@ class Settings:
     detector: str = "gdino"  # gdino | owlv2 | florence2
     ocr: str = "none"  # none | apple | paddle | florence2
     device: str = "auto"
+    store: str = "none"  # none | a folder that keeps every scan (parent spec §9)
 
     @classmethod
     def from_env(cls, env=os.environ) -> Settings:
@@ -31,6 +32,8 @@ class Settings:
             # OCR defaults on only with the scanner, so stub mode runs on any OS.
             ocr=env.get("TEXPILOT_OCR_BACKEND", "apple" if vision == "scanner" else "none"),
             device=env.get("TEXPILOT_DEVICE", "auto"),
+            # Scans are kept with the real scanner; stub scans are not worth the disk.
+            store=env.get("TEXPILOT_SCAN_STORE", "data/scans" if vision == "scanner" else "none"),
         )
 
 
@@ -52,3 +55,11 @@ def build_ocr(s: Settings):
     from services.ocr.engines import load_engine
 
     return load_engine(s.ocr, s.device)
+
+
+def build_store(s: Settings):
+    if s.store == "none":
+        return None
+    from services.api.store import ScanStore
+
+    return ScanStore(Path(s.store))

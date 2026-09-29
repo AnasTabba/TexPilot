@@ -189,3 +189,46 @@ def test_a_junk_label_photo_is_a_422_even_against_the_stub():
 def test_an_empty_upload_is_a_422():
     r = client.post("/api/v1/scan", files={"surface_image": ("g.jpg", b"", "image/jpeg")})
     assert r.status_code == 422
+
+
+def _saved(root):
+    import sqlite3
+
+    con = sqlite3.connect(root / "scans.sqlite3")
+    try:
+        return [r[0] for r in con.execute("select scan_id from scans")]
+    finally:
+        con.close()
+
+
+def test_an_answered_scan_is_kept_with_its_photo(state, tmp_path):
+    from services.api.store import ScanStore
+
+    state["store"] = ScanStore(tmp_path)
+    r = client.post("/api/v1/scan", files={"surface_image": ("a.jpg", JPEG, "image/jpeg")},
+                    data={"label_text": "100% COTTON"})  # fmt: skip
+    body = r.json()
+    assert _saved(tmp_path) == [body["scan_id"]]
+    assert (tmp_path / "photos" / f"{body['scan_id']}_garment.jpg").read_bytes() == JPEG
+    assert "NOT_SAVED" not in {f["code"] for f in body["flags"]}
+
+
+def test_a_scan_that_cannot_be_saved_still_gets_its_verdict_and_says_so(state):
+    class DiskFull:
+        def save(self, *args):
+            raise OSError(28, "No space left on device")
+
+    state["store"] = DiskFull()
+    r = client.post("/api/v1/scan", files={"surface_image": ("a.jpg", JPEG, "image/jpeg")})
+    assert r.status_code == 200 and r.json()["verdict"] == "INSUFFICIENT_EVIDENCE"
+    [flag] = [f for f in r.json()["flags"] if f["code"] == "NOT_SAVED"]
+    assert flag["severity"] == "info" and "OSError" in flag["message"]
+
+
+def test_a_rejected_upload_is_not_kept(state, tmp_path):
+    from services.api.store import ScanStore
+
+    state["store"] = ScanStore(tmp_path)
+    heic = b"\x00\x00\x00\x18ftypheic" + b"\x00" * 16
+    r = client.post("/api/v1/scan", files={"surface_image": ("a.heic", heic, "image/heic")})
+    assert r.status_code == 422 and _saved(tmp_path) == []

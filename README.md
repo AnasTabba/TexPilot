@@ -106,8 +106,8 @@ plausibility KB, the flag engine, the FastAPI app and wire contract.
 1. Extend `_CODEBOOK` from `fiber_codebook.csv` once the dataset is downloaded.
 2. Real OCR backend behind `TEXPILOT_OCR_BACKEND` — start with PaddleOCR server-side.
 3. Accept a `label_image` upload instead of `label_text`.
-4. Scan persistence (spec §9) — every scan is audit evidence *and* accumulating
-   phone-domain training data.
+4. ~~Scan persistence (spec §9)~~ done: the scanner keeps every answered scan in
+   `data/scans/` (`TEXPILOT_SCAN_STORE`; `none` turns it off).
 
 ### P3 — App  (`app/`)
 1. Expo + React Native, camera with a framing guide.

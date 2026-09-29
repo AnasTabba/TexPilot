@@ -186,7 +186,9 @@ Present and tested: `ocr/parser.py`, `ocr/normalizer.py`, `consistency/kb.yaml` 
 1. Extend `_CODEBOOK` from `fiber_codebook.csv` once downloaded.
 2. Real OCR backend behind `TEXPILOT_OCR_BACKEND` — PaddleOCR server-side first.
 3. Accept a `label_image` upload instead of `label_text`.
-4. Scan persistence (spec §9) — audit evidence *and* accumulating phone-domain training data.
+4. ~~Scan persistence (spec §9)~~ **done:** with `TEXPILOT_VISION=scanner`, every answered scan is
+   kept in `data/scans/` (`scans.sqlite3` plus the photos as `<scan_id>_garment.jpg` /
+   `_label.jpg`). `TEXPILOT_SCAN_STORE` sets the folder, or `none` turns it off; stub mode keeps nothing.
 
 ### P3 — App (`app/`)
 **Changed by decision 14:** shot 1 is now the **whole garment** (laid flat or on a hanger),
@@ -202,6 +204,8 @@ not a close-up. Upload **JPEG**: the API answers HEIC, empty or non-image upload
 - **`info` flags explain an abstention; they are not mismatches.** Examples are
   `NO_GARMENT_DETECTED`, `NO_LABEL_TEXT`, `LABEL_UNREADABLE` and `COMPONENT_FAILED`.
   Show them apart from "Why it was flagged", which is only for `high` / `medium` flags.
+- **`NOT_SAVED`** (info) means the verdict is real but the server couldn't record the scan
+  (e.g. a full disk). Show it so the operator knows the scan left no audit record.
 - A scan can carry two flags with the same `code` (e.g. `COMPONENT_FAILED` from both
   vision and OCR). **Key flag rows by index, not by `code`.**
 
