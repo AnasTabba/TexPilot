@@ -118,3 +118,20 @@ def test_failing_heads_leave_every_head_empty():
 def test_undecodable_upload_is_rejected():
     with pytest.raises(UnsupportedImage):
         _scanner().predict(b"not an image")
+
+
+def test_capture_quality_is_measured_on_the_photo_and_the_garment_box():
+    out = _scanner().predict(_jpeg())
+    assert set(out.quality) == {"blur", "exposure", "framing"}
+    assert (out.quality["exposure"], out.quality["framing"]) == ("ok", "ok")
+
+
+def test_a_failing_quality_measure_leaves_the_scan_alone(monkeypatch):
+    import services.vision.scanner as scanner
+
+    def boom(image, box):
+        raise ValueError("bad pixels")
+
+    monkeypatch.setattr(scanner, "capture_quality", boom)
+    out = _scanner().predict(_jpeg())
+    assert out.quality is None and out.notes == () and out.structure.label == "denim"

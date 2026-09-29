@@ -13,6 +13,7 @@ from pathlib import Path
 from services.vision.garment import choose_primary
 from services.vision.imageio import decode_image
 from services.vision.predictor import GarmentOutput, Note, VisionOutput
+from services.vision.quality import capture_quality
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +50,13 @@ class ScannerPredictor:
                 mask = box_mask((h, w), primary.box)
             views = self._try(notes, "cropper", lambda: self.cropper.views(image, mask)) or [image]
         heads = self._try(notes, "fabric heads", lambda: self.heads.predict(views))
-        return replace(heads or VisionOutput(None, None, None), garment=garment, notes=tuple(notes))
+        try:
+            quality = capture_quality(image, garment.box if garment else None)
+        except Exception:  # noqa: BLE001 -- a quality number must never cost the scan
+            log.exception("capture quality failed")
+            quality = None
+        out = heads or VisionOutput(None, None, None)
+        return replace(out, garment=garment, notes=tuple(notes), quality=quality)
 
     @staticmethod
     def _try(notes: list[Note], component: str, fn):

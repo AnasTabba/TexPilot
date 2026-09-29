@@ -6,6 +6,7 @@ import logging
 import uuid
 
 from services.api.schemas import (
+    CaptureQuality,
     CompositionSource,
     FiberComponent,
     FlagModel,
@@ -97,6 +98,7 @@ def run_scan(
         if g is None
         else GarmentPrediction(label=g.label, confidence=g.confidence, box=g.box),
         stated_composition=stated,
+        capture_quality=CaptureQuality(**vision.quality) if vision.quality else CaptureQuality(),
         flags=[
             FlagModel(code=f.code, message=f.message, severity=f.severity) for f in verdict.flags
         ]

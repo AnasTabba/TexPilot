@@ -232,3 +232,10 @@ def test_a_rejected_upload_is_not_kept(state, tmp_path):
     heic = b"\x00\x00\x00\x18ftypheic" + b"\x00" * 16
     r = client.post("/api/v1/scan", files={"surface_image": ("a.heic", heic, "image/heic")})
     assert r.status_code == 422 and _saved(tmp_path) == []
+
+
+def test_capture_quality_reaches_the_response(state):
+    quality = {"blur": 812.5, "exposure": "ok", "framing": "cut_off"}
+    state["predictor"] = FakePredictor(VisionOutput(None, None, None, quality=quality))
+    r = client.post("/api/v1/scan", files={"surface_image": ("a.jpg", JPEG, "image/jpeg")})
+    assert r.json()["capture_quality"] == quality

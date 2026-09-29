@@ -39,6 +39,7 @@ class VisionOutput:
     fibre_family: HeadOutput | None
     garment: GarmentOutput | None = None
     notes: tuple[Note, ...] = ()
+    quality: dict | None = None  # blur / exposure / framing (services.vision.quality)
 
 
 @runtime_checkable
