@@ -17,7 +17,7 @@ from services.vision.predictor import Predictor, StubPredictor
 class Settings:
     vision: str = "stub"  # stub | scanner
     bundle: Path = Path("models/scanner-v1")
-    detector: str = "gdino"  # gdino | owlv2 | florence2
+    detector: str = "gdino"  # gdino | owlv2 | rtdetr | florence2
     ocr: str = "none"  # none | apple | paddle | florence2
     device: str = "auto"
     store: str = "none"  # none | a folder that keeps every scan (parent spec §9)

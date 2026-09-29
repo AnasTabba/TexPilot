@@ -19,7 +19,9 @@ def main() -> int:
     ap.add_argument("--garment", type=Path, required=True)
     ap.add_argument("--label", type=Path)
     ap.add_argument("--label-text")
-    ap.add_argument("--detector", default="gdino", choices=["gdino", "owlv2", "florence2"])
+    ap.add_argument(
+        "--detector", default="gdino", choices=["gdino", "owlv2", "rtdetr", "florence2"]
+    )
     ap.add_argument("--ocr", default="apple", choices=["apple", "paddle", "florence2"])
     ap.add_argument("--bundle", type=Path, default=Path("models/scanner-v1"))
     ap.add_argument("--repeat", type=int, default=3)
