@@ -207,7 +207,32 @@ configured in `app.json` (task T9).
 - Web: navigation uses real links (`Link`), and page regions have roles
   (`navigation`, `main`, `banner`, `contentinfo`). Every page sets a title.
 
-## 8. Seeing your work
+## 8. Factory inventory workspace (frontend preview)
+
+The user's next-phase request expands the mobile app into factory inventory management.
+Inventory opens at `/inventory`; detection scans remain at `/scan`. This overrides the
+earlier scanner-only mobile-home assumption for this frontend phase. Backend integration
+and the production-planning optimizer remain outside this change.
+
+The current visual reference is [lazy kar's AI inventory app design](https://dribbble.com/shots/26804873-Ai-inventory-app-design) for LazyInterface:
+a light grey canvas, rounded white cards, a violet lead metric, a compact two-by-two
+summary grid, circular icon wells, pastel stock-flow columns and lavender selection
+states. The mobile header is compact so stock metrics take priority. Textile swatches
+keep their material colours. Text uses dark, accessible tones on the violet card and
+selected chips; primary actions use a deeper violet for white-label contrast.
+
+HCI decisions: persistent labelled navigation, minimum 48-point targets, searchable
+recognition-based material selection, explicit units, textual stock states, store
+scope, useful empty states, field validation, review before commit, and pinned primary
+stock actions. Demo provenance stays visible. Holds cannot be issued and reserved
+quantities cannot silently become available. Scanner findings retain all three verdicts.
+
+Inventory state is frontend sample data saved on the current device. Charts and orders
+are explicitly illustrative. No scan is fabricated and no inspection automatically
+releases a lot. Exact composition displayed in material details is sample master data,
+never a visual inference.
+
+## 9. Seeing your work
 
 - **All three verdicts, no backend or model needed:** open `/scan/history` and tap
   **Load sample results (dev)**. It only appears in development builds. The samples

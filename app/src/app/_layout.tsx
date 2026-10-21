@@ -9,7 +9,8 @@ configureScanner({ apiUrl: env.apiUrl });
 
 /**
  * Root of all three surfaces. Each has its own layout:
- *   /           landing page (web) · redirects to /scan (iOS, Android)
+ *   /           landing page (web) · redirects to /inventory (iOS, Android)
+ *   /inventory  mobile inventory workspace with local demo data
  *   /scan       scanner, every platform          -> scan/_layout.tsx
  *   /dashboard  supervisor dashboard, web only   -> dashboard/_layout(.web).tsx
  */

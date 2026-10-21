@@ -1,6 +1,6 @@
 import { Redirect } from 'expo-router';
 
-/** iOS and Android open straight into the scanner. The web gets index.web.tsx. */
+/** Inventory is the mobile workspace; fabric verification remains in the Scan tab. */
 export default function Index() {
-  return <Redirect href="/scan" />;
+  return <Redirect href="/inventory" />;
 }

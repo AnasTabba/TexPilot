@@ -6,6 +6,9 @@ One Expo codebase (SDK 57, React Native, TypeScript, Expo Router) that ships:
 - **a website:** the same scanner in the browser, a supervisor dashboard, and a
   public landing page
 
+The mobile home is now an **inventory workspace** (`/inventory`). Detection scans
+remain available from its Scan navigation item and at `/scan`.
+
 **Docs in this folder:**
 
 - `AGENTS.md`: rules for anyone, human or AI agent, changing the app
@@ -17,11 +20,12 @@ It works end-to-end today: photograph a fabric, type the care-label text, and ge
 verdict back from the live API. Until P1 lands a model, that verdict is always
 `INSUFFICIENT_EVIDENCE`. That is correct behaviour, not a bug.
 
-| Surface              | URL          | Runs on                                             |
-| -------------------- | ------------ | --------------------------------------------------- |
-| Scanner              | `/scan`      | iOS, Android, web                                   |
-| Supervisor dashboard | `/dashboard` | web                                                 |
-| Landing page         | `/`          | web (the phone apps open straight into the scanner) |
+| Surface              | URL          | Runs on                                          |
+| -------------------- | ------------ | ------------------------------------------------ |
+| Scanner              | `/scan`      | iOS, Android, web                                |
+| Inventory workspace  | `/inventory` | iOS, Android, web; demo inventory stored locally |
+| Supervisor dashboard | `/dashboard` | web                                              |
+| Landing page         | `/`          | web; phone apps open in the inventory workspace  |
 
 ## Run it
 
@@ -34,7 +38,7 @@ make app-setup      # app JS deps
 ```
 
 **In a browser (quickest):** from `app/`, run `npm run web` and open
-http://localhost:8081. Visit `/`, `/scan` and `/dashboard`. The API has no CORS headers
+http://localhost:8081. Visit `/inventory`, `/scan`, `/` and `/dashboard`. The API has no CORS headers
 yet, so the browser can't read its responses and the scanner shows "Unreachable".
 Everything else works. For sample results, open `/scan/history` → **Load sample
 results (dev)**.
@@ -278,6 +282,32 @@ package, or a Web Component. Start with the iframe; it's the least work.
 - CORS for `localhost` in development, so the web scanner can reach the API
 - scan storage and a list endpoint (T14)
 - an HTTPS deployment of the API for the public website (T12)
+
+## Factory inventory UI preview
+
+The user-requested next phase adds a mobile inventory workspace. Open `/inventory`
+in the web preview; iOS and Android now open there automatically. The Scan tab keeps
+the existing fabric explorer, camera capture, detection submission, results and history.
+
+- Overview: stock on hand, available/reserved quantities, store selection, low-stock
+  and quality-hold links, an explicitly illustrative movement chart and recent activity.
+- Inventory: search by material, colour, SKU, lot or supplier; category/status filters;
+  lot details, locations, composition from sample master data, GSM and width.
+- Receive/issue: choose an existing material and lot, enter metres, rolls and reference,
+  review the resulting stock, then confirm. Reserved stock and quality holds are protected.
+- Incoming stock: sample purchase-order cards and a shortcut to record a delivery.
+- Activity: filter local receipts/issues and open their details.
+
+**Frontend only.** The inventory uses eight labelled sample materials and sample orders.
+Demo stock moves persist via AsyncStorage on the current device/browser. Sample activity
+is an illustrative history, not an opening-balance ledger. There are no inventory API
+calls, backend/schema changes, order-status updates, or automatic scan-to-stock releases.
+The existing scanner continues to use its configured API independently.
+
+Code lives in `src/features/inventory/`; routes in `src/app/inventory/` are thin. The
+inventory tokens live in `src/theme/index.ts`. Backend integration can later replace
+the inventory store without changing the scanner contract. A model or server is not
+required to explore this inventory preview.
 
 ## Fabric explorer design preview
 
