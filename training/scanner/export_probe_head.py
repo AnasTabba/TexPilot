@@ -1,4 +1,5 @@
-"""Turn a frozen-encoder linear probe (training/textilenet/probe.py) into a scanner Head A.
+"""Turn a frozen-encoder probe into a scanner Head A: a linear head (training/textilenet/probe.py)
+or a linear/MLP head from training/textilenet/head_search.py.
 
 The probe's head works on standardised pooled features of a frozen timm encoder. Here the
 standardisation is folded into the head, temperature and the abstain threshold are fitted
@@ -43,13 +44,32 @@ def main(argv: list[str] | None = None) -> int:
 
     from training.scanner.export_head_a import calibrate
     from training.textilenet.feature_cache import FeatureCache
+    from training.textilenet.head_search import make_head
     from training.textilenet.metrics import summarize
     from training.textilenet.splits import read_csv
 
     ck = torch.load(args.run / "head.pt", map_location="cpu", weights_only=False)
-    classes, name, size = list(ck["classes"]), ck["timm_name"], ck["img_size"]
-    w, b = ck["state_dict"]["weight"].numpy(), ck["state_dict"]["bias"].numpy()
-    w2, b2 = fold_standardisation(w, b, ck["mu"], ck["sd"])
+    classes, state = list(ck["classes"]), dict(ck["state_dict"])
+    if "kind" in ck:  # training/textilenet/head_search.py: linear or MLP, per feature set
+        if len(ck["features"]) > 1:
+            sys.exit(
+                "a head on concatenated encoders needs both encoders at serving: not supported"
+            )
+        name, size = ck["features"][0].rsplit("_", 1)
+        size, mu, sd = int(size), ck["mu"][0], ck["sd"][0]
+    else:  # probe.py: linear
+        name, size, mu, sd = ck["timm_name"], ck["img_size"], ck["mu"], ck["sd"]
+    first = "weight" if "weight" in state else "0.weight"  # an MLP's first layer
+    w2, b2 = fold_standardisation(
+        state[first].numpy(), state[first.replace("weight", "bias")].numpy(), mu, sd
+    )
+    state[first], state[first.replace("weight", "bias")] = (
+        torch.from_numpy(w2),
+        torch.from_numpy(b2),
+    )
+    head = make_head("linear" if first == "weight" else "mlp", w2.shape[1], len(classes),
+                     hidden=w2.shape[0]).eval()  # fmt: skip
+    head.load_state_dict({k: v.float() for k, v in state.items()})
 
     cache = FeatureCache(args.feature_dir / args.partition / f"{name}_{size}")
     rows = read_csv(args.split_csv)
@@ -59,30 +79,32 @@ def main(argv: list[str] | None = None) -> int:
         missing = set(cache.missing([r.path for r in rs]))
         rs = [r for r in rs if r.path not in missing]  # e.g. scraped rows absent on Kaggle
         f = cache.assemble([r.path for r in rs]).astype(np.float32)
-        scores[split] = (f @ w2.T + b2, np.array([classes.index(r.label) for r in rs]))
+        with torch.no_grad():
+            logits = head(torch.from_numpy(f)).numpy()
+        scores[split] = (logits, np.array([classes.index(r.label) for r in rs]))
     cal = calibrate(scores["val"], scores["test"], args.target)
     test = summarize(*scores["test"], classes)
 
     cfg = timm.get_pretrained_cfg(name).to_dict()
     args.out.mkdir(parents=True, exist_ok=True)
     save_file(
-        {"probe.weight": w2.astype(np.float32), "probe.bias": b2.astype(np.float32)},
+        {f"probe.{k}": v.numpy().astype(np.float32) for k, v in head.state_dict().items()},
         str(args.out / "probe.safetensors"),
     )
-    head = {
+    meta = {
         "classes": classes,
         "timm_name": name,
         "img_size": size,
         "crop_pct": args.crop_pct,
         "mean": list(cfg["mean"]),
         "std": list(cfg["std"]),
-        "pool": "probe",  # frozen public encoder + this linear head on its pooled features
+        "pool": "probe",  # frozen public encoder + this head on its pooled features
         "source_run": str(args.run),
         "domain": "catalog (TextileNet fabric)",
         **cal,
         "test_macro_f1": test["macro_f1"],
     }
-    (args.out / "head.json").write_text(json.dumps(head, indent=1))
+    (args.out / "head.json").write_text(json.dumps(meta, indent=1))
     t = cal["test"]
     print(
         f"{name}: test n={t['n']} top-1 {t['top1']:.4f} macro F1 {test['macro_f1']:.4f}; answers "
