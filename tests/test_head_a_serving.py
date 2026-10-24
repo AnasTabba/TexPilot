@@ -113,3 +113,27 @@ def test_a_head_whose_fp16_output_overflows_reruns_in_fp32(tmp_path):
     head.model, head.half = Overflowing(), True
     p = head.probs([np.full((64, 64, 3), 128, np.uint8)])
     assert np.isfinite(p).all() and not head.half
+
+
+def test_a_probe_head_loads_its_encoder_from_a_local_file_when_one_is_shipped(
+    tmp_path, monkeypatch
+):
+    import timm
+
+    from services.vision import heads
+
+    seen = {}
+    real = timm.create_model
+
+    def spy(name, **kw):
+        seen.update(kw)
+        return real("resnet10t", pretrained=False, num_classes=0)
+
+    monkeypatch.setattr(timm, "create_model", spy)
+    d = tmp_path / "head_a"
+    d.mkdir()
+    (d / "encoder.safetensors").write_bytes(b"")  # presence is what counts here
+    heads.timm_classifier(
+        "resnet10t", 0, 64, pretrained=True, weights_file=d / "encoder.safetensors"
+    )
+    assert seen["pretrained_cfg_overlay"] == {"file": str(d / "encoder.safetensors")}

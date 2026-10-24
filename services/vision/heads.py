@@ -59,12 +59,17 @@ def closest(probs: np.ndarray, classes, k: int = 3) -> list[tuple[str, float]]:
     return [(classes[j], float(probs[j])) for j in np.argsort(-probs, kind="stable")[:k]]
 
 
-def timm_classifier(timm_name: str, n_classes: int, img_size: int, pretrained: bool = False):
+def timm_classifier(
+    timm_name: str, n_classes: int, img_size: int, pretrained: bool = False, weights_file=None
+):
     """The classifier training.textilenet.train builds: ViT-style models are made at the
-    training size (their position embeddings are resampled to it), CNNs take any size."""
+    training size (their position embeddings are resampled to it), CNNs take any size.
+    ``weights_file`` loads the pretrained weights from disk instead of the Hugging Face Hub."""
     import timm
 
     kwargs = {"img_size": img_size} if timm_name.startswith(("vit_", "eva", "deit", "beit")) else {}
+    if weights_file is not None:
+        kwargs["pretrained_cfg_overlay"] = {"file": str(weights_file)}
     return timm.create_model(timm_name, pretrained=pretrained, num_classes=n_classes, **kwargs)
 
 
@@ -86,7 +91,10 @@ class FineTunedHead:
         self.half = device.type in ("mps", "cuda")
         m, self.probe = self.meta, None
         if m.get("pool") == "probe":
-            model = timm_classifier(m["timm_name"], 0, m["img_size"], pretrained=True)
+            local = head_dir / "encoder.safetensors"  # shipped when the Hub is slow to reach
+            model = timm_classifier(
+                m["timm_name"], 0, m["img_size"], True, local if local.exists() else None
+            )
             w = load_file(str(head_dir / "probe.safetensors"))
             self.probe = torch.nn.Linear(*w["probe.weight"].shape[::-1])
             self.probe.load_state_dict({"weight": w["probe.weight"], "bias": w["probe.bias"]})
