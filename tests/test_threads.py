@@ -6,8 +6,13 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
-from services.vision.threads import thread_density, yarn_count_ne  # noqa: E402
-from tests.fabric_sim import degrade, render  # noqa: E402
+from services.vision.threads import (  # noqa: E402
+    knit_density,
+    thread_density,
+    yarn_count_knit_ne,
+    yarn_count_ne,
+)
+from tests.fabric_sim import degrade, knit, render  # noqa: E402
 
 PPI = 600  # a 600 dpi flatbed scan
 
@@ -110,3 +115,18 @@ def test_yarn_count_round_trips_through_the_fabric_weight_formula():
     gsm = 23.248 * (ends * (1 + cw) / ne_warp + picks * (1 + cf) / ne_weft)
     w, f = yarn_count_ne(gsm, ends, picks, warp_crimp=cw, weft_crimp=cf, weft_to_warp=1.2)
     assert w == pytest.approx(10.0, rel=1e-3) and f == pytest.approx(12.0, rel=1e-3)
+
+
+@pytest.mark.parametrize("wales,courses", [(40, 55), (28, 38)])
+def test_knit_density_counts_wales_not_loop_legs(wales, courses):
+    d = knit_density(knit(wales, courses, 1200, size=1600), 1200)
+    assert d.ends_per_inch == pytest.approx(wales, rel=0.03)  # each wale shows two legs
+    assert d.picks_per_inch == pytest.approx(courses, rel=0.03)
+
+
+def test_knit_yarn_count_round_trips_through_the_tightness_relation():
+    ne, wpi, cpi, tf = 30.0, 32, 44, 1.45
+    tex = 590.5 / ne
+    stitches_per_cm2 = (wpi / 2.54) * (cpi / 2.54)
+    gsm = stitches_per_cm2 * (tex**0.5 / tf) * tex / 100  # loop length (mm) = sqrt(tex) / TF
+    assert yarn_count_knit_ne(gsm, wpi, cpi, tightness=tf) == pytest.approx(30.0, rel=1e-3)
