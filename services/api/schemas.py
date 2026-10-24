@@ -104,6 +104,7 @@ class SpecResult(BaseModel):
     construction: str  # woven | knit
     dpi: float  # pixels per inch the threads were measured at
     scale_source: str | None = None  # form | file (the scan's dpi) | card (printed marker)
+    weave: str | None = None  # e.g. "3/1 twill, right-hand"; None for knits or no clear repeat
     density: SpecDensity
     weight_gsm: float | None = None
     yarn: YarnCount | None = None  # None without a weight

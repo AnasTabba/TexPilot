@@ -330,6 +330,7 @@ export interface SpecResult {
   construction: "woven" | "knit";
   dpi: number; // pixels per inch the threads were measured at
   scale_source?: "form" | "file" | "card" | null; // card: the printed TexPilot card
+  weave?: string | null; // e.g. "3/1 twill, right-hand"; null for knits or no clear repeat
   density: {
     ends_per_inch: number; // knits: wales
     picks_per_inch: number; // knits: courses
@@ -380,6 +381,7 @@ export function parseSpecResult(value: unknown): SpecResult {
     !["woven", "knit"].includes(String(value.construction)) ||
     !positive(value.dpi) ||
     (value.scale_source != null && typeof value.scale_source !== "string") ||
+    (value.weave != null && typeof value.weave !== "string") ||
     !record(d) ||
     !positive(d.ends_per_inch) ||
     !positive(d.picks_per_inch) ||

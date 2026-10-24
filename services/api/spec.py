@@ -62,6 +62,7 @@ def run_spec(
         MIN_PERIOD_PX,
         knit_density,
         thread_density,
+        weave_pattern,
         yarn_count_knit_ne,
         yarn_count_ne,
     )
@@ -129,12 +130,20 @@ def run_spec(
     _, stated = stated_composition(label_text, label_image, ocr, flags)
     fibre = _fibres(stated)
     ends, picks = d.ends_per_inch, d.picks_per_inch
+    weave = None
     if construction == "knit":
         construction_line = (
             f"Construction: weft knit, {ends:.0f} wales x {picks:.0f} courses per inch"
         )
     else:
-        construction_line = f"Construction: woven, {ends:.0f} ends x {picks:.0f} picks per inch"
+        weave = weave_pattern(gray, dpi, d)
+        kind = f"woven {weave.name}" if weave else "woven"
+        construction_line = f"Construction: {kind}, {ends:.0f} ends x {picks:.0f} picks per inch"
+        if weave:
+            msg = "Weave read from the yarn crossings, taking the darker yarn as the one on top "
+            flags.append(
+                _flag("WEAVE_READ", msg + "(the warp in denim): confirm with a pick glass.")
+            )
 
     yarn, order = None, []
     if gsm is None:
@@ -181,5 +190,6 @@ def run_spec(
         yarn=yarn,
         stated_composition=stated,
         yarn_order=order,
+        weave=weave.name if weave else None,
         flags=flags,
     )

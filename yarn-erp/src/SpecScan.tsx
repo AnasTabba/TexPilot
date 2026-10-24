@@ -219,6 +219,12 @@ export default function SpecScan() {
             ))}
           </ul>
           <dl className="spec-measures">
+            {result.weave && (
+              <div>
+                <dt>Weave</dt>
+                <dd>{result.weave}</dd>
+              </div>
+            )}
             <div>
               <dt>{knit ? "Wales per inch" : "Ends per inch (warp)"}</dt>
               <dd>{result.density.ends_per_inch.toFixed(1)}</dd>

@@ -115,3 +115,15 @@ def test_a_flatbed_scan_says_where_its_scale_came_from():
 def test_an_absurd_card_size_is_refused():
     scan = _png(render("3/1 twill", 64, 42, 600, size=1600), dpi=600)
     assert _spec(scan, card_mm=300).status_code == 422
+
+
+def test_the_weave_is_named_in_the_spec_and_the_order():
+    r = _spec(_png(render("3/1 twill", 64, 42, 600, size=1600)[:, ::-1].copy(), dpi=600), oz=11.5)
+    assert r.json()["weave"] == "3/1 twill, right-hand"
+    assert "3/1 twill, right-hand" in " ".join(r.json()["yarn_order"])
+    assert "WEAVE_READ" in [f["code"] for f in r.json()["flags"]]
+
+
+def test_a_knit_has_no_weave():
+    r = _spec(_png(knit(32, 44, 1200, size=1600), dpi=1200), construction="knit", gsm=160)
+    assert r.json()["weave"] is None

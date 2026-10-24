@@ -276,3 +276,8 @@ test("A phone photo with the card: the card's measured size is sent, the scale's
   assert.throws(() => parseSpecResult({ ...spec, scale_source: 3 }), ScanError);
   assert.equal(parseSpecResult(spec).scale_source, undefined); // older servers leave it out
 });
+test("The weave read from the scan is passed through; a malformed one is refused", () => {
+  assert.equal(parseSpecResult({ ...spec, weave: "3/1 twill, right-hand" }).weave, "3/1 twill, right-hand");
+  assert.equal(parseSpecResult({ ...spec, weave: null }).weave, null);
+  assert.throws(() => parseSpecResult({ ...spec, weave: 31 }), ScanError);
+});
