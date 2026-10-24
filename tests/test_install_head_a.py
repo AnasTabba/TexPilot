@@ -59,3 +59,9 @@ def test_the_two_head_as_are_compared_on_the_same_numbers(tmp_path):
     text = "\n".join(compare(bundle, head))
     assert "val top-1" in text and "0.706" in text and "0.781" in text
     assert "coverage" in text and "0.489" in text and "0.612" in text
+
+
+def test_the_version_follows_the_bundle_name_so_model_version_matches_the_folder(tmp_path):
+    out = tmp_path / "scanner-v4"
+    install(_bundle(tmp_path), _head(tmp_path), out)  # built on an older base bundle
+    assert json.loads((out / "bundle.json").read_text())["version"] == 4

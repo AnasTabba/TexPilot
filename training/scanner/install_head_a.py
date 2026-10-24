@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -39,7 +40,10 @@ def install(bundle: Path, head: Path, out: Path) -> None:
     info = json.loads((head / "head.json").read_text())
     shutil.copytree(bundle, out)
     shutil.copytree(head, out / "head_a")
-    meta["version"] = int(meta["version"]) + 1
+    # The API reports scanner-v{version}: a bundle named scanner-vN must say version N, even
+    # when built on an older base (scanner-v4 on scanner-v2 once reported itself as v3).
+    named = re.fullmatch(r"scanner-v(\d+)", out.name)
+    meta["version"] = int(named.group(1)) if named else int(meta["version"]) + 1
     meta["structure_model"] = {
         "dir": "head_a",
         "timm_name": info["timm_name"],
