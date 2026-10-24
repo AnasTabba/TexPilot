@@ -12,6 +12,25 @@ from pathlib import Path
 
 from services.vision.predictor import Predictor, StubPredictor
 
+DEFAULT_BROWSER_ORIGINS = (
+    "https://yarnflow-factory-glass.thryuil.chatgpt.site",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+)
+
+
+def browser_origins(env=os.environ) -> tuple[str, ...]:
+    """Explicit browser clients; never allow arbitrary origins or credentials."""
+    configured = env.get("TEXPILOT_CORS_ORIGINS")
+    if configured is None:
+        return DEFAULT_BROWSER_ORIGINS
+    origins = tuple(
+        origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()
+    )
+    if "*" in origins:
+        raise ValueError("TEXPILOT_CORS_ORIGINS must list exact origins, not '*'")
+    return origins
+
 
 @dataclass(frozen=True)
 class Settings:

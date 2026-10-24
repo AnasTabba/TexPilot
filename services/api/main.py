@@ -14,8 +14,9 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 
-from services.api.config import Settings, build_ocr, build_predictor, build_store
+from services.api.config import Settings, browser_origins, build_ocr, build_predictor, build_store
 from services.api.pipeline import run_scan
 from services.api.schemas import FlagModel, ScanResult
 from services.api.uploads import check_upload
@@ -40,6 +41,13 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="TexPilot Scanner", version="0.2.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(browser_origins()),
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
 
 
 def get_predictor() -> Predictor:
@@ -49,6 +57,14 @@ def get_predictor() -> Predictor:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/v1/model")
+def model_info() -> dict[str, str | bool]:
+    """A healthy stub is not a loaded model. Let browser clients tell them apart."""
+    version = _state["model_version"]
+    ready = not isinstance(get_predictor(), StubPredictor) and "stub" not in version.lower()
+    return {"ready": ready, "mode": "scanner" if ready else "stub", "model_version": version}
 
 
 @app.post("/api/v1/scan", response_model=ScanResult)
