@@ -9,6 +9,7 @@ np = pytest.importorskip("numpy")
 from services.vision.threads import (  # noqa: E402
     knit_density,
     thread_density,
+    weave_pattern,
     yarn_count_knit_ne,
     yarn_count_ne,
 )
@@ -136,3 +137,34 @@ def test_the_finest_count_a_resolution_allows_is_not_refused_by_rounding():
     ppi = 480.02770222981763  # from a card photo: ppi / 2.5 * 2.5 > ppi in floating point
     d = thread_density(render("plain", 110, 70, ppi, size=1200), ppi, max_tpi=ppi / 2.5)
     assert d.ends_per_inch is not None
+
+
+@pytest.mark.parametrize(
+    "weave,ends,picks,name",
+    [
+        ("plain", 110, 80, "plain"),
+        ("2/1 twill", 90, 60, "2/1 twill, left-hand"),
+        ("3/1 twill", 64, 42, "3/1 twill, left-hand"),
+        ("2/2 twill", 80, 56, "2/2 twill, left-hand"),
+        ("5-satin", 120, 80, "5-end satin"),
+        ("basket 2x2", 60, 60, "2/2 basket"),
+    ],
+)
+def test_the_weave_is_read_from_the_interlacings(weave, ends, picks, name):
+    img = degrade(render(weave, ends, picks, 1200, size=1600), blur=0.7, jpeg=88)
+    d = thread_density(img, 1200)
+    assert weave_pattern(img, 1200, d).name == name
+
+
+def test_denim_twill_reads_right_hand_when_its_diagonal_climbs_to_the_right():
+    img = degrade(render("3/1 twill", 64, 42, 600, size=1600)[:, ::-1], blur=0.7, jpeg=88)
+    w = weave_pattern(img, 600, thread_density(img, 600))
+    assert w.name == "3/1 twill, right-hand"
+    assert w.repeat == (4, 4) and w.agreement > 0.9
+
+
+def test_a_fabric_without_a_clear_repeat_has_no_weave_name():
+    rng = np.random.default_rng(0)
+    img = (rng.random((1600, 1600)) * 255).astype(np.uint8)
+    d = thread_density(render("plain", 80, 60, 600, size=1600), 600)  # counts from another fabric
+    assert weave_pattern(img, 600, d) is None

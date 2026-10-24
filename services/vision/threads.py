@@ -143,6 +143,104 @@ def thread_density(
     return Density(result[0], result[2], result[1], result[3], len(tiles), skew)
 
 
+@dataclass(frozen=True)
+class Weave:
+    name: str  # e.g. "3/1 twill, right-hand": the darker yarn's float over the lighter one
+    repeat: tuple[int, int]  # ends x picks in one repeat
+    agreement: float  # share of the read crossings that follow the repeat
+    unit: tuple[tuple[int, ...], ...]  # one repeat, rows = picks, 1 = darker yarn on top
+
+
+def _cell_means(ii: np.ndarray, xs: np.ndarray, ys: np.ndarray, hx: float, hy: float):
+    """Mean grey in a box of half-size (hx, hy) around every (y, x) grid centre."""
+    x0, x1 = np.round(xs - hx).astype(int), np.round(xs + hx).astype(int) + 1
+    y0, y1 = np.round(ys - hy).astype(int), np.round(ys + hy).astype(int) + 1
+    total = ii[y1][:, x1] - ii[y0][:, x1] - ii[y1][:, x0] + ii[y0][:, x0]
+    return total / np.outer(y1 - y0, x1 - x0)
+
+
+def _name(u: np.ndarray) -> str:
+    n_picks, n_ends = u.shape
+    if u.shape == (2, 2) and u[0, 0] != u[0, 1] and u[0, 0] != u[1, 0]:
+        return "plain"
+    block = np.kron(np.eye(2, dtype=int), np.ones((2, 2), int))
+    if u.shape == (4, 4) and any(
+        np.array_equal(u, np.roll(b, (dy, dx), (0, 1)))
+        for b in (block, 1 - block)
+        for dy in range(4)
+        for dx in range(4)
+    ):
+        return "2/2 basket"
+    if n_picks == n_ends:
+        n, k = n_ends, int(u[0].sum())
+        shifts = {
+            s
+            for s in range(1, n)
+            if all(np.array_equal(u[(r + 1) % n], np.roll(u[r], s)) for r in range(n))
+        }
+        if shifts & {1, n - 1} and 0 < k < n:
+            # Rows run down the image: moving right each pick down is a "\" diagonal.
+            return f"{k}/{n - k} twill, {'left' if 1 in shifts else 'right'}-hand"
+        if shifts and n >= 5 and k in (1, n - 1):
+            return f"{n}-end satin"
+    return f"repeat of {n_ends} ends x {n_picks} picks"
+
+
+def weave_pattern(
+    gray: np.ndarray, ppi: float, d: Density, cells: int = 24, min_agreement: float = 0.85
+) -> Weave | None:
+    """The weave, read like a weaver's point paper: which yarn is on top at each crossing of
+    the measured thread grid, then the smallest repeat. None when no repeat holds.
+
+    The darker yarn is taken as the one on top where a crossing reads dark, so "3/1" means the
+    darker yarn floats over three: the warp in denim (indigo warp, white weft)."""
+    if d.ends_per_inch is None:
+        return None
+    img = gray.astype(float)
+    if img.ndim == 3:
+        img = img.mean(2)
+    if d.skew_deg:
+        img = _unrotate(img, d.skew_deg)
+    pe, pp = ppi / d.ends_per_inch, ppi / d.picks_per_inch
+    h, w = img.shape
+    nx, ny = min(cells, int(w / pe) - 2), min(cells, int(h / pp) - 2)
+    if nx < 8 or ny < 8:
+        return None
+    ii = np.pad(img.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+    x0, y0 = (w - nx * pe) / 2, (h - ny * pp) / 2
+    # The grid's phase: crossings read purest (most spread-out cell means) when the boxes sit
+    # on them rather than straddling two.
+    grids = [
+        _cell_means(ii, x0 + ox + (np.arange(nx) + 0.5) * pe, y0 + oy + (np.arange(ny) + 0.5) * pp,
+                    0.3 * pe, 0.3 * pp)
+        for ox in np.arange(-4, 4) * pe / 8
+        for oy in np.arange(-4, 4) * pp / 8
+    ]  # fmt: skip
+    m = max(grids, key=np.var)
+    t = m.mean()
+    for _ in range(20):  # two-means threshold: dark crossings vs light ones
+        t = (m[m <= t].mean() + m[m > t].mean()) / 2 if (m > t).any() and (m <= t).any() else t
+    b = (m < t).astype(int)
+
+    def period(axis: int) -> int | None:
+        for s in range(1, 9):
+            a, z = (b[:, :-s], b[:, s:]) if axis == 1 else (b[:-s], b[s:])
+            if (a == z).mean() >= min_agreement:
+                return s
+        return None
+
+    rx, ry = period(1), period(0)
+    if rx is None or ry is None:
+        return None
+    unit = np.array(
+        [[round(b[a::ry, c::rx].mean()) for c in range(rx)] for a in range(ry)], dtype=int
+    )
+    agreement = float((np.tile(unit, (ny // ry + 1, nx // rx + 1))[:ny, :nx] == b).mean())
+    if agreement < min_agreement or unit.min() == unit.max():
+        return None
+    return Weave(_name(unit), (rx, ry), agreement, tuple(map(tuple, unit.tolist())))
+
+
 def yarn_count_ne(
     gsm: float,
     ends: float,
