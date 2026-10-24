@@ -135,3 +135,11 @@ def test_a_failing_quality_measure_leaves_the_scan_alone(monkeypatch):
     monkeypatch.setattr(scanner, "capture_quality", boom)
     out = _scanner().predict(_jpeg())
     assert out.quality is None and out.notes == () and out.structure.label == "denim"
+
+
+def test_whole_photo_mode_classifies_the_whole_image_but_still_reports_the_garment():
+    seg, crop, heads = Seg(error=AssertionError("segmenter must not run")), Crop(), Heads()
+    det = Det([Detection("pants", 0.9, (50.0, 10.0, 150.0, 90.0))])
+    out = ScannerPredictor(det, seg, crop, heads, whole_photo=True).predict(_jpeg())
+    assert [v.shape for v in heads.views[0]] == [(100, 200, 3)] and crop.masks == []
+    assert out.garment.label == "pants" and not out.notes  # no COMPONENT_FAILED from the segmenter

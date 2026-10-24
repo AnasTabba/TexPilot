@@ -102,8 +102,9 @@ class FineTunedHead:
         else:
             model = timm_classifier(m["timm_name"], len(self.classes), m["img_size"])
             model.load_state_dict(load_file(str(head_dir / "model.safetensors")))
-        model = model.eval().to(device)
-        self.model = model.half() if self.half else model
+        # Halve before moving: a 400M-parameter encoder must not sit on the GPU in fp32 first.
+        model = model.eval().half() if self.half else model.eval()
+        self.model = model.to(device)
 
     def predict(self, views: list[np.ndarray]) -> HeadOutput | None:
         return decide(self.probs(views), self.classes, self.meta["threshold"])

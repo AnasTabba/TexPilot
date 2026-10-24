@@ -19,13 +19,24 @@ log = logging.getLogger(__name__)
 
 
 class ScannerPredictor:
-    def __init__(self, detector, segmenter, cropper, heads, min_det_score: float | None = None):
+    def __init__(
+        self,
+        detector,
+        segmenter,
+        cropper,
+        heads,
+        min_det_score: float | None = None,
+        whole_photo: bool = False,
+    ):
         self.detector, self.segmenter, self.cropper, self.heads = (
             detector,
             segmenter,
             cropper,
             heads,
         )
+        # Classify the whole photo, not the garment cut-out: heads trained on whole catalog
+        # images (e.g. scanner-v4's SigLIP2) lose ~11 pts top-1 on the white-filled cut-out.
+        self.whole_photo = whole_photo
         self.min_det_score = detector.default_min_score if min_det_score is None else min_det_score
 
     def predict(self, image_bytes: bytes) -> VisionOutput:
@@ -45,10 +56,16 @@ class ScannerPredictor:
         else:
             x0, y0, x1, y1 = primary.box
             garment = GarmentOutput(primary.label, primary.score, (x0 / w, y0 / h, x1 / w, y1 / h))
-            mask = self._try(notes, "segmenter", lambda: self.segmenter.segment(image, primary.box))
-            if mask is None:
-                mask = box_mask((h, w), primary.box)
-            views = self._try(notes, "cropper", lambda: self.cropper.views(image, mask)) or [image]
+            if self.whole_photo:
+                views = [image]
+            else:
+                mask = self._try(
+                    notes, "segmenter", lambda: self.segmenter.segment(image, primary.box)
+                )
+                if mask is None:
+                    mask = box_mask((h, w), primary.box)
+                views = self._try(notes, "cropper", lambda: self.cropper.views(image, mask))
+                views = views or [image]
         heads = self._try(notes, "fabric heads", lambda: self.heads.predict(views))
         try:
             quality = capture_quality(image, garment.box if garment else None)
@@ -69,14 +86,18 @@ class ScannerPredictor:
 
 
 def build_scanner(bundle_dir: Path, detector_name: str, device, patches: bool = False):
+    import json
+
     from services.vision.crop import FabricCropper
     from services.vision.detectors import load_detector
     from services.vision.heads import LinearHeads
     from services.vision.segment import Sam2Segmenter
 
+    whole = json.loads((Path(bundle_dir) / "bundle.json").read_text()).get("views") == "whole"
     return ScannerPredictor(
         load_detector(detector_name, device),
-        Sam2Segmenter(device),
+        None if whole else Sam2Segmenter(device),  # the cut-out is all SAM is for
         FabricCropper(patches),
         LinearHeads(bundle_dir, device),
+        whole_photo=whole,
     )
