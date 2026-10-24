@@ -24,7 +24,12 @@ OZ_PER_SQYD_IN_GSM = 33.906
 def main(argv: list[str] | None = None) -> int:
     from PIL import Image
 
-    from services.vision.threads import thread_density, yarn_count_ne
+    from services.vision.threads import (
+        knit_density,
+        thread_density,
+        yarn_count_knit_ne,
+        yarn_count_ne,
+    )
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--image", type=Path, required=True)
@@ -34,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     weight.add_argument("--oz", type=float, help="fabric weight, oz/yd2 (denim)")
     ap.add_argument("--max-tpi", type=float, default=200, help="finest count to look for")
     ap.add_argument("--weft-to-warp", type=float, default=1.0, help="assumed Ne_weft / Ne_warp")
+    ap.add_argument("--knit", action="store_true", help="weft knit (jersey): wales x courses")
     args = ap.parse_args(argv)
 
     with Image.open(args.image) as im:
@@ -41,19 +47,27 @@ def main(argv: list[str] | None = None) -> int:
         gray = np.asarray(im.convert("L"))
     if not dpi or dpi < 100:  # phone photos often claim 72 dpi: that is not a scale
         raise SystemExit("no scan resolution: pass --dpi (the dpi you scanned at)")
-    d = thread_density(gray, float(dpi), max_tpi=args.max_tpi)
+    measure = knit_density if args.knit else thread_density
+    d = measure(gray, float(dpi), max_tpi=args.max_tpi)
+    names = ("wales", "courses") if args.knit else ("ends/inch (warp)", "picks/inch (weft)")
     print(f"{args.image.name}: {gray.shape[1]}x{gray.shape[0]} px at {dpi:.0f} dpi")
     if d.ends_per_inch is None:
         print(d.note)
         return 1
     print(
-        f"ends/inch (warp) {d.ends_per_inch:.1f}  picks/inch (weft) {d.picks_per_inch:.1f}  "
+        f"{names[0]} {d.ends_per_inch:.1f}  {names[1]} {d.picks_per_inch:.1f}  "
         f"[{d.tiles} tiles agree within {100 * max(d.ends_spread, d.picks_spread):.1f}%, "
         f"swatch skew {d.skew_deg:+.1f} deg]"
     )
     gsm = args.gsm or (args.oz * OZ_PER_SQYD_IN_GSM if args.oz else None)
     if gsm is None:
         print("yarn count: weigh the swatch (--gsm or --oz) to compute it")
+        return 0
+    if args.knit:  # tightness factor 1.3 (slack) .. 1.6 (tight) for cotton jersey
+        lo, hi = sorted(
+            yarn_count_knit_ne(gsm, d.ends_per_inch, d.picks_per_inch, t) for t in (1.3, 1.6)
+        )
+        print(f"yarn count at {gsm:.0f} g/m2, tightness 1.3-1.6: Ne {lo:.1f}-{hi:.1f} (cotton)")
         return 0
     lo = yarn_count_ne(gsm, d.ends_per_inch, d.picks_per_inch, 0.06, 0.04, args.weft_to_warp)
     hi = yarn_count_ne(gsm, d.ends_per_inch, d.picks_per_inch, 0.14, 0.10, args.weft_to_warp)
