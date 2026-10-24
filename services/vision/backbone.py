@@ -10,13 +10,14 @@ CROP_PCT = 0.875
 
 
 def pool_features(model, x):
-    """[CLS ; mean(patch tokens)] for ViTs (the DINOv2 linear-eval feature); pooled
-    pre-logits for other backbones."""
+    """[CLS ; mean(patch tokens)] for ViTs with a CLS token (the DINOv2 linear-eval
+    feature); the model's own pooled pre-logits otherwise (CNNs, and ViTs without a CLS
+    token such as SigLIP, whose attention pool is the trained summary)."""
     tokens = model.forward_features(x)
-    if tokens.ndim == 3:
+    prefix = getattr(model, "num_prefix_tokens", 0)
+    if tokens.ndim == 3 and prefix > 0:
         import torch
 
-        prefix = getattr(model, "num_prefix_tokens", 1)
         return torch.cat([tokens[:, 0], tokens[:, prefix:].mean(1)], dim=1)
     return model.forward_head(tokens, pre_logits=True)
 

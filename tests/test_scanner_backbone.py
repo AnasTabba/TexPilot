@@ -31,3 +31,22 @@ def test_large_crops_are_shrunk_without_aliasing():
     img = np.repeat(np.repeat(stripes[None, :, None], 1280, 0), 3, 2).round().astype(np.uint8)
     out = preprocess(img, (0.0, 0.0, 0.0), (1 / 255, 1 / 255, 1 / 255))  # back to pixel units
     assert out.std() < 0.3 * stripes.std(), "fine texture aliased into a strong pattern"
+
+
+def test_models_without_a_cls_token_use_their_own_pooling():
+    import torch
+
+    timm = pytest.importorskip("timm")
+    from services.vision.backbone import pool_features
+
+    torch.manual_seed(0)
+    x = torch.randn(2, 3, 32, 32)
+    kw = dict(pretrained=False, num_classes=0, img_size=32, depth=1)
+    gap = timm.create_model("vit_tiny_patch16_224", class_token=False, global_pool="avg", **kw)
+    gap.eval()
+    with torch.no_grad():  # e.g. SigLIP: tokens[:, 0] is just a patch, not a summary
+        want = gap.forward_head(gap.forward_features(x), pre_logits=True)
+        assert torch.allclose(pool_features(gap, x), want)
+    cls = timm.create_model("vit_tiny_patch16_224", **kw).eval()
+    with torch.no_grad():  # DINOv2-style: unchanged [CLS ; mean(patches)]
+        assert pool_features(cls, x).shape == (2, 2 * cls.num_features)
