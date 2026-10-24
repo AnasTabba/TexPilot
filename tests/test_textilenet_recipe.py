@@ -11,6 +11,7 @@ import torch.nn.functional as F  # noqa: E402
 
 from training.textilenet.recipe import (  # noqa: E402
     class_balance_weights,
+    epoch_order,
     lr_at,
     predict,
     soft_cross_entropy,
@@ -98,3 +99,17 @@ def test_tta_views_are_the_orientations_and_predict_returns_log_probs():
     assert y.tolist() == [0, 2]
     plain, _ = predict(model, loader, torch.device("cpu"), nullcontext, tta=False)
     assert np.allclose(plain, model(x).detach().numpy(), atol=1e-6)
+
+
+def test_epoch_order_is_a_shuffle_without_a_sampler():
+    y = torch.tensor([0] * 90 + [1] * 10)
+    order = epoch_order(y, 2, 0.0, torch.Generator().manual_seed(0))
+    assert sorted(order.tolist()) == list(range(100))
+
+
+def test_sqrt_epoch_order_draws_rare_classes_at_sqrt_balanced_rates():
+    y = torch.tensor([0] * 900 + [1] * 100)
+    order = epoch_order(y, 2, 0.5, torch.Generator().manual_seed(0))
+    assert len(order) == len(y)  # one epoch = n draws, as WeightedRandomSampler
+    # weights 900^-.5 : 100^-.5 = 1/30 : 1/10 -> class-1 share 10 / (30 + 10) = .25
+    assert (y[order] == 1).float().mean().item() == pytest.approx(0.25, abs=0.04)

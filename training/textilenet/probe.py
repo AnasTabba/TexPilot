@@ -8,12 +8,20 @@ decay and lr are chosen on val; test is evaluated once per seed with that choice
 
 For ViTs the feature is [CLS ; mean(patch tokens)], the DINOv2 linear-eval recipe.
 Writes runs/<partition>/probe_<model>/seed<k>/test_metrics.json in the same format as
-train.py, so ``aggregate`` puts both in one table.
+train.py, so ``aggregate`` puts both in one table, plus log.jsonl (train/val loss and
+val metrics per epoch), head.pt and confusion.png.
+
+Rows already in the feature cache need no image on disk. The imbalance ablation:
+
+    python -m training.textilenet.probe --partition fabric \
+        --split-csv data/splits/prelim/fabric.csv --epochs 20 --select macro_f1 \
+        --sampler sqrt --tag dinov2_linear_sqrt --out runs/imbalance
 """
 
 from __future__ import annotations
 
 import argparse
+import copy
 import itertools
 import json
 import math
@@ -31,20 +39,20 @@ from services.vision.backbone import pool_features as pool
 from training.textilenet.data import TextileDataset
 from training.textilenet.feature_cache import FeatureCache
 from training.textilenet.governor import Governor
-from training.textilenet.metrics import summarize
-from training.textilenet.recipe import lr_at
+from training.textilenet.metrics import HEADLINE, minority_recall, summarize
+from training.textilenet.recipe import epoch_order, lr_at
 from training.textilenet.splits import class_index, read_csv
-from training.textilenet.train import PRESETS, build_transforms, pick_device
+from training.textilenet.train import PRESETS, build_transforms, pick_device, plot_confusion
 
 SHARD = 4096  # images per cache shard; the unit of resumption
 #: (lr, weight decay) pairs tried on val; shared with training/scanner/fit_heads.py
 GRID = list(itertools.product([1e-3, 3e-3], [1e-4, 1e-3, 1e-2, 5e-2]))
+SAMPLER_POWER = {"none": 0.0, "sqrt": 0.5, "inverse": 1.0}
 
 
 @torch.no_grad()
-def extract(args: argparse.Namespace, rows, device) -> np.ndarray:
+def extract(args: argparse.Namespace, rows, device, cache: FeatureCache) -> np.ndarray:
     """Features for ``rows`` in order; only images not already cached are computed."""
-    cache = FeatureCache(args.feature_dir / args.partition / f"{args.model}_{args.img_size}")
     missing = set(cache.missing([r.path for r in rows]))
     todo = [r for r in rows if r.path in missing]
     if todo:
@@ -86,15 +94,20 @@ def extract(args: argparse.Namespace, rows, device) -> np.ndarray:
     return cache.assemble([r.path for r in rows])
 
 
-def fit_linear(xtr, ytr, n_classes, lr, wd, epochs, seed, device) -> torch.nn.Linear:
+def fit_linear(
+    xtr, ytr, n_classes, lr, wd, epochs, seed, device, *, sampler_power=0.0, on_epoch=None
+) -> torch.nn.Linear:
+    """``sampler_power`` > 0 redraws each epoch at class weight count^-power;
+    ``on_epoch(epoch, head, mean_train_loss)`` runs after every epoch."""
     g = torch.Generator().manual_seed(seed)
     torch.manual_seed(seed)
     head = torch.nn.Linear(xtr.shape[1], n_classes).to(device)
     opt = torch.optim.AdamW(head.parameters(), lr=lr, weight_decay=wd)
     total = epochs * math.ceil(len(xtr) / 1024)
     step = 0
-    for _ in range(epochs):
-        for idx in torch.randperm(len(xtr), generator=g).split(1024):
+    for epoch in range(epochs):
+        loss_sum = torch.zeros((), device=device)
+        for idx in epoch_order(ytr, n_classes, sampler_power, g).split(1024):
             for group in opt.param_groups:  # same warmup-cosine as train.py; 10% warmup
                 group["lr"] = lr_at(step, total, total // 10, lr)
             idx = idx.to(device)
@@ -103,6 +116,9 @@ def fit_linear(xtr, ytr, n_classes, lr, wd, epochs, seed, device) -> torch.nn.Li
             loss.backward()
             opt.step()
             step += 1
+            loss_sum += loss.detach() * len(idx)
+        if on_epoch:
+            on_epoch(epoch, head, loss_sum.item() / len(xtr))
     return head
 
 
@@ -123,16 +139,32 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--epochs", type=int, default=30)
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     ap.add_argument("--device", default="auto")
+    ap.add_argument(
+        "--sampler",
+        choices=list(SAMPLER_POWER),
+        default="none",
+        help="redraw train each epoch at class weight count^-0.5 (sqrt) or count^-1",
+    )
+    ap.add_argument(
+        "--select",
+        choices=["top1", "macro_f1"],
+        default="top1",
+        help="val metric that picks lr/wd and the epoch whose head is kept",
+    )
     args = ap.parse_args(argv)
 
     device = pick_device(args.device)
     labels = class_index(args.partition)
     classes = sorted(labels, key=labels.get)
     split_csv = args.split_csv or args.data_root / "splits" / f"{args.partition}.csv"
-    rows = [r for r in read_csv(split_csv) if (args.data_root / r.path).exists()]
-    feats = extract(args, rows, device)
+    cache = FeatureCache(args.feature_dir / args.partition / f"{args.model}_{args.img_size}")
+    all_rows = read_csv(split_csv)
+    uncached = set(cache.missing([r.path for r in all_rows]))
+    rows = [r for r in all_rows if r.path not in uncached or (args.data_root / r.path).exists()]
+    feats = extract(args, rows, device, cache)
 
     split = np.array([r.split for r in rows])
+    source = np.array([r.source for r in rows])
     y = np.array([labels[r.label] for r in rows])
     mu = feats[split == "train"].astype(np.float32).mean(0)
     sd = feats[split == "train"].astype(np.float32).std(0) + 1e-6
@@ -142,42 +174,104 @@ def main(argv: list[str] | None = None) -> int:
         return x, torch.from_numpy(y[split == s]).to(device)
 
     (xtr, ytr), (xva, yva), (xte, yte) = tensors("train"), tensors("val"), tensors("test")
+    yva_np, yte_np, src_te = yva.cpu().numpy(), yte.cpu().numpy(), source[split == "test"]
+    counts = np.bincount(ytr.cpu().numpy(), minlength=len(classes)).tolist()
+    train_counts = dict(zip(classes, counts, strict=True))
+    power = SAMPLER_POWER[args.sampler]
 
     @torch.no_grad()
     def logits(head, x):
         return head(x).float().cpu().numpy()
 
+    def fit(lr, wd, seed, log=None):
+        """The head from the epoch with the best val ``--select`` metric, and that epoch."""
+        best = {"score": -1.0}
+
+        def on_epoch(epoch, head, train_loss):
+            lv = logits(head, xva)
+            s = summarize(lv, yva_np, classes)
+            if log is not None:
+                val_loss = F.cross_entropy(torch.from_numpy(lv), torch.from_numpy(yva_np)).item()
+                log.append(
+                    {"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss}
+                    | {f"val_{k}": s[k] for k in HEADLINE}
+                )
+            if s[args.select] > best["score"]:
+                state = copy.deepcopy(head.state_dict())
+                best.update(score=s[args.select], epoch=epoch, state=state)
+
+        head = fit_linear(
+            xtr, ytr, len(classes), lr, wd, args.epochs, seed, device,
+            sampler_power=power, on_epoch=on_epoch,
+        )  # fmt: skip
+        head.load_state_dict(best["state"])
+        return head, best
+
     scores = {}
     for lr, wd in GRID:
-        head = fit_linear(xtr, ytr, len(classes), lr, wd, args.epochs, 0, device)
-        scores[(lr, wd)] = summarize(logits(head, xva), yva.cpu().numpy(), classes)["top1"]
-        print(f"lr {lr:g} wd {wd:g}: val top-1 {scores[(lr, wd)]:.4f}", flush=True)
+        scores[(lr, wd)] = fit(lr, wd, 0)[1]["score"]
+        print(f"lr {lr:g} wd {wd:g}: val {args.select} {scores[(lr, wd)]:.4f}", flush=True)
     lr, wd = max(scores, key=scores.get)
-    print(f"selected on val: lr {lr:g} wd {wd:g}")
+    print(f"selected on val {args.select}: lr {lr:g} wd {wd:g}")
 
     tag = args.tag or f"probe_{args.model}"
     for seed in args.seeds:
-        head = fit_linear(xtr, ytr, len(classes), lr, wd, args.epochs, seed, device)
-        val = summarize(logits(head, xva), yva.cpu().numpy(), classes)
-        test = summarize(logits(head, xte), yte.cpu().numpy(), classes)
+        log = []
+        head, best = fit(lr, wd, seed, log)
+        val = summarize(logits(head, xva), yva_np, classes)
+        lte = logits(head, xte)
+        test = summarize(lte, yte_np, classes)
+        by_source = {
+            str(s): summarize(lte[src_te == s], yte_np[src_te == s], classes)
+            for s in np.unique(src_te)
+        }
+        for s in (test, *by_source.values()):
+            s["minority_recall"] = minority_recall(s, train_counts)
         run_dir = args.out / args.partition / tag / f"seed{seed}"
         run_dir.mkdir(parents=True, exist_ok=True)
-        headline = {k: val[k] for k in ("top1", "top5", "macro_f1")}
         result = {
             "partition": args.partition,
             "tag": tag,
             "seed": seed,
             "tta": False,
             "timm_name": PRESETS.get(args.model, {"timm_name": args.model})["timm_name"],
-            "best": {"val_top1": val["top1"], "weights": "frozen+linear", "lr": lr, "wd": wd},
-            "val": {"plain": headline},
+            "best": {
+                "val_top1": val["top1"],
+                f"val_{args.select}": val[args.select],
+                "epoch": best["epoch"],
+                "weights": "frozen+linear",
+                "lr": lr,
+                "wd": wd,
+                "sampler": args.sampler,
+                "select": args.select,
+                "epochs": args.epochs,
+            },
+            "val": {"plain": {k: val[k] for k in HEADLINE}},
             "test": test,
+            "test_by_source": by_source,
+            "train_counts": train_counts,
+            "split_csv": str(split_csv),
             "grid": {f"lr={a:g},wd={b:g}": v for (a, b), v in scores.items()},
         }
         (run_dir / "test_metrics.json").write_text(json.dumps(result, indent=1))
+        (run_dir / "log.jsonl").write_text("".join(json.dumps(r) + "\n" for r in log))
+        torch.save(
+            {
+                "state_dict": head.state_dict(),
+                "mu": mu,
+                "sd": sd,
+                "classes": classes,
+                "timm_name": result["timm_name"],
+                "img_size": args.img_size,
+                "feature": "[CLS ; mean(patch tokens)]",
+            },
+            run_dir / "head.pt",
+        )
+        plot_confusion(test, classes, run_dir / "confusion.png")
         print(
-            f"TEST {args.partition}/{tag}/seed{seed}: top1 {test['top1']:.4f} "
-            f"top5 {test['top5']:.4f} macroF1 {test['macro_f1']:.4f}"
+            f"TEST {args.partition}/{tag}/seed{seed} (epoch {best['epoch']}): "
+            + " ".join(f"{k} {test[k]:.4f}" for k in HEADLINE)
+            + f" minRec {test['minority_recall']['mean_recall']:.4f}"
         )
     return 0
 

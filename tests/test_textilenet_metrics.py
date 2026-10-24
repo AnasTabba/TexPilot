@@ -4,7 +4,7 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
-from training.textilenet.metrics import summarize, topk_accuracy  # noqa: E402
+from training.textilenet.metrics import minority_recall, summarize, topk_accuracy  # noqa: E402
 
 CLASSES = ["a", "b", "c", "d", "e", "f"]
 
@@ -40,3 +40,22 @@ def test_confused_pairs_are_row_normalised_and_ranked():
     assert (first["true"], first["pred"], first["count"], first["rate"]) == ("a", "c", 3, 0.75)
     assert (second["true"], second["pred"]) == ("b", "a")
     assert np.array(s["confusion_matrix"]).sum() == len(y)
+
+
+def test_weighted_f1_and_balanced_accuracy():
+    y = np.array([0, 0, 0, 1])
+    pred = np.array([0, 0, 1, 1])
+    s = summarize(_onehot_logits(pred), y, CLASSES)
+    # a: P=1, R=2/3 -> F1=.8 (support 3) ; b: P=.5, R=1 -> F1=2/3 (support 1)
+    assert s["weighted_f1"] == pytest.approx((0.8 * 3 + 2 / 3) / 4)
+    assert s["balanced_accuracy"] == pytest.approx((2 / 3 + 1) / 2)  # absent classes skipped
+
+
+def test_minority_recall_averages_rare_train_classes_present_in_test():
+    y = np.array([0, 0, 1, 1])
+    pred = np.array([0, 1, 1, 0])  # recall a=.5, b=.5
+    s = summarize(_onehot_logits(pred), y, CLASSES)
+    counts = {"a": 1000, "b": 5, "c": 5, "d": 1000, "e": 1000, "f": 1000}
+    m = minority_recall(s, counts, share=0.01)
+    assert m["classes"] == ["b", "c"]  # under 1% of 4010 train images
+    assert m["mean_recall"] == pytest.approx(0.5)  # c is absent from y, so not averaged

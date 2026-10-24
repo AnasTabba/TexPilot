@@ -1,12 +1,13 @@
 """The parts of the training recipe that decide the numbers. torch + numpy only.
 
 Kept out of train.py so they are unit-tested without timm or albumentations: the
-loss, the lr schedule, the class-balance weights, the head lr multiplier, and
-prediction with TTA.
+loss, the lr schedule, class-balance weights and sampling, LoRA, the head lr
+multiplier, and prediction with TTA.
 """
 
 from __future__ import annotations
 
+import copy
 import math
 
 import numpy as np
@@ -44,6 +45,59 @@ def class_balance_weights(targets: list[int], n_classes: int, power: float) -> n
     counts = np.bincount(targets, minlength=n_classes).astype(float)
     w = np.where(counts > 0, np.maximum(counts, 1) ** -power, 0.0)
     return w * len(targets) / (w * counts).sum()
+
+
+def epoch_order(y: torch.Tensor, n_classes: int, power: float, g: torch.Generator):
+    """One epoch of sample indices: a plain shuffle at power 0, otherwise n draws with
+    replacement at class weight count^-power (WeightedRandomSampler's semantics)."""
+    if not power:
+        return torch.randperm(len(y), generator=g)
+    y = y.cpu().numpy()
+    w = class_balance_weights(y, n_classes, power)[y]
+    return torch.multinomial(torch.from_numpy(w), len(y), replacement=True, generator=g)
+
+
+class LoRALinear(torch.nn.Module):
+    """``base(x) + scale * x A^T B^T`` with ``base`` frozen. B starts at zero, so training
+    starts from exactly the pretrained model."""
+
+    def __init__(self, base: torch.nn.Linear, rank: int, alpha: float):
+        super().__init__()
+        self.base = base.requires_grad_(False)
+        self.lora_a = torch.nn.Parameter(torch.empty(rank, base.in_features))
+        self.lora_b = torch.nn.Parameter(torch.zeros(base.out_features, rank))
+        torch.nn.init.kaiming_uniform_(self.lora_a, a=math.sqrt(5))
+        self.scale = alpha / rank
+
+    def forward(self, x):
+        return self.base(x) + (x @ self.lora_a.T @ self.lora_b.T) * self.scale
+
+
+def add_lora(model: torch.nn.Module, rank: int, alpha: float, target: str = "attn.qkv") -> int:
+    """Freeze all but the classifier and wrap every ``target`` Linear (the fused q/k/v
+    projection in timm ViTs) in LoRA. Returns how many layers were wrapped."""
+    model.requires_grad_(False)
+    model.get_classifier().requires_grad_(True)
+    wrapped = 0
+    for name, mod in list(model.named_modules()):
+        if name.endswith(target) and isinstance(mod, torch.nn.Linear):
+            parent, attr = name.rsplit(".", 1)
+            setattr(model.get_submodule(parent), attr, LoRALinear(mod, rank, alpha))
+            wrapped += 1
+    return wrapped
+
+
+def merge_lora(model: torch.nn.Module) -> torch.nn.Module:
+    """A copy with each LoRALinear folded into a plain Linear: timm's own state-dict keys,
+    so the export and serving code load it like any fine-tuned model."""
+    model = copy.deepcopy(model)
+    for name, mod in list(model.named_modules()):
+        if isinstance(mod, LoRALinear):
+            with torch.no_grad():
+                mod.base.weight += mod.scale * (mod.lora_b @ mod.lora_a)
+            parent, attr = name.rsplit(".", 1)
+            setattr(model.get_submodule(parent), attr, mod.base)
+    return model
 
 
 def split_head(groups: list[dict], head_params, head_lr_mult: float) -> list[dict]:

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 
+#: The per-epoch / per-run numbers every log and result records.
+HEADLINE = ("top1", "top5", "macro_f1", "weighted_f1", "balanced_accuracy")
+
 
 def topk_accuracy(logits: np.ndarray, y: np.ndarray, k: int) -> float:
     k = min(k, logits.shape[1])
@@ -59,6 +62,8 @@ def summarize(logits: np.ndarray, y: np.ndarray, classes: list[str], n_pairs: in
         "top1": topk_accuracy(logits, y, 1),
         "top5": topk_accuracy(logits, y, 5),
         "macro_f1": float(np.nanmean(np.where(present, f1, np.nan))),
+        "weighted_f1": float((f1 * support).sum() / max(support.sum(), 1)),
+        "balanced_accuracy": float(np.nanmean(recall)),
         "classes_absent": [c for c, p in zip(classes, present, strict=True) if not p],
         "per_class": {
             c: {
@@ -71,6 +76,22 @@ def summarize(logits: np.ndarray, y: np.ndarray, classes: list[str], n_pairs: in
         },
         "confused_pairs": pairs,
         "confusion_matrix": cm.tolist(),
+    }
+
+
+def minority_recall(summary: dict, train_counts: dict[str, int], share: float = 0.01) -> dict:
+    """Mean recall over the classes holding under ``share`` of the train images.
+
+    Classes absent from the evaluated set have no recall and are listed but not averaged.
+    """
+    total = sum(train_counts.values())
+    rare = [c for c, n in train_counts.items() if n < share * total]
+    recalls = [summary["per_class"][c]["recall"] for c in rare]
+    recalls = [r for r in recalls if r is not None]
+    return {
+        "share": share,
+        "classes": rare,
+        "mean_recall": float(np.mean(recalls)) if recalls else None,
     }
 
 

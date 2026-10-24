@@ -7,8 +7,12 @@ schedule that never decayed, and selected their checkpoint on the test set.
 
     python -m training.textilenet.train --partition fabric --model convnextv2_base --seed 0
 
-Model selection and early stopping use the val carve-out only. Test is evaluated
-once, at the end, with the weights (raw vs EMA) and TTA setting that won on val.
+Model selection and early stopping use the val carve-out only (``--select`` top1 or
+macro_f1). Test is evaluated once, at the end, with the weights (raw vs EMA) and TTA
+setting that won on val.
+
+``--lora-rank r`` freezes the backbone and trains LoRA adapters on the attention q/k/v
+projections plus the head; ``--probe-epochs N --epochs N`` trains the head alone.
 
 Outputs go to runs/<partition>/<model>/seed<k>/: config.json, log.jsonl, best.pt,
 test_metrics.json, confusion.png. Summarise with ``training.textilenet.aggregate``.
@@ -39,10 +43,12 @@ from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from training.textilenet.data import TextileDataset, load_rows, seed_worker
 from training.textilenet.governor import Governor
-from training.textilenet.metrics import summarize
+from training.textilenet.metrics import HEADLINE, minority_recall, summarize
 from training.textilenet.recipe import (
+    add_lora,
     class_balance_weights,
     lr_at,
+    merge_lora,
     predict,
     soft_cross_entropy,
     split_head,
@@ -190,6 +196,10 @@ def main(argv: list[str] | None = None) -> int:
     print({s: len(r) for s, r in rows.items()})
 
     model = create_model(args, len(classes))
+    if args.lora_rank:
+        n_lora = add_lora(model, args.lora_rank, args.lora_alpha or args.lora_rank)
+        n_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"LoRA r={args.lora_rank} on {n_lora} qkv layers; {n_train:,} trainable params")
     data_cfg = timm.data.resolve_model_data_config(model)
     train_tf, eval_tf = build_transforms(
         args.img_size, data_cfg["mean"], data_cfg["std"], args.crop_pct
@@ -280,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
     # Short runs (smoke tests, --epochs 2) must still reach the cosine phase.
     warmup_steps = min(int(steps_per_epoch * args.warmup_epochs), total_steps // 2)
 
-    start_epoch, best, stale = 0, {"val_top1": -1.0}, 0
+    start_epoch, best, stale = 0, {"score": -1.0, "val_top1": -1.0}, 0
     last_ckpt = run_dir / "last.pt"
     if args.resume and last_ckpt.exists():
         ck = torch.load(last_ckpt, map_location="cpu", weights_only=False)
@@ -372,19 +382,27 @@ def main(argv: list[str] | None = None) -> int:
         for which, net in (("raw", model), ("ema", ema.module)):
             logits, ys = predict(net, eval_loaders["val"], device, amp_ctx, False, channels_last)
             s = summarize(logits, ys, classes)
-            rec[f"val_{which}"] = {k: s[k] for k in ("top1", "top5", "macro_f1")}
+            val_loss = F.cross_entropy(torch.from_numpy(logits), torch.from_numpy(ys)).item()
+            rec[f"val_{which}"] = {k: s[k] for k in HEADLINE} | {"loss": val_loss}
         rec["epoch_s"] = time.time() - t0
-        winner = max(("raw", "ema"), key=lambda w: rec[f"val_{w}"]["top1"])
+        winner = max(("raw", "ema"), key=lambda w: rec[f"val_{w}"][args.select])
         print(json.dumps(rec), flush=True)
         with open(run_dir / "log.jsonl", "a") as f:
             f.write(json.dumps(rec) + "\n")
 
-        if rec[f"val_{winner}"]["top1"] > best["val_top1"]:
-            best = {"val_top1": rec[f"val_{winner}"]["top1"], "epoch": epoch, "weights": winner}
+        score = rec[f"val_{winner}"][args.select]
+        if score > best.get("score", best["val_top1"]):  # last.pt from before --select
+            best = {
+                "score": score,
+                "select": args.select,
+                "val_top1": rec[f"val_{winner}"]["top1"],
+                "epoch": epoch,
+                "weights": winner,
+            }
             net = model if winner == "raw" else ema.module
             torch.save(
                 {
-                    "model": net.state_dict(),
+                    "model": (merge_lora(net) if args.lora_rank else net).state_dict(),
                     "timm_name": args.timm_name,
                     "classes": classes,
                     "img_size": args.img_size,
@@ -417,6 +435,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # ---- final: select TTA on val, then touch test exactly once --------------------
     ck = torch.load(run_dir / "best.pt", map_location="cpu", weights_only=False)
+    if args.lora_rank:  # best.pt holds merged weights: evaluate exactly what gets exported
+        model = merge_lora(model)
     model.load_state_dict(ck["model"])
     val_plain = summarize(
         *predict(model, eval_loaders["val"], device, amp_ctx, False, channels_last), classes
@@ -424,10 +444,19 @@ def main(argv: list[str] | None = None) -> int:
     val_tta = summarize(
         *predict(model, eval_loaders["val"], device, amp_ctx, True, channels_last), classes
     )
-    use_tta = val_tta["top1"] > val_plain["top1"]
-    test = summarize(
-        *predict(model, eval_loaders["test"], device, amp_ctx, use_tta, channels_last), classes
+    use_tta = val_tta[args.select] > val_plain[args.select]
+    test_logits, test_y = predict(
+        model, eval_loaders["test"], device, amp_ctx, use_tta, channels_last
     )
+    test = summarize(test_logits, test_y, classes)
+    source = np.array([r.source for r in rows["test"]])
+    by_source = {
+        str(s): summarize(test_logits[source == s], test_y[source == s], classes)
+        for s in np.unique(source)
+    }
+    train_counts = dict(zip(classes, counts.tolist(), strict=True))
+    for s in (test, *by_source.values()):
+        s["minority_recall"] = minority_recall(s, train_counts)
     result = {
         "partition": args.partition,
         "tag": args.tag,
@@ -437,6 +466,7 @@ def main(argv: list[str] | None = None) -> int:
         "tta": use_tta,
         "val": {"plain": _headline(val_plain), "tta": _headline(val_tta)},
         "test": test,
+        "test_by_source": by_source,
     }
     (run_dir / "test_metrics.json").write_text(json.dumps(result, indent=1))
     plot_confusion(test, classes, run_dir / "confusion.png")
@@ -451,7 +481,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _headline(s: dict) -> dict:
-    return {k: s[k] for k in ("top1", "top5", "macro_f1")}
+    return {k: s[k] for k in HEADLINE}
 
 
 # --------------------------------------------------------------------------- plumbing
@@ -576,7 +606,15 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=0,
         help="two-stage: train only the head for this many epochs first",
     )
-    g.add_argument("--patience", type=int, default=8, help="early stop on val top-1; 0 = off")
+    g.add_argument("--patience", type=int, default=8, help="early stop on --select; 0 = off")
+    g.add_argument(
+        "--select",
+        choices=["top1", "macro_f1"],
+        default="top1",
+        help="val metric for the kept checkpoint, raw vs EMA, TTA and early stopping",
+    )
+    g.add_argument("--lora-rank", type=int, default=0, help="LoRA on attention qkv; 0 = off")
+    g.add_argument("--lora-alpha", type=float, default=0, help="LoRA scale alpha/r; 0 = rank")
 
     g = ap.add_argument_group("regularisation / imbalance")
     g.add_argument("--smoothing", type=float, default=0.1)
@@ -608,6 +646,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     args.split_csv = args.split_csv or args.data_root / "splits" / f"{args.partition}.csv"
     if args.batch_size % 2 and (args.mixup or args.cutmix):
         ap.error("mixup/cutmix need an even batch size")
+    if args.lora_rank and args.probe_epochs:
+        ap.error("--lora-rank already freezes the backbone; drop --probe-epochs")
     return args
 
 
