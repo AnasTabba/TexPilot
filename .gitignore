@@ -40,3 +40,9 @@ dist/
 
 # Bake-off prediction caches (bakeoff.md is committed)
 /results/bakeoff/*.json
+
+# Local shared-inventory preview database and generated deploy bundle
+yarn-erp/.local/
+yarn-erp/server/assets.generated.mjs
+yarn-erp/test-results/
+yarn-erp/playwright-report/

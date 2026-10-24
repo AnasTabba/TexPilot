@@ -12,7 +12,7 @@ worker = worker.replace(
 );
 worker = worker.replace(
   "cache.addAll(['/','/icon.svg'])",
-  `cache.addAll(${JSON.stringify(["/", "/icon.svg", "/manifest.webmanifest", ...assets])})`,
+  `cache.addAll(${JSON.stringify(["/", "/icon.svg", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png", "/manifest.webmanifest", ...assets])})`,
 );
 await writeFile("dist/sw.js", worker);
 console.log(`Offline shell prepared: ${assets.length} local assets.`);
