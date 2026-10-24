@@ -7,6 +7,7 @@ import pytest
 np = pytest.importorskip("numpy")
 
 from services.vision.threads import thread_density, yarn_count_ne  # noqa: E402
+from tests.fabric_sim import degrade, render  # noqa: E402
 
 PPI = 600  # a 600 dpi flatbed scan
 
@@ -63,6 +64,40 @@ def test_density_counts_threads_not_the_weave_pattern(weave, ends, picks, angle)
     d = thread_density(_woven(ends, picks, 1200, weave, angle_deg=angle), 1200)
     assert d.ends_per_inch == pytest.approx(ends, rel=0.03)
     assert d.picks_per_inch == pytest.approx(picks, rel=0.03)
+
+
+@pytest.mark.parametrize(
+    "make,ends,picks,ppi",
+    [
+        (lambda: render("2/1 twill", 70, 50, 1200, size=1600), 70, 50, 1200),
+        (lambda: render("2/2 twill", 80, 60, 1200, size=1600), 80, 60, 1200),
+        (lambda: render("5-satin", 120, 90, 1200, size=1600), 120, 90, 1200),
+        (lambda: render("basket 2x2", 50, 50, 600, size=1600), 50, 50, 600),
+        (lambda: render("plain", 144, 76, 1200, size=1600), 144, 76, 1200),
+        (lambda: render("plain", 110, 80, 600, size=1600), 110, 80, 600),
+        (lambda: render("3/1 twill", 64, 42, 1200, size=1600, angle=7), 64, 42, 1200),
+        (lambda: degrade(render("3/1 twill", 64, 42, 1200, size=1600), blur=1.5), 64, 42, 1200),
+        (lambda: degrade(render("3/1 twill", 64, 42, 1200, size=1600), jpeg=50), 64, 42, 1200),
+        (lambda: degrade(render("3/1 twill", 64, 42, 1200, size=1600), light=0.4), 64, 42, 1200),
+        (lambda: render("3/1 twill", 64, 42, 1200, size=1600, jitter=1, thick=0.25), 64, 42, 1200),
+        (lambda: render("3/1 twill", 64, 42, 1200, size=1600, warp_tone=90, weft_tone=120),
+         64, 42, 1200),
+    ],
+    ids=["2/1-twill", "2/2-twill", "satin", "basket", "fine-poplin", "poplin-600dpi", "skew-7deg",
+         "blur", "jpeg-q50", "uneven-light", "slub", "low-contrast"],
+)  # fmt: skip
+def test_density_holds_on_harder_weaves_and_real_scan_defects(make, ends, picks, ppi):
+    d = thread_density(make(), ppi)
+    assert d.ends_per_inch == pytest.approx(ends, rel=0.03)
+    assert d.picks_per_inch == pytest.approx(picks, rel=0.03)
+
+
+def test_irregular_yarns_show_up_as_tile_disagreement():
+    even = thread_density(render("3/1 twill", 64, 42, 1200, size=1600), 1200)
+    slub = thread_density(
+        render("3/1 twill", 64, 42, 1200, size=1600, jitter=1.0, thick=0.25), 1200
+    )
+    assert even.ends_spread < 0.01 < slub.ends_spread  # the spread is the honesty signal
 
 
 def test_density_reports_a_too_coarse_scan_instead_of_guessing():
