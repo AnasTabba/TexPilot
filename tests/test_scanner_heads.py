@@ -5,7 +5,14 @@ import pytest
 np = pytest.importorskip("numpy")
 pytest.importorskip("safetensors")
 
-from services.vision.heads import HeadSpec, apply_head, load_bundle, save_bundle  # noqa: E402
+from services.vision.heads import (  # noqa: E402
+    HeadSpec,
+    apply_head,
+    closest,
+    head_probs,
+    load_bundle,
+    save_bundle,
+)
 
 
 def _spec(threshold=0.5, temperature=1.0):
@@ -22,6 +29,14 @@ def test_confident_prediction_with_sorted_topk():
 
 def test_below_threshold_returns_none_not_a_guess():
     assert apply_head(np.array([[1.0, 0.0]], np.float32), _spec(threshold=0.999)) is None
+
+
+def test_an_abstaining_head_still_ranks_its_closest_matches():
+    spec = _spec(threshold=0.999)
+    f = np.array([[1.0, 0.0]], np.float32)
+    assert apply_head(f, spec) is None
+    top = closest(head_probs(f, spec), spec.classes, k=2)
+    assert [c for c, _ in top] == ["a", "b"] and top[0][1] > top[1][1]
 
 
 def test_temperature_softens_confidence():

@@ -4,6 +4,7 @@ export interface HeadPrediction {
   confidence: number;
   topk: [string, number][];
 }
+export type HeadName = "structure" | "treatment" | "fibre_family";
 export interface ScanResult {
   scan_id: string;
   verdict: "PASS" | "FLAG" | "INSUFFICIENT_EVIDENCE";
@@ -22,6 +23,8 @@ export interface ScanResult {
     section: string | null;
   };
   flags: { code: string; message: string; severity: string }[];
+  /** For heads that abstained: what they were weighing. Never a verdict. */
+  candidates: Partial<Record<HeadName, [string, number][]>>;
   capture_quality: {
     blur: number | null;
     exposure: string | null;
@@ -181,7 +184,23 @@ export function parseScanResult(value: unknown): ScanResult {
       !garment.box.every(score))
   )
     throw new ScanError("response");
-  return value as unknown as ScanResult;
+  const candidates = value.candidates ?? {}; // absent from APIs before candidates existed
+  if (
+    !record(candidates) ||
+    !Object.values(candidates).every(
+      (list) =>
+        Array.isArray(list) &&
+        list.every(
+          (pair) =>
+            Array.isArray(pair) &&
+            pair.length === 2 &&
+            typeof pair[0] === "string" &&
+            score(pair[1]),
+        ),
+    )
+  )
+    throw new ScanError("response");
+  return { ...(value as unknown as ScanResult), candidates };
 }
 async function request(
   url: string,

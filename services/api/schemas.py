@@ -69,6 +69,9 @@ class ScanResult(BaseModel):
     stated_composition: StatedComposition = StatedComposition()
     flags: list[FlagModel] = []
     capture_quality: CaptureQuality = CaptureQuality()
+    # For heads that abstained (null above): what they were weighing, most likely first.
+    # Low-confidence by definition; the verdict never uses them.
+    candidates: dict[str, list[tuple[str, float]]] = {}
     model_version: str
     kb_version: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

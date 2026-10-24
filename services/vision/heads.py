@@ -43,10 +43,20 @@ def decide(probs: np.ndarray, classes, threshold: float, k: int = 5) -> HeadOutp
     return HeadOutput(classes[i], float(probs[i]), topk)
 
 
+def head_probs(features: np.ndarray, spec: HeadSpec) -> np.ndarray:
+    """Features (V, D) of one garment's views -> calibrated class probabilities."""
+    return softmax(features @ spec.weight.T + spec.bias, spec.temperature).mean(0)
+
+
 def apply_head(features: np.ndarray, spec: HeadSpec, k: int = 5) -> HeadOutput | None:
     """Features (V, D) of one garment's views -> calibrated prediction, or None if unsure."""
-    probs = softmax(features @ spec.weight.T + spec.bias, spec.temperature).mean(0)
-    return decide(probs, spec.classes, spec.threshold, k)
+    return decide(head_probs(features, spec), spec.classes, spec.threshold, k)
+
+
+def closest(probs: np.ndarray, classes, k: int = 3) -> list[tuple[str, float]]:
+    """The k most likely classes, for showing what an abstaining head was weighing.
+    Not an answer: the scan's verdict ignores these."""
+    return [(classes[j], float(probs[j])) for j in np.argsort(-probs, kind="stable")[:k]]
 
 
 def timm_classifier(timm_name: str, n_classes: int, img_size: int, pretrained: bool = False):
@@ -77,6 +87,9 @@ class FineTunedHead:
         self.model = model.half() if self.half else model
 
     def predict(self, views: list[np.ndarray]) -> HeadOutput | None:
+        return decide(self.probs(views), self.classes, self.meta["threshold"])
+
+    def probs(self, views: list[np.ndarray]) -> np.ndarray:
         from services.vision.backbone import preprocess
 
         m = self.meta
@@ -86,7 +99,7 @@ class FineTunedHead:
         t = self._torch.from_numpy(x).to(self.device)
         with self._torch.no_grad():
             logits = self.model(t.half() if self.half else t).float().cpu().numpy()
-        return decide(softmax(logits, m["temperature"]).mean(0), self.classes, m["threshold"])
+        return softmax(logits, m["temperature"]).mean(0)
 
 
 def load_structure_model(bundle_dir: Path, meta: dict, device) -> FineTunedHead | None:
@@ -167,7 +180,20 @@ class LinearHeads:
         t = self._torch.from_numpy(x).to(self.device)
         with self._torch.no_grad():
             f = pool_features(self.model, t.half() if self.half else t).float().cpu().numpy()
-        out = {n: (apply_head(f, self.specs[n]) if n in self.specs else None) for n in HEAD_NAMES}
+        probs = {n: head_probs(f, self.specs[n]) for n in HEAD_NAMES if n in self.specs}
+        classes = {n: self.specs[n].classes for n in probs}
         if self.structure_model is not None:  # the fine-tuned Head A replaces the linear one
-            out["structure"] = self.structure_model.predict(views)
-        return VisionOutput(**out)
+            probs["structure"] = self.structure_model.probs(views)
+            classes["structure"] = self.structure_model.classes
+        out = {n: None for n in HEAD_NAMES}
+        candidates = {}
+        for n, p in probs.items():
+            threshold = (
+                self.structure_model.meta["threshold"]
+                if n == "structure" and self.structure_model is not None
+                else self.specs[n].threshold
+            )
+            out[n] = decide(p, classes[n], threshold)
+            if out[n] is None:
+                candidates[n] = closest(p, classes[n])
+        return VisionOutput(**out, candidates=candidates)

@@ -79,6 +79,7 @@ export default function Scanner({
   const connectionRequest = useRef<AbortController | null>(null);
   const scanRequest = useRef<AbortController | null>(null);
   const cameraGeneration = useRef(0);
+  const nativeCamera = useRef<HTMLInputElement>(null);
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const activePhoto = slot === "surface" ? surface : label;
   const msg = (e: unknown) => {
@@ -174,12 +175,16 @@ export default function Scanner({
     }
   }, [camera, t]);
   useEffect(() => {
-    if (endpoint) {
-      void checkConnection(endpoint, false);
-    }
+    if (endpoint) void checkConnection(endpoint, false);
+    // Nothing saved: quietly try this page's own server (the dev proxy serves the model).
+    else void checkConnection(location.origin, true, "");
     return () => connectionRequest.current?.abort();
   }, [endpoint]);
-  async function checkConnection(value: string, save: boolean) {
+  async function checkConnection(
+    value: string,
+    save: boolean,
+    fallbackError?: string, // "" = stay quiet on failure
+  ) {
     connectionRequest.current?.abort();
     const controller = new AbortController();
     connectionRequest.current = controller;
@@ -199,8 +204,14 @@ export default function Scanner({
       setInfo(data);
       setConfigOpen(false);
     } catch (e) {
-      if (mounted.current && !controller.signal.aborted)
-        setConnectionError(msg(e));
+      if (!mounted.current || controller.signal.aborted) return;
+      // A saved address goes stale when the host changes wifi. This page's own server is
+      // the usual model host, so try it before reporting the original failure.
+      if (!save && value !== location.origin) {
+        void checkConnection(location.origin, true, msg(e));
+        return;
+      }
+      if (fallbackError !== "") setConnectionError(fallbackError ?? msg(e));
     } finally {
       if (mounted.current && connectionRequest.current === controller)
         setConnecting(false);
@@ -209,12 +220,8 @@ export default function Scanner({
   async function openCamera() {
     setCameraError("");
     if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError(
-        t(
-          "A camera is not available here. Upload a photo, or open this page in a supported browser over HTTPS.",
-          "یہاں کیمرا دستیاب نہیں۔ تصویر اپ لوڈ کریں یا HTTPS براؤزر استعمال کریں۔",
-        ),
-      );
+      // No live preview here (phones allow it only over HTTPS): open the phone's own camera.
+      nativeCamera.current?.click();
       return;
     }
     const generation = ++cameraGeneration.current;
@@ -384,6 +391,7 @@ export default function Scanner({
     ur: string,
     head: HeadPrediction | null,
     I: typeof Layers3,
+    near?: [string, number][],
   ) => (
     <div className="scan-prediction">
       <span className="scan-prediction-icon">
@@ -396,6 +404,16 @@ export default function Scanner({
             ? labelFor(head.label)
             : t("Not enough evidence", "شواہد ناکافی ہیں")}
         </strong>
+        {!head && near && near.length > 0 && (
+          <small className="scan-candidates">
+            {t("Closest, not confident:", "قریب ترین، یقینی نہیں:")}{" "}
+            <bdi>
+              {near
+                .map(([label, p]) => `${labelFor(label)} ${Math.round(p * 100)}%`)
+                .join(" · ")}
+            </bdi>
+          </small>
+        )}
       </div>
       {head ? (
         <div className="scan-confidence">
@@ -630,8 +648,8 @@ export default function Scanner({
                 <p>
                   {slot === "surface"
                     ? t(
-                        "Lay the garment flat. Keep the whole piece in frame.",
-                        "گارمنٹ سیدھا رکھیں اور مکمل فریم میں لیں۔",
+                        "Get close: fill the frame with the fabric, 10–15 cm away, so the weave is sharp.",
+                        "قریب سے لیں: کپڑے کو 10–15 سینٹی میٹر سے پورے فریم میں لیں تاکہ بُنائی صاف نظر آئے۔",
                       )
                     : t(
                         "Fill the frame with the composition label. Keep the text sharp.",
@@ -704,6 +722,18 @@ export default function Scanner({
                       ? t("Retake photo", "دوبارہ تصویر لیں")
                       : t("Open camera", "کیمرا کھولیں")}
                 </button>
+                <input
+                  ref={nativeCamera}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,image/bmp"
+                  capture="environment"
+                  hidden
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) choosePhoto(file);
+                    e.target.value = "";
+                  }}
+                />
                 <label
                   className={`button scan-upload-button ${scanning ? "disabled" : ""}`}
                 >
@@ -912,18 +942,21 @@ export default function Scanner({
                     "کپڑے کی ساخت",
                     result.structure,
                     Layers3,
+                    result.candidates.structure,
                   )}
                   {headRow(
                     "Surface treatment",
                     "سطح کی ٹریٹمنٹ",
                     result.treatment,
                     Sun,
+                    result.candidates.treatment,
                   )}
                   {headRow(
                     "Fibre family",
                     "فائبر کی قسم",
                     result.fibre_family,
                     Tag,
+                    result.candidates.fibre_family,
                   )}
                 </div>
                 {result.garment && (
@@ -1081,8 +1114,8 @@ export default function Scanner({
               </h3>
               <p>
                 {t(
-                  "Use soft, even lighting. Avoid flash, deep shadows, and busy backgrounds. Include the whole garment when possible.",
-                  "یکساں روشنی استعمال کریں۔ فلیش، گہرے سائے اور مصروف پس منظر سے بچیں۔ مکمل گارمنٹ دکھائیں۔",
+                  "Use bright, even light, such as a window. Avoid flash and deep shadows. The fabric should fill the photo, not the room or the person wearing it.",
+                  "روشن اور یکساں روشنی استعمال کریں، جیسے کھڑکی کی روشنی۔ فلیش اور گہرے سائے سے بچیں۔ تصویر میں کپڑا ہو، کمرہ یا پہننے والا نہیں۔",
                 )}
               </p>
             </div>

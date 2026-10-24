@@ -23,6 +23,7 @@ const fixture: ScanResult = {
     section: null,
   },
   flags: [],
+  candidates: {},
   capture_quality: { blur: null, exposure: null, framing: null },
   model_version: "scanner-v2+det=gdino+ocr=apple",
   kb_version: "1",
@@ -68,6 +69,15 @@ test("Scanner renders real API evidence including normal abstention without inve
   };
   assert.equal(parseScanResult(abstain).structure, null);
   assert.equal(parseScanResult(abstain).verdict, "INSUFFICIENT_EVIDENCE");
+});
+test("Scanner keeps an abstaining head's closest matches, and older APIs without them still parse", () => {
+  const candidates = { structure: [["knit", 0.32], ["crepe", 0.2]] };
+  const abstain = { ...fixture, verdict: "INSUFFICIENT_EVIDENCE", structure: null, candidates };
+  assert.deepEqual(parseScanResult(abstain).candidates, candidates);
+  const { candidates: _, ...older } = { ...fixture, candidates: {} };
+  assert.deepEqual(parseScanResult(older).candidates, {});
+  for (const bad of [{ structure: [["knit", 1.5]] }, { structure: "knit" }, []])
+    assert.throws(() => parseScanResult({ ...fixture, candidates: bad }), ScanError);
 });
 test("Scanner rejects stub outputs, invalid confidence and malformed result contracts", () => {
   assert.throws(

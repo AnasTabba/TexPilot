@@ -239,3 +239,14 @@ def test_capture_quality_reaches_the_response(state):
     state["predictor"] = FakePredictor(VisionOutput(None, None, None, quality=quality))
     r = client.post("/api/v1/scan", files={"surface_image": ("a.jpg", JPEG, "image/jpeg")})
     assert r.json()["capture_quality"] == quality
+
+
+def test_abstaining_heads_report_closest_matches_but_no_verdict(state):
+    state["predictor"] = FakePredictor(
+        VisionOutput(None, None, None, candidates={"structure": [("knit", 0.32), ("crepe", 0.2)]})
+    )
+    body = client.post(
+        "/api/v1/scan", files={"surface_image": ("g.jpg", JPEG, "image/jpeg")}
+    ).json()
+    assert body["structure"] is None and body["verdict"] == "INSUFFICIENT_EVIDENCE"
+    assert body["candidates"] == {"structure": [["knit", 0.32], ["crepe", 0.2]]}
