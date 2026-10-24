@@ -37,7 +37,7 @@ class Density:
 
 
 def _peak(profile: np.ndarray, fmin: float, fmax: float) -> tuple[float, float]:
-    """(frequency in cycles/pixel, sharpness) of the strongest periodicity in [fmin, fmax]."""
+    """(frequency in cycles/pixel, power) of the strongest periodicity in [fmin, fmax]."""
     p = (profile - profile.mean()) * np.hanning(len(profile))
     m = 4 * len(p)  # zero-padded: finer frequency steps
     power = np.abs(np.fft.rfft(p, m)) ** 2
@@ -45,7 +45,7 @@ def _peak(profile: np.ndarray, fmin: float, fmax: float) -> tuple[float, float]:
     k = int(band[power[band].argmax()])
     a, b, c = np.log(power[k - 1 : k + 2] + 1e-12)
     shift = 0.5 * (a - c) / (a - 2 * b + c) if (a - 2 * b + c) < 0 else 0.0
-    return (k + shift) / m, float(power[k] / power[band].sum())
+    return (k + shift) / m, float(power[k])
 
 
 def _unrotate(img: np.ndarray, deg: float) -> np.ndarray:
@@ -55,7 +55,9 @@ def _unrotate(img: np.ndarray, deg: float) -> np.ndarray:
 
 
 def _skew(img: np.ndarray, fmin: float, fmax: float) -> float:
-    """Rotation (degrees) that squares the weave to the axes: the sharpest thread spacing."""
+    """Rotation (degrees) that squares the weave to the axes: the strongest thread spacing.
+    Absolute power, not peak/total: at a wrong angle the threads smear out of the averages,
+    and a weak sub-harmonic left behind can look relatively sharp (poplin at 600 dpi did)."""
     side = min(img.shape[0], img.shape[1], 1024)
     y0, x0 = (img.shape[0] - side) // 2, (img.shape[1] - side) // 2
     centre = img[y0 : y0 + side, x0 : x0 + side]
