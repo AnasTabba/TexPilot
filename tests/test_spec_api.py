@@ -74,3 +74,11 @@ def test_without_a_weight_there_is_density_but_no_yarn_count_and_it_says_why():
 def test_bad_inputs_are_a_422_not_a_guess(form):
     scan = _png(render("3/1 twill", 64, 42, 600, size=1600), dpi=600)
     assert _spec(scan, **form).status_code == 422
+
+
+def test_a_tiff_scan_is_accepted_flatbed_scanners_default_to_it():
+    buf = io.BytesIO()
+    Image.fromarray(render("3/1 twill", 64, 42, 600, size=1600)).save(buf, "TIFF", dpi=(600, 600))
+    r = client.post("/api/v1/spec", files={"scan_image": ("s.tif", buf.getvalue(), "image/tiff")})
+    assert r.status_code == 200, r.text
+    assert r.json()["density"]["ends_per_inch"] == pytest.approx(64, rel=0.03)

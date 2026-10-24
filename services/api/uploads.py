@@ -15,6 +15,8 @@ _SIGNATURES = (
     (b"GIF87a", "GIF"),
     (b"GIF89a", "GIF"),
     (b"BM", "BMP"),
+    (b"II*\x00", "TIFF"),  # flatbed scanners' default (spec scans)
+    (b"MM\x00*", "TIFF"),
 )
 #: ISO base-media brands used by HEIC/HEIF/AVIF, the iPhone default.
 _HEIF_BRANDS = (b"heic", b"heix", b"hevc", b"heim", b"heis", b"mif1", b"msf1", b"heif", b"avif")
@@ -39,4 +41,4 @@ def check_upload(data: bytes, field: str) -> None:
             "(iPhone: Settings -> Camera -> Formats -> Most Compatible)"
         )
     if image_format(data) is None:
-        raise UnsupportedImage(f"{field} is not a JPEG, PNG, WebP, GIF or BMP image")
+        raise UnsupportedImage(f"{field} is not a JPEG, PNG, WebP, GIF, BMP or TIFF image")

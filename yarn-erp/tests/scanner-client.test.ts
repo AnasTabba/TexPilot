@@ -6,8 +6,12 @@ import {
   parseScanResult,
   connectModel,
   analyzeMaterial,
+  analyzeSpec,
+  parseSpecResult,
+  validateScan,
   ScanError,
   type ScanResult,
+  type SpecResult,
 } from "../src/scanner-client.ts";
 const fixture: ScanResult = {
   scan_id: "test-real-api-shape",
@@ -184,6 +188,71 @@ test("Scanner upload errors preserve real server rejection instead of producing 
         "",
       ),
       (e) => e instanceof ScanError && e.code === "invalid-image",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+const spec: SpecResult = {
+  spec_id: "spec-1",
+  construction: "woven",
+  dpi: 1200,
+  density: { ends_per_inch: 64, picks_per_inch: 42, spread_pct: 0.4, tiles: 36, skew_deg: 1.5 },
+  weight_gsm: 390,
+  yarn: {
+    warp_ne: [6.6, 7.1],
+    weft_ne: [6.6, 7.1],
+    warp_standard_ne: 7,
+    weft_standard_ne: 7,
+    basis: "crimp 6-14% warp, 4-10% weft; weft assumed the same count as the warp",
+  },
+  stated_composition: { source: "care_label", fibers: [{ name: "cotton", pct: 100 }], ocr_confidence: null, section: null },
+  yarn_order: ["Warp yarn: Ne 7s (range 6.6-7.1), 100% cotton"],
+  flags: [{ code: "WEFT_ASSUMED", message: "Warp and weft are assumed to be the same count", severity: "info" }],
+  timestamp: "2026-10-25T04:00:00Z",
+};
+test("Spec results are validated: real measurements pass, malformed ones are refused", () => {
+  assert.deepEqual(parseSpecResult(spec), spec);
+  assert.equal(parseSpecResult({ ...spec, yarn: null }).yarn, null);
+  for (const bad of [
+    { ...spec, density: { ...spec.density, ends_per_inch: -1 } },
+    { ...spec, yarn: { ...spec.yarn, warp_ne: [7] } },
+    { ...spec, construction: "felt" },
+    { ...spec, yarn_order: "Ne 7" },
+  ])
+    assert.throws(() => parseSpecResult(bad), ScanError);
+});
+test("Spec scans accept flatbed TIFFs up to 60 MB and still refuse HEIC", () => {
+  validateScan({ size: 40 * 1024 * 1024, type: "image/tiff", name: "swatch.tif" });
+  validateScan({ size: 1000, type: "image/png", name: "swatch.png" });
+  assert.throws(() => validateScan({ size: 1000, type: "image/heic", name: "a.heic" }), ScanError);
+  assert.throws(() => validateScan({ size: 61 * 1024 * 1024, type: "image/tiff", name: "big.tif" }), ScanError);
+});
+test("Spec scan posts the scan, its scale, the weight and the label, and surfaces a 422 reason", async () => {
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url, init) => {
+      assert.equal(url, "https://model.example/api/v1/spec");
+      const body = init?.body as FormData;
+      assert.equal((body.get("scan_image") as File).name, "swatch.tif");
+      assert.equal(body.get("dpi"), "1200");
+      assert.equal(body.get("construction"), "woven");
+      assert.equal(body.get("oz"), "11.5");
+      assert.equal(body.get("gsm"), null);
+      assert.equal(body.get("label_text"), "100% cotton");
+      return Response.json(spec);
+    };
+    const scan = new File([new Uint8Array([73, 73, 42, 0])], "swatch.tif", { type: "image/tiff" });
+    const out = await analyzeSpec("https://model.example", scan, {
+      dpi: 1200, construction: "woven", weight: 11.5, unit: "oz", labelText: " 100% cotton ",
+    });
+    assert.equal(out.yarn?.warp_standard_ne, 7);
+    globalThis.fetch = async () =>
+      Response.json({ detail: "scan resolution unknown or below 300 dpi" }, { status: 422 });
+    await assert.rejects(
+      analyzeSpec("https://model.example", scan, { construction: "woven" }),
+      (e) => e instanceof ScanError && e.code === "invalid-image" && e.detail.includes("300 dpi"),
     );
   } finally {
     globalThis.fetch = original;
