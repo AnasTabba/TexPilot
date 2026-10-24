@@ -108,15 +108,20 @@ class FineTunedHead:
             [preprocess(v, m["mean"], m["std"], m["img_size"], m["crop_pct"]) for v in views]
         )
         t = self._torch.from_numpy(x).to(self.device)
-        with self._torch.no_grad():
-            t = t.half() if self.half else t
-            if self.probe is None:
-                logits = self.model(t).float()
-            else:
-                from services.vision.backbone import pool_features
+        logits = self._logits(t)
+        if self.half and not np.isfinite(logits).all():  # fp16 overflow (DINOv3): fp32 for good
+            self.model, self.half = self.model.float(), False
+            logits = self._logits(t)
+        return softmax(logits, m["temperature"]).mean(0)
 
-                logits = self.probe(pool_features(self.model, t).float())
-        return softmax(logits.cpu().numpy(), m["temperature"]).mean(0)
+    def _logits(self, t) -> np.ndarray:
+        with self._torch.no_grad():
+            t = t.half() if self.half else t.float()
+            if self.probe is None:
+                return self.model(t).float().cpu().numpy()
+            from services.vision.backbone import pool_features
+
+            return self.probe(pool_features(self.model, t).float()).cpu().numpy()
 
 
 def load_structure_model(bundle_dir: Path, meta: dict, device) -> FineTunedHead | None:

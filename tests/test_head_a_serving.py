@@ -97,3 +97,19 @@ def test_a_probe_head_runs_its_linear_layer_on_the_frozen_encoders_pooled_featur
         logits = pool_features(encoder.eval(), x).numpy() @ w.T + b
     want = np.exp(logits - logits.max()) / np.exp(logits - logits.max()).sum()
     assert np.allclose(head.probs([view]), want[0], atol=1e-4)
+
+
+def test_a_head_whose_fp16_output_overflows_reruns_in_fp32(tmp_path):
+    head = FineTunedHead(_head_dir(tmp_path, 0.0), CPU)
+
+    class Overflowing(torch.nn.Module):  # e.g. DINOv3 in fp16
+        def forward(self, x):
+            return (
+                torch.full((len(x), 3), float("inf"))
+                if x.dtype == torch.float16
+                else x[:, 0, 0, :3]
+            )
+
+    head.model, head.half = Overflowing(), True
+    p = head.probs([np.full((64, 64, 3), 128, np.uint8)])
+    assert np.isfinite(p).all() and not head.half
