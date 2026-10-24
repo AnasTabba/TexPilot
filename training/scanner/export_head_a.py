@@ -90,7 +90,10 @@ def main(argv: list[str] | None = None) -> int:
     _, eval_tf = build_transforms(size, mean, std, crop)
     rows = load_rows(args.split_csv, args.data_root)
     labels = {c: i for i, c in enumerate(classes)}
-    amp = (lambda: torch.autocast("cuda", dtype=torch.bfloat16)) if device.type == "cuda" \
+    # bf16 needs Ampere+ (T4/P100, e.g. Kaggle, only emulate it, slowly): fp16 there.
+    ampere = device.type == "cuda" and torch.cuda.get_device_capability(device)[0] >= 8
+    half = torch.bfloat16 if ampere else torch.float16
+    amp = (lambda: torch.autocast("cuda", dtype=half)) if device.type == "cuda" \
         else contextlib.nullcontext  # fmt: skip
     scores = {}
     for split in ("val", "test"):
