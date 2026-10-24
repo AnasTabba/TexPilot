@@ -42,6 +42,7 @@ async function copy(text: string): Promise<boolean> {
 export default function SpecScan() {
   const [scan, setScan] = useState<File | null>(null);
   const [dpi, setDpi] = useState("");
+  const [cardMm, setCardMm] = useState("");
   const [construction, setConstruction] = useState<"woven" | "knit">("woven");
   const [weight, setWeight] = useState("");
   const [unit, setUnit] = useState<"gsm" | "oz">("gsm");
@@ -63,6 +64,7 @@ export default function SpecScan() {
       setResult(
         await analyzeSpec(endpoint(), scan, {
           dpi: Number(dpi) || undefined,
+          cardMm: Number(cardMm) || undefined,
           construction,
           weight: Number(weight) || undefined,
           unit,
@@ -86,14 +88,18 @@ export default function SpecScan() {
             <h2>Yarn spec</h2>
             <p>
               Find the yarn to order for a fabric. Scan it flat on a flatbed scanner at 1200 dpi,
-              with the selvedge running up the glass, and weigh a 10 x 10 cm piece.
+              selvedge running up the glass. No scanner? Lay the{" "}
+              <a href="/texpilot-card.svg" target="_blank" rel="noreferrer">
+                printed TexPilot card
+              </a>{" "}
+              on the fabric and photograph both from about 15 cm. Then weigh a 10 x 10 cm piece.
             </p>
           </div>
           <Ruler size={22} aria-hidden="true" />
         </div>
         <form className="spec-form" onSubmit={run}>
           <label>
-            Fabric scan (PNG, JPEG or TIFF)
+            Fabric scan, or photo with the card (PNG, JPEG or TIFF)
             <input
               type="file"
               accept="image/png,image/jpeg,image/tiff,.tif,.tiff"
@@ -108,9 +114,22 @@ export default function SpecScan() {
               inputMode="numeric"
               min={300}
               max={4800}
-              placeholder="Read from the scan"
+              placeholder="Read from the scan or the card"
               value={dpi}
               onChange={(e) => setDpi(e.target.value)}
+            />
+          </label>
+          <label>
+            Card's black square measures (mm, optional)
+            <input
+              type="number"
+              inputMode="decimal"
+              min={10}
+              max={100}
+              step="any"
+              placeholder="30"
+              value={cardMm}
+              onChange={(e) => setCardMm(e.target.value)}
             />
           </label>
           <fieldset className="spec-choice">
@@ -207,6 +226,12 @@ export default function SpecScan() {
             <div>
               <dt>{knit ? "Courses per inch" : "Picks per inch (weft)"}</dt>
               <dd>{result.density.picks_per_inch.toFixed(1)}</dd>
+            </div>
+            <div>
+              <dt>Scale</dt>
+              <dd>
+                {result.scale_source === "card" ? "card" : "scan"}, {result.dpi.toFixed(0)} ppi
+              </dd>
             </div>
             <div>
               <dt>Agreement</dt>

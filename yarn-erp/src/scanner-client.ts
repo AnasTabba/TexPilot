@@ -328,7 +328,8 @@ async function body(response: Response): Promise<unknown> {
 export interface SpecResult {
   spec_id: string;
   construction: "woven" | "knit";
-  dpi: number;
+  dpi: number; // pixels per inch the threads were measured at
+  scale_source?: "form" | "file" | "card" | null; // card: the printed TexPilot card
   density: {
     ends_per_inch: number; // knits: wales
     picks_per_inch: number; // knits: courses
@@ -356,6 +357,7 @@ export interface SpecOptions {
   unit?: "gsm" | "oz";
   labelText?: string;
   label?: File | null;
+  cardMm?: number; // what the card's black square measures, if it did not print at 30 mm
 }
 const SCAN_TYPES = ["image/jpeg", "image/png", "image/tiff", "image/webp", "image/bmp"];
 /** Flatbed scans: TIFF allowed (scanners' default), and larger than photos. */
@@ -377,6 +379,7 @@ export function parseSpecResult(value: unknown): SpecResult {
     typeof value.spec_id !== "string" ||
     !["woven", "knit"].includes(String(value.construction)) ||
     !positive(value.dpi) ||
+    (value.scale_source != null && typeof value.scale_source !== "string") ||
     !record(d) ||
     !positive(d.ends_per_inch) ||
     !positive(d.picks_per_inch) ||
@@ -421,6 +424,7 @@ export async function analyzeSpec(
   form.append("scan_image", scan, scan.name);
   form.append("construction", options.construction);
   if (options.dpi) form.append("dpi", String(options.dpi));
+  if (options.cardMm) form.append("card_mm", String(options.cardMm));
   if (options.weight) form.append(options.unit === "oz" ? "oz" : "gsm", String(options.weight));
   if (options.labelText?.trim()) form.append("label_text", options.labelText.trim());
   if (options.label) form.append("label_image", options.label, options.label.name);

@@ -258,3 +258,21 @@ test("Spec scan posts the scan, its scale, the weight and the label, and surface
     globalThis.fetch = original;
   }
 });
+test("A phone photo with the card: the card's measured size is sent, the scale's source is read", async () => {
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async (_url, init) => {
+      const body = init?.body as FormData;
+      assert.equal(body.get("dpi"), null);
+      assert.equal(body.get("card_mm"), "29.5");
+      return Response.json({ ...spec, dpi: 640.2, scale_source: "card" });
+    };
+    const photo = new File([new Uint8Array([255, 216, 255])], "fabric.jpg", { type: "image/jpeg" });
+    const out = await analyzeSpec("https://model.example", photo, { construction: "woven", cardMm: 29.5 });
+    assert.equal(out.scale_source, "card");
+  } finally {
+    globalThis.fetch = original;
+  }
+  assert.throws(() => parseSpecResult({ ...spec, scale_source: 3 }), ScanError);
+  assert.equal(parseSpecResult(spec).scale_source, undefined); // older servers leave it out
+});

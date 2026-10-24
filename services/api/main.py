@@ -119,8 +119,10 @@ def spec(
     oz: float | None = Form(default=None),
     label_image: UploadFile | None = File(default=None),
     label_text: str | None = Form(default=None),
+    card_mm: float | None = Form(default=None),
 ) -> SpecResult:
-    """Yarn to order for a fabric scanned flat at a known dpi (services/api/spec.py).
+    """Yarn to order for a fabric scanned flat at a known dpi, or photographed with the printed
+    card on it (services/api/spec.py).
 
     Sync on purpose: the measurement takes a second or two of CPU, so it runs in the
     threadpool instead of blocking scans. Unusable input (no scale, absurd weight) is a 422.
@@ -140,6 +142,7 @@ def spec(
             label_text=label_text,
             label_image=label,
             ocr=_state["ocr"],
+            card_mm=card_mm,
         )
     except UnsupportedImage as e:
         raise HTTPException(status_code=422, detail=str(e)) from e

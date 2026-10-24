@@ -102,7 +102,8 @@ class SpecResult(BaseModel):
 
     spec_id: str
     construction: str  # woven | knit
-    dpi: float
+    dpi: float  # pixels per inch the threads were measured at
+    scale_source: str | None = None  # form | file (the scan's dpi) | card (printed marker)
     density: SpecDensity
     weight_gsm: float | None = None
     yarn: YarnCount | None = None  # None without a weight

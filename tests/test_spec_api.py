@@ -82,3 +82,36 @@ def test_a_tiff_scan_is_accepted_flatbed_scanners_default_to_it():
     r = client.post("/api/v1/spec", files={"scan_image": ("s.tif", buf.getvalue(), "image/tiff")})
     assert r.status_code == 200, r.text
     assert r.json()["density"]["ends_per_inch"] == pytest.approx(64, rel=0.03)
+
+
+def _jpeg(img):
+    buf = io.BytesIO()
+    Image.fromarray(img).save(buf, format="JPEG", quality=90, dpi=(72, 72))  # as phones do
+    return buf.getvalue()
+
+
+def test_a_phone_photo_with_the_card_is_measured_without_a_scanner():
+    from tests.test_marker import phone_photo
+
+    r = _spec(_jpeg(phone_photo(64, 42, 600, tilt=12, turn=25)), oz=11.5)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["scale_source"] == "card"
+    assert body["density"]["ends_per_inch"] == pytest.approx(64, rel=0.03)
+    assert body["density"]["picks_per_inch"] == pytest.approx(42, rel=0.03)
+    assert "CARD_SCALE" in [f["code"] for f in body["flags"]]
+
+
+def test_a_phone_photo_without_the_card_says_how_to_get_a_scale():
+    r = _spec(_jpeg(render("3/1 twill", 64, 42, 600, size=1600)), oz=11.5)
+    assert r.status_code == 422 and "card" in r.text
+
+
+def test_a_flatbed_scan_says_where_its_scale_came_from():
+    r = _spec(_png(render("3/1 twill", 64, 42, 600, size=1600), dpi=600))
+    assert r.json()["scale_source"] == "file"
+
+
+def test_an_absurd_card_size_is_refused():
+    scan = _png(render("3/1 twill", 64, 42, 600, size=1600), dpi=600)
+    assert _spec(scan, card_mm=300).status_code == 422

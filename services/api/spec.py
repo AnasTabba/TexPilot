@@ -1,7 +1,8 @@
 """Yarn spec from a flatbed scan (POST /api/v1/spec): what to order to make this fabric again.
 
 Thread density is measured on the scan (services/vision/threads.py; the scan's dpi is the
-scale), the yarn count follows from the density and the fabric's weight, the fibre comes from
+scale, or for a phone photo the printed card lying on the fabric, services/vision/marker.py),
+the yarn count follows from the density and the fabric's weight, the fibre comes from
 the care label. Every assumption behind a number is stated next to it, and an input that
 cannot give a trustworthy answer is refused (422) rather than guessed at.
 """
@@ -51,10 +52,12 @@ def run_spec(
     label_text: str | None = None,
     label_image: bytes | None = None,
     ocr=None,
+    card_mm: float | None = None,
 ) -> SpecResult:
     import numpy as np
     from PIL import Image
 
+    from services.vision.marker import MARKER_MM, find_card
     from services.vision.threads import (
         MIN_PERIOD_PX,
         knit_density,
@@ -65,6 +68,8 @@ def run_spec(
 
     if construction not in ("woven", "knit"):
         raise UnsupportedImage("construction must be 'woven' or 'knit'")
+    if card_mm is not None and not 10 <= card_mm <= 100:
+        raise UnsupportedImage(f"card_mm {card_mm:g}: the card's marker is about 30 mm wide")
     if gsm is None and oz is not None:
         gsm = oz * OZ_PER_SQYD_IN_GSM
     if gsm is not None and not GSM_RANGE[0] <= gsm <= GSM_RANGE[1]:
@@ -82,18 +87,32 @@ def run_spec(
         raise
     except Exception as e:  # noqa: BLE001 -- an undecodable upload is the client's 422
         raise UnsupportedImage(f"scan_image could not be decoded: {type(e).__name__}") from e
-    dpi = float(dpi or file_dpi or 0)
+    flags: list[FlagModel] = []
+    card = None if dpi else find_card(gray, card_mm or MARKER_MM)
+    if card is not None:  # a phone photo with the card: straightened, scale from the marker
+        gray, dpi, source = card.gray, card.ppi, "card"
+        msg = f"Scale from the printed card ({card_mm or MARKER_MM:g} mm marker): check that it "
+        flags.append(_flag("CARD_SCALE", msg + "printed at that size, or enter what it measures."))
+    else:
+        source = "form" if dpi else "file"
+        dpi = float(dpi or file_dpi or 0)
     if dpi < MIN_DPI:
+        if source == "card":
+            raise UnsupportedImage(
+                f"the photo resolves only {dpi:.0f} pixels per inch: hold the phone closer, so "
+                "the card fills about a quarter of the photo's width"
+            )
         raise UnsupportedImage(
             "scan resolution unknown or below 300 dpi: scan the swatch flat on a flatbed scanner "
-            "at 600-1200 dpi (phone photos have no fixed scale), or pass the dpi you scanned at"
+            "at 600-1200 dpi, or lay the printed TexPilot card on the fabric and photograph both, "
+            "or pass the dpi you scanned at"
         )
 
-    flags: list[FlagModel] = []
     max_tpi = min(200.0, dpi / MIN_PERIOD_PX)
     if max_tpi < 200:
         msg = f"At {dpi:.0f} dpi only up to {max_tpi:.0f} threads per inch can be resolved; "
-        flags.append(_flag("LOW_DPI", msg + "scan fine shirting at 1200 dpi."))
+        fix = "photograph from closer" if source == "card" else "scan at 1200 dpi"
+        flags.append(_flag("LOW_DPI", msg + f"for fine shirting {fix}."))
     measure = knit_density if construction == "knit" else thread_density
     d = measure(gray, dpi, max_tpi=max_tpi)
     if d.ends_per_inch is None:
@@ -150,6 +169,7 @@ def run_spec(
         spec_id=str(uuid.uuid4()),
         construction=construction,
         dpi=dpi,
+        scale_source=source,
         density=SpecDensity(
             ends_per_inch=round(ends, 1),
             picks_per_inch=round(picks, 1),
