@@ -137,3 +137,34 @@ def test_a_probe_head_loads_its_encoder_from_a_local_file_when_one_is_shipped(
         "resnet10t", 0, 64, pretrained=True, weights_file=d / "encoder.safetensors"
     )
     assert seen["pretrained_cfg_overlay"] == {"file": str(d / "encoder.safetensors")}
+
+
+def test_a_probe_head_can_be_a_small_mlp_on_the_pooled_features(tmp_path, monkeypatch):
+    from safetensors.numpy import save_file
+
+    from services.vision import heads
+    from services.vision.backbone import pool_features, preprocess
+
+    torch.manual_seed(0)
+    encoder = timm_classifier("resnet10t", 0, 64)
+    monkeypatch.setattr(heads, "timm_classifier", lambda *a, **k: encoder)
+    d = tmp_path / "head_a"
+    d.mkdir()
+    mlp = torch.nn.Sequential(
+        torch.nn.Linear(encoder.num_features, 16),
+        torch.nn.GELU(),
+        torch.nn.Dropout(0.2),
+        torch.nn.Linear(16, 3),
+    ).eval()
+    save_file(
+        {f"probe.{k}": v.numpy() for k, v in mlp.state_dict().items()}, str(d / "probe.safetensors")
+    )
+    meta = dict(classes=list(CLASSES), timm_name="resnet10t", img_size=64, crop_pct=0.875)
+    meta |= dict(mean=[0.5] * 3, std=[0.5] * 3, temperature=1.0, threshold=0.0, pool="probe")
+    (d / "head.json").write_text(json.dumps(meta))
+    head = FineTunedHead(d, CPU)
+    view = np.random.default_rng(1).integers(0, 255, (80, 100, 3), dtype=np.uint8)
+    x = torch.from_numpy(preprocess(view, meta["mean"], meta["std"], 64, 0.875))[None]
+    with torch.no_grad():
+        want = torch.softmax(mlp(pool_features(encoder.eval(), x)), 1).numpy()[0]
+    assert np.allclose(head.probs([view]), want, atol=1e-4)

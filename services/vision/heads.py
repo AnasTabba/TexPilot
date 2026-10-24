@@ -96,9 +96,18 @@ class FineTunedHead:
                 m["timm_name"], 0, m["img_size"], True, local if local.exists() else None
             )
             w = load_file(str(head_dir / "probe.safetensors"))
-            self.probe = torch.nn.Linear(*w["probe.weight"].shape[::-1])
-            self.probe.load_state_dict({"weight": w["probe.weight"], "bias": w["probe.bias"]})
-            self.probe = self.probe.to(device)
+            w = {k.removeprefix("probe."): v for k, v in w.items()}
+            if "weight" in w:  # linear
+                self.probe = torch.nn.Linear(*w["weight"].shape[::-1])
+            else:  # small MLP: Linear, GELU, Dropout, Linear (training/textilenet/head_search.py)
+                self.probe = torch.nn.Sequential(
+                    torch.nn.Linear(*w["0.weight"].shape[::-1]),
+                    torch.nn.GELU(),
+                    torch.nn.Dropout(0.0),
+                    torch.nn.Linear(*w["3.weight"].shape[::-1]),
+                )
+            self.probe.load_state_dict(w)
+            self.probe = self.probe.eval().to(device)
         else:
             model = timm_classifier(m["timm_name"], len(self.classes), m["img_size"])
             model.load_state_dict(load_file(str(head_dir / "model.safetensors")))
