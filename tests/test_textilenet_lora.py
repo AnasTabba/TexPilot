@@ -38,3 +38,10 @@ def test_merged_model_matches_the_adapted_one_under_timm_keys():
     assert set(merged.state_dict()) == keys  # loads into a plain timm model for serving
     assert torch.allclose(merged(x), adapted, atol=1e-5)
     assert not torch.allclose(_vit()(x), adapted)  # the adapters did change the output
+
+
+def test_lora_can_be_limited_to_the_last_blocks():
+    model = _vit()
+    assert add_lora(model, rank=4, alpha=4, last_blocks=1) == 1
+    assert isinstance(model.blocks[0].attn.qkv, torch.nn.Linear)
+    assert not any(p.requires_grad for p in model.blocks[0].parameters())

@@ -39,7 +39,7 @@ import timm
 import torch
 import torch.nn.functional as F
 from albumentations.pytorch import ToTensorV2
-from torch.utils.data import DataLoader, WeightedRandomSampler
+from torch.utils.data import ConcatDataset, DataLoader, Sampler, WeightedRandomSampler
 
 from training.textilenet.data import TextileDataset, load_rows, seed_worker
 from training.textilenet.governor import Governor
@@ -47,6 +47,8 @@ from training.textilenet.metrics import HEADLINE, minority_recall, summarize
 from training.textilenet.recipe import (
     add_lora,
     class_balance_weights,
+    irus_epoch_size,
+    irus_order,
     lr_at,
     merge_lora,
     predict,
@@ -128,6 +130,43 @@ def build_transforms(size: int, mean, std, crop_pct: float) -> tuple[A.Compose, 
     return train, evaluate
 
 
+def augment_4to5(size: int, mean, std) -> A.Compose:
+    """The augmented half of --double-aug: a random crop, then 4 or 5 of these at random.
+    Texture-safe: no cutout, no strong colour shift (colour is signal for fabric)."""
+    pool = [
+        A.HorizontalFlip(p=1),
+        A.VerticalFlip(p=1),
+        A.RandomRotate90(p=1),
+        A.Affine(rotate=(-20, 20), shear=(-8, 8), border_mode=cv2.BORDER_REFLECT_101, p=1),
+        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=1),
+        A.HueSaturationValue(hue_shift_limit=4, sat_shift_limit=15, val_shift_limit=0, p=1),
+        A.GaussianBlur(blur_limit=(3, 5), p=1),
+        A.GaussNoise(std_range=(0.02, 0.05), p=1),
+        A.ImageCompression(quality_range=(60, 95), p=1),
+    ]
+    return A.Compose(
+        [
+            A.RandomResizedCrop(size=(size, size), scale=(0.35, 1.0)),
+            A.OneOf([A.SomeOf(pool, n=4, p=1), A.SomeOf(pool, n=5, p=1)], p=1),
+            A.Normalize(mean=tuple(mean), std=tuple(std)),
+            ToTensorV2(),
+        ]
+    )
+
+
+class EpochSampler(Sampler):
+    """Calls ``draw()`` afresh every epoch: IRUS redraws its majority subsets each time."""
+
+    def __init__(self, draw, size: int):
+        self.draw, self.size = draw, size
+
+    def __len__(self) -> int:
+        return self.size
+
+    def __iter__(self):
+        return iter(self.draw().tolist())
+
+
 # --------------------------------------------------------------------------- model
 
 
@@ -197,13 +236,16 @@ def main(argv: list[str] | None = None) -> int:
 
     model = create_model(args, len(classes))
     if args.lora_rank:
-        n_lora = add_lora(model, args.lora_rank, args.lora_alpha or args.lora_rank)
+        n_lora = add_lora(
+            model, args.lora_rank, args.lora_alpha or args.lora_rank, last_blocks=args.lora_blocks
+        )
         n_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"LoRA r={args.lora_rank} on {n_lora} qkv layers; {n_train:,} trainable params")
     data_cfg = timm.data.resolve_model_data_config(model)
     train_tf, eval_tf = build_transforms(
         args.img_size, data_cfg["mean"], data_cfg["std"], args.crop_pct
     )
+    eval_decode = math.ceil(args.img_size / args.crop_pct)
     ds = {
         "train": TextileDataset(
             rows["train"], args.data_root, labels, train_tf, decode_size=2 * args.img_size
@@ -214,13 +256,22 @@ def main(argv: list[str] | None = None) -> int:
                 args.data_root,
                 labels,
                 eval_tf,
-                decode_size=math.ceil(args.img_size / args.crop_pct),
+                decode_size=eval_decode,
             )
             for s in ("val", "test")
         },
     }
     counts = np.bincount(ds["train"].targets, minlength=len(classes))
     print("train class counts:", dict(zip(classes, counts.tolist(), strict=True)))
+    copies, train_targets = 1, ds["train"].targets
+    if args.double_aug:  # rows 0..N-1 as val sees them, rows N..2N-1 with 4-5 augmentations
+        train_tf = augment_4to5(args.img_size, data_cfg["mean"], data_cfg["std"])
+        standard = TextileDataset(rows["train"], args.data_root, labels, eval_tf, eval_decode)
+        augmented = TextileDataset(
+            rows["train"], args.data_root, labels, train_tf, decode_size=2 * args.img_size
+        )
+        ds["train"] = ConcatDataset([standard, augmented])
+        copies, train_targets = 2, standard.targets * 2
 
     if hasattr(train_tf, "set_random_seed"):  # covers --workers 0; workers reseed themselves
         train_tf.set_random_seed(args.seed)
@@ -229,11 +280,21 @@ def main(argv: list[str] | None = None) -> int:
         num_workers=args.workers, pin_memory=device.type == "cuda", worker_init_fn=seed_worker
     )
     keep = dict(persistent_workers=args.workers > 0)  # train/val iterate every epoch
-    if args.sampler != "none":
+    if args.sampler == "irus":
+        y_img = torch.tensor(train_targets[: len(train_targets) // copies])
+        sampler = EpochSampler(
+            lambda: irus_order(y_img, len(classes), args.irus_cap, gen, copies),
+            irus_epoch_size(y_img.numpy(), len(classes), args.irus_cap, copies),
+        )
+        print(f"IRUS: {len(sampler)} samples per epoch (cap {args.irus_cap} images per class)")
+        train_loader = DataLoader(
+            ds["train"], args.batch_size, sampler=sampler, drop_last=True, **common, **keep
+        )
+    elif args.sampler != "none":
         power = {"sqrt": 0.5, "inverse": 1.0}[args.sampler]
-        w_cls = class_balance_weights(ds["train"].targets, len(classes), power)
+        w_cls = class_balance_weights(train_targets, len(classes), power)
         sampler = WeightedRandomSampler(
-            w_cls[ds["train"].targets], len(ds["train"]), replacement=True, generator=gen
+            w_cls[train_targets], len(ds["train"]), replacement=True, generator=gen
         )
         train_loader = DataLoader(
             ds["train"], args.batch_size, sampler=sampler, drop_last=True, **common, **keep
@@ -276,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.class_weighted_loss != "none":
         power = {"sqrt": 0.5, "inverse": 1.0}[args.class_weighted_loss]
         class_w = torch.tensor(
-            class_balance_weights(ds["train"].targets, len(classes), power),
+            class_balance_weights(train_targets, len(classes), power),
             dtype=torch.float32,
             device=device,
         )
@@ -438,17 +499,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.lora_rank:  # best.pt holds merged weights: evaluate exactly what gets exported
         model = merge_lora(model)
     model.load_state_dict(ck["model"])
-    val_plain = summarize(
-        *predict(model, eval_loaders["val"], device, amp_ctx, False, channels_last), classes
-    )
-    val_tta = summarize(
-        *predict(model, eval_loaders["val"], device, amp_ctx, True, channels_last), classes
+    val_logits, val_y = predict(model, eval_loaders["val"], device, amp_ctx, False, channels_last)
+    val_plain = summarize(val_logits, val_y, classes)
+    val_tta = (
+        val_plain
+        if args.no_tta
+        else summarize(
+            *predict(model, eval_loaders["val"], device, amp_ctx, True, channels_last), classes
+        )
     )
     use_tta = val_tta[args.select] > val_plain[args.select]
     test_logits, test_y = predict(
         model, eval_loaders["test"], device, amp_ctx, use_tta, channels_last
     )
     test = summarize(test_logits, test_y, classes)
+    np.savez(  # for post-hoc analysis (e.g. prior correction) without rerunning the model
+        run_dir / "logits.npz", val=val_logits, val_y=val_y, test=test_logits, test_y=test_y
+    )
     source = np.array([r.source for r in rows["test"]])
     by_source = {
         str(s): summarize(test_logits[source == s], test_y[source == s], classes)
@@ -615,6 +682,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     g.add_argument("--lora-rank", type=int, default=0, help="LoRA on attention qkv; 0 = off")
     g.add_argument("--lora-alpha", type=float, default=0, help="LoRA scale alpha/r; 0 = rank")
+    g.add_argument("--lora-blocks", type=int, default=0, help="LoRA in the last k blocks; 0 = all")
+    g.add_argument("--no-tta", action="store_true", help="skip the TTA check (4x eval time)")
 
     g = ap.add_argument_group("regularisation / imbalance")
     g.add_argument("--smoothing", type=float, default=0.1)
@@ -622,7 +691,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     g.add_argument("--cutmix", type=float, default=1.0)
     g.add_argument("--mix-switch-prob", type=float, default=0.5)
     g.add_argument("--ema-decay", type=float, default=0.9998)
-    g.add_argument("--sampler", choices=["none", "sqrt", "inverse"], default="none")
+    g.add_argument("--sampler", choices=["none", "sqrt", "inverse", "irus"], default="none")
+    g.add_argument("--irus-cap", type=int, default=1000, help="IRUS: images per class per epoch")
+    g.add_argument(
+        "--double-aug",
+        action="store_true",
+        help="2x train set: each image once as val sees it, once with 4-5 random augmentations",
+    )
     g.add_argument("--class-weighted-loss", choices=["none", "sqrt", "inverse"], default="none")
 
     g = ap.add_argument_group("runtime")

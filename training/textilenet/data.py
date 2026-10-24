@@ -57,9 +57,11 @@ def seed_worker(_: int) -> None:
     np.random.seed(seed)
     random.seed(seed)
     info = torch.utils.data.get_worker_info()
-    tf = getattr(info.dataset, "transform", None)
-    if hasattr(tf, "set_random_seed"):  # albumentations >= 2 keeps its own RNG
-        tf.set_random_seed(seed)
+    top = getattr(info.dataset, "dataset", info.dataset)  # through a Subset
+    for ds in getattr(top, "datasets", [top]):  # and a ConcatDataset
+        tf = getattr(ds, "transform", None)
+        if hasattr(tf, "set_random_seed"):  # albumentations >= 2 keeps its own RNG
+            tf.set_random_seed(seed)
 
 
 def load_rows(

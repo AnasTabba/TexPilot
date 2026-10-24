@@ -12,6 +12,7 @@ import torch.nn.functional as F  # noqa: E402
 from training.textilenet.recipe import (  # noqa: E402
     class_balance_weights,
     epoch_order,
+    irus_order,
     lr_at,
     predict,
     soft_cross_entropy,
@@ -113,3 +114,17 @@ def test_sqrt_epoch_order_draws_rare_classes_at_sqrt_balanced_rates():
     assert len(order) == len(y)  # one epoch = n draws, as WeightedRandomSampler
     # weights 900^-.5 : 100^-.5 = 1/30 : 1/10 -> class-1 share 10 / (30 + 10) = .25
     assert (y[order] == 1).float().mean().item() == pytest.approx(0.25, abs=0.04)
+
+
+def test_irus_cuts_big_classes_to_a_fresh_subset_each_epoch_and_keeps_views_together():
+    y = torch.tensor([0] * 50 + [1] * 5)
+    g = torch.Generator().manual_seed(0)
+    a = irus_order(y, 2, cap=10, g=g, copies=2)
+    b = irus_order(y, 2, cap=10, g=g, copies=2)
+    assert len(a) == len(b) == (10 + 5) * 2
+    images = a[a < 55]  # first copy (standard view); the second copy is image + 55
+    assert sorted((a[a >= 55] - 55).tolist()) == sorted(images.tolist())  # both views of each
+    assert (y[images] == 0).sum() == 10 and sorted(images[y[images] == 1].tolist()) == list(
+        range(50, 55)
+    )
+    assert set(images[y[images] == 0].tolist()) != set(b[(b < 55)][y[b[b < 55]] == 0].tolist())

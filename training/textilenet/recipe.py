@@ -57,6 +57,27 @@ def epoch_order(y: torch.Tensor, n_classes: int, power: float, g: torch.Generato
     return torch.multinomial(torch.from_numpy(w), len(y), replacement=True, generator=g)
 
 
+def irus_order(y: torch.Tensor, n_classes: int, cap: int, g: torch.Generator, copies: int = 1):
+    """One epoch of inverse random under-sampling, adapted to many classes: each class
+    above ``cap`` images is cut to a fresh random ``cap`` of them every epoch (so over the
+    run every image is still seen), smaller classes are kept whole. ``y`` labels the N
+    images; the data holds ``copies`` views of each (rows i, i + N, ...), kept together."""
+    keep = []
+    for c in range(n_classes):
+        idx = torch.nonzero(y.cpu() == c).flatten()
+        if len(idx) > cap:
+            idx = idx[torch.randperm(len(idx), generator=g)[:cap]]
+        keep.append(idx)
+    keep = torch.cat(keep)
+    keep = torch.cat([keep + k * len(y) for k in range(copies)])
+    return keep[torch.randperm(len(keep), generator=g)]
+
+
+def irus_epoch_size(y, n_classes: int, cap: int, copies: int = 1) -> int:
+    counts = np.bincount(np.asarray(y), minlength=n_classes)
+    return int(np.minimum(counts, cap).sum()) * copies
+
+
 class LoRALinear(torch.nn.Module):
     """``base(x) + scale * x A^T B^T`` with ``base`` frozen. B starts at zero, so training
     starts from exactly the pretrained model."""
@@ -73,18 +94,21 @@ class LoRALinear(torch.nn.Module):
         return self.base(x) + (x @ self.lora_a.T @ self.lora_b.T) * self.scale
 
 
-def add_lora(model: torch.nn.Module, rank: int, alpha: float, target: str = "attn.qkv") -> int:
+def add_lora(
+    model: torch.nn.Module, rank: int, alpha: float, target: str = "attn.qkv", last_blocks: int = 0
+) -> int:
     """Freeze all but the classifier and wrap every ``target`` Linear (the fused q/k/v
-    projection in timm ViTs) in LoRA. Returns how many layers were wrapped."""
+    projection in timm ViTs) in LoRA, or only those in the last ``last_blocks`` blocks:
+    then backprop stops there, which is ~1.7x faster. Returns how many were wrapped."""
     model.requires_grad_(False)
     model.get_classifier().requires_grad_(True)
-    wrapped = 0
-    for name, mod in list(model.named_modules()):
-        if name.endswith(target) and isinstance(mod, torch.nn.Linear):
-            parent, attr = name.rsplit(".", 1)
-            setattr(model.get_submodule(parent), attr, LoRALinear(mod, rank, alpha))
-            wrapped += 1
-    return wrapped
+    depth = len(model.blocks)
+    first = depth - last_blocks if last_blocks else 0
+    for i in range(first, depth):
+        parent, attr = f"blocks.{i}.{target}".rsplit(".", 1)
+        base = model.get_submodule(f"{parent}.{attr}")
+        setattr(model.get_submodule(parent), attr, LoRALinear(base, rank, alpha))
+    return depth - first
 
 
 def merge_lora(model: torch.nn.Module) -> torch.nn.Module:

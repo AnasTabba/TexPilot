@@ -29,3 +29,28 @@ def test_fit_linear_reports_every_epoch_and_learns_a_separable_problem():
     assert [e for e, _ in seen] == list(range(30))  # one 330-row batch per epoch
     assert seen[-1][1] < seen[0][1]
     assert (head(x).argmax(1) == y).float().mean().item() > 0.95
+
+
+def test_augment_4to5_gives_a_normalised_crop_that_changes_every_call():
+    import numpy as np
+
+    from training.textilenet.train import augment_4to5
+
+    tf = augment_4to5(64, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    img = np.random.default_rng(0).integers(0, 255, (120, 90, 3), dtype=np.uint8)
+    a, b = tf(image=img)["image"], tf(image=img)["image"]
+    assert a.shape == (3, 64, 64) and not torch.equal(a, b)
+
+
+def test_fit_linear_with_irus_over_two_stacked_views():
+    g = torch.Generator().manual_seed(0)
+    y = torch.tensor([0] * 300 + [1] * 30)
+    x = torch.randn(len(y), 8, generator=g) + 3 * torch.nn.functional.one_hot(y, 8).float()
+    x2, y2 = torch.cat([x, x + 0.1 * torch.randn(x.shape, generator=g)]), y.repeat(2)
+    seen = []
+    head = fit_linear(
+        x2, y2, 2, 5e-2, 1e-4, 30, 0, "cpu", irus_cap=60, copies=2,
+        on_epoch=lambda epoch, h, loss: seen.append(loss),
+    )  # fmt: skip
+    assert len(seen) == 30 and seen[-1] < seen[0]
+    assert (head(x).argmax(1) == y).float().mean().item() > 0.95

@@ -36,13 +36,19 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 
 from services.vision.backbone import pool_features as pool
-from training.textilenet.data import TextileDataset
+from training.textilenet.data import TextileDataset, seed_worker
 from training.textilenet.feature_cache import FeatureCache
 from training.textilenet.governor import Governor
 from training.textilenet.metrics import HEADLINE, minority_recall, summarize
-from training.textilenet.recipe import epoch_order, lr_at
+from training.textilenet.recipe import epoch_order, irus_epoch_size, irus_order, lr_at
 from training.textilenet.splits import class_index, read_csv
-from training.textilenet.train import PRESETS, build_transforms, pick_device, plot_confusion
+from training.textilenet.train import (
+    PRESETS,
+    augment_4to5,
+    build_transforms,
+    pick_device,
+    plot_confusion,
+)
 
 SHARD = 4096  # images per cache shard; the unit of resumption
 #: (lr, weight decay) pairs tried on val; shared with training/scanner/fit_heads.py
@@ -51,8 +57,11 @@ SAMPLER_POWER = {"none": 0.0, "sqrt": 0.5, "inverse": 1.0}
 
 
 @torch.no_grad()
-def extract(args: argparse.Namespace, rows, device, cache: FeatureCache) -> np.ndarray:
-    """Features for ``rows`` in order; only images not already cached are computed."""
+def extract(
+    args: argparse.Namespace, rows, device, cache: FeatureCache, augment_seed: int | None = None
+) -> np.ndarray:
+    """Features for ``rows`` in order; only images not already cached are computed. With
+    ``augment_seed``, each image gets one seeded augment_4to5 view instead of the centre crop."""
     missing = set(cache.missing([r.path for r in rows]))
     todo = [r for r in rows if r.path in missing]
     if todo:
@@ -65,19 +74,23 @@ def extract(args: argparse.Namespace, rows, device, cache: FeatureCache) -> np.n
             model.half()
         cfg = timm.data.resolve_model_data_config(model)
         _, tf = build_transforms(args.img_size, cfg["mean"], cfg["std"], args.crop_pct)
-        ds = TextileDataset(
-            todo,
-            args.data_root,
-            class_index(args.partition),
-            tf,
-            decode_size=math.ceil(args.img_size / args.crop_pct),
-        )
+        decode = math.ceil(args.img_size / args.crop_pct)
+        if augment_seed is not None:
+            tf, decode = augment_4to5(args.img_size, cfg["mean"], cfg["std"]), 2 * args.img_size
+            tf.set_random_seed(augment_seed)
+        ds = TextileDataset(todo, args.data_root, class_index(args.partition), tf, decode)
         n_shards = math.ceil(len(todo) / SHARD)
         gov = Governor()  # pauses when the laptop runs hot or short of memory
         t_all = time.time()
         for k in range(n_shards):
             idx = range(k * SHARD, min((k + 1) * SHARD, len(todo)))
-            loader = DataLoader(Subset(ds, idx), args.batch_size, num_workers=args.workers)
+            loader = DataLoader(
+                Subset(ds, idx),
+                args.batch_size,
+                num_workers=args.workers,
+                worker_init_fn=seed_worker,  # distinct, reproducible augmentations per worker
+                generator=torch.Generator().manual_seed(1000 * (augment_seed or 0) + k),
+            )
             feats, t0 = [], time.time()
             for x, _ in loader:
                 gov.pause_if_needed()
@@ -95,19 +108,41 @@ def extract(args: argparse.Namespace, rows, device, cache: FeatureCache) -> np.n
 
 
 def fit_linear(
-    xtr, ytr, n_classes, lr, wd, epochs, seed, device, *, sampler_power=0.0, on_epoch=None
+    xtr,
+    ytr,
+    n_classes,
+    lr,
+    wd,
+    epochs,
+    seed,
+    device,
+    *,
+    sampler_power=0.0,
+    irus_cap=0,
+    copies=1,
+    on_epoch=None,
 ) -> torch.nn.Linear:
-    """``sampler_power`` > 0 redraws each epoch at class weight count^-power;
+    """``sampler_power`` > 0 redraws each epoch at class weight count^-power; ``irus_cap``
+    > 0 runs IRUS instead. ``xtr`` may stack ``copies`` views of the same N images.
     ``on_epoch(epoch, head, mean_train_loss)`` runs after every epoch."""
     g = torch.Generator().manual_seed(seed)
     torch.manual_seed(seed)
     head = torch.nn.Linear(xtr.shape[1], n_classes).to(device)
     opt = torch.optim.AdamW(head.parameters(), lr=lr, weight_decay=wd)
-    total = epochs * math.ceil(len(xtr) / 1024)
+    y_img = ytr[: len(ytr) // copies].cpu()
+    per_epoch = (
+        irus_epoch_size(y_img.numpy(), n_classes, irus_cap, copies) if irus_cap else len(xtr)
+    )
+    total = epochs * math.ceil(per_epoch / 1024)
     step = 0
     for epoch in range(epochs):
         loss_sum = torch.zeros((), device=device)
-        for idx in epoch_order(ytr, n_classes, sampler_power, g).split(1024):
+        order = (
+            irus_order(y_img, n_classes, irus_cap, g, copies)
+            if irus_cap
+            else epoch_order(ytr, n_classes, sampler_power, g)
+        )
+        for idx in order.split(1024):
             for group in opt.param_groups:  # same warmup-cosine as train.py; 10% warmup
                 group["lr"] = lr_at(step, total, total // 10, lr)
             idx = idx.to(device)
@@ -118,7 +153,7 @@ def fit_linear(
             step += 1
             loss_sum += loss.detach() * len(idx)
         if on_epoch:
-            on_epoch(epoch, head, loss_sum.item() / len(xtr))
+            on_epoch(epoch, head, loss_sum.item() / per_epoch)
     return head
 
 
@@ -141,9 +176,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--device", default="auto")
     ap.add_argument(
         "--sampler",
-        choices=list(SAMPLER_POWER),
+        choices=[*SAMPLER_POWER, "irus"],
         default="none",
-        help="redraw train each epoch at class weight count^-0.5 (sqrt) or count^-1",
+        help="redraw train each epoch at class weight count^-0.5 (sqrt) or count^-1, or IRUS",
+    )
+    ap.add_argument("--irus-cap", type=int, default=1000, help="IRUS: images per class per epoch")
+    ap.add_argument(
+        "--aug-views",
+        type=int,
+        default=0,
+        help="add this many augment_4to5 views of every train image (1 = a 2x train set)",
     )
     ap.add_argument(
         "--select",
@@ -177,7 +219,18 @@ def main(argv: list[str] | None = None) -> int:
     yva_np, yte_np, src_te = yva.cpu().numpy(), yte.cpu().numpy(), source[split == "test"]
     counts = np.bincount(ytr.cpu().numpy(), minlength=len(classes)).tolist()
     train_counts = dict(zip(classes, counts, strict=True))
-    power = SAMPLER_POWER[args.sampler]
+    power = SAMPLER_POWER.get(args.sampler, 0.0)
+    irus_cap = args.irus_cap if args.sampler == "irus" else 0
+    if args.aug_views:  # stack augmented views under the standard ones: rows i, i + N, ...
+        train_rows = [r for r in rows if r.split == "train"]
+        root = args.feature_dir / args.partition / f"{args.model}_{args.img_size}_aug4to5"
+        views = [
+            extract(args, train_rows, device, FeatureCache(Path(f"{root}_{v}")), augment_seed=v)
+            for v in range(args.aug_views)
+        ]
+        aug = torch.from_numpy((np.concatenate(views).astype(np.float32) - mu) / sd)
+        xtr = torch.cat([xtr, aug.to(device)])
+        ytr = ytr.repeat(1 + args.aug_views)
 
     @torch.no_grad()
     def logits(head, x):
@@ -202,7 +255,8 @@ def main(argv: list[str] | None = None) -> int:
 
         head = fit_linear(
             xtr, ytr, len(classes), lr, wd, args.epochs, seed, device,
-            sampler_power=power, on_epoch=on_epoch,
+            sampler_power=power, irus_cap=irus_cap, copies=1 + args.aug_views,
+            on_epoch=on_epoch,
         )  # fmt: skip
         head.load_state_dict(best["state"])
         return head, best
@@ -243,6 +297,8 @@ def main(argv: list[str] | None = None) -> int:
                 "lr": lr,
                 "wd": wd,
                 "sampler": args.sampler,
+                "irus_cap": irus_cap,
+                "aug_views": args.aug_views,
                 "select": args.select,
                 "epochs": args.epochs,
             },
@@ -271,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"TEST {args.partition}/{tag}/seed{seed} (epoch {best['epoch']}): "
             + " ".join(f"{k} {test[k]:.4f}" for k in HEADLINE)
-            + f" minRec {test['minority_recall']['mean_recall']:.4f}"
+            + f" minRec {test['minority_recall']['mean_recall'] or 0:.4f}"
         )
     return 0
 
