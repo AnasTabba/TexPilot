@@ -53,6 +53,30 @@ def _read_label(ocr, label_image: bytes, flags: list[FlagModel]):
         return None
 
 
+def stated_composition(label_text, label_image, ocr, notes: list[FlagModel]):
+    """(fibres, StatedComposition) from typed label text (wins: a human correction) or a label
+    photo read by OCR; explains in ``notes`` when a photo gave nothing usable."""
+    if label_text:
+        composition = parse_composition(label_text)
+        if composition is not None:
+            return composition, StatedComposition(
+                source=CompositionSource.CARE_LABEL,
+                fibers=[FiberComponent(name=c.name, pct=c.pct) for c in composition],
+            )
+    elif label_image is not None and ocr is not None:
+        ex = _read_label(ocr, label_image, notes)
+        if ex is not None and ex.fibers:
+            return ex.fibers, StatedComposition(
+                source=CompositionSource.CARE_LABEL,
+                fibers=[FiberComponent(name=c.name, pct=c.pct) for c in ex.fibers],
+                ocr_confidence=ex.confidence,
+                section=ex.section,
+            )
+        if ex is not None and ex.reason in _REASONS:
+            notes.append(_info(*_REASONS[ex.reason]))
+    return None, StatedComposition()
+
+
 def run_scan(
     predictor: Predictor,
     surface_image: bytes,
@@ -64,27 +88,7 @@ def run_scan(
 ) -> ScanResult:
     vision = predictor.predict(surface_image)
     notes = [_info(n.code, n.message) for n in vision.notes]
-
-    composition, stated = None, StatedComposition()
-    if label_text:  # typed text is a human correction: it wins over OCR
-        composition = parse_composition(label_text)
-        if composition is not None:
-            stated = StatedComposition(
-                source=CompositionSource.CARE_LABEL,
-                fibers=[FiberComponent(name=c.name, pct=c.pct) for c in composition],
-            )
-    elif label_image is not None and ocr is not None:
-        ex = _read_label(ocr, label_image, notes)
-        if ex is not None and ex.fibers:
-            composition = ex.fibers
-            stated = StatedComposition(
-                source=CompositionSource.CARE_LABEL,
-                fibers=[FiberComponent(name=c.name, pct=c.pct) for c in composition],
-                ocr_confidence=ex.confidence,
-                section=ex.section,
-            )
-        elif ex is not None and ex.reason in _REASONS:
-            notes.append(_info(*_REASONS[ex.reason]))
+    composition, stated = stated_composition(label_text, label_image, ocr, notes)
 
     verdict = evaluate(vision, composition)
     g = vision.garment

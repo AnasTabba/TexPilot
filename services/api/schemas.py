@@ -75,3 +75,38 @@ class ScanResult(BaseModel):
     model_version: str
     kb_version: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class SpecDensity(BaseModel):
+    """Measured on the scan. Knits: ends = wales, picks = courses."""
+
+    ends_per_inch: float
+    picks_per_inch: float
+    spread_pct: float  # how much the scan's tiles disagree; high = irregular yarns
+    tiles: int
+    skew_deg: float
+
+
+class YarnCount(BaseModel):
+    """Cotton count (Ne) ranges; the standard counts are the nearest a spinner sells."""
+
+    warp_ne: tuple[float, float]  # knits: the one yarn
+    weft_ne: tuple[float, float] | None = None  # None for weft knits
+    warp_standard_ne: int
+    weft_standard_ne: int | None = None
+    basis: str  # the assumptions behind the range
+
+
+class SpecResult(BaseModel):
+    """POST /api/v1/spec: what to order to make this fabric again. Additive to the contract."""
+
+    spec_id: str
+    construction: str  # woven | knit
+    dpi: float
+    density: SpecDensity
+    weight_gsm: float | None = None
+    yarn: YarnCount | None = None  # None without a weight
+    stated_composition: StatedComposition = StatedComposition()
+    yarn_order: list[str] = []
+    flags: list[FlagModel] = []
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
