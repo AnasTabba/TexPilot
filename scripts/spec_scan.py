@@ -16,6 +16,8 @@ from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # this checkout's services/
+
 OZ_PER_SQYD_IN_GSM = 33.906
 
 
