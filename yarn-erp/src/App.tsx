@@ -1,3 +1,4 @@
+import { copy } from "./ui-copy";
 import {
   useState,
   useEffect,
@@ -43,7 +44,6 @@ import {
   ShieldCheck,
   LockKeyhole,
   Delete,
-  Sparkles,
   PackagePlus,
   Layers3,
   FileText,
@@ -80,6 +80,7 @@ import {
   type Stage,
 } from "./domain";
 import Scanner from "./Scanner";
+const pendingWrites = new Map<string, unknown>();
 const Language = createContext(false);
 const LedgerContext = createContext<Entry[]>([]);
 function useT() {
@@ -98,15 +99,28 @@ function useStored<T>(
       return initial;
     }
   });
+  const current = useRef(value);
+  current.current = value;
   return [
     value,
-    (next) =>
-      setValue((previous) => {
-        const updated =
-          typeof next === "function" ? (next as (v: T) => T)(previous) : next;
+    (next) => {
+      const updated =
+        typeof next === "function"
+          ? (next as (v: T) => T)(current.current)
+          : next;
+      try {
         localStorage.setItem(key, JSON.stringify(updated));
-        return updated;
-      }),
+        pendingWrites.delete(key);
+      } catch {
+        window.dispatchEvent(new Event("yf-storage-error"));
+        // Stock changes commit only after persistence succeeds. Keep typed drafts in memory.
+        if (key === "yf-entries-v1" || key === "yf-orders-v1")
+          throw new Error("storage");
+        pendingWrites.set(key, updated);
+      }
+      current.current = updated;
+      setValue(updated);
+    },
   ];
 }
 function Icon({ icon: I, size = 20 }: { icon: LucideIcon; size?: number }) {
@@ -116,10 +130,7 @@ function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <div className="brand">
       <img src="/icon.svg" alt="" />
-      <span>
-        yarnflow<span className="brand-dot">.</span>
-      </span>
-      {!compact && <span className="brand-sub">FACTORY WORKSPACE</span>}
+      <span>{copy.yarnflow}</span>
     </div>
   );
 }
@@ -159,7 +170,13 @@ function Status({
 }) {
   return (
     <span className={`status ${tone}`}>
-      <span className="status-dot" />
+      {tone === "amber" || tone === "red" || tone === "danger" ? (
+        <AlertTriangle size={18} />
+      ) : tone === "green" ? (
+        <CircleCheck size={18} />
+      ) : (
+        <Clock3 size={18} />
+      )}
       {children}
     </span>
   );
@@ -211,8 +228,8 @@ function Modal({
       );
     focusables()[0]?.focus();
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close.current();
-      if (e.key === "Tab") {
+      if (e.key === copy.escape) close.current();
+      if (e.key === copy.tab) {
         const els = focusables();
         const first = els[0],
           last = els[els.length - 1];
@@ -251,10 +268,11 @@ function Modal({
           <h2>{title}</h2>
           <button
             className="icon-button"
-            aria-label={t("Close", "بند کریں")}
+            aria-label={t(copy.close, copy.urdu)}
             onClick={onClose}
           >
             <X size={21} />
+            <span className="control-label">{t(copy.close, copy.urdu)}</span>
           </button>
         </div>
         {children}
@@ -262,103 +280,23 @@ function Modal({
     </div>
   );
 }
-function YarnArt({ large = false }: { large?: boolean }) {
-  return (
-    <svg
-      className={`yarn-art ${large ? "large" : ""}`}
-      viewBox="0 0 500 400"
-      fill="none"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient
-          id="spool"
-          x1="140"
-          y1="70"
-          x2="360"
-          y2="350"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="#e4d9ff" />
-          <stop offset=".45" stopColor="#b1a0e9" />
-          <stop offset="1" stopColor="#7156bb" />
-        </linearGradient>
-        <linearGradient id="glass" x1="100" y1="0" x2="400" y2="350">
-          <stop stopColor="white" stopOpacity=".7" />
-          <stop offset="1" stopColor="white" stopOpacity=".06" />
-        </linearGradient>
-        <filter id="shadow">
-          <feGaussianBlur stdDeviation="15" />
-        </filter>
-      </defs>
-      <ellipse
-        cx="262"
-        cy="345"
-        rx="140"
-        ry="19"
-        fill="#493274"
-        opacity=".2"
-        filter="url(#shadow)"
-      />
-      <path
-        d="M80 300C-35 220 180 60 371 102S487 293 326 315 123 250 211 223"
-        stroke="white"
-        strokeOpacity=".45"
-        strokeWidth="2"
-      />
-      <g transform="rotate(-18 260 200)">
-        <path d="M177 70h154l45 248c0 35-243 35-243 0z" fill="url(#spool)" />
-        <ellipse cx="254" cy="70" rx="77" ry="25" fill="#e4d9ff" />
-        <ellipse cx="254" cy="70" rx="30" ry="12" fill="#8d76c5" />
-        <ellipse cx="254" cy="68" rx="18" ry="7" fill="#6a51a4" />
-        {Array.from({ length: 27 }, (_, i) => (
-          <path
-            key={i}
-            d={`M${175 - i * 1.5} ${88 + i * 8.5} Q254 ${122 + i * 8.5} ${333 + i * 1.5} ${88 + i * 8.5}`}
-            stroke={i % 3 === 0 ? "#f3ebff" : "#9980d4"}
-            strokeOpacity={i % 3 === 0 ? ".65" : ".4"}
-            strokeWidth="2"
-          />
-        ))}
-        <path
-          d="M178 78c-5 10-29 204-34 237 25 18 47 22 65 23l17-241z"
-          fill="url(#glass)"
-        />
-      </g>
-      <path
-        d="M330 320c70-6 94 55 12 48s-90-25-119-10"
-        stroke="#c3afe9"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-      <circle cx="100" cy="180" r="8" fill="#e4d9ff" />
-      <circle cx="413" cy="243" r="5" fill="white" fillOpacity=".65" />
-      <path
-        d="m385 73 4 11 11 4-11 4-4 11-4-11-11-4 11-4z"
-        fill="white"
-        fillOpacity=".8"
-      />
-    </svg>
-  );
-}
 const navItems: [string, string, string, LucideIcon][] = [
-  ["overview", "Overview", "جائزہ", LayoutDashboard],
-  ["scanner", "Material scanner", "کپڑے کا اسکینر", ScanLine],
-  ["production", "Production", "پیداوار", Factory],
-  ["inventory", "Inventory", "اسٹاک", Boxes],
-  ["orders", "Orders", "آرڈرز", ShoppingBag],
-  ["dispatch", "Dispatch", "ترسیل", Truck],
-  ["register", "Register view", "رجسٹر", BookOpen],
-  ["reports", "Reports", "رپورٹس", BarChart3],
+  ["overview", copy.today, copy.urdu2, LayoutDashboard],
+  ["production", copy.production, copy.urdu3, Factory],
+  ["inventory", copy.stock, copy.urdu4, Boxes],
+  ["orders", copy.orders, copy.urdu5, ShoppingBag],
+  ["dispatch", copy.dispatch, copy.urdu6, Truck],
+  ["register", copy.registers, copy.urdu7, BookOpen],
+  ["more", copy.more, copy.urdu8, Menu],
 ];
 const kindNames: Record<Kind, [string, string]> = {
-  production: ["Production", "پیداوار"],
-  receipt: ["Yarn receipt", "یارن کی وصولی"],
-  dispatch: ["Dispatch", "ترسیل"],
-  issue: ["Machine issue", "مشین کو اجرا"],
-  waste: ["Waste", "ضائع شدہ"],
-  cops: ["Cops produced", "کاپس کی پیداوار"],
-  reversal: ["Reversal", "واپسی اندراج"],
+  production: [copy.production, copy.urdu3],
+  receipt: [copy.yarnReceipt, copy.urdu9],
+  dispatch: [copy.dispatch, copy.urdu6],
+  issue: [copy.machineIssue, copy.urdu10],
+  waste: [copy.waste, copy.urdu11],
+  cops: [copy.copsProduced, copy.urdu12],
+  reversal: [copy.reversal, copy.urdu13],
 };
 function EntryTable({
   entries,
@@ -378,18 +316,18 @@ function EntryTable({
       className="table-scroll"
       tabIndex={0}
       role="region"
-      aria-label={t("Scrollable table", "اسکرول جدول")}
+      aria-label={t(copy.scrollableTable, copy.urdu14)}
     >
       <table>
         <thead>
           <tr>
-            <th>{t("Entry / material", "اندراج / یارن")}</th>
-            <th>{t("Machine / customer", "مشین / کسٹمر")}</th>
-            <th>{t("Quantity", "مقدار")}</th>
-            {!compact && <th>{t("Recorded by", "درج کرنے والا")}</th>}
-            <th>{t("Status", "حالت")}</th>
+            <th>{t(copy.entryMaterial, copy.urdu15)}</th>
+            <th>{t(copy.machineCustomer, copy.urdu16)}</th>
+            <th>{t(copy.quantity, copy.urdu17)}</th>
+            {!compact && <th>{t(copy.recordedBy, copy.urdu18)}</th>}
+            <th>{t(copy.status, copy.urdu19)}</th>
             <th>
-              <span className="sr-only">{t("Details", "تفصیل")}</span>
+              <span className="sr-only">{t(copy.details, copy.urdu20)}</span>
             </th>
           </tr>
         </thead>
@@ -417,8 +355,9 @@ function EntryTable({
                   <span>
                     <strong>{lots.find((l) => l.id === e.lot)?.spec}</strong>
                     <small>
-                      <bdi>{e.serial}</bdi> · {t("Lot", "لاٹ")}{" "}
-                      <bdi>{e.lot}</bdi>
+                      <bdi>{e.serial}</bdi>
+                      {copy.urdu21}
+                      {t(copy.lot, copy.urdu22)} <bdi>{e.lot}</bdi>
                     </small>
                   </span>
                 </button>
@@ -428,15 +367,20 @@ function EntryTable({
                   <bdi>{e.machine}</bdi>
                 </span>
                 <small>
-                  {t("Shift", "شفٹ")} <bdi>{e.shift}</bdi> · <bdi>{e.time}</bdi>
+                  {t(copy.shift, copy.urdu23)} <bdi>{e.shift}</bdi>
+                  {copy.urdu21}
+                  <bdi>{e.time}</bdi>
                 </small>
               </td>
               <td>
                 <strong className="number">
-                  <bdi>{fmt(e.grams / 1000, 3)} kg</bdi>
+                  <bdi>
+                    {fmt(e.grams / 1000, 3)}
+                    {copy.kg}
+                  </bdi>
                 </strong>
                 <small>
-                  <bdi>{e.cartons}</bdi> {t("cartons", "کارٹن")}
+                  <bdi>{e.cartons}</bdi> {t(copy.cartons, copy.urdu24)}
                 </small>
               </td>
               {!compact && (
@@ -455,18 +399,21 @@ function EntryTable({
               <td>
                 <Status tone={isReversed(e) ? "gray" : "green"}>
                   {t(
-                    isReversed(e) ? "Reversed" : "Saved locally",
-                    isReversed(e) ? "واپس کیا گیا" : "ڈیوائس پر محفوظ",
+                    isReversed(e) ? copy.reversed : copy.savedLocally,
+                    isReversed(e) ? copy.urdu25 : copy.urdu26,
                   )}
                 </Status>
               </td>
               <td>
                 <button
                   className="icon-button"
-                  aria-label={t("View entry", "اندراج دیکھیں")}
+                  aria-label={t(copy.viewEntry, copy.urdu27)}
                   onClick={() => onDetail(e)}
                 >
                   <ChevronRight size={17} />
+                  <span className="control-label">
+                    {t(copy.viewEntry, copy.urdu27)}
+                  </span>
                 </button>
               </td>
             </tr>
@@ -476,130 +423,134 @@ function EntryTable({
     </div>
   ) : (
     <Empty
-      title={t("No entries yet", "ابھی کوئی اندراج نہیں")}
-      detail={t(
-        "Your saved entries will appear here.",
-        "محفوظ اندراجات یہاں نظر آئیں گے۔",
-      )}
+      title={t(copy.noEntriesYet, copy.urdu28)}
+      detail={t(copy.yourSavedEntriesWillAppearHere, copy.urdu29)}
     />
   );
 }
-function ProductionChart({
-  period,
-  onTable,
-  entries,
-}: {
-  period: string;
-  onTable: () => void;
-  entries: Entry[];
-}) {
+function ProductionChart({ entries }: { entries: Entry[] }) {
   const t = useT();
-  const [hover, setHover] = useState<number | null>(null);
-  const weekly = period !== "Today";
-  const labels = weekly
-    ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-    : ["06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00"];
-  const produced = entries.reduce((sum, e) => sum + e.grams / 1000, 0);
-  const values = weekly
-    ? [2180, 2510, 2250, 3180, 2820, 3100, produced]
-    : labels.map((time) =>
-        entries
-          .filter((e) => e.time <= time)
-          .reduce((sum, e) => sum + e.grams / 1000, 0),
-      );
-  const max = Math.max(4000, Math.ceil(Math.max(...values) / 1000) * 1000);
-  const points = values.map((value, i) => ({
-    x: i * 120,
-    y: 195 - (value / max) * 180,
-  }));
-  const path = points.reduce(
-    (path, p, i) =>
-      i === 0
-        ? `M${p.x} ${p.y}`
-        : path +
-          ` C${points[i - 1].x + 60} ${points[i - 1].y} ${p.x - 60} ${p.y} ${p.x} ${p.y}`,
-    "",
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date(today() + "T12:00:00+05:00");
+    date.setUTCDate(date.getUTCDate() - 6 + i);
+    const key = new Intl.DateTimeFormat("en-CA", {
+      timeZone: copy.asiaKarachi,
+    }).format(date);
+    return {
+      key,
+      label: new Intl.DateTimeFormat(
+        document.documentElement.lang === "ur" ? "ur-PK" : "en-GB",
+        { weekday: "short", timeZone: copy.asiaKarachi },
+      ).format(date),
+      value: entries
+        .filter((e) => e.date === key && e.kind === "production")
+        .reduce((sum, e) => sum + e.grams / 1000, 0),
+    };
+  });
+  const max = Math.max(
+    4000,
+    Math.ceil(Math.max(...days.map((d) => d.value)) / 1000) * 1000,
   );
   return (
-    <div className="chart-wrap" dir="ltr">
-      <div className="chart-y">
-        {[max, max * 0.75, max * 0.5, max * 0.25, 0].map((value) => (
-          <span key={value}>{fmt(value, 0)}</span>
-        ))}
-      </div>
-      <div className="chart-main">
-        <svg
-          viewBox="0 0 720 215"
-          preserveAspectRatio="none"
-          role="img"
-          aria-label={t(
-            "Production trend in kilograms",
-            "کلوگرام میں پیداوار کا رجحان",
-          )}
-        >
-          <defs>
-            <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-              <stop stopColor="#a38bdd" stopOpacity=".28" />
-              <stop offset="1" stopColor="#a38bdd" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {[15, 60, 105, 150, 195].map((y) => (
-            <line
-              key={y}
-              x1="0"
-              x2="720"
-              y1={y}
-              y2={y}
-              stroke="#e8e7f0"
-              strokeDasharray="4 5"
-            />
+    <div className="weekly-chart" dir="ltr">
+      <p className="chart-target">
+        {t(copy.dailyTarget, copy.urdu30)}
+        {copy.label3000Kg}
+      </p>
+      <div className="bar-plot">
+        <div className="bar-axis">
+          {[max, max * 0.75, max * 0.5, max * 0.25, 0].map((n) => (
+            <span key={n}>{fmt(n, 0)}</span>
           ))}
-          <line
-            x1="0"
-            x2="720"
-            y1={195 - (3000 / max) * 180}
-            y2={195 - (3000 / max) * 180}
-            stroke="#beb5d3"
-            strokeWidth="2"
-            strokeDasharray="6 6"
-          />
-          <path d={path + " L720 215 L0 215Z"} fill="url(#chartFill)" />
-          <path d={path} stroke="#8c72cc" strokeWidth="3" fill="none" />
-          {points.map((point, i) => (
-            <rect
-              key={i}
-              x={Math.max(0, point.x - 50)}
-              y="0"
-              width="100"
-              height="215"
-              fill="transparent"
-              onMouseEnter={() => setHover(i)}
-              onMouseLeave={() => setHover(null)}
-            />
-          ))}
-        </svg>
-        {hover !== null && (
+        </div>
+        <div className="bar-columns">
           <div
-            className="chart-tooltip"
-            style={{ insetInlineStart: `${Math.min(hover * 14, 75)}%` }}
+            className="target-rule"
+            style={{ bottom: `${(3000 / max) * 100}%` }}
           >
-            {labels[hover]} · {fmt(values[hover])} kg
+            <span>{t(copy.target, copy.urdu34)}</span>
           </div>
-        )}
-        <div className="chart-x">
-          {labels.map((l) => (
-            <span key={l}>{l}</span>
+          {days.map((d) => (
+            <div className="bar-column" key={d.key}>
+              {d.value > 0 && (
+                <span className="bar-quantity">{fmt(d.value, 0)}</span>
+              )}
+              <div
+                className={`production-bar ${d.key === today() ? "is-today" : ""}`}
+                style={{ height: `${(d.value / max) * 100}%` }}
+              />
+              <span className="bar-day">{d.label}</span>
+            </div>
           ))}
         </div>
       </div>
-      <button className="sr-only focus-show" onClick={onTable}>
-        {t("View chart data as a table", "چارٹ کا ڈیٹا جدول میں دیکھیں")}
-      </button>
+      <p className="chart-note">
+        {t(copy.chartRecordedDays, copy.chartRecordedDaysUr)}
+      </p>
+      <details className="chart-table">
+        <summary>{t(copy.showDailyFigures, copy.urdu32)}</summary>
+        <table>
+          <thead>
+            <tr>
+              <th>{t(copy.date, copy.urdu33)}</th>
+              <th>{copy.kg}</th>
+              <th>{t(copy.target, copy.urdu34)}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map((d) => (
+              <tr key={d.key}>
+                <td>{d.key}</td>
+                <td>
+                  {d.value > 0
+                    ? fmt(d.value, 0)
+                    : t(copy.noRecordedProduction, copy.noRecordedProductionUr)}
+                </td>
+                <td>{copy.label3000Kg2}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
     </div>
   );
 }
+function Choices({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: {
+    value: string;
+    label: string;
+  }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <fieldset className="choice-field">
+      <legend>{label}</legend>
+      <div className="choice-grid">
+        {options.map((option) => (
+          <button
+            type="button"
+            key={option.value}
+            aria-pressed={value === option.value}
+            className={value === option.value ? "selected" : ""}
+            onClick={() => onChange(option.value)}
+          >
+            {value === option.value && <Check size={20} />}
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 function EntryForm({
-  kind: initialKind,
+  kind,
   entries,
   onSave,
   onClose,
@@ -614,402 +565,368 @@ function EntryForm({
   user: string;
 }) {
   const t = useT();
-  type Draft = {
-    kind: Kind;
-    machine: string;
-    lot: string;
-    cartons: string;
-    cones: string;
-    weight: string;
-    notes: string;
-    date: string;
-    shift: string;
-    id: string;
-  };
-  const [draft, setDraft] = useStored<Draft>(
-    `yf-draft-v1-${user}-${initialKind}`,
-    {
-      kind: initialKind,
-      machine: "1A",
-      lot: "1221",
-      cartons: "12",
-      cones: "288",
-      weight: "258.660",
-      notes: "",
-      date: today(),
-      shift: "A",
-      id: crypto.randomUUID(),
-    },
-  );
-  const [review, setReview] = useState(false);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [restored, setRestored] = useState(
-    () => !!localStorage.getItem(`yf-draft-v1-${user}-${initialKind}`),
-  );
-  const allowedMachines =
-    initialKind === "dispatch"
-      ? ["Lahore Knitwear", "Style Textile", "Sapphire Finishing"]
-      : initialKind === "receipt"
-        ? ["Crescent Textiles", "Nishat Mills", "Ibrahim Fibres"]
+  const storageKey = `yf-draft-v2-${user}-${kind}`;
+  const machines =
+    kind === "dispatch"
+      ? [copy.lahoreKnitwear, copy.styleTextile, copy.sapphireFinishing]
+      : kind === "receipt"
+        ? [copy.crescentTextiles, copy.nishatMills, copy.ibrahimFibres]
         : ["1A", "1B", "2A", "2B", "3A", "3B"];
-  const d = {
-    ...draft,
-    kind: initialKind,
-    machine: allowedMachines.includes(draft.machine)
-      ? draft.machine
-      : allowedMachines[0],
-  };
-  const set = (key: keyof Draft, value: string) => {
+  const [d, setDraft] = useStored(storageKey, {
+    date: today(),
+    shift: currentShift(),
+    machine: localStorage.getItem(`yf-last-machine-${kind}`) || machines[0],
+    lot: lots[0].id,
+    cartons: "",
+    cones: "",
+    weight: "",
+    notes: "",
+    id: crypto.randomUUID(),
+  });
+  const [step, setStep] = useState(1);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const set = (key: keyof typeof d, value: string) => {
     setDraft({ ...d, [key]: value });
     setError("");
   };
-  const available = balance(
-    entries,
-    d.lot,
-    ["dispatch", "production"].includes(d.kind) ? "finished" : "raw",
+  const lot = lots.find((l) => l.id === d.lot)!;
+  const stockStage: Stage =
+    kind === "waste" ? "wip" : kind === "dispatch" ? "finished" : "raw";
+  const available = balance(entries, d.lot, stockStage);
+  const removesStock = ["dispatch", "issue", "waste"].includes(kind);
+  const weightError =
+    d.weight && !/^\d+(\.\d{1,3})?$/.test(d.weight)
+      ? t(copy.enterAWeightSuchAs520Or, copy.label520520250)
+      : d.weight && Number(d.weight) <= 0
+        ? t(copy.weightMustBeGreaterThanZero, copy.urdu35)
+        : removesStock && Number(d.weight) * 1000 > available.grams
+          ? t(
+              copy.only0KgIsAvailableReduceThe(fmt(available.grams / 1000, 3)),
+              copy.label0(fmt(available.grams / 1000, 3)),
+            )
+          : "";
+  const countError = (value: string, limit: number) =>
+    value && (!/^\d+$/.test(value) || (removesStock && Number(value) > limit))
+      ? t(copy.enterAWholeNumberWithinTheAvailable, copy.urdu36)
+      : "";
+  const cartonsError = countError(d.cartons, available.cartons);
+  const conesError = countError(d.cones, available.cones);
+  const dateError =
+    !d.date || d.date > today()
+      ? t(copy.chooseTodayOrAnEarlierDate, copy.urdu37)
+      : closed && d.date === today()
+        ? t(copy.todayIsClosedAskTheManagerTo, copy.urdu38)
+        : "";
+  const holdError =
+    kind === "dispatch" && lot.status === "hold"
+      ? t(copy.thisLotIsOnQcHoldChoose, copy.urdu39)
+      : "";
+  const canContinue =
+    step === 1
+      ? !dateError && !holdError
+      : !!d.weight &&
+        !weightError &&
+        !!d.cartons &&
+        !cartonsError &&
+        !!d.cones &&
+        !conesError;
+  const locationLabel = t(
+    kind === "dispatch"
+      ? copy.customer
+      : kind === "receipt"
+        ? copy.supplier
+        : copy.machine,
+    kind === "dispatch"
+      ? copy.urdu40
+      : kind === "receipt"
+        ? copy.urdu41
+        : copy.urdu42,
   );
-  const selectedLot = lots.find((l) => l.id === d.lot)!;
-  function validate() {
-    if (closed && d.date === today()) throw new Error("closed");
-    return appendEntry(
-      entries,
-      createEntry(
+  const heading = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, [step]);
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (step < 3) {
+      if (canContinue) setStep(step + 1);
+      return;
+    }
+    try {
+      setSaving(true);
+      const entry = createEntry(
         {
-          kind: d.kind,
+          kind,
+          date: d.date,
+          shift: d.shift,
+          machine: d.machine,
           lot: d.lot,
           grams: kgToGrams(d.weight),
           cartons: Number(d.cartons),
           cones: Number(d.cones),
-          machine:
-            d.kind === "dispatch"
-              ? d.machine.includes(" ")
-                ? d.machine
-                : "Lahore Knitwear"
-              : d.machine,
           notes: d.notes,
-          shift: d.shift,
-          date: d.date,
         },
         d.id,
-      ),
-    ).at(-1)!;
-  }
-  const errors: Record<string, string> = {
-    weight: t(
-      "Enter a positive weight with up to 3 decimal places, for example 258.660.",
-      "مثبت وزن درج کریں، اعشاریہ کے بعد زیادہ سے زیادہ ۳ ہندسے۔",
-    ),
-    stock: t(
-      `Only ${fmt(available.grams / 1000)} kg and ${available.cartons} cartons are available in this lot. Reduce the quantity.`,
-      `اس لاٹ میں صرف ${fmt(available.grams / 1000)} کلو اور ${available.cartons} کارٹن دستیاب ہیں۔ مقدار کم کریں۔`,
-    ),
-    hold: t(
-      "This lot is on QC hold. Select a released lot before dispatch.",
-      "اس لاٹ کی کوالٹی جانچ باقی ہے۔ دوسری لاٹ منتخب کریں۔",
-    ),
-    future: t(
-      "Choose today or an earlier business date.",
-      "آج یا پہلے کی تاریخ منتخب کریں۔",
-    ),
-    quantity: t(
-      "Use whole, positive quantities for cartons and cones.",
-      "کارٹن اور کونز کی درست مثبت تعداد درج کریں۔",
-    ),
-    closed: t(
-      "This day is closed. Ask the manager to reopen it before recording an entry.",
-      "یہ دن بند ہے۔ اندراج سے پہلے مینیجر سے دن کھلوائیں۔",
-    ),
-  };
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    try {
-      const entry = validate();
-      if (!review) {
-        setReview(true);
-        return;
-      }
-      setBusy(true);
-      onSave(entry);
-      localStorage.removeItem(`yf-draft-v1-${user}-${initialKind}`);
-    } catch (e) {
-      setError(
-        errors[e instanceof Error ? e.message : ""] ||
-          t(
-            "Could not save. Check the fields and try again.",
-            "محفوظ نہیں ہوا۔ معلومات چیک کر کے دوبارہ کوشش کریں۔",
-          ),
       );
-      setBusy(false);
+      appendEntry(entries, entry);
+      localStorage.setItem(`yf-last-machine-${kind}`, d.machine);
+      onSave(entry);
+      localStorage.removeItem(storageKey);
+    } catch {
+      setError(t(copy.couldNotSaveThisEntryCheckThe, copy.urdu43));
+      setSaving(false);
     }
   }
   return (
-    <form onSubmit={submit} className="entry-form">
-      {restored && !review && (
-        <div className="info-banner">
-          <FileText size={18} />
-          {t(
-            "Your unfinished entry is saved on this device.",
-            "آپ کا نامکمل اندراج اس ڈیوائس پر محفوظ ہے۔",
-          )}
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => setRestored(false)}
-          >
-            {t("Continue", "جاری رکھیں")}
-          </button>
-        </div>
-      )}
-      <div className="step-indicator">
-        <span className={!review ? "current" : "done"}>
-          {review ? <Check size={14} /> : "1"}
+    <form onSubmit={submit} className="entry-form register-form">
+      <div ref={heading} tabIndex={-1} className="form-step-heading">
+        <strong>{t(copy.step0Of3(step), copy.label03(step))}</strong>
+        <span>
+          {step === 1
+            ? t(copy.dateMachineAndLot, copy.urdu44)
+            : step === 2
+              ? t(copy.quantities, copy.urdu17)
+              : t(copy.reviewEntry, copy.urdu45)}
         </span>
-        <b>{t("Entry details", "اندراج کی تفصیل")}</b>
-        <div />
-        <span className={review ? "current" : ""}>2</span>
-        <b>{t("Review & save", "جائزہ اور محفوظ")}</b>
       </div>
-      {review ? (
+      <p className="draft-status">
+        <CheckCheck size={18} />
+        {t(copy.draftSavedOnThisDevice, copy.urdu46)}
+      </p>
+      {step === 1 && (
         <>
-          <div className="review-card">
-            <span className="feature-icon">
-              <Icon icon={Factory} size={28} />
-            </span>
-            <h3>{t("Everything look right?", "کیا معلومات درست ہیں؟")}</h3>
-            <p>
-              {t("You are recording", "آپ درج کر رہے ہیں")}{" "}
-              <strong>
-                <bdi>{d.cartons}</bdi> {t("cartons", "کارٹن")} ·{" "}
-                <bdi>{fmt(Number(d.weight), 3)} kg</bdi>
-              </strong>{" "}
-              {t("of", "کی")} <strong>{selectedLot.spec}</strong> ·{" "}
-              {t("Lot", "لاٹ")} <bdi>{d.lot}</bdi>.
+          <label>
+            {t(copy.date, copy.urdu33)}
+            <input
+              type="date"
+              required
+              max={today()}
+              value={d.date}
+              onChange={(e) => set("date", e.target.value)}
+              aria-invalid={!!dateError}
+              aria-describedby={dateError ? "date-error" : undefined}
+            />
+          </label>
+          {dateError && (
+            <p id="date-error" className="field-error" role="alert">
+              {dateError}
             </p>
-            <dl>
-              <div>
-                <dt>{t("Entry type", "اندراج کی قسم")}</dt>
-                <dd>{t(...kindNames[d.kind])}</dd>
-              </div>
-              <div>
-                <dt>{t("Machine / customer", "مشین / کسٹمر")}</dt>
-                <dd>
-                  <bdi>{d.machine}</bdi>
-                </dd>
-              </div>
-              <div>
-                <dt>{t("Date / shift", "تاریخ / شفٹ")}</dt>
-                <dd>
-                  <bdi>{d.date}</bdi> · {d.shift}
-                </dd>
-              </div>
-              <div>
-                <dt>{t("Cones", "کونز")}</dt>
-                <dd>
-                  <bdi>{d.cones}</bdi>
-                </dd>
-              </div>
-            </dl>
-            <div className="info-banner">
-              <ShieldCheck size={18} />
-              {t(
-                "Practice entry. Saved locally, never sent to a factory server.",
-                "مشق کا اندراج۔ صرف اس ڈیوائس پر محفوظ ہوگا۔",
-              )}
-            </div>
-          </div>
+          )}
+          <Choices
+            label={t(copy.shift, copy.urdu23)}
+            value={d.shift}
+            options={[
+              { value: "A", label: copy.shiftA },
+              { value: "B", label: copy.shiftB },
+              { value: "C", label: copy.shiftC },
+            ]}
+            onChange={(v) => set("shift", v)}
+          />
+          <Choices
+            label={locationLabel}
+            value={d.machine}
+            options={machines.map((m) => ({ value: m, label: m }))}
+            onChange={(v) => set("machine", v)}
+          />
+          <Choices
+            label={t(copy.yarnAndLot, copy.urdu47)}
+            value={d.lot}
+            options={lots.map((l) => ({
+              value: l.id,
+              label: `${t(copy.lot, copy.urdu22)} ${l.id} · ${l.spec}${l.status === "hold" ? ` · ${t(copy.qcHold, copy.urdu48)}` : ""}`,
+            }))}
+            onChange={(v) => set("lot", v)}
+          />
+          {holdError && (
+            <p className="field-error" role="alert">
+              {holdError}
+            </p>
+          )}
         </>
-      ) : (
+      )}
+      {step === 2 && (
         <>
+          <p className="register-context">
+            {locationLabel}
+            {copy.urdu49}
+            <strong>{d.machine}</strong>
+            {copy.urdu21}
+            {t(copy.lot, copy.urdu22)} <bdi>{d.lot}</bdi>
+            {copy.urdu21}
+            {t(copy.shift, copy.urdu23)} <bdi>{d.shift}</bdi>
+          </p>
+          {removesStock && (
+            <p className="stock-available">
+              {t(copy.available, copy.urdu50)}
+              {copy.urdu49}
+              {fmt(available.grams / 1000, 3)}
+              {copy.kg2}
+              {available.cartons} {t(copy.cartons, copy.urdu24)}
+              {copy.urdu21}
+              {available.cones} {t(copy.cones, copy.urdu51)}
+            </p>
+          )}
           <div className="form-grid">
             <label>
-              {t("Business date", "کاروباری تاریخ")}
+              {t(copy.cartons2, copy.urdu24)}
               <input
                 required
-                type="date"
-                max={today()}
-                value={d.date}
-                onChange={(e) => set("date", e.target.value)}
+                inputMode="numeric"
+                value={d.cartons}
+                aria-invalid={!!cartonsError}
+                aria-describedby={cartonsError ? "cartons-error" : undefined}
+                onChange={(e) => {
+                  setDraft({
+                    ...d,
+                    cartons: e.target.value,
+                    cones: /^\d*$/.test(e.target.value)
+                      ? String(Number(e.target.value) * 24)
+                      : d.cones,
+                  });
+                  setError("");
+                }}
               />
-            </label>
-            <label>
-              {t("Shift", "شفٹ")}
-              <select
-                value={d.shift}
-                onChange={(e) => set("shift", e.target.value)}
-              >
-                <option value="A">A · 07:00–15:00</option>
-                <option value="B">B · 15:00–23:00</option>
-                <option value="C">C · 23:00–07:00</option>
-              </select>
-            </label>
-            <label>
-              {t(
-                d.kind === "dispatch"
-                  ? "Customer"
-                  : d.kind === "receipt"
-                    ? "Supplier"
-                    : "Machine",
-                d.kind === "dispatch"
-                  ? "کسٹمر"
-                  : d.kind === "receipt"
-                    ? "سپلائر"
-                    : "مشین",
+              {cartonsError && (
+                <span id="cartons-error" className="field-error">
+                  {cartonsError}
+                </span>
               )}
-              <select
-                value={d.machine}
-                onChange={(e) => set("machine", e.target.value)}
-              >
-                {(d.kind === "dispatch"
-                  ? ["Lahore Knitwear", "Style Textile", "Sapphire Finishing"]
-                  : d.kind === "receipt"
-                    ? ["Crescent Textiles", "Nishat Mills", "Ibrahim Fibres"]
-                    : ["1A", "1B", "2A", "2B", "3A", "3B"]
-                ).map((m) => (
-                  <option key={m}>{m}</option>
-                ))}
-              </select>
             </label>
             <label>
-              {t("Yarn & lot", "یارن اور لاٹ")}
-              <select
-                value={d.lot}
-                onChange={(e) => set("lot", e.target.value)}
-              >
-                {lots.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.id} · {l.spec}
-                    {l.status === "hold" ? " · QC HOLD" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="lot-context">
-            <span className="row-icon lavender">
-              <Boxes size={20} />
-            </span>
-            <div>
-              <strong>{selectedLot.spec}</strong>
-              <small>
-                {t("Available", "دستیاب")}:{" "}
-                <bdi>{fmt(available.grams / 1000, 3)} kg</bdi> ·{" "}
-                <bdi>{available.cartons}</bdi> {t("cartons", "کارٹن")}
-              </small>
-            </div>
-            <Status tone={selectedLot.status === "hold" ? "amber" : "green"}>
-              {selectedLot.status === "hold"
-                ? t("QC hold", "جانچ باقی")
-                : t("Active lot", "فعال لاٹ")}
-            </Status>
-          </div>
-          <div className="form-grid three">
-            <label>
-              {t("Cartons", "کارٹن")}
-              <div className="stepper">
-                <button
-                  type="button"
-                  aria-label={t("Fewer cartons", "کارٹن کم کریں")}
-                  onClick={() =>
-                    set("cartons", String(Math.max(0, Number(d.cartons) - 1)))
-                  }
-                >
-                  <Minus size={16} />
-                </button>
-                <input
-                  aria-label={t("Cartons", "کارٹن")}
-                  required
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={d.cartons}
-                  onChange={(e) => {
-                    setDraft({
-                      ...d,
-                      cartons: e.target.value,
-                      cones: String(Number(e.target.value) * 24),
-                    });
-                  }}
-                />
-                <button
-                  type="button"
-                  aria-label={t("More cartons", "کارٹن بڑھائیں")}
-                  onClick={() => set("cartons", String(Number(d.cartons) + 1))}
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
-            </label>
-            <label>
-              {t("Cones", "کونز")}
+              {t(copy.cones2, copy.urdu51)}
               <input
                 required
-                type="number"
-                min="1"
-                step="1"
+                inputMode="numeric"
                 value={d.cones}
                 onChange={(e) => set("cones", e.target.value)}
+                aria-invalid={!!conesError}
+                aria-describedby={conesError ? "cones-error" : undefined}
               />
+              {conesError && (
+                <span id="cones-error" className="field-error">
+                  {conesError}
+                </span>
+              )}
             </label>
-            <label>
-              {t("Net weight (kg)", "خالص وزن (کلو)")}
+          </div>
+          <label>
+            {t(copy.netWeight, copy.urdu52)}
+            <div className="quantity-input">
               <input
+                autoFocus
                 required
                 inputMode="decimal"
                 value={d.weight}
                 onChange={(e) => set("weight", e.target.value)}
+                aria-label={t(copy.netWeightInKilograms, copy.urdu53)}
+                aria-invalid={!!weightError}
+                aria-describedby="weight-help"
               />
-            </label>
-          </div>
+              <span>{copy.kg}</span>
+            </div>
+            <span
+              id="weight-help"
+              className={weightError ? "field-error" : "field-help"}
+            >
+              {weightError || t(copy.useTheWeightOnTheScaleUp, copy.urdu54)}
+            </span>
+          </label>
           <label>
-            {t("Notes", "نوٹس")}{" "}
-            <span className="optional">{t("(optional)", "(اختیاری)")}</span>
+            {t(copy.notesOptional, copy.urdu55)}
             <textarea
-              maxLength={500}
               rows={2}
-              placeholder={t(
-                "Anything the next shift should know?",
-                "اگلی شفٹ کے لیے کوئی ضروری بات؟",
-              )}
+              maxLength={500}
               value={d.notes}
               onChange={(e) => set("notes", e.target.value)}
             />
           </label>
-          <small className="form-footnote">
-            {t(
-              "Draft saves automatically. Quantities update your practice stock.",
-              "مسودہ خود محفوظ ہوتا ہے۔ مقدار مشق کے اسٹاک میں شامل ہوگی۔",
-            )}
-          </small>
         </>
       )}
+      {step === 3 && (
+        <section className="entry-review">
+          <h3>{t(copy.checkBeforeSaving, copy.urdu56)}</h3>
+          <p className="register-line">
+            {t(
+              copy.registerSummary(
+                d.date,
+                d.shift,
+                locationLabel,
+                d.machine,
+                d.lot,
+                d.cartons,
+                d.cones,
+                fmt(Number(d.weight), 3),
+              ),
+              copy.registerSummaryUr(
+                d.date,
+                d.shift,
+                locationLabel,
+                d.machine,
+                d.lot,
+                d.cartons,
+                d.cones,
+                fmt(Number(d.weight), 3),
+              ),
+            )}
+          </p>
+          <dl>
+            <div>
+              <dt>{t(copy.yarn, copy.urdu57)}</dt>
+              <dd>{lot.spec}</dd>
+            </div>
+            <div>
+              <dt>{t(copy.recordedBy, copy.urdu18)}</dt>
+              <dd>{user}</dd>
+            </div>
+            {d.notes && (
+              <div>
+                <dt>{t(copy.notes, copy.urdu58)}</dt>
+                <dd>{d.notes}</dd>
+              </div>
+            )}
+          </dl>
+          <p>
+            {t(copy.practiceEntryThisChangesPracticeStockOnly, copy.urdu59)}
+          </p>
+        </section>
+      )}
       {error && (
-        <div className="error-banner" role="alert">
+        <p className="error-banner" role="alert">
           <AlertTriangle size={20} />
           {error}
-        </div>
+        </p>
       )}
       <div className="modal-actions">
-        <Button onClick={review ? () => setReview(false) : onClose}>
-          {review
-            ? t("Back to edit", "واپس ترمیم کریں")
-            : t("Save draft & close", "مسودہ رکھیں اور بند کریں")}
+        <Button onClick={() => (step === 1 ? onClose() : setStep(step - 1))}>
+          {step === 1
+            ? t(copy.saveDraftAndClose, copy.urdu60)
+            : t(copy.back, copy.urdu61)}
         </Button>
         <Button
           type="submit"
           variant="primary"
-          icon={review ? Check : ArrowRight}
-          disabled={busy}
+          disabled={saving || (step < 3 && !canContinue)}
         >
-          {busy
-            ? t("Saving…", "محفوظ ہو رہا ہے…")
-            : review
-              ? t("Confirm & save", "تصدیق اور محفوظ")
-              : t("Review entry", "اندراج کا جائزہ")}
+          {saving
+            ? t(copy.saving, copy.urdu62)
+            : step === 3
+              ? t(copy.saveEntry, copy.urdu63)
+              : t(copy.continue, copy.urdu64)}
         </Button>
       </div>
     </form>
   );
+}
+function currentShift() {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: copy.asiaKarachi,
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date()),
+  );
+  return hour >= 7 && hour < 15 ? "A" : hour >= 15 && hour < 23 ? "B" : "C";
 }
 function Login({
   onEnter,
@@ -1022,7 +939,7 @@ function Login({
 }) {
   const t = useT();
   const [pin, setPin] = useState("");
-  const [profile, setProfile] = useState("Ahmed Khan");
+  const [profile, setProfile] = useState<string>(copy.ahmedKhan);
   const [error, setError] = useState(false);
   function enter(e?: FormEvent) {
     e?.preventDefault();
@@ -1034,67 +951,24 @@ function Login({
   }
   return (
     <div className="login-page">
-      <section className="login-story">
-        <Logo />
-        <div className="login-story-text">
-          <span className="eyebrow">
-            {t(
-              "A LITTLE CLARITY. A LOT OF POSSIBILITIES.",
-              "ہر قدم پر وضاحت، ہر دن نئی کامیابی۔",
-            )}
-          </span>
-          <h1>
-            {t("Good things", "بہتر کام")}
-            <br />
-            {t("come together.", "ایک ساتھ۔")}
-          </h1>
-          <p>
-            {t(
-              "From the first cone to the final delivery. Keep your people, production, and possibilities in flow.",
-              "پہلے کون سے آخری ترسیل تک۔ آپ کی ٹیم، پیداوار اور اسٹاک ایک جگہ۔",
-            )}
-          </p>
-        </div>
-        <YarnArt large />
-        <div className="login-story-bottom">
-          <span>
-            <ShieldCheck size={18} />
-            {t("Built for your factory floor", "آپ کی فیکٹری کے لیے بنایا گیا")}
-          </span>
-          <span>01 — 03</span>
-        </div>
-      </section>
       <section className="login-side">
         <button className="language-button" onClick={onLanguage}>
           <Globe2 size={17} />
-          {ur ? "English" : "اردو"}
+          {ur ? copy.english : copy.urdu65}
           <ChevronDown size={14} />
         </button>
         <form className="login-card glass" onSubmit={enter}>
-          <span className="welcome-icon">
-            <Sparkles size={27} />
-          </span>
-          <span className="eyebrow">
-            {t("YOUR WORKSPACE IS READY", "آپ کا ورک اسپیس تیار ہے")}
-          </span>
-          <h2>{t("Welcome back.", "خوش آمدید۔")}</h2>
-          <p>
-            {t(
-              "Pick your profile and enter your PIN to get started.",
-              "اپنا پروفائل منتخب کریں اور پن درج کریں۔",
+          <Logo />
+          <h1>{t(copy.signIn, copy.urdu66)}</h1>
+          <p>{t(copy.pickYourProfileAndEnterYourPin, copy.urdu67)}</p>
+          <Choices
+            label={t(copy.yourName, copy.urdu68)}
+            value={profile}
+            options={[copy.ahmedKhan, copy.asifAli, copy.muhammadBilal].map(
+              (name) => ({ value: name, label: name }),
             )}
-          </p>
-          <label>
-            {t("Continue as", "اس نام سے جاری رکھیں")}
-            <select
-              value={profile}
-              onChange={(e) => setProfile(e.target.value)}
-            >
-              <option>Ahmed Khan</option>
-              <option>Asif Ali</option>
-              <option>Muhammad Bilal</option>
-            </select>
-          </label>
+            onChange={setProfile}
+          />
           <div className="profile-preview">
             <span className="avatar">
               {profile
@@ -1104,12 +978,12 @@ function Login({
             </span>
             <div>
               <strong>{profile}</strong>
-              <small>{t("Practice profile", "مشق کا پروفائل")}</small>
+              <small>{t(copy.practiceProfile, copy.urdu69)}</small>
             </div>
-            <Status tone="purple">{t("Demo", "ڈیمو")}</Status>
+            <Status tone="purple">{t(copy.demo, copy.urdu70)}</Status>
           </div>
           <label>
-            {t("Your 4-digit PIN", "آپ کا ۴ ہندسوں کا پن")}
+            {t(copy.your4DigitPin, copy.urdu71)}
             <input
               className="pin-input"
               type="password"
@@ -1121,9 +995,9 @@ function Login({
                 setPin(e.target.value.replace(/\D/g, ""));
                 setError(false);
               }}
-              aria-label={t("Your 4-digit PIN", "آپ کا پن")}
+              aria-label={t(copy.your4DigitPin, copy.urdu72)}
               required
-              placeholder="• • • •"
+              placeholder={copy.urdu73}
             />
           </label>
           <div className="pin-pad">
@@ -1146,9 +1020,9 @@ function Login({
                 type="button"
                 aria-label={
                   n === "delete"
-                    ? t("Delete digit", "ہندسہ مٹائیں")
+                    ? t(copy.deleteDigit, copy.urdu74)
                     : n === "clear"
-                      ? t("Clear PIN", "پن صاف کریں")
+                      ? t(copy.clearPin, copy.urdu75)
                       : n
                 }
                 onClick={() => {
@@ -1163,9 +1037,9 @@ function Login({
                 }}
               >
                 {n === "delete" ? (
-                  <Delete size={20} />
+                  <span>{t(copy.deleteDigit, copy.urdu74)}</span>
                 ) : n === "clear" ? (
-                  t("Clear", "صاف")
+                  t(copy.clear, copy.urdu76)
                 ) : (
                   n
                 )}
@@ -1174,39 +1048,25 @@ function Login({
           </div>
           {error && (
             <div className="error-banner" role="alert">
-              {t(
-                "Use 1234 to enter this practice workspace.",
-                "مشق کے لیے پن 1234 استعمال کریں۔",
-              )}
+              {t(copy.use1234ToEnterThisPracticeWorkspace, copy.label1234)}
             </div>
           )}
           <Button type="submit" variant="primary full" icon={ArrowRight}>
-            {t("Enter workspace", "ورک اسپیس کھولیں")}
+            {t(copy.enterWorkspace, copy.urdu77)}
           </Button>
           <div className="demo-pin">
             <LockKeyhole size={14} />
-            {t(
-              "Practice workspace · Demo PIN: 1234",
-              "مشق کا ورک اسپیس · ڈیمو پن: 1234",
-            )}
+            {t(copy.practiceWorkspaceDemoPin1234, copy.label12342)}
           </div>
           <button
             type="button"
             className="text-button forgot"
             onClick={() => setError(true)}
           >
-            {t("Forgot your PIN?", "پن بھول گئے؟")}{" "}
-            <strong>{t("Ask your supervisor", "سپروائزر سے پوچھیں")}</strong>
+            {t(copy.forgotYourPin, copy.urdu78)}{" "}
+            <strong>{t(copy.askYourSupervisor, copy.urdu79)}</strong>
           </button>
         </form>
-        <p className="login-footer">
-          {t(
-            "Less paperwork. More peace of mind.",
-            "کم کاغذی کام۔ زیادہ اطمینان۔",
-          )}
-          <br />
-          <span>Yarnflow © 2026</span>
-        </p>
       </section>
     </div>
   );
@@ -1227,7 +1087,7 @@ function Workspace({
   setUr: (v: boolean) => void;
 }) {
   const t = useT();
-  const [user, setUser] = useStored("yf-user", "Ahmed Khan");
+  const [user, setUser] = useStored<string>("yf-user", copy.ahmedKhan);
   const initials = user
     .split(" ")
     .map((word) => word[0])
@@ -1242,13 +1102,13 @@ function Workspace({
   );
   const [orders, setOrders] = useStored<Order[]>("yf-orders-v1", seedOrders);
   const [theme, setTheme] = useStored("yf-theme", "light");
-  const [factoryName, setFactoryName] = useStored(
+  const [factoryName, setFactoryName] = useStored<string>(
     "yf-factory",
-    "Crescent Yarn Mills",
+    copy.crescentYarnMills,
   );
   const [closed, setClosed] = useStored("yf-closed-v1", "");
   const [query, setQuery] = useState("");
-  const [period, setPeriod] = useState("This week");
+  const [period, setPeriod] = useState(copy.thisWeek);
   const [stage, setStage] = useState<Stage>("finished");
   const [filter, setFilter] = useState("all");
   const [registerTab, setRegisterTab] = useState("production");
@@ -1259,9 +1119,11 @@ function Workspace({
     kind?: Kind;
     report?: string;
   } | null>(null);
-  const [toast, setToast] = useState<{ text: string; entry?: Entry } | null>(
-    null,
-  );
+  const [toast, setToast] = useState<{
+    text: string;
+    entry?: Entry;
+  } | null>(null);
+  const [storageError, setStorageError] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [orderTab, setOrderTab] = useState("all");
   const [checks, setChecks] = useState<boolean[]>([false, false, false]);
@@ -1306,17 +1168,17 @@ function Workspace({
         !(e.target instanceof HTMLTextAreaElement)
       ) {
         e.preventDefault();
-        document.getElementById("global-search")?.focus();
+        navigate("search");
       }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, []);
   useEffect(() => {
-    if (!toast) return;
+    if (!toast || modal) return;
     const id = setTimeout(() => setToast(null), 7000);
     return () => clearTimeout(id);
-  }, [toast]);
+  }, [toast, modal]);
   function notify(text: string, entry?: Entry) {
     setToast({ text, entry });
   }
@@ -1332,7 +1194,7 @@ function Workspace({
   );
   const produced = dayProduction.reduce((s, e) => s + e.grams, 0);
   const dispatched = active
-    .filter((e) => e.kind === "dispatch")
+    .filter((e) => e.kind === "dispatch" && e.date === today())
     .reduce((s, e) => s + e.grams, 0);
   const finished = total(entries, "finished");
   const raw = total(entries, "raw");
@@ -1342,11 +1204,15 @@ function Workspace({
     try {
       const next = appendEntry(entries, { ...entry, by: user });
       setEntries(next);
-      setModal(null);
+      setModal({ type: "saved", entry });
       notify(
         t(
-          "Entry saved. Your practice stock is up to date.",
-          "اندراج محفوظ ہوگیا۔ مشق کا اسٹاک تازہ ہے۔",
+          copy.saved0Kg1Shift2(
+            fmt(entry.grams / 1000, 3),
+            entry.machine,
+            entry.shift,
+          ),
+          copy.label012(fmt(entry.grams / 1000, 3), entry.machine, entry.shift),
         ),
         entry,
       );
@@ -1354,37 +1220,27 @@ function Workspace({
       throw new Error("stock");
     }
   }
-  function undo(entry: Entry, reason = "Undone by creator") {
+  function undo(entry: Entry, reason: string = copy.undoneByCreator) {
     try {
       setEntries(reverseEntry(entries, entry, reason));
       setModal(null);
-      notify(
-        t(
-          "Entry reversed. The original stays in your history.",
-          "اندراج واپس ہوگیا۔ اصل اندراج تاریخ میں محفوظ ہے۔",
-        ),
-      );
+      notify(t(copy.entryReversedTheOriginalStaysInYour, copy.urdu80));
     } catch {
-      notify(
-        t(
-          "This entry cannot be reversed because its stock has already been used.",
-          "اس اندراج کا اسٹاک استعمال ہو چکا ہے، اس لیے واپسی ممکن نہیں۔",
-        ),
-      );
+      notify(t(copy.thisEntryCannotBeReversedBecauseIts, copy.urdu81));
     }
   }
   function exportEntries(list = visible) {
     downloadCsv("yarnflow-entries.csv", [
       [
-        t("Serial", "سیریل"),
-        t("Date", "تاریخ"),
-        t("Type", "قسم"),
-        t("Lot", "لاٹ"),
-        t("Machine", "مشین"),
-        t("Cartons", "کارٹن"),
-        t("Cones", "کونز"),
-        t("Weight kg", "وزن کلو"),
-        t("Recorded by", "درج کرنے والا"),
+        t(copy.serial, copy.urdu82),
+        t(copy.date, copy.urdu33),
+        t(copy.type, copy.urdu83),
+        t(copy.lot, copy.urdu22),
+        t(copy.machine, copy.urdu42),
+        t(copy.cartons2, copy.urdu24),
+        t(copy.cones2, copy.urdu51),
+        t(copy.weightKg, copy.urdu84),
+        t(copy.recordedBy, copy.urdu18),
       ],
       ...list.map((e) => [
         e.serial,
@@ -1398,125 +1254,61 @@ function Workspace({
         e.by,
       ]),
     ]);
-    notify(t("Your CSV export is ready.", "آپ کی CSV فائل تیار ہے۔"));
+    notify(t(copy.yourCsvExportIsReady, copy.csv));
   }
   const dateLabel = new Intl.DateTimeFormat(ur ? "ur-PK" : "en-GB", {
-    timeZone: "Asia/Karachi",
+    timeZone: copy.asiaKarachi,
     day: "numeric",
     month: "short",
     year: "numeric",
   }).format(new Date());
   const titles: Record<string, [string, string, string, string]> = {
-    scanner: [
-      "Material scanner",
-      "کپڑے کا اسکینر",
-      "From a closer look to a clearer decision.",
-      "قریب سے دیکھیں، بہتر فیصلہ کریں۔",
-    ],
-    overview: [
-      "Overview",
-      "جائزہ",
-      "A clear view of your factory.",
-      "آپ کی فیکٹری کا واضح جائزہ۔",
-    ],
-    production: [
-      "Production",
-      "پیداوار",
-      "Every cone. Every shift. All together.",
-      "ہر کون، ہر شفٹ، ایک جگہ۔",
-    ],
-    inventory: [
-      "Inventory",
-      "اسٹاک",
-      "Know what you have. Plan what comes next.",
-      "اسٹاک جانیں اور اگلا قدم طے کریں۔",
-    ],
-    orders: [
-      "Customer orders",
-      "کسٹمر آرڈرز",
-      "Keep your promises in view.",
-      "ہر آرڈر پر نظر رکھیں۔",
-    ],
-    dispatch: [
-      "Dispatch",
-      "ترسیل",
-      "From your floor to their door.",
-      "آپ کی فیکٹری سے کسٹمر تک۔",
-    ],
-    register: [
-      "Register view",
-      "رجسٹر",
-      "Your familiar register, with a little less paperwork.",
-      "آپ کا مانوس رجسٹر، کم کاغذی کام کے ساتھ۔",
-    ],
-    reports: [
-      "Reports & insights",
-      "رپورٹس",
-      "Good decisions start with a clear picture.",
-      "واضح معلومات سے بہتر فیصلے۔",
-    ],
-    sync: [
-      "Sync center",
-      "سنک سینٹر",
-      "A little peace of mind for every entry.",
-      "ہر اندراج کے محفوظ ہونے کا اطمینان۔",
-    ],
-    settings: [
-      "Workspace settings",
-      "ورک اسپیس کی ترتیبات",
-      "Make Yarnflow work your way.",
-      "یارن فلو کو اپنی ضرورت کے مطابق بنائیں۔",
-    ],
-    help: [
-      "A little help, right here.",
-      "مدد یہیں موجود ہے۔",
-      "Simple answers for your everyday work.",
-      "روزمرہ کام کے آسان جواب۔",
-    ],
-    search: [
-      "Search your workspace",
-      "ورک اسپیس میں تلاش",
-      "Find an entry, a lot, or a customer.",
-      "اندراج، لاٹ یا کسٹمر تلاش کریں۔",
-    ],
-    close: [
-      "Day close",
-      "دن بند کریں",
-      "Finish the day with everything accounted for.",
-      "دن کا اختتام مکمل حساب کے ساتھ۔",
-    ],
-    masters: [
-      "Your master data",
-      "بنیادی معلومات",
-      "The building blocks of your factory.",
-      "آپ کی فیکٹری کی بنیادی معلومات۔",
-    ],
-    users: [
-      "People & devices",
-      "افراد اور ڈیوائسز",
-      "The people who keep things moving.",
-      "آپ کے کام کو آگے بڑھانے والی ٹیم۔",
-    ],
-    import: [
-      "Import your registers",
-      "رجسٹر درآمد کریں",
-      "Bring your existing records along.",
-      "اپنے پرانے ریکارڈ ساتھ لائیں۔",
-    ],
-    home: [
-      "Your daily workspace",
-      "آپ کا روزمرہ ورک اسپیس",
-      "What would you like to record?",
-      "آپ کیا درج کرنا چاہتے ہیں؟",
-    ],
-    components: [
-      "Component gallery",
-      "کمپوننٹ گیلری",
-      "The details that bring it all together.",
-      "وہ تفصیلات جو سب کو جوڑتی ہیں۔",
-    ],
+    scanner: [copy.materialScanner, copy.urdu85, "", ""],
+    overview: [copy.today, copy.urdu2, "", ""],
+    production: [copy.todaySProduction, copy.urdu86, "", ""],
+    inventory: [copy.stock, copy.urdu4, "", ""],
+    orders: [copy.customerOrders, copy.urdu87, "", ""],
+    dispatch: [copy.dispatch, copy.urdu6, "", ""],
+    register: [copy.registers, copy.urdu7, "", ""],
+    reports: [copy.reports, copy.urdu88, "", ""],
+    sync: [copy.savedEntries, copy.urdu89, "", ""],
+    settings: [copy.workspaceSettings, copy.urdu90, "", ""],
+    help: [copy.help, copy.urdu91, "", ""],
+    search: [copy.searchYourWorkspace, copy.urdu92, "", ""],
+    close: [copy.dayClose, copy.urdu93, "", ""],
+    masters: [copy.yarnLotsAndSuppliers, copy.urdu94, "", ""],
+    users: [copy.peopleDevices, copy.urdu95, "", ""],
+    import: [copy.importYourRegisters, copy.urdu96, "", ""],
+    home: [copy.recordStockMovement, copy.urdu97, "", ""],
+    components: [copy.componentGallery, copy.urdu98, "", ""],
   };
-  const title = titles[route] || titles.overview;
+  const title =
+    route === "more"
+      ? [copy.more, copy.urdu8, "", ""]
+      : titles[route] || titles.overview;
+  useEffect(() => {
+    const close = () => setModal(null);
+    window.addEventListener("yf-close-modal", close);
+    return () => window.removeEventListener("yf-close-modal", close);
+  }, []);
+  useEffect(() => {
+    const failed = () => setStorageError(true);
+    window.addEventListener("yf-storage-error", failed);
+    return () => window.removeEventListener("yf-storage-error", failed);
+  }, []);
+  function retryStorage() {
+    try {
+      const probe = "yf-storage-check";
+      localStorage.setItem(probe, "1");
+      localStorage.removeItem(probe);
+      for (const [key, value] of pendingWrites)
+        localStorage.setItem(key, JSON.stringify(value));
+      pendingWrites.clear();
+      setStorageError(false);
+    } catch {
+      setStorageError(true);
+    }
+  }
   if (route === "login")
     return (
       <Login
@@ -1532,23 +1324,18 @@ function Workspace({
     if (route === "scanner")
       return (
         <Button icon={ShieldCheck} onClick={() => navigate("inventory")}>
-          {t("Open inventory", "اسٹاک کھولیں")}
+          {t(copy.openInventory, copy.urdu99)}
         </Button>
       );
     if (route === "overview")
       return (
-        <>
-          <Button icon={ScanLine} onClick={() => navigate("scanner")}>
-            {t("Scan material", "کپڑا اسکین کریں")}
-          </Button>
-          <Button
-            variant="primary"
-            icon={Plus}
-            onClick={() => setModal({ type: "new" })}
-          >
-            {t("New entry", "نیا اندراج")}
-          </Button>
-        </>
+        <Button
+          variant="primary"
+          icon={Plus}
+          onClick={() => setModal({ type: "entry", kind: "production" })}
+        >
+          {t(copy.recordProduction, copy.urdu100)}
+        </Button>
       );
     if (route === "production")
       return (
@@ -1557,7 +1344,7 @@ function Workspace({
           icon={Plus}
           onClick={() => setModal({ type: "entry", kind: "production" })}
         >
-          {t("Record production", "پیداوار درج کریں")}
+          {t(copy.recordProduction, copy.urdu100)}
         </Button>
       );
     if (route === "dispatch")
@@ -1567,7 +1354,7 @@ function Workspace({
           icon={Plus}
           onClick={() => setModal({ type: "entry", kind: "dispatch" })}
         >
-          {t("New dispatch", "نئی ترسیل")}
+          {t(copy.recordDispatch, copy.urdu101)}
         </Button>
       );
     if (route === "orders")
@@ -1577,7 +1364,7 @@ function Workspace({
           icon={Plus}
           onClick={() => setModal({ type: "order" })}
         >
-          {t("New order", "نیا آرڈر")}
+          {t(copy.recordOrder, copy.urdu102)}
         </Button>
       );
     if (route === "inventory")
@@ -1587,504 +1374,279 @@ function Workspace({
           icon={PackagePlus}
           onClick={() => setModal({ type: "entry", kind: "receipt" })}
         >
-          {t("Receive yarn", "یارن وصول کریں")}
+          {t(copy.receiveYarn, copy.urdu103)}
         </Button>
       );
-    if (
-      route === "settings" ||
-      route === "help" ||
-      route === "users" ||
-      route === "masters" ||
-      route === "import" ||
-      route === "components"
-    )
-      return null;
-    return (
-      <>
-        <Button icon={CalendarDays} onClick={() => setModal({ type: "date" })}>
-          {dateLabel}
-          <ChevronDown size={14} />
-        </Button>
-        <Button
-          variant="primary"
-          icon={Plus}
-          onClick={() => setModal({ type: "new" })}
-        >
-          {t("New entry", "نیا اندراج")}
-        </Button>
-      </>
+    return null;
+  }
+  function friendlyDue(value: string) {
+    const date = new Date(value + "T12:00:00+05:00");
+    const days = Math.round(
+      (date.getTime() - new Date(today() + "T12:00:00+05:00").getTime()) /
+        86400000,
     );
+    const label = new Intl.DateTimeFormat(ur ? "ur-PK" : "en-GB", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      timeZone: "Asia/Karachi",
+    }).format(date);
+    const relative =
+      days === 0
+        ? t(copy.dueToday, copy.dueTodayUr)
+        : days === 1
+          ? t(copy.dueTomorrow, copy.dueTomorrowUr)
+          : days > 0
+            ? t(copy.dueInDays(days), copy.dueInDaysUr(days))
+            : t(copy.daysOverdue(-days), copy.daysOverdueUr(-days));
+    return `${label} · ${relative}`;
   }
   function overview() {
-    const cards: [
-      string,
-      string,
-      number,
-      string,
-      string,
-      string,
-      LucideIcon,
-      string,
-    ][] = [
-      [
-        "Production today",
-        "آج کی پیداوار",
-        produced / 1000,
-        "kg",
-        "12.8%",
-        "vs. 7-day average",
-        Factory,
-        "production",
-      ],
-      [
-        "Finished stock",
-        "تیار اسٹاک",
-        finished.grams / 1000,
-        "kg",
-        "8.2%",
-        "vs. last week",
-        Boxes,
-        "inventory",
-      ],
-      [
-        "Dispatched today",
-        "آج کی ترسیل",
-        dispatched / 1000,
-        "kg",
-        "6.4%",
-        "vs. 7-day average",
-        Truck,
-        "dispatch",
-      ],
-      [
-        "Pending orders",
-        "باقی آرڈرز",
-        pending / 1000,
-        "kg",
-        `${orders.filter((o) => o.status !== "completed").length} ${t("orders", "آرڈرز")}`,
-        "awaiting fulfillment",
-        ShoppingBag,
-        "orders",
-      ],
+    const target = 3000;
+    const difference = Math.abs(Math.round(produced / 1000) - target);
+    const heldLots = lots.filter((l) => l.status === "hold");
+    const dueOrders = orders
+      .filter((o) => o.status !== "completed")
+      .sort((a, b) => a.due.localeCompare(b.due));
+    const machines = ["1A", "1B", "2A", "2B", "3A", "3B"]
+      .map((machine) => ({
+        machine,
+        value: dayProduction
+          .filter((e) => e.machine === machine)
+          .reduce((sum, e) => sum + e.grams / 1000, 0),
+      }))
+      .sort((a, b) => b.value - a.value);
+    const stats = [
+      {
+        label: t(copy.producedToday, copy.urdu86),
+        icon: Factory,
+        tone: produced / 1000 >= target ? "success" : "warning",
+        value: produced / 1000,
+        note:
+          produced / 1000 >= target
+            ? t(copy.label0KgAboveTarget(difference), copy.label02(difference))
+            : t(copy.label0KgBelowTarget(difference), copy.label04(difference)),
+      },
+      {
+        label: t(copy.finishedStock, copy.urdu105),
+        icon: Boxes,
+        tone: "neutral",
+        value: finished.grams / 1000,
+        note: t(
+          copy.stockCartons(finished.cartons),
+          copy.stockCartonsUr(finished.cartons),
+        ),
+      },
+      {
+        label: t(copy.dispatchedToday, copy.urdu107),
+        icon: Truck,
+        tone: "success",
+        value: dispatched / 1000,
+        note: t(
+          copy.label0DispatchesRecorded(
+            active.filter((e) => e.kind === "dispatch" && e.date === today())
+              .length,
+          ),
+          copy.label05(
+            active.filter((e) => e.kind === "dispatch" && e.date === today())
+              .length,
+          ),
+        ),
+      },
+      {
+        label: t(copy.ordersRemaining, copy.urdu108),
+        icon: ShoppingBag,
+        tone: dueOrders.length ? "warning" : "success",
+        value: pending / 1000,
+        note: t(
+          copy.label0OrdersToComplete(dueOrders.length),
+          copy.label06(dueOrders.length),
+        ),
+      },
     ];
     return (
       <>
-        <div className="welcome-row">
-          <div>
-            <span className="eyebrow">
-              {t("SATURDAY, LET’S MAKE IT A GOOD ONE", "آج کا دن، بہتر بنائیں")}
+        <section
+          className="attention-section"
+          aria-labelledby="attention-title"
+        >
+          <div className="section-heading">
+            <h2 id="attention-title">{t(copy.needsAttention, copy.urdu109)}</h2>
+            <span>
+              {t(
+                copy.label0Items(
+                  heldLots.length + Math.min(dueOrders.length, 2),
+                ),
+                copy.label07(heldLots.length + Math.min(dueOrders.length, 2)),
+              )}
             </span>
-            <h2>
-              {t(
-                `Good afternoon, ${user.split(" ")[0]}`,
-                `آداب، ${user === "Ahmed Khan" ? "احمد" : user === "Asif Ali" ? "آصف" : "بلال"}`,
-              )}{" "}
-              <span className="greeting-spark">✳</span>
-            </h2>
-            <p>
-              {t(
-                "Here’s how things are coming together today.",
-                "آج آپ کی فیکٹری کا کام کچھ یوں چل رہا ہے۔",
-              )}
-            </p>
           </div>
-          <div className="shift-pill">
-            <span className="live-dot" />
-            {t("Shift A in progress", "شفٹ A جاری ہے")}
-            <span>07:00 – 15:00</span>
-          </div>
-        </div>
-        <div className="attention-bar">
-          <span className="attention-icon">
-            <AlertTriangle size={19} />
-          </span>
-          <strong>
-            {t(
-              "A little attention goes a long way.",
-              "تھوڑی توجہ، بہتر نتائج۔",
-            )}
-          </strong>
-          <span>
-            {t(
-              "1 lot on QC hold · 2 orders due this week",
-              "۱ لاٹ کی جانچ باقی · ۲ آرڈر اس ہفتے واجب",
-            )}
-          </span>
-          <button
-            onClick={() => {
-              setStage("finished");
-              setFilter("hold");
-              navigate("inventory");
-              setFilter("hold");
-            }}
-          >
-            {t("Take a look", "تفصیل دیکھیں")}
-            <ArrowRight size={16} />
-          </button>
-        </div>
-        <div className="kpi-grid">
-          {cards.map(
-            ([en, urdu, value, unit, change, comparison, I, to], i) => (
-              <button
-                key={en}
-                className="kpi-card glass"
-                onClick={() => navigate(to)}
+          <div className="action-list">
+            {heldLots.map((l) => (
+              <div className="action-row warning" key={l.id}>
+                <span className="attention-symbol">
+                  <AlertTriangle size={24} />
+                </span>
+                <div>
+                  <p>{t(copy.lot0IsOnQcHoldDo(l.id), copy.label08(l.id))}</p>
+                  <span>{l.spec}</span>
+                </div>
+                <Button onClick={() => setModal({ type: "lot", lot: l.id })}>
+                  {t(copy.reviewLot, copy.urdu110)}
+                </Button>
+              </div>
+            ))}
+            {dueOrders.slice(0, 2).map((o) => (
+              <div
+                className={`action-row ${o.due < today() ? "danger" : "warning"}`}
+                key={o.id}
               >
-                <div className="kpi-top">
-                  <span>{t(en, urdu)}</span>
-                  <span className={`kpi-icon kpi-${i}`}>
-                    <Icon icon={I} size={19} />
-                  </span>
-                </div>
-                <div className="kpi-value">
-                  <bdi>{fmt(value)}</bdi>
-                  <span>{unit}</span>
-                </div>
-                <div className="kpi-bottom">
-                  <span
-                    className={i === 3 ? "neutral-trend" : "positive-trend"}
-                  >
-                    {i < 3 && <ArrowUpRight size={14} />}
-                    <bdi>{change}</bdi>
-                  </span>
-                  <span>
+                <span className="attention-symbol">
+                  <Clock3 size={24} />
+                </span>
+                <div>
+                  <p>
                     {t(
-                      comparison,
-                      i === 3
-                        ? "تکمیل کے منتظر"
-                        : i === 1
-                          ? "گزشتہ ہفتے کے مقابلے"
-                          : "۷ دن کی اوسط کے مقابلے",
+                      copy.label0Needs1KgBy2(
+                        o.customer,
+                        fmt((o.grams - o.delivered) / 1000, 0),
+                        friendlyDue(o.due),
+                      ),
+                      copy.label0122(
+                        o.customer,
+                        friendlyDue(o.due),
+                        fmt((o.grams - o.delivered) / 1000, 0),
+                      ),
                     )}
-                  </span>
-                  <svg
-                    className={`sparkline spark-${i}`}
-                    viewBox="0 0 80 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d={
-                        [
-                          "M1 21 10 17 19 19 28 10 37 12 46 8 55 11 64 3 79 5",
-                          "M1 20 11 19 20 12 30 14 40 8 50 12 60 5 70 8 79 2",
-                          "M1 22 11 16 22 18 32 10 42 13 52 5 62 9 72 2 79 4",
-                          "M1 9 12 9 22 15 32 12 42 17 52 10 62 14 72 7 79 9",
-                        ][i]
-                      }
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                    />
-                  </svg>
-                </div>
-              </button>
-            ),
-          )}
-        </div>
-        <div className="chart-grid">
-          <section className="panel glass production-panel">
-            <div className="panel-heading">
-              <div>
-                <h3>
-                  {t("Production at a glance", "پیداوار پر ایک نظر")}
-                  <span className="muted unit">kg</span>
-                </h3>
-                <p>
-                  {t(
-                    "A steady flow, shift after shift.",
-                    "ہر شفٹ میں پیداوار کا تسلسل۔",
-                  )}
-                </p>
-              </div>
-              <select
-                className="compact-select"
-                aria-label={t("Chart period", "چارٹ کی مدت")}
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-              >
-                <option value="This week">
-                  {t("Last 7 days", "گزشتہ ۷ دن")}
-                </option>
-                <option value="Today">{t("Today", "آج")}</option>
-              </select>
-            </div>
-            <div className="chart-summary">
-              <strong>
-                <bdi>
-                  {fmt(produced / 1000 + (period === "Today" ? 0 : 16040))}
-                </bdi>
-                <span> kg</span>
-              </strong>
-              <span className="positive-trend">
-                <ArrowUpRight size={14} />
-                12.8%{" "}
-                <span>{t("vs. previous period", "پچھلی مدت کے مقابلے")}</span>
-              </span>
-              <div className="chart-legend">
-                <span>
-                  <i />
-                  {t("Production", "پیداوار")}
-                </span>
-                <span>
-                  <i />
-                  {t("Target", "ہدف")}
-                </span>
-              </div>
-            </div>
-            {showChartTable ? (
-              <div className="chart-data">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>{t("Day", "دن")}</th>
-                      <th>kg</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(period === "Today"
-                      ? [
-                          "06:00",
-                          "08:00",
-                          "10:00",
-                          "12:00",
-                          "14:00",
-                          "16:00",
-                          "18:00",
-                        ]
-                      : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-                    ).map((day, i) => (
-                      <tr key={day}>
-                        <td>{day}</td>
-                        <td>
-                          {
-                            (period === "Today"
-                              ? [
-                                  "06:00",
-                                  "08:00",
-                                  "10:00",
-                                  "12:00",
-                                  "14:00",
-                                  "16:00",
-                                  "18:00",
-                                ].map((time) =>
-                                  dayProduction
-                                    .filter((e) => e.time <= time)
-                                    .reduce(
-                                      (sum, e) => sum + e.grams / 1000,
-                                      0,
-                                    ),
-                                )
-                              : [
-                                  2180,
-                                  2510,
-                                  2250,
-                                  3180,
-                                  2820,
-                                  3100,
-                                  produced / 1000,
-                                ])[i]
-                          }
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <ProductionChart
-                entries={dayProduction}
-                period={period}
-                onTable={() => setShowChartTable(true)}
-              />
-            )}
-            <div className="chart-footer">
-              <span>
-                <span className="live-dot" />
-                {t(
-                  "Today’s production is shown so far",
-                  "آج کی اب تک کی پیداوار",
-                )}
-              </span>
-              <button
-                className="text-button"
-                onClick={() => setShowChartTable(!showChartTable)}
-              >
-                {showChartTable
-                  ? t("View chart", "چارٹ دیکھیں")
-                  : t("View as table", "جدول دیکھیں")}
-                <ArrowUpRight size={13} />
-              </button>
-            </div>
-          </section>
-          <section className="panel glass machine-panel">
-            <div className="panel-heading">
-              <div>
-                <h3>{t("On the factory floor", "فیکٹری فلور پر")}</h3>
-                <p>
-                  {t(
-                    "Production by machine · today",
-                    "آج مشین کے لحاظ سے پیداوار",
-                  )}
-                </p>
-              </div>
-              <button
-                className="icon-button"
-                aria-label={t("View all machines", "تمام مشینیں دیکھیں")}
-                onClick={() => navigate("production")}
-              >
-                <ArrowUpRight size={19} />
-              </button>
-            </div>
-            <div className="machine-list">
-              {["1A", "1B", "2A", "2B", "3A", "3B"].map((m, i) => {
-                const value = dayProduction
-                  .filter((e) => e.machine === m)
-                  .reduce((s, e) => s + e.grams / 1000, 0);
-                return (
-                  <button
-                    className="machine-row"
-                    key={m}
-                    onClick={() => {
-                      navigate("production");
-                      setQuery(m);
-                    }}
-                  >
-                    <span className="machine-name">
-                      <span className="machine-box">
-                        <Factory size={17} />
-                      </span>
-                      <strong>{m}</strong>
-                      <span className="live-dot" />
-                    </span>
-                    <span className="machine-bar">
-                      <i
-                        style={{
-                          width: `${Math.min(value / 6, 100)}%`,
-                          opacity: 1 - i * 0.075,
-                        }}
-                      />
-                    </span>
-                    <bdi>
-                      {fmt(value)} <span>kg</span>
-                    </bdi>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="machine-footer">
-              <span>
-                <span className="live-dot" />{" "}
-                {t("6 machines running", "۶ مشینیں چل رہی ہیں")}
-              </span>
-              <span>
-                {t("All looking good", "سب بہتر چل رہا ہے")}
-                <CheckCheck size={15} />
-              </span>
-            </div>
-          </section>
-        </div>
-        <div className="bottom-grid">
-          <section className="panel glass recent-panel">
-            <div className="panel-heading">
-              <div>
-                <h3>{t("Fresh from the floor", "تازہ اندراجات")}</h3>
-                <p>
-                  {t(
-                    "The latest entries from your team.",
-                    "آپ کی ٹیم کے حالیہ اندراجات۔",
-                  )}
-                </p>
-              </div>
-              <button
-                className="text-button"
-                onClick={() => navigate("register")}
-              >
-                {t("View all entries", "تمام اندراجات")}
-                <ArrowUpRight size={15} />
-              </button>
-            </div>
-            <EntryTable
-              entries={visible.slice(0, 4)}
-              onDetail={(entry) => setModal({ type: "detail", entry })}
-              compact
-            />
-          </section>
-          <section className="panel glass stock-panel">
-            <div className="panel-heading">
-              <div>
-                <h3>{t("A healthy stockroom", "اسٹاک کی صورتِ حال")}</h3>
-                <p>
-                  {t("Finished yarn by material", "تیار یارن، مواد کے لحاظ سے")}
-                </p>
-              </div>
-              <Boxes size={20} />
-            </div>
-            <div className="stock-total">
-              <strong>
-                <bdi>{fmt(finished.grams / 1000)}</bdi>
-              </strong>
-              <span>kg {t("in stock", "اسٹاک میں")}</span>
-            </div>
-            <div className="composition-bar">
-              {lots.map((l) => (
-                <span
-                  key={l.id}
-                  style={{
-                    background: l.color,
-                    width: `${(balance(entries, l.id, "finished").grams / finished.grams) * 100}%`,
-                  }}
-                />
-              ))}
-            </div>
-            <div className="composition-list">
-              {lots.map((l) => (
-                <button
-                  key={l.id}
-                  onClick={() => setModal({ type: "lot", lot: l.id })}
-                >
+                  </p>
                   <span>
-                    <i style={{ background: l.color }} />
-                    {l.material}
+                    <bdi>{o.id}</bdi>
                   </span>
-                  <bdi>
-                    {fmt(balance(entries, l.id, "finished").grams / 1000)}{" "}
-                    <span>kg</span>
-                  </bdi>
-                </button>
+                </div>
+                <Button
+                  onClick={() =>
+                    setModal({ type: "order-detail", report: o.id })
+                  }
+                >
+                  {t(copy.viewOrder, copy.urdu111)}
+                </Button>
+              </div>
+            ))}
+            {!heldLots.length && !dueOrders.length && (
+              <p className="empty-inline">
+                <CircleCheck size={24} />
+                {t(copy.noLotsOnHoldOrOrdersWaiting, copy.urdu112)}
+              </p>
+            )}
+          </div>
+        </section>
+        <section className="today-section" aria-labelledby="today-figures">
+          <div className="section-heading">
+            <h2 id="today-figures">{t(copy.todaySTotals, copy.urdu113)}</h2>
+            <span>{t(copy.dailyProductionTarget3000Kg, copy.label3000)}</span>
+          </div>
+          <div className="daily-stats">
+            {stats.map((stat) => (
+              <div key={stat.label} className="total-card">
+                <div className="total-heading">
+                  <p>{stat.label}</p>
+                  <span className={`total-icon ${stat.tone}`}>
+                    <Icon icon={stat.icon} size={22} />
+                  </span>
+                </div>
+                <strong>
+                  <bdi>{fmt(stat.value, 0)}</bdi>
+                  <span>{copy.kg}</span>
+                </strong>
+                <p className={`stat-note ${stat.tone}`}>
+                  {stat.tone === "success" ? (
+                    <CircleCheck size={16} />
+                  ) : stat.tone === "warning" ? (
+                    stat.icon === ShoppingBag ? (
+                      <Clock3 size={16} />
+                    ) : (
+                      <ArrowDownRight size={16} />
+                    )
+                  ) : null}
+                  {stat.note}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+        <div className="overview-analysis">
+          <section className="machine-section">
+            <div className="section-heading">
+              <h2>{t(copy.productionByMachine, copy.urdu114)}</h2>
+            </div>
+            <p className="section-description">
+              {t(copy.todayTarget500KgPerMachine, copy.label500)}
+            </p>
+            <div className="machine-target-key">
+              <span />
+              {t(copy.target, copy.urdu34)} · 500 kg
+            </div>
+            <div className="plain-machine-list">
+              {machines.map((m) => (
+                <div key={m.machine}>
+                  <span>
+                    {t(copy.machine, copy.urdu42)} <bdi>{m.machine}</bdi>
+                  </span>
+                  <div className="plain-machine-track">
+                    <span
+                      style={{
+                        width: `${Math.min((m.value / 600) * 100, 100)}%`,
+                      }}
+                    />
+                    <i style={{ insetInlineStart: `${(500 / 600) * 100}%` }} />
+                  </div>
+                  <strong>
+                    <bdi>
+                      {fmt(m.value, 0)}
+                      {copy.kg}
+                    </bdi>
+                  </strong>
+                  <span
+                    className={`machine-gap ${m.value >= 500 ? "success" : "warning"}`}
+                  >
+                    {m.value >= 500
+                      ? t(copy.targetMet, copy.urdu115)
+                      : t(
+                          copy.label0KgBelow(Math.round(500 - m.value)),
+                          copy.label09(Math.round(500 - m.value)),
+                        )}
+                  </span>
+                </div>
               ))}
             </div>
-            <button
-              className="stock-link"
-              onClick={() => navigate("inventory")}
-            >
-              {t("Explore inventory", "اسٹاک کی تفصیل")}
-              <ArrowRight size={15} />
-            </button>
+            <Button onClick={() => navigate("production")}>
+              {t(copy.viewProductionEntries, copy.urdu116)}
+            </Button>
+          </section>
+          <section className="trend-section">
+            <div className="section-heading">
+              <h2>{t(copy.last7Days, copy.urdu117)}</h2>
+            </div>
+            <ProductionChart entries={active} />
           </section>
         </div>
-        <div className="flow-banner">
-          <div className="flow-icon">
-            <Layers3 size={24} />
+        <section className="recent-entries">
+          <div className="section-heading">
+            <h2>{t(copy.recentEntries, copy.urdu118)}</h2>
+            <Button onClick={() => navigate("register")}>
+              {t(copy.viewRegisters, copy.urdu119)}
+            </Button>
           </div>
-          <div>
-            <h3>
-              {t(
-                "Your next shift starts with a clear handover.",
-                "اگلی شفٹ کی شروعات واضح حساب کے ساتھ۔",
-              )}
-            </h3>
-            <p>
-              {t(
-                "Review today’s numbers and close the day in a few easy steps.",
-                "آج کے اعداد دیکھیں اور آسانی سے دن بند کریں۔",
-              )}
-            </p>
-          </div>
-          <button onClick={() => navigate("close")}>
-            {t("Go to day close", "دن بند کریں")}
-            <ArrowRight size={17} />
-          </button>
-          <span className="banner-orbit" />
+          <EntryTable
+            compact
+            entries={visible.slice(0, 4)}
+            onDetail={(entry) => setModal({ type: "detail", entry })}
+          />
+        </section>
+        <div className="day-close-link">
+          <Button onClick={() => navigate("close")}>
+            {t(copy.reviewAndCloseToday, copy.urdu120)}
+          </Button>
         </div>
       </>
     );
@@ -2094,7 +1656,7 @@ function Workspace({
       (e) =>
         (route === "dispatch"
           ? e.kind === "dispatch"
-          : e.kind !== "dispatch") &&
+          : e.kind === "production" && e.date === today()) &&
         (filter === "all" || e.shift === filter) &&
         (!query ||
           `${e.machine} ${e.serial} ${e.lot} ${e.by}`
@@ -2110,15 +1672,18 @@ function Workspace({
                 <Factory size={22} />
               </span>
               <span>
-                {t("Produced today", "آج کی پیداوار")}
+                {t(copy.producedToday, copy.urdu86)}
                 <strong>
-                  <bdi>{fmt(produced / 1000)} kg</bdi>
+                  <bdi>
+                    {fmt(produced / 1000, 0)}
+                    {copy.kg}
+                  </bdi>
                 </strong>
               </span>
             </div>
             <div>
               <span>
-                {t("Cartons packed", "پیک شدہ کارٹن")}
+                {t(copy.cartonsPacked, copy.urdu121)}
                 <strong>
                   <bdi>{dayProduction.reduce((s, e) => s + e.cartons, 0)}</bdi>
                 </strong>
@@ -2126,17 +1691,27 @@ function Workspace({
             </div>
             <div>
               <span>
-                {t("Machines running", "چلتی مشینیں")}
+                {t(copy.machinesRunning, copy.urdu122)}
                 <strong>
-                  6 <small>/ 6</small>
+                  {new Set(dayProduction.map((e) => e.machine)).size}
+                  <small>{copy.label62}</small>
                 </strong>
               </span>
             </div>
             <div>
               <span>
-                {t("Current shift", "موجودہ شفٹ")}
+                {t(copy.currentShift, copy.urdu123)}
                 <strong>
-                  A <small>07:00 – 15:00</small>
+                  {currentShift()}
+                  <small>
+                    {
+                      {
+                        A: copy.shiftATime,
+                        B: copy.shiftBTime,
+                        C: copy.shiftCTime,
+                      }[currentShift()]
+                    }
+                  </small>
                 </strong>
               </span>
             </div>
@@ -2145,10 +1720,7 @@ function Workspace({
         {route === "dispatch" && (
           <div className="info-banner">
             <Truck size={20} />
-            {t(
-              "Dispatch only from released lots. Stock is checked again before every save.",
-              "صرف منظور شدہ لاٹ سے ترسیل کریں۔ محفوظ کرنے سے پہلے اسٹاک چیک ہوتا ہے۔",
-            )}
+            {t(copy.dispatchOnlyFromReleasedLotsStockIs, copy.urdu124)}
           </div>
         )}
         <section className="panel glass">
@@ -2161,8 +1733,8 @@ function Workspace({
                   className={filter === f ? "active" : ""}
                 >
                   {f === "all"
-                    ? t("All entries", "تمام اندراجات")
-                    : `${t("Shift", "شفٹ")} ${f}`}
+                    ? t(copy.allEntries, copy.urdu125)
+                    : `${t(copy.shift, copy.urdu23)} ${f}`}
                 </button>
               ))}
             </div>
@@ -2170,32 +1742,49 @@ function Workspace({
               <label className="inline-search">
                 <Search size={17} />
                 <input
-                  aria-label={t("Search entries", "اندراج تلاش کریں")}
-                  placeholder={t("Search entries…", "اندراج تلاش کریں…")}
+                  aria-label={t(copy.searchEntries, copy.urdu126)}
+                  placeholder={t(copy.searchEntries2, copy.urdu127)}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
               </label>
               <button
                 className="icon-button"
-                aria-label={t("Export entries", "اندراج برآمد کریں")}
+                aria-label={t(copy.exportEntries, copy.urdu128)}
                 onClick={() => exportEntries(list)}
               >
                 <Download size={18} />
+                <span className="control-label">
+                  {t(copy.exportEntries, copy.urdu128)}
+                </span>
               </button>
             </div>
           </div>
-          <EntryTable
-            entries={previewState === "empty" ? [] : list}
-            onDetail={(entry) => setModal({ type: "detail", entry })}
-          />
+          {list.length === 0 ? (
+            <Empty
+              title={
+                query || filter !== "all"
+                  ? t(copy.noMatchingListEntries, copy.noMatchingEntriesUr)
+                  : route === "dispatch"
+                    ? t(copy.noDispatchesToday, copy.noDispatchesTodayUr)
+                    : t(copy.noProductionToday, copy.noProductionTodayUr)
+              }
+              detail={
+                query || filter !== "all"
+                  ? t(copy.changeEntryFilters, copy.changeEntryFiltersUr)
+                  : t(copy.recordFirstEntry, copy.recordFirstEntryUr)
+              }
+            />
+          ) : (
+            <EntryTable
+              entries={previewState === "empty" ? [] : list}
+              onDetail={(entry) => setModal({ type: "detail", entry })}
+            />
+          )}
           <div className="table-footer">
-            {t("Showing", "دکھائے گئے")} <bdi>{list.length}</bdi>{" "}
-            {t(
-              "entries · Asia/Karachi business date",
-              "اندراج · کراچی کی کاروباری تاریخ",
-            )}
-            <Status tone="gray">{t("Practice data", "مشق کا ڈیٹا")}</Status>
+            {t(copy.showing, copy.urdu129)} <bdi>{list.length}</bdi>{" "}
+            {t(copy.entriesAsiaKarachiBusinessDate, copy.urdu130)}
+            <Status tone="gray">{t(copy.practiceData, copy.urdu131)}</Status>
           </div>
         </section>
       </>
@@ -2214,40 +1803,30 @@ function Workspace({
       <>
         <div className="inventory-summary">
           <div className="panel glass">
-            <span>{t("Total finished stock", "کل تیار اسٹاک")}</span>
+            <span>{t(copy.totalFinishedStock, copy.urdu132)}</span>
             <h2>
-              <bdi>{fmt(finished.grams / 1000)}</bdi>
-              <small> kg</small>
+              <bdi>{fmt(finished.grams / 1000, 0)}</bdi>
+              <small>{copy.kg}</small>
             </h2>
             <p>
-              {finished.cartons}{" "}
-              {t("cartons across 4 lots", "کارٹن، ۴ لاٹ میں")}
+              {finished.cartons} {t(copy.cartonsAcross4Lots, copy.urdu133)}
             </p>
           </div>
           <div className="panel glass">
-            <span>{t("Raw yarn available", "دستیاب خام یارن")}</span>
+            <span>{t(copy.rawYarnAvailable, copy.urdu134)}</span>
             <h2>
-              <bdi>{fmt(raw.grams / 1000)}</bdi>
-              <small> kg</small>
+              <bdi>{fmt(raw.grams / 1000, 0)}</bdi>
+              <small>{copy.kg}</small>
             </h2>
-            <p>
-              {t(
-                "Ready for the next production run",
-                "اگلی پیداوار کے لیے تیار",
-              )}
-            </p>
+            <p>{t(copy.readyForTheNextProductionRun, copy.urdu135)}</p>
           </div>
           <div className="panel glass">
-            <span>{t("Quality hold", "کوالٹی جانچ")}</span>
+            <span>{t(copy.qualityHold, copy.urdu136)}</span>
             <h2>
-              1<small> {t("lot", "لاٹ")}</small>
+              {copy.label1}
+              <small> {t(copy.lot2, copy.urdu22)}</small>
             </h2>
-            <p>
-              {t(
-                "Lot 1216 · awaiting lab release",
-                "لاٹ 1216 · لیب کی منظوری باقی",
-              )}
-            </p>
+            <p>{t(copy.lot1216AwaitingLabRelease, copy.label1216)}</p>
           </div>
         </div>
         <section className="panel glass">
@@ -2260,8 +1839,13 @@ function Workspace({
                   onClick={() => setStage(s)}
                 >
                   {t(
-                    ["Finished yarn", "Raw yarn", "Machine WIP", "Cops WIP"][i],
-                    ["تیار یارن", "خام یارن", "مشین میں", "کاپس"][i],
+                    [
+                      copy.finishedYarn,
+                      copy.rawYarn,
+                      copy.machineWip,
+                      copy.copsWip,
+                    ][i],
+                    [copy.urdu137, copy.urdu138, copy.urdu139, copy.urdu140][i],
                   )}
                 </button>
               ))}
@@ -2269,26 +1853,39 @@ function Workspace({
             <div className="toolbar-actions">
               <button
                 className={`icon-button ${filter === "hold" ? "selected" : ""}`}
-                aria-label={t("Filter QC hold lots", "جانچ والی لاٹ دکھائیں")}
+                aria-label={t(copy.filterQcHoldLots, copy.urdu141)}
                 aria-pressed={filter === "hold"}
                 onClick={() => setFilter(filter === "hold" ? "all" : "hold")}
               >
                 <SlidersHorizontal size={19} />
+                <span className="control-label">
+                  {t(copy.filterQcHoldLots, copy.urdu141)}
+                </span>
               </button>
               <button
                 className={`icon-button ${viewMatrix ? "selected" : ""}`}
-                aria-label={t("Toggle matrix view", "جدولی منظر بدلیں")}
+                aria-label={t(copy.toggleMatrixView, copy.urdu142)}
                 aria-pressed={viewMatrix}
                 onClick={() => setViewMatrix(!viewMatrix)}
               >
                 <LayoutDashboard size={18} />
+                <span className="control-label">
+                  {t(copy.toggleMatrixView, copy.urdu142)}
+                </span>
               </button>
               <button
                 className="icon-button"
-                aria-label={t("Export stock", "اسٹاک برآمد کریں")}
+                aria-label={t(copy.exportStock, copy.urdu143)}
                 onClick={() =>
                   downloadCsv("yarnflow-stock.csv", [
-                    ["Lot", "Spec", "Stage", "kg", "Cartons", "Cones"],
+                    [
+                      copy.lot,
+                      copy.spec,
+                      copy.stage,
+                      "kg",
+                      copy.cartons2,
+                      copy.cones2,
+                    ],
                     ...list.map((l) => {
                       const b = balance(entries, l.id, stage);
                       return [
@@ -2304,37 +1901,37 @@ function Workspace({
                 }
               >
                 <Download size={18} />
+                <span className="control-label">
+                  {t(copy.exportStock, copy.urdu143)}
+                </span>
               </button>
             </div>
           </div>
           {filter === "hold" && (
             <div className="active-filter">
-              {t("QC hold lots", "جانچ والی لاٹ")}
+              {t(copy.qcHoldLots, copy.urdu144)}
               <button
                 onClick={() => setFilter("all")}
-                aria-label={t("Clear filter", "فلٹر ہٹائیں")}
+                aria-label={t(copy.clearFilter, copy.urdu145)}
               >
                 <X size={14} />
+                <span className="control-label">
+                  {t(copy.clearFilter, copy.urdu145)}
+                </span>
               </button>
             </div>
           )}
           {["wip", "cops"].includes(stage) &&
           total(entries, stage).grams === 0 ? (
             <Empty
-              title={t(
-                "Nothing in progress just yet",
-                "ابھی کوئی کام جاری نہیں",
-              )}
-              detail={t(
-                "Issue yarn to a machine to start tracking work in progress.",
-                "مشین میں جاری کام دیکھنے کے لیے یارن کا اجرا کریں۔",
-              )}
+              title={t(copy.noYarnIssuedToMachines, copy.urdu146)}
+              detail={t(copy.issueYarnToAMachineToStart, copy.urdu147)}
               action={
                 <Button
                   icon={Plus}
                   onClick={() => setModal({ type: "entry", kind: "issue" })}
                 >
-                  {t("Issue to machine", "مشین کو اجرا")}
+                  {t(copy.issueToMachine, copy.urdu10)}
                 </Button>
               }
             />
@@ -2354,17 +1951,18 @@ function Workspace({
                   </span>
                   <strong>{l.spec}</strong>
                   <span>
-                    {t("Lot", "لاٹ")} {l.id}
+                    {t(copy.lot, copy.urdu22)} {l.id}
                   </span>
                   <h3>
                     <bdi>
-                      {fmt(balance(entries, l.id, stage).grams / 1000)} kg
+                      {fmt(balance(entries, l.id, stage).grams / 1000)}
+                      {copy.kg}
                     </bdi>
                   </h3>
                   <Status tone={l.status === "hold" ? "amber" : "green"}>
                     {l.status === "hold"
-                      ? t("QC hold", "جانچ باقی")
-                      : t("Available", "دستیاب")}
+                      ? t(copy.qcHold, copy.urdu48)
+                      : t(copy.available, copy.urdu50)}
                   </Status>
                 </button>
               ))}
@@ -2374,16 +1972,16 @@ function Workspace({
               className="table-scroll"
               tabIndex={0}
               role="region"
-              aria-label={t("Scrollable table", "اسکرول جدول")}
+              aria-label={t(copy.scrollableTable, copy.urdu14)}
             >
               <table>
                 <thead>
                   <tr>
-                    <th>{t("Yarn specification", "یارن کی تفصیل")}</th>
-                    <th>{t("Lot / supplier", "لاٹ / سپلائر")}</th>
-                    <th>{t("Available stock", "دستیاب اسٹاک")}</th>
-                    <th>{t("Cartons / cones", "کارٹن / کونز")}</th>
-                    <th>{t("Status", "حالت")}</th>
+                    <th>{t(copy.yarnSpecification, copy.urdu148)}</th>
+                    <th>{t(copy.lotSupplier, copy.urdu149)}</th>
+                    <th>{t(copy.availableStock, copy.urdu150)}</th>
+                    <th>{t(copy.cartonsCones, copy.urdu151)}</th>
+                    <th>{t(copy.status, copy.urdu19)}</th>
                     <th />
                   </tr>
                 </thead>
@@ -2417,18 +2015,20 @@ function Workspace({
                         </td>
                         <td>
                           <strong className="number">
-                            <bdi>{fmt(b.grams / 1000, 3)} kg</bdi>
+                            <bdi>
+                              {fmt(b.grams / 1000, 3)}
+                              {copy.kg}
+                            </bdi>
                           </strong>
                           <small>
-                            {t(
-                              "Calculated from entries",
-                              "اندراجات سے حساب شدہ",
-                            )}
+                            {t(copy.calculatedFromEntries, copy.urdu152)}
                           </small>
                         </td>
                         <td>
                           <bdi>
-                            {b.cartons} / {fmt(b.cones, 0)}
+                            {b.cartons}
+                            {copy.urdu153}
+                            {fmt(b.cones, 0)}
                           </bdi>
                         </td>
                         <td>
@@ -2436,17 +2036,18 @@ function Workspace({
                             tone={l.status === "hold" ? "amber" : "green"}
                           >
                             {l.status === "hold"
-                              ? t("QC hold", "جانچ باقی")
-                              : t("Available", "دستیاب")}
+                              ? t(copy.qcHold, copy.urdu48)
+                              : t(copy.available, copy.urdu50)}
                           </Status>
                         </td>
                         <td>
                           <button
                             className="icon-button"
-                            aria-label={`${t("View lot", "لاٹ دیکھیں")} ${l.id}`}
+                            aria-label={`${t(copy.viewLot, copy.urdu154)} ${l.id}`}
                             onClick={() => setModal({ type: "lot", lot: l.id })}
                           >
                             <ChevronRight size={18} />
+                            <span className="control-label">{`${t(copy.viewLot, copy.urdu154)} ${l.id}`}</span>
                           </button>
                         </td>
                       </tr>
@@ -2457,11 +2058,8 @@ function Workspace({
             </div>
           )}
           <div className="table-footer">
-            {t(
-              "Balances are calculated from your immutable practice ledger.",
-              "بیلنس مشق کے محفوظ اندراجات سے حساب ہوتا ہے۔",
-            )}
-            <span>{t("4 active lots", "۴ فعال لاٹ")}</span>
+            {t(copy.stockIsCalculatedFromSavedEntries, copy.urdu155)}
+            <span>{t(copy.label4ActiveLots, copy.urdu156)}</span>
           </div>
         </section>
       </>
@@ -2483,18 +2081,16 @@ function Workspace({
           </div>
           <div>
             <strong>
-              <bdi>{fmt(pending / 1000)} kg</bdi>{" "}
-              {t("to make good on", "کے آرڈر مکمل کرنے ہیں")}
+              <bdi>
+                {fmt(pending / 1000)}
+                {copy.kg}
+              </bdi>{" "}
+              {t(copy.toMakeGoodOn, copy.urdu157)}
             </strong>
-            <p>
-              {t(
-                "3 customers are counting on your next production run.",
-                "۳ کسٹمر آپ کی اگلی پیداوار کے منتظر ہیں۔",
-              )}
-            </p>
+            <p>{t(copy.label3CustomersAreCountingOnYourNext, copy.urdu158)}</p>
           </div>
           <Button onClick={() => navigate("inventory")} icon={ArrowUpRight}>
-            {t("Check available stock", "دستیاب اسٹاک دیکھیں")}
+            {t(copy.checkAvailableStock, copy.urdu159)}
           </Button>
         </div>
         <section className="panel glass">
@@ -2507,8 +2103,8 @@ function Workspace({
                   className={orderTab === v ? "active" : ""}
                 >
                   {t(
-                    ["All orders", "In progress", "Completed"][i],
-                    ["تمام آرڈرز", "جاری", "مکمل"][i],
+                    [copy.allOrders, copy.inProgress, copy.completed][i],
+                    [copy.urdu160, copy.urdu161, copy.urdu162][i],
                   )}
                   <span className="tab-count">
                     {v === "all"
@@ -2524,16 +2120,16 @@ function Workspace({
             </div>
             <button
               className="icon-button"
-              aria-label={t("Export orders", "آرڈر برآمد کریں")}
+              aria-label={t(copy.exportOrders, copy.urdu163)}
               onClick={() =>
                 downloadCsv("yarnflow-orders.csv", [
                   [
-                    "Order",
-                    "Customer",
-                    "Spec",
-                    "Ordered kg",
-                    "Delivered kg",
-                    "Due",
+                    copy.order,
+                    copy.customer,
+                    copy.spec,
+                    copy.orderedKg,
+                    copy.deliveredKg,
+                    copy.due,
                   ],
                   ...list.map((o) => [
                     o.id,
@@ -2547,22 +2143,25 @@ function Workspace({
               }
             >
               <Download size={18} />
+              <span className="control-label">
+                {t(copy.exportOrders, copy.urdu163)}
+              </span>
             </button>
           </div>
           <div
             className="table-scroll"
             tabIndex={0}
             role="region"
-            aria-label={t("Scrollable table", "اسکرول جدول")}
+            aria-label={t(copy.scrollableTable, copy.urdu14)}
           >
             <table>
               <thead>
                 <tr>
-                  <th>{t("Customer / order", "کسٹمر / آرڈر")}</th>
-                  <th>{t("Yarn & fabric", "یارن اور کپڑا")}</th>
-                  <th>{t("Fulfillment", "تکمیل")}</th>
-                  <th>{t("Due date", "آخری تاریخ")}</th>
-                  <th>{t("Status", "حالت")}</th>
+                  <th>{t(copy.customerOrder, copy.urdu164)}</th>
+                  <th>{t(copy.yarnFabric, copy.urdu165)}</th>
+                  <th>{t(copy.fulfillment, copy.urdu166)}</th>
+                  <th>{t(copy.dueDate, copy.urdu167)}</th>
+                  <th>{t(copy.status, copy.urdu19)}</th>
                   <th />
                 </tr>
               </thead>
@@ -2582,7 +2181,10 @@ function Workspace({
                     <td>
                       <strong>
                         <bdi>
-                          {fmt(o.delivered / 1000)} / {fmt(o.grams / 1000)} kg
+                          {fmt(o.delivered / 1000)}
+                          {copy.urdu153}
+                          {fmt(o.grams / 1000)}
+                          {copy.kg}
                         </bdi>
                       </strong>
                       <div className="progress-track">
@@ -2605,21 +2207,24 @@ function Workspace({
                         }
                       >
                         {o.status === "completed"
-                          ? t("Completed", "مکمل")
+                          ? t(copy.completed, copy.urdu162)
                           : o.status === "ready"
-                            ? t("Ready to plan", "منصوبہ بندی تیار")
-                            : t("In progress", "جاری")}
+                            ? t(copy.readyToPlan, copy.urdu168)
+                            : t(copy.inProgress, copy.urdu161)}
                       </Status>
                     </td>
                     <td>
                       <button
                         className="icon-button"
-                        aria-label={t("View order", "آرڈر دیکھیں")}
+                        aria-label={t(copy.viewOrder, copy.urdu111)}
                         onClick={() =>
                           setModal({ type: "order-detail", report: o.id })
                         }
                       >
                         <ArrowUpRight size={18} />
+                        <span className="control-label">
+                          {t(copy.viewOrder, copy.urdu111)}
+                        </span>
                       </button>
                     </td>
                   </tr>
@@ -2628,7 +2233,7 @@ function Workspace({
             </table>
           </div>
           {!list.length && (
-            <Empty title={t("No orders here yet", "ابھی کوئی آرڈر نہیں")} />
+            <Empty title={t(copy.noOrdersHereYet, copy.urdu169)} />
           )}
         </section>
       </>
@@ -2646,63 +2251,60 @@ function Workspace({
                 className={registerTab === tab ? "active" : ""}
               >
                 {t(
-                  ["Lot sheet", "Production", "Daily summary"][i],
-                  ["لاٹ شیٹ", "پیداوار", "روزانہ خلاصہ"][i],
+                  [copy.lotSheet, copy.production, copy.dailySummary][i],
+                  [copy.urdu170, copy.urdu3, copy.urdu171][i],
                 )}
               </button>
             ))}
           </div>
           <div className="toolbar-actions">
             <Button icon={Download} onClick={() => exportEntries()}>
-              {t("Export CSV", "CSV برآمد کریں")}
+              {t(copy.exportCsv, copy.csv2)}
             </Button>
             <Button icon={Printer} onClick={() => window.print()}>
-              {t("Print", "پرنٹ")}
+              {t(copy.print, copy.urdu172)}
             </Button>
           </div>
         </div>
         <div className="register-caption">
           <BookOpen size={17} />
-          {t(
-            "Same columns as your paper register. Every saved row keeps its history.",
-            "کاغذی رجسٹر جیسے کالم۔ ہر محفوظ سطر کی تاریخ برقرار۔",
-          )}
+          {t(copy.sameColumnsAsYourPaperRegisterEvery, copy.urdu173)}
           <span>{dateLabel}</span>
         </div>
         <div
           className="table-scroll"
           tabIndex={0}
           role="region"
-          aria-label={t("Scrollable table", "اسکرول جدول")}
+          aria-label={t(copy.scrollableTable, copy.urdu14)}
         >
           <table className="paper-table">
             <thead>
               <tr>
                 {(registerTab === "production"
                   ? [
-                      "Date",
-                      "Machine",
-                      "Yarn spec",
-                      "Lot no.",
-                      "Cartons",
-                      "Cones",
-                      "Weight (kg)",
+                      copy.date,
+                      copy.machine,
+                      copy.yarnSpec,
+                      copy.lotNo,
+                      copy.cartons2,
+                      copy.cones2,
+                      copy.weightKg2,
                     ]
                   : registerTab === "lot"
                     ? [
-                        "Lot no.",
-                        "Date received",
-                        "Cartons received",
-                        "Cartons issued",
-                        "Cartons in stock",
-                        "Cones in stock",
+                        copy.lotNo,
+                        copy.dateReceived,
+                        copy.cartonsReceived,
+                        copy.cartonsIssued,
+                        copy.cartonsInStock,
+                        copy.conesInStock,
                       ]
                     : [
-                        "Date",
-                        "Production (kg)",
-                        "Delivery (kg)",
-                        "Stock balance (kg)",
-                        "Entries",
+                        copy.date,
+                        copy.productionKg,
+                        copy.deliveryKg,
+                        copy.stockBalanceKg,
+                        copy.entries,
                       ]
                 ).map((h, i) => (
                   <th key={h}>
@@ -2710,29 +2312,29 @@ function Workspace({
                       h,
                       (registerTab === "production"
                         ? [
-                            "تاریخ",
-                            "مشین",
-                            "یارن",
-                            "لاٹ نمبر",
-                            "کارٹن",
-                            "کونز",
-                            "وزن کلو",
+                            copy.urdu33,
+                            copy.urdu42,
+                            copy.urdu57,
+                            copy.urdu174,
+                            copy.urdu24,
+                            copy.urdu51,
+                            copy.urdu84,
                           ]
                         : registerTab === "lot"
                           ? [
-                              "لاٹ نمبر",
-                              "وصولی کی تاریخ",
-                              "وصول کارٹن",
-                              "جاری کارٹن",
-                              "اسٹاک کارٹن",
-                              "اسٹاک کونز",
+                              copy.urdu174,
+                              copy.urdu175,
+                              copy.urdu176,
+                              copy.urdu177,
+                              copy.urdu178,
+                              copy.urdu179,
                             ]
                           : [
-                              "تاریخ",
-                              "پیداوار کلو",
-                              "ترسیل کلو",
-                              "اسٹاک کلو",
-                              "اندراجات",
+                              copy.urdu33,
+                              copy.urdu180,
+                              copy.urdu181,
+                              copy.urdu182,
+                              copy.urdu183,
                             ])[i],
                     )}
                   </th>
@@ -2744,15 +2346,19 @@ function Workspace({
                 active
                   .filter((e) => e.kind === "production")
                   .map((e) => (
-                    <tr
-                      key={e.id}
-                      onClick={() => setModal({ type: "detail", entry: e })}
-                    >
+                    <tr key={e.id}>
                       <td>
                         <bdi>{e.date.split("-").reverse().join("/")}</bdi>
                       </td>
                       <td>
-                        <bdi>{e.machine}</bdi>
+                        <button
+                          className="table-link"
+                          onClick={() => setModal({ type: "detail", entry: e })}
+                        >
+                          <bdi>{e.machine}</bdi>
+                          {copy.urdu21}
+                          {t(copy.viewEntry, copy.urdu27)}
+                        </button>
                       </td>
                       <td>{lots.find((l) => l.id === e.lot)?.spec}</td>
                       <td>{e.lot}</td>
@@ -2799,7 +2405,7 @@ function Workspace({
                         : 1
                   }
                 >
-                  {t("Total", "کل")}
+                  {t(copy.total, copy.urdu184)}
                 </td>
                 {registerTab === "production" ? (
                   <>
@@ -2814,9 +2420,9 @@ function Workspace({
                   </>
                 ) : (
                   <>
-                    <td>{fmt(produced / 1000)}</td>
-                    <td>{fmt(dispatched / 1000)}</td>
-                    <td>{fmt(finished.grams / 1000)}</td>
+                    <td>{fmt(produced / 1000, 0)}</td>
+                    <td>{fmt(dispatched / 1000, 0)}</td>
+                    <td>{fmt(finished.grams / 1000, 0)}</td>
                     <td>{visible.length}</td>
                   </>
                 )}
@@ -2834,13 +2440,10 @@ function Workspace({
               })
             }
           >
-            {t("Add a register entry", "رجسٹر میں اندراج کریں")}
+            {t(copy.addARegisterEntry, copy.urdu185)}
           </Button>
           <small>
-            {t(
-              "Review first. Save once. Keep every original.",
-              "پہلے جائزہ، پھر محفوظ۔ ہر اصل اندراج برقرار۔",
-            )}
+            {t(copy.savedEntriesRemainInTheRegisterReverse, copy.urdu186)}
           </small>
         </div>
       </section>
@@ -2848,45 +2451,45 @@ function Workspace({
   }
   const reportNames: [string, string, string, string, LucideIcon][] = [
     [
-      "Daily summary",
-      "روزانہ خلاصہ",
-      "Production, deliveries, and closing stock in one place.",
-      "پیداوار، ترسیل اور اختتامی اسٹاک ایک جگہ۔",
+      copy.dailySummary,
+      copy.urdu171,
+      copy.productionDeliveriesAndClosingStockInOne,
+      copy.urdu187,
       CalendarDays,
     ],
     [
-      "Production register",
-      "پیداوار رجسٹر",
-      "Every machine, lot, and shift — clearly accounted for.",
-      "ہر مشین، لاٹ اور شفٹ کا مکمل حساب۔",
+      copy.productionRegister,
+      copy.urdu188,
+      copy.everyMachineLotAndShiftClearlyAccounted,
+      copy.urdu189,
       Factory,
     ],
     [
-      "Lot ledger",
-      "لاٹ کھاتہ",
-      "Follow a lot from receipt to its final delivery.",
-      "وصولی سے آخری ترسیل تک لاٹ کی تفصیل۔",
+      copy.lotLedger,
+      copy.urdu190,
+      copy.followALotFromReceiptToIts,
+      copy.urdu191,
       Layers3,
     ],
     [
-      "Stock report",
-      "اسٹاک رپورٹ",
-      "See exactly what’s available across your stockroom.",
-      "گودام میں دستیاب تمام اسٹاک دیکھیں۔",
+      copy.stockReport,
+      copy.urdu192,
+      copy.seeExactlyWhatSAvailableAcrossYour,
+      copy.urdu193,
       Boxes,
     ],
     [
-      "Order status",
-      "آرڈر کی حالت",
-      "What’s promised, what’s delivered, and what’s next.",
-      "آرڈر، ترسیل اور باقی کام کی تفصیل۔",
+      copy.orderStatus,
+      copy.urdu194,
+      copy.whatSPromisedWhatSDeliveredAnd,
+      copy.urdu195,
       ShoppingBag,
     ],
     [
-      "Paper-match report",
-      "کاغذی رجسٹر رپورٹ",
-      "A familiar layout for your paper and app parallel run.",
-      "کاغذ اور ایپ کے تقابلی جائزے کے لیے مانوس ترتیب۔",
+      copy.paperMatchReport,
+      copy.urdu196,
+      copy.aFamiliarLayoutForYourPaperAnd,
+      copy.urdu197,
       BookOpen,
     ],
   ];
@@ -2894,10 +2497,8 @@ function Workspace({
     return (
       <>
         <div className="section-label">
-          {t("YOUR EVERYDAY REPORTS", "روزمرہ کی رپورٹس")}
-          <span>
-            {t("6 reports · ready when you are", "۶ رپورٹس · ہر وقت تیار")}
-          </span>
+          {t(copy.yourEverydayReports, copy.urdu198)}
+          <span>{t(copy.label6ReportsReadyWhenYouAre, copy.urdu199)}</span>
         </div>
         <div className="report-grid">
           {reportNames.map(([name, urdu, description, urDesc, I], i) => (
@@ -2912,7 +2513,10 @@ function Workspace({
               <h3>{t(name, urdu)}</h3>
               <p>{t(description, urDesc)}</p>
               <div>
-                <span>CSV · {t("Print / PDF", "پرنٹ / پی ڈی ایف")}</span>
+                <span>
+                  {copy.csv3}
+                  {t(copy.printPdf, copy.urdu200)}
+                </span>
                 <ArrowUpRight size={18} />
               </div>
             </button>
@@ -2920,10 +2524,7 @@ function Workspace({
         </div>
         <div className="info-banner">
           <FileText size={20} />
-          {t(
-            "Exports use your practice data. Use your browser’s Print → Save as PDF for a PDF copy.",
-            "برآمد میں مشق کا ڈیٹا شامل ہے۔ پی ڈی ایف کے لیے براؤزر میں پرنٹ ← پی ڈی ایف محفوظ کریں استعمال کریں۔",
-          )}
+          {t(copy.exportsUseYourPracticeDataUseYour, copy.urdu201)}
         </div>
       </>
     );
@@ -2936,58 +2537,40 @@ function Workspace({
             <ShieldCheck size={40} />
           </span>
           <div>
-            <h2>
-              {t(
-                "Your practice entries are safe here.",
-                "آپ کے مشق کے اندراجات یہاں محفوظ ہیں۔",
-              )}
-            </h2>
-            <p>
-              {t(
-                "Saved in this browser. A factory server is not connected to this preview.",
-                "اس براؤزر میں محفوظ ہیں۔ یہ پیش نظارہ فیکٹری سرور سے منسلک نہیں۔",
-              )}
-            </p>
+            <h2>{t(copy.yourPracticeEntriesAreSafeHere, copy.urdu202)}</h2>
+            <p>{t(copy.savedInThisBrowserAFactoryServer, copy.urdu203)}</p>
             <Status tone={offline ? "amber" : "green"}>
               {offline
-                ? t(
-                    "Offline · local saves available",
-                    "آف لائن · مقامی محفوظ دستیاب",
-                  )
-                : t(
-                    "Online · practice workspace",
-                    "آن لائن · مشق کا ورک اسپیس",
-                  )}
+                ? t(copy.offlineLocalSavesAvailable, copy.urdu204)
+                : t(copy.onlinePracticeWorkspace, copy.urdu205)}
             </Status>
           </div>
         </div>
         <div className="inventory-summary">
           <div className="panel glass">
-            <span>{t("Saved on this device", "اس ڈیوائس پر محفوظ")}</span>
+            <span>{t(copy.savedOnThisDevice, copy.urdu206)}</span>
             <h2>
               {savedLocal}
-              <small> {t("entries", "اندراجات")}</small>
+              <small> {t(copy.entries2, copy.urdu183)}</small>
             </h2>
           </div>
           <div className="panel glass">
-            <span>{t("Sample records", "نمونہ ریکارڈ")}</span>
+            <span>{t(copy.sampleRecords, copy.urdu207)}</span>
             <h2>{visible.length - savedLocal}</h2>
           </div>
           <div className="panel glass">
-            <span>{t("Factory connection", "فیکٹری کنکشن")}</span>
-            <h2 className="text-value">{t("Not connected", "منسلک نہیں")}</h2>
+            <span>{t(copy.factoryConnection, copy.urdu208)}</span>
+            <h2 className="text-value">{t(copy.notConnected, copy.urdu209)}</h2>
           </div>
         </div>
         <div className="warning-banner">
           <AlertTriangle size={20} />
           <div>
-            <strong>
-              {t("Keep a copy of your work.", "اپنے کام کی نقل رکھیں۔")}
-            </strong>
+            <strong>{t(copy.keepACopyOfYourWork, copy.urdu210)}</strong>
             <p>
               {t(
-                "Clearing browser data removes local practice entries. Export a backup before clearing storage or changing devices.",
-                "براؤزر ڈیٹا صاف کرنے سے مقامی اندراجات مٹ جائیں گے۔ پہلے بیک اپ برآمد کریں۔",
+                copy.clearingBrowserDataRemovesLocalPracticeEntries,
+                copy.urdu211,
               )}
             </p>
           </div>
@@ -2995,29 +2578,26 @@ function Workspace({
             icon={Download}
             onClick={() =>
               downloadCsv("yarnflow-local-backup.json.csv", [
-                ["Backup JSON"],
+                [copy.backupJson],
                 [JSON.stringify({ entries, orders })],
               ])
             }
           >
-            {t("Export backup", "بیک اپ برآمد کریں")}
+            {t(copy.exportBackup, copy.urdu212)}
           </Button>
         </div>
         <section className="panel glass">
           <div className="panel-heading">
-            <h3>{t("Saved on this device", "اس ڈیوائس پر محفوظ")}</h3>
+            <h3>{t(copy.savedOnThisDevice, copy.urdu206)}</h3>
             <Button
               icon={RefreshCw}
               onClick={() =>
                 notify(
-                  t(
-                    "All practice entries are saved locally. Server sync needs a connected backend.",
-                    "تمام اندراجات مقامی طور پر محفوظ ہیں۔ سنک کے لیے سرور کنکشن درکار ہے۔",
-                  ),
+                  t(copy.allPracticeEntriesAreSavedLocallyServer, copy.urdu213),
                 )
               }
             >
-              {t("Check status", "حالت چیک کریں")}
+              {t(copy.checkStatus, copy.urdu214)}
             </Button>
           </div>
           <EntryTable
@@ -3033,10 +2613,10 @@ function Workspace({
       <div className="settings-layout">
         <nav className="settings-nav">
           {[
-            ["general", "General", "عمومی", Settings2],
-            ["appearance", "Appearance", "ظاہری شکل", Sun],
-            ["data", "Data & masters", "ڈیٹا اور بنیادی معلومات", Database],
-            ["people", "People & devices", "افراد اور ڈیوائسز", Users],
+            ["general", copy.general, copy.urdu215, Settings2],
+            ["appearance", copy.appearance, copy.urdu216, Sun],
+            ["data", copy.dataMasters, copy.urdu217, Database],
+            ["people", copy.peopleDevices, copy.urdu95, Users],
           ].map(([key, en, urdu, I]) => (
             <button
               key={String(key)}
@@ -3052,15 +2632,12 @@ function Workspace({
         <section className="panel glass settings-panel">
           {settingsTab === "general" ? (
             <>
-              <h3>{t("A workspace of your own", "آپ کا اپنا ورک اسپیس")}</h3>
+              <h3>{t(copy.factorySettings, copy.urdu218)}</h3>
               <p className="muted">
-                {t(
-                  "The small details that make it feel like your factory.",
-                  "آپ کی فیکٹری کی بنیادی معلومات۔",
-                )}
+                {t(copy.factoryNameTimezoneAndLanguage, copy.urdu219)}
               </p>
               <label>
-                {t("Factory name", "فیکٹری کا نام")}
+                {t(copy.factoryName, copy.urdu220)}
                 <input
                   value={factoryName}
                   onChange={(e) => setFactoryName(e.target.value)}
@@ -3069,32 +2646,28 @@ function Workspace({
               </label>
               <div className="form-grid">
                 <label>
-                  {t("Timezone", "ٹائم زون")}
-                  <input value="Asia/Karachi (UTC +05:00)" readOnly />
+                  {t(copy.timezone, copy.urdu221)}
+                  <input value={copy.factoryTimezone} readOnly />
                 </label>
-                <label>
-                  {t("Language", "زبان")}
-                  <select
-                    value={ur ? "ur" : "en"}
-                    onChange={(e) => setUr(e.target.value === "ur")}
-                  >
-                    <option value="en">English</option>
-                    <option value="ur">اردو</option>
-                  </select>
-                </label>
+                <Choices
+                  label={t(copy.language, copy.urdu222)}
+                  value={ur ? "ur" : "en"}
+                  options={[
+                    { value: "en", label: copy.english },
+                    { value: "ur", label: copy.urdu65 },
+                  ]}
+                  onChange={(value) => setUr(value === "ur")}
+                />
               </div>
               <div className="setting-line">
                 <div>
-                  <strong>{t("Practice workspace", "مشق کا ورک اسپیس")}</strong>
+                  <strong>{t(copy.practiceWorkspace, copy.urdu223)}</strong>
                   <p>
-                    {t(
-                      "Try real workflows with sample data, safely.",
-                      "نمونہ ڈیٹا کے ساتھ کام کی مشق کریں۔",
-                    )}
+                    {t(copy.tryRealWorkflowsWithSampleDataSafely, copy.urdu224)}
                   </p>
                 </div>
                 <Status tone="purple">
-                  {t("Always on in this preview", "اس پیش نظارے میں فعال")}
+                  {t(copy.alwaysOnInThisPreview, copy.urdu225)}
                 </Status>
               </div>
               <Button
@@ -3102,30 +2675,24 @@ function Workspace({
                 icon={Check}
                 onClick={() =>
                   notify(
-                    t(
-                      "Workspace preferences saved on this device.",
-                      "ورک اسپیس کی ترتیبات اس ڈیوائس پر محفوظ ہوگئیں۔",
-                    ),
+                    t(copy.workspacePreferencesSavedOnThisDevice, copy.urdu226),
                   )
                 }
               >
-                {t("Save preferences", "ترتیبات محفوظ کریں")}
+                {t(copy.savePreferences, copy.urdu227)}
               </Button>
             </>
           ) : settingsTab === "appearance" ? (
             <>
-              <h3>{t("Find your kind of clarity", "اپنی پسند کا منظر")}</h3>
+              <h3>{t(copy.display, copy.urdu228)}</h3>
               <p className="muted">
-                {t(
-                  "Choose a comfortable view for your environment.",
-                  "اپنے ماحول کے مطابق آرام دہ منظر منتخب کریں۔",
-                )}
+                {t(copy.chooseAComfortableViewForYourEnvironment, copy.urdu229)}
               </p>
               <div className="theme-options">
                 {[
-                  ["light", "Liquid glass", "لیکوئڈ گلاس", Sun],
-                  ["dark", "After hours", "گہرا منظر", Moon],
-                  ["factory", "Factory mode", "فیکٹری موڈ", Monitor],
+                  ["light", copy.light, copy.urdu230, Sun],
+                  ["dark", copy.dark, copy.urdu231, Moon],
+                  ["factory", copy.factoryMode, copy.urdu232, Monitor],
                 ].map(([key, en, urdu, I]) => (
                   <button
                     key={String(key)}
@@ -3150,34 +2717,21 @@ function Workspace({
               </div>
               <div className="info-banner">
                 <Eye size={20} />
-                {t(
-                  "Factory mode uses stronger borders and higher contrast for the floor.",
-                  "فیکٹری موڈ میں واضح بارڈر اور زیادہ کنٹراسٹ ہے۔",
-                )}
+                {t(copy.factoryModeUsesStrongerBordersAndHigher, copy.urdu233)}
               </div>
             </>
           ) : settingsTab === "data" ? (
             <>
-              <h3>
-                {t(
-                  "Everything starts with good data",
-                  "درست معلومات سے بہتر شروعات",
-                )}
-              </h3>
+              <h3>{t(copy.manageFactoryRecords, copy.urdu234)}</h3>
               {[
                 [
                   "masters",
-                  "Manage yarn, lots & suppliers",
-                  "یارن، لاٹ اور سپلائر سنبھالیں",
+                  copy.manageYarnLotsSuppliers,
+                  copy.urdu235,
                   Database,
                 ],
-                ["import", "Import a register", "رجسٹر درآمد کریں", Upload],
-                [
-                  "sync",
-                  "Back up your practice data",
-                  "مشق کے ڈیٹا کا بیک اپ",
-                  Download,
-                ],
+                ["import", copy.importARegister, copy.urdu96, Upload],
+                ["sync", copy.backUpYourPracticeData, copy.urdu236, Download],
               ].map(([to, en, urdu, I]) => (
                 <button
                   key={String(to)}
@@ -3192,20 +2746,15 @@ function Workspace({
             </>
           ) : (
             <>
-              <h3>
-                {t(
-                  "A little teamwork goes a long way",
-                  "ٹیم ورک سے بہتر نتائج",
-                )}
-              </h3>
+              <h3>{t(copy.peopleAndDevices, copy.urdu237)}</h3>
               <p className="muted">
                 {t(
-                  "Preview the people and device management screens.",
-                  "افراد اور ڈیوائسز کے انتظام کا پیش نظارہ دیکھیں۔",
+                  copy.previewThePeopleAndDeviceManagementScreens,
+                  copy.urdu238,
                 )}
               </p>
               <Button icon={Users} onClick={() => navigate("users")}>
-                {t("Manage people & devices", "افراد اور ڈیوائسز سنبھالیں")}
+                {t(copy.managePeopleDevices, copy.urdu239)}
               </Button>
             </>
           )}
@@ -3220,51 +2769,41 @@ function Workspace({
           <span className="feature-icon">
             <CircleHelp size={30} />
           </span>
-          <h2>
-            {t(
-              "You’ve got this. We’re here to help.",
-              "آپ یہ کر سکتے ہیں۔ ہم مدد کے لیے موجود ہیں۔",
-            )}
-          </h2>
-          <p>
-            {t(
-              "Get comfortable with your new everyday workspace.",
-              "اپنے نئے روزمرہ ورک اسپیس سے واقف ہوں۔",
-            )}
-          </p>
+          <h2>{t(copy.howToUseYarnflow, copy.urdu240)}</h2>
+          <p>{t(copy.chooseATaskBelowForInstructions, copy.urdu241)}</p>
           <Button
             variant="primary"
-            icon={Sparkles}
+            icon={CircleHelp}
             onClick={() => navigate("home")}
           >
-            {t("Explore practice actions", "مشق کے کام دیکھیں")}
+            {t(copy.explorePracticeActions, copy.urdu242)}
           </Button>
         </div>
         <div className="help-grid">
           {[
             [
-              "How do I record production?",
-              "پیداوار کیسے درج کروں؟",
-              "Choose New entry → Record production. Pick a machine and lot, enter quantities, then review and save.",
-              "نیا اندراج ← پیداوار منتخب کریں۔ مشین اور لاٹ چنیں، مقدار درج کریں، پھر جائزہ اور محفوظ کریں۔",
+              copy.howDoIRecordProduction,
+              copy.urdu243,
+              copy.chooseProductionThenRecordProductionChooseA,
+              copy.urdu244,
             ],
             [
-              "What happens without internet?",
-              "انٹرنیٹ نہ ہو تو کیا ہوگا؟",
-              "Practice entries save on this device. After the first visit, the app shell is cached for offline use. This preview has no factory sync server.",
-              "مشق کے اندراجات ڈیوائس پر محفوظ ہوتے ہیں۔ پہلی بار کھولنے کے بعد ایپ آف لائن بھی دستیاب ہے۔ اس پیش نظارے میں سرور سنک نہیں۔",
+              copy.whatHappensWithoutInternet,
+              copy.urdu245,
+              copy.practiceEntriesSaveOnThisDeviceAfter,
+              copy.urdu246,
             ],
             [
-              "Can I correct a saved entry?",
-              "کیا محفوظ اندراج درست کر سکتا ہوں؟",
-              "Open an entry and choose Reverse entry. Give a reason. The original stays in history, and a reversing entry restores stock if it is still available.",
-              "اندراج کھولیں اور واپس کریں منتخب کریں۔ وجہ درج کریں۔ اصل تاریخ برقرار رہے گی اور اسٹاک دستیاب ہونے پر واپس ہوگا۔",
+              copy.canICorrectASavedEntry,
+              copy.urdu247,
+              copy.openAnEntryAndChooseReverseEntry,
+              copy.urdu248,
             ],
             [
-              "What does QC hold mean?",
-              "کوالٹی ہولڈ کیا ہے؟",
-              "The lot is waiting for a quality check. It remains visible in stock, but cannot be dispatched until the manager releases it.",
-              "لاٹ کی کوالٹی جانچ باقی ہے۔ اسٹاک میں نظر آتی ہے لیکن منظوری تک ترسیل نہیں ہوسکتی۔",
+              copy.whatDoesQcHoldMean,
+              copy.urdu249,
+              copy.theLotIsWaitingForAQuality,
+              copy.urdu250,
             ],
           ].map(([en, urdu, answer, urAnswer]) => (
             <details className="help-question glass" key={en}>
@@ -3279,12 +2818,12 @@ function Workspace({
         <div className="help-links">
           <button onClick={() => navigate("components")}>
             <Layers3 size={19} />
-            {t("Component gallery", "کمپوننٹ گیلری")}
+            {t(copy.componentGallery, copy.urdu98)}
             <ArrowUpRight size={16} />
           </button>
           <button onClick={() => navigate("login")}>
             <Users size={19} />
-            {t("Try the PIN login screen", "پن لاگ ان آزمائیں")}
+            {t(copy.tryThePinLoginScreen, copy.urdu251)}
             <ArrowUpRight size={16} />
           </button>
         </div>
@@ -3301,68 +2840,60 @@ function Workspace({
           </span>
           <h2>
             {isClosed
-              ? t("A good day, all wrapped up.", "آج کا حساب مکمل ہوگیا۔")
-              : t("Let’s bring today together.", "آج کا حساب مکمل کریں۔")}
+              ? t(copy.aGoodDayAllWrappedUp, copy.urdu252)
+              : t(copy.reviewTodaySEntries, copy.urdu253)}
           </h2>
           <p>
-            {dateLabel} · {factoryName}
+            {dateLabel}
+            {copy.urdu21}
+            {factoryName}
           </p>
         </div>
         <div className="close-totals">
           <div>
-            <span>{t("Production", "پیداوار")}</span>
+            <span>{t(copy.production, copy.urdu3)}</span>
             <strong>
-              <bdi>{fmt(produced / 1000)} kg</bdi>
+              <bdi>
+                {fmt(produced / 1000, 0)}
+                {copy.kg}
+              </bdi>
             </strong>
           </div>
           <div>
-            <span>{t("Dispatch", "ترسیل")}</span>
+            <span>{t(copy.dispatch, copy.urdu6)}</span>
             <strong>
-              <bdi>{fmt(dispatched / 1000)} kg</bdi>
+              <bdi>
+                {fmt(dispatched / 1000, 0)}
+                {copy.kg}
+              </bdi>
             </strong>
           </div>
           <div>
-            <span>{t("Closing stock", "اختتامی اسٹاک")}</span>
+            <span>{t(copy.closingStock, copy.urdu254)}</span>
             <strong>
-              <bdi>{fmt(finished.grams / 1000)} kg</bdi>
+              <bdi>
+                {fmt(finished.grams / 1000, 0)}
+                {copy.kg}
+              </bdi>
             </strong>
           </div>
         </div>
         {isClosed ? (
           <div className="success-block">
             <CircleCheck size={36} />
-            <h3>{t("Practice day closed", "مشق کا دن بند ہوگیا")}</h3>
-            <p>
-              {t(
-                "New entries for today are now blocked in this practice workspace.",
-                "اس مشق کے ورک اسپیس میں آج کے نئے اندراجات بند ہیں۔",
-              )}
-            </p>
+            <h3>{t(copy.practiceDayClosed, copy.urdu255)}</h3>
+            <p>{t(copy.newEntriesForTodayAreNowBlocked, copy.urdu256)}</p>
             <Button onClick={() => setModal({ type: "reopen" })}>
-              {t("Reopen with a reason", "وجہ کے ساتھ دوبارہ کھولیں")}
+              {t(copy.reopenWithAReason, copy.urdu257)}
             </Button>
           </div>
         ) : (
           <>
-            <h3>
-              {t(
-                "A quick check before you close",
-                "بند کرنے سے پہلے مختصر چیک",
-              )}
-            </h3>
+            <h3>{t(copy.aQuickCheckBeforeYouClose, copy.urdu258)}</h3>
             {[
-              [
-                "I reviewed today’s production and dispatch entries.",
-                "آج کی پیداوار اور ترسیل دیکھ لی ہے۔",
-              ],
-              [
-                "I checked the closing stock against the register.",
-                "رجسٹر سے اختتامی اسٹاک ملا لیا ہے۔",
-              ],
-              [
-                "I have exported a backup of locally saved entries.",
-                "مقامی اندراجات کا بیک اپ برآمد کر لیا ہے۔",
-              ],
+              [copy.iReviewedTodaySProductionAndDispatch, copy.urdu259],
+              [copy.iCheckedTheClosingStockAgainstThe, copy.urdu260],
+              [copy.iHaveExportedABackupOfLocally, copy.urdu261],
             ].map(([en, urdu], i) => (
               <label className="check-line" key={en}>
                 <input
@@ -3378,21 +2909,18 @@ function Workspace({
               </label>
             ))}
             <label>
-              {t("Handover notes", "اگلی شفٹ کے لیے نوٹس")}
+              {t(copy.handoverNotes, copy.urdu262)}
               <textarea
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 maxLength={500}
                 rows={3}
-                placeholder={t(
-                  "Anything for the next shift?",
-                  "اگلی شفٹ کے لیے کوئی بات؟",
-                )}
+                placeholder={t(copy.anythingForTheNextShift, copy.urdu263)}
               />
             </label>
             <div className="modal-actions">
               <Button icon={Download} onClick={() => exportEntries()}>
-                {t("Export daily summary", "روزانہ خلاصہ برآمد")}
+                {t(copy.exportDailySummary, copy.urdu264)}
               </Button>
               <Button
                 variant="primary"
@@ -3400,7 +2928,7 @@ function Workspace({
                 disabled={!checks.every(Boolean)}
                 onClick={() => setModal({ type: "close-confirm" })}
               >
-                {t("Review & close day", "جائزہ لیں اور دن بند کریں")}
+                {t(copy.reviewCloseDay, copy.urdu265)}
               </Button>
             </div>
           </>
@@ -3431,19 +2959,19 @@ function Workspace({
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t(
-              "Try a lot number, yarn spec, or machine…",
-              "لاٹ نمبر، یارن یا مشین تلاش کریں…",
-            )}
-            aria-label={t("Search all records", "تمام ریکارڈ تلاش کریں")}
+            placeholder={t(copy.tryALotNumberYarnSpecOr, copy.urdu266)}
+            aria-label={t(copy.searchAllRecords, copy.urdu267)}
           />
           {query && (
             <button
               className="icon-button"
-              aria-label={t("Clear search", "تلاش صاف کریں")}
+              aria-label={t(copy.clearSearch, copy.urdu268)}
               onClick={() => setQuery("")}
             >
               <X size={18} />
+              <span className="control-label">
+                {t(copy.clearSearch, copy.urdu268)}
+              </span>
             </button>
           )}
         </label>
@@ -3456,7 +2984,7 @@ function Workspace({
               >
                 <Layers3 size={20} />
                 <strong>
-                  {t("Lot", "لاٹ")} {l.id}
+                  {t(copy.lot, copy.urdu22)} {l.id}
                 </strong>
                 <span>{l.spec}</span>
                 <ArrowUpRight size={17} />
@@ -3473,24 +3001,21 @@ function Workspace({
           <Empty
             title={
               query
-                ? t("No matching entries", "کوئی اندراج نہیں ملا")
-                : t("Find something in a heartbeat.", "فوراً تلاش کریں۔")
+                ? t(copy.noMatchingEntries, copy.urdu269)
+                : t(copy.findSomethingInAHeartbeat, copy.urdu270)
             }
             detail={
               query
-                ? t(
-                    "Check the lot number or try the supplier name.",
-                    "لاٹ نمبر چیک کریں یا سپلائر کا نام آزمائیں۔",
-                  )
+                ? t(copy.checkTheLotNumberOrTryThe, copy.urdu271)
                 : t(
-                    "Search by lot, serial, machine, yarn specification, or team member.",
-                    "لاٹ، سیریل، مشین، یارن یا ٹیم کے نام سے تلاش کریں۔",
+                    copy.searchByLotSerialMachineYarnSpecification,
+                    copy.urdu272,
                   )
             }
             action={
               query ? (
                 <Button onClick={() => setQuery("")}>
-                  {t("Clear search", "تلاش صاف کریں")}
+                  {t(copy.clearSearch, copy.urdu268)}
                 </Button>
               ) : (
                 <div className="search-suggestions">
@@ -3513,34 +3038,42 @@ function Workspace({
       <>
         <div className="info-banner">
           <Database size={19} />
-          {t(
-            "Sample master data is read-only. Production editing and archiving need server permissions.",
-            "نمونہ بنیادی ڈیٹا صرف پڑھنے کے لیے ہے۔ اصل ترمیم اور آرکائیو کے لیے سرور کی اجازت ضروری ہے۔",
-          )}
+          {t(copy.sampleMasterDataIsReadOnlyProduction, copy.urdu273)}
         </div>
         <section className="panel glass">
           <div className="panel-heading">
-            <h3>{t("Yarn specifications & lots", "یارن کی تفصیل اور لاٹ")}</h3>
-            <Status tone="purple">{t("4 sample lots", "۴ نمونہ لاٹ")}</Status>
+            <h3>{t(copy.yarnSpecificationsLots, copy.urdu274)}</h3>
+            <Status tone="purple">
+              {t(copy.label4SampleLots, copy.urdu275)}
+            </Status>
           </div>
           <div
             className="table-scroll"
             tabIndex={0}
             role="region"
-            aria-label={t("Scrollable table", "اسکرول جدول")}
+            aria-label={t(copy.scrollableTable, copy.urdu14)}
           >
             <table>
               <thead>
                 <tr>
                   {[
-                    "Specification",
-                    "Lot",
-                    "Supplier",
-                    "Packing default",
-                    "Status",
+                    copy.specification,
+                    copy.lot,
+                    copy.supplier,
+                    copy.packingDefault,
+                    copy.status,
                   ].map((h, i) => (
                     <th key={h}>
-                      {t(h, ["یارن", "لاٹ", "سپلائر", "پیکنگ", "حالت"][i])}
+                      {t(
+                        h,
+                        [
+                          copy.urdu57,
+                          copy.urdu22,
+                          copy.urdu41,
+                          copy.urdu276,
+                          copy.urdu19,
+                        ][i],
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -3553,12 +3086,15 @@ function Workspace({
                     </td>
                     <td>{l.id}</td>
                     <td>{l.supplier}</td>
-                    <td>24 {t("cones / carton", "کونز / کارٹن")}</td>
+                    <td>
+                      {copy.label24}
+                      {t(copy.conesCarton, copy.urdu277)}
+                    </td>
                     <td>
                       <Status tone={l.status === "hold" ? "amber" : "green"}>
                         {l.status === "hold"
-                          ? t("QC hold", "جانچ باقی")
-                          : t("Active", "فعال")}
+                          ? t(copy.qcHold, copy.urdu48)
+                          : t(copy.active, copy.urdu278)}
                       </Status>
                     </td>
                   </tr>
@@ -3569,9 +3105,9 @@ function Workspace({
         </section>
         <div className="inventory-summary">
           {[
-            ["6", "Machines", "مشینیں", "1A · 1B · 2A · 2B · 3A · 3B"],
-            ["3", "Shifts", "شفٹیں", "A 07–15 · B 15–23 · C 23–07"],
-            ["3", "Suppliers", "سپلائر", "Crescent · Nishat · Ibrahim"],
+            ["6", copy.machines, copy.urdu279, "1A · 1B · 2A · 2B · 3A · 3B"],
+            ["3", copy.shifts, copy.urdu280, "A 07–15 · B 15–23 · C 23–07"],
+            ["3", copy.suppliers, copy.urdu41, copy.crescentNishatIbrahim],
           ].map(([n, en, urdu, desc]) => (
             <div className="panel glass" key={en}>
               <span>{t(en, urdu)}</span>
@@ -3588,22 +3124,19 @@ function Workspace({
       <>
         <div className="info-banner">
           <ShieldCheck size={20} />
-          {t(
-            "These are practice profiles. Live PIN resets, device approval, and permissions require the authentication server.",
-            "یہ مشق کے پروفائل ہیں۔ اصل پن، ڈیوائس منظوری اور اجازتوں کے لیے سرور ضروری ہے۔",
-          )}
+          {t(copy.theseArePracticeProfilesLivePinResets, copy.urdu281)}
         </div>
         <section className="panel glass">
           <div className="panel-heading">
-            <h3>{t("Your people", "آپ کی ٹیم")}</h3>
+            <h3>{t(copy.yourPeople, copy.urdu282)}</h3>
             <Button icon={LogOut} onClick={() => navigate("login")}>
-              {t("Switch profile", "پروفائل بدلیں")}
+              {t(copy.switchProfile, copy.urdu283)}
             </Button>
           </div>
           {[
-            ["Ahmed Khan", "Owner", "مالک", "AK"],
-            ["Asif Ali", "Supervisor", "سپروائزر", "AA"],
-            ["Muhammad Bilal", "Operator", "آپریٹر", "MB"],
+            [copy.ahmedKhan, copy.owner, copy.urdu284, copy.ak],
+            [copy.asifAli, copy.supervisor, copy.urdu285, copy.aa],
+            [copy.muhammadBilal, copy.operator, copy.urdu286, copy.mb],
           ].map(([name, role, urdu, initials]) => (
             <div className="user-row" key={name}>
               <span className="avatar">{initials}</span>
@@ -3611,13 +3144,13 @@ function Workspace({
                 <strong>{name}</strong>
                 <small>{t(role, urdu)}</small>
               </div>
-              <Status>{t("Practice profile", "مشق پروفائل")}</Status>
+              <Status>{t(copy.practiceProfile, copy.urdu287)}</Status>
             </div>
           ))}
         </section>
         <section className="panel glass">
           <div className="panel-heading">
-            <h3>{t("This device", "یہ ڈیوائس")}</h3>
+            <h3>{t(copy.thisDevice, copy.urdu288)}</h3>
             <Monitor size={20} />
           </div>
           <div className="device-row">
@@ -3625,13 +3158,11 @@ function Workspace({
               <Monitor size={24} />
             </span>
             <div>
-              <strong>
-                {t("Your current browser", "آپ کا موجودہ براؤزر")}
-              </strong>
+              <strong>{t(copy.yourCurrentBrowser, copy.urdu289)}</strong>
               <p>
                 {t(
-                  "Local practice storage · no registered factory device",
-                  "مقامی مشق اسٹوریج · فیکٹری ڈیوائس رجسٹر نہیں",
+                  copy.localPracticeStorageNoRegisteredFactoryDevice,
+                  copy.urdu290,
                 )}
               </p>
             </div>
@@ -3643,21 +3174,11 @@ function Workspace({
   function home() {
     return (
       <div className="quick-actions">
-        <button
-          className="quick-action glass"
-          onClick={() => navigate("scanner")}
-        >
-          <span className="feature-icon">
-            <ScanLine size={30} />
-          </span>
-          <h3>{t("Scan material", "کپڑا اسکین کریں")}</h3>
-          <ArrowUpRight size={20} />
-        </button>
         {[
-          ["production", "Record production", "پیداوار درج کریں", Factory],
-          ["issue", "Issue to machine", "مشین کو اجرا", Layers3],
-          ["receipt", "Receive yarn", "یارن وصول کریں", PackagePlus],
-          ["dispatch", "Dispatch yarn", "یارن ترسیل کریں", Truck],
+          ["production", copy.recordProduction, copy.urdu100, Factory],
+          ["issue", copy.issueToMachine, copy.urdu10, Layers3],
+          ["receipt", copy.receiveYarn, copy.urdu103, PackagePlus],
+          ["dispatch", copy.dispatchYarn, copy.urdu292, Truck],
         ].map(([kind, en, urdu, I]) => (
           <button
             className="quick-action glass"
@@ -3678,7 +3199,7 @@ function Workspace({
           <span className="feature-icon">
             <BookOpen size={30} />
           </span>
-          <h3>{t("Open register", "رجسٹر کھولیں")}</h3>
+          <h3>{t(copy.openRegister, copy.urdu293)}</h3>
           <ArrowUpRight size={20} />
         </button>
         <button
@@ -3688,7 +3209,7 @@ function Workspace({
           <span className="feature-icon">
             <CalendarDays size={30} />
           </span>
-          <h3>{t("Close the day", "دن بند کریں")}</h3>
+          <h3>{t(copy.closeTheDay, copy.urdu93)}</h3>
           <ArrowUpRight size={20} />
         </button>
       </div>
@@ -3698,66 +3219,68 @@ function Workspace({
     return (
       <div className="gallery">
         <section className="panel glass">
-          <h3>{t("Buttons & controls", "بٹن اور کنٹرول")}</h3>
+          <h3>{t(copy.buttonsControls, copy.urdu294)}</h3>
           <div className="gallery-row">
             <Button
               variant="primary"
-              onClick={() => notify(t("Action complete", "کام مکمل"))}
+              onClick={() => notify(t(copy.actionComplete, copy.urdu295))}
               icon={Check}
             >
-              {t("Primary action", "بنیادی عمل")}
+              {t(copy.primaryAction, copy.urdu296)}
             </Button>
             <Button
               onClick={() =>
-                notify(t("Secondary action complete", "ثانوی کام مکمل"))
+                notify(t(copy.secondaryActionComplete, copy.urdu297))
               }
             >
-              {t("Secondary action", "ثانوی عمل")}
+              {t(copy.secondaryAction, copy.urdu298)}
             </Button>
-            <Button disabled>{t("Disabled", "غیر فعال")}</Button>
+            <Button disabled>{t(copy.disabled, copy.urdu299)}</Button>
           </div>
           <div className="gallery-row">
-            <Status>{t("Saved locally", "مقامی محفوظ")}</Status>
-            <Status tone="amber">{t("QC hold", "جانچ باقی")}</Status>
-            <Status tone="purple">{t("Practice", "مشق")}</Status>
-            <Status tone="gray">{t("Archived", "آرکائیو")}</Status>
+            <Status>{t(copy.savedLocally, copy.urdu300)}</Status>
+            <Status tone="amber">{t(copy.qcHold, copy.urdu48)}</Status>
+            <Status tone="purple">{t(copy.practice, copy.urdu301)}</Status>
+            <Status tone="gray">{t(copy.archived, copy.urdu302)}</Status>
           </div>
-          <label>
-            {t("Preview a screen state", "اسکرین کی حالت دیکھیں")}
-            <select
-              value={previewState}
-              onChange={(e) => setPreviewState(e.target.value)}
-            >
-              {["ready", "loading", "empty", "error", "denied"].map(
-                (state, i) => (
-                  <option key={state} value={state}>
-                    {t(
-                      [
-                        "Ready",
-                        "Loading",
-                        "Empty",
-                        "Error",
-                        "Permission denied",
-                      ][i],
-                      ["تیار", "لوڈنگ", "خالی", "خرابی", "اجازت نہیں"][i],
-                    )}
-                  </option>
+          <Choices
+            label={t(copy.previewAScreenState, copy.urdu303)}
+            value={previewState}
+            options={["ready", "loading", "empty", "error", "denied"].map(
+              (value, i) => ({
+                value,
+                label: t(
+                  [
+                    copy.ready,
+                    copy.loading,
+                    copy.empty,
+                    copy.error,
+                    copy.permissionDenied,
+                  ][i],
+                  [
+                    copy.urdu304,
+                    copy.urdu305,
+                    copy.urdu306,
+                    copy.urdu307,
+                    copy.urdu308,
+                  ][i],
                 ),
-              )}
-            </select>
-          </label>
+              }),
+            )}
+            onChange={setPreviewState}
+          />
         </section>
         <section className="panel glass">
-          <h3>{t("Theme & language", "منظر اور زبان")}</h3>
+          <h3>{t(copy.themeLanguage, copy.urdu309)}</h3>
           <div className="gallery-row">
             <Button onClick={() => setUr(!ur)} icon={Globe2}>
-              {ur ? "English" : "اردو"}
+              {ur ? copy.english : copy.urdu65}
             </Button>
             {["light", "dark", "factory"].map((v, i) => (
               <Button key={v} onClick={() => setTheme(v)}>
                 {t(
-                  ["Liquid glass", "After hours", "Factory mode"][i],
-                  ["لیکوئڈ گلاس", "گہرا منظر", "فیکٹری موڈ"][i],
+                  [copy.light, copy.dark, copy.factoryMode][i],
+                  [copy.urdu230, copy.urdu231, copy.urdu232][i],
                 )}
               </Button>
             ))}
@@ -3771,11 +3294,9 @@ function Workspace({
       return (
         <div className="panel glass loading-state" role="status">
           <RefreshCw className="spin" size={30} />
-          <p>
-            {t("Loading your workspace…", "آپ کا ورک اسپیس لوڈ ہو رہا ہے…")}
-          </p>
+          <p>{t(copy.loadingYourWorkspace, copy.urdu310)}</p>
           <Button onClick={() => setPreviewState("ready")}>
-            {t("Finish preview", "پیش نظارہ مکمل")}
+            {t(copy.finishPreview, copy.urdu311)}
           </Button>
         </div>
       );
@@ -3785,25 +3306,44 @@ function Workspace({
           <Empty
             title={
               previewState === "denied"
-                ? t(
-                    "This view needs manager access",
-                    "اس منظر کے لیے مینیجر کی اجازت درکار ہے",
-                  )
-                : t("We couldn’t load these entries", "اندراجات لوڈ نہیں ہوئے")
+                ? t(copy.thisViewNeedsManagerAccess, copy.urdu312)
+                : t(copy.weCouldnTLoadTheseEntries, copy.urdu313)
             }
-            detail={t(
-              "Your saved entries are still safe on this device.",
-              "آپ کے محفوظ اندراجات اس ڈیوائس پر برقرار ہیں۔",
-            )}
+            detail={t(copy.yourSavedEntriesAreStillSafeOn, copy.urdu314)}
             action={
               <Button onClick={() => setPreviewState("ready")}>
-                {t("Try again", "دوبارہ کوشش کریں")}
+                {t(copy.tryAgain, copy.urdu315)}
               </Button>
             }
           />
         </div>
       );
     switch (route) {
+      case "more":
+        return (
+          <div className="more-grid">
+            {[
+              ["dispatch", copy.dispatch, copy.urdu6, Truck],
+              ["register", copy.registers, copy.urdu7, BookOpen],
+              ["scanner", copy.scanMaterial, copy.urdu291, ScanLine],
+              ["reports", copy.reports, copy.urdu88, BarChart3],
+              ["home", copy.recordStockMovement, copy.urdu104, PackagePlus],
+              ["close", copy.closeToday, copy.urdu316, CheckCheck],
+              ["settings", copy.settings, copy.urdu317, Settings2],
+              ["help", copy.help, copy.urdu318, CircleHelp],
+            ].map(([to, en, ur, I]) => (
+              <button
+                className="more-link"
+                key={String(to)}
+                onClick={() => navigate(String(to))}
+              >
+                <Icon icon={I as LucideIcon} />
+                <span>{t(String(en), String(ur))}</span>
+                <ChevronRight size={20} />
+              </button>
+            ))}
+          </div>
+        );
       case "overview":
         return overview();
       case "scanner":
@@ -3849,40 +3389,28 @@ function Workspace({
   return (
     <LedgerContext.Provider value={entries}>
       <div className="app-shell">
-        {mobileNav && (
-          <button
-            className="sidebar-scrim"
-            aria-label={t("Close navigation", "نیویگیشن بند کریں")}
-            onClick={() => setMobileNav(false)}
-          />
-        )}
-        <aside className={`sidebar glass ${mobileNav ? "open" : ""}`}>
+        <a
+          className="skip-link"
+          href="#main-content"
+          onClick={(event) => {
+            event.preventDefault();
+            document.getElementById("main-content")?.focus();
+          }}
+        >
+          {t(copy.skipToContent, copy.urdu319)}
+        </a>
+        <aside className="sidebar">
           <button
             className="brand-button"
             onClick={() => navigate("overview")}
-            aria-label="Yarnflow overview"
+            aria-label={copy.yarnflow2}
           >
             <Logo />
           </button>
-          <button
-            className="workspace-picker"
-            onClick={() => navigate("settings")}
-          >
-            <span className="workspace-symbol">
-              <Factory size={19} />
-            </span>
-            <span>
-              <strong>{factoryName}</strong>
-              <small>
-                {t("Your factory workspace", "آپ کی فیکٹری کا ورک اسپیس")}
-              </small>
-            </span>
-            <ChevronDown size={15} />
-          </button>
-          <div className="nav-label">{t("WORKSPACE", "ورک اسپیس")}</div>
+          <div className="factory-name">{factoryName}</div>
           <nav
             className="main-nav"
-            aria-label={t("Main navigation", "بنیادی نیویگیشن")}
+            aria-label={t(copy.mainNavigation, copy.urdu320)}
           >
             {navItems.map(([to, en, urdu, I]) => (
               <button
@@ -3901,239 +3429,220 @@ function Workspace({
                     {orders.filter((o) => o.status !== "completed").length}
                   </span>
                 )}
-                {to === "overview" && route === to && (
-                  <span className="active-indicator" />
-                )}
               </button>
             ))}
           </nav>
-          <div className="nav-label tools-label">
-            {t("YOUR TOOLS", "آپ کے ٹولز")}
-          </div>
-          <nav className="main-nav utility-nav" aria-label={t("Tools", "ٹولز")}>
-            {[
-              ["sync", "Sync center", "سنک سینٹر", RefreshCw],
-              ["settings", "Settings", "ترتیبات", Settings2],
-              ["help", "Help & getting started", "مدد اور شروعات", CircleHelp],
-            ].map(([to, en, urdu, I]) => (
-              <button
-                key={String(to)}
-                onClick={() => navigate(String(to))}
-                className={route === to ? "active" : ""}
-              >
-                <Icon icon={I as LucideIcon} />
-                <span>{t(String(en), String(urdu))}</span>
-                {to === "sync" && <span className="tiny-green-dot" />}
-              </button>
-            ))}
-          </nav>
-          <div className="sidebar-bottom">
-            <div className="practice-card">
-              <div>
-                <span className="practice-icon">
-                  <Sparkles size={17} />
-                </span>
-                <strong>{t("A little practice?", "کچھ مشق کریں؟")}</strong>
-              </div>
-              <p>
-                {t(
-                  "Get the hang of things. Your real stock stays safe.",
-                  "کام کو سمجھیں۔ آپ کا اصل اسٹاک محفوظ ہے۔",
-                )}
-              </p>
-              <button onClick={() => navigate("home")}>
-                {t("Explore practice mode", "مشق کا موڈ کھولیں")}
-                <ArrowUpRight size={16} />
-              </button>
-            </div>
-            <button className="user-profile" onClick={() => navigate("login")}>
-              <span className="avatar">{initials}</span>
-              <span>
-                <strong>{user}</strong>
-                <small>
-                  {t("Practice · Switch profile", "مشق · پروفائل بدلیں")}
-                </small>
-              </span>
-              <LogOut size={17} />
-            </button>
+          <div className="sidebar-note">
+            <ShieldCheck size={18} />
+            {t(copy.practiceWorkspace, copy.urdu223)}
           </div>
         </aside>
         <div className="main-shell">
-          <header className="topbar">
-            <div className="breadcrumb">
-              <button
-                className="icon-button mobile-menu"
-                onClick={() => setMobileNav(true)}
-                aria-label={t("Open navigation", "نیویگیشن کھولیں")}
-              >
-                <Menu size={22} />
-              </button>
-              <span className="breadcrumb-home">
-                <Factory size={16} />
-                <span>{t("Workspace", "ورک اسپیس")}</span>
-                <ChevronRight size={13} />
-              </span>
-              <strong>{t(title[0], title[1])}</strong>
+          <div className="practice-banner">
+            <div>
+              <ShieldCheck size={22} />
+              <strong>
+                {t(copy.practiceModeNothingHereAffectsRealStock, copy.urdu321)}
+              </strong>
             </div>
+            <Button onClick={() => setModal({ type: "workspace" })}>
+              {t(copy.switchToRealWorkspace, copy.urdu322)}
+            </Button>
+          </div>
+          <header className="topbar">
+            <span className="header-date">{dateLabel}</span>
             <div className="topbar-right">
-              <label className="global-search">
-                <Search size={17} />
-                <input
-                  id="global-search"
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    if (e.target.value && route !== "search")
-                      navigate("search");
-                  }}
-                  placeholder={t("Search anything…", "کچھ بھی تلاش کریں…")}
-                  aria-label={t("Search anything", "کچھ بھی تلاش کریں")}
-                />
-                <kbd>/</kbd>
-              </label>
-              <button className="top-sync" onClick={() => navigate("sync")}>
-                <span className={offline ? "offline-dot" : "live-dot"} />
-                {offline
-                  ? t("Offline", "آف لائن")
-                  : t("Saved locally", "مقامی محفوظ")}
+              <button className="button" onClick={() => navigate("search")}>
+                <Search size={20} />
+                <span>{t(copy.search, copy.urdu323)}</span>
               </button>
-              <span className="topbar-divider" />
-              <button
-                className="language-button"
-                onClick={() => setUr(!ur)}
-                aria-label={ur ? "Switch to English" : "اردو میں بدلیں"}
-              >
-                <Globe2 size={17} />
-                <span>{ur ? "EN" : "اردو"}</span>
+              <button className="button" onClick={() => setUr(!ur)}>
+                <Globe2 size={20} />
+                <span>{ur ? copy.english : copy.urdu65}</span>
               </button>
               <button
-                className="icon-button notification-button"
-                aria-label={t("Notifications", "اطلاعات")}
-                onClick={() => setModal({ type: "notifications" })}
-              >
-                <Bell size={20} />
-                <i />
-              </button>
-              <button
-                className="avatar small-avatar"
-                aria-label={t("Switch profile", "پروفائل بدلیں")}
+                className="button profile-control"
                 onClick={() => navigate("login")}
               >
-                {initials}
+                <Users size={20} />
+                <span>{user}</span>
               </button>
             </div>
           </header>
-          <main id="main-content">
+          <main id="main-content" tabIndex={-1}>
             <div className="page-heading">
-              <div>
-                <div className="page-eyebrow">
-                  <span className="eyebrow">
-                    {t("YOUR FACTORY, IN FLOW", "آپ کی فیکٹری، رواں دواں")}
-                  </span>
-                  <span className="practice-label">
-                    <span />
-                    {route === "scanner"
-                      ? t("TexPilot integration", "ٹیکس پائلٹ انٹیگریشن")
-                      : t("Practice workspace", "مشق کا ورک اسپیس")}
-                  </span>
-                </div>
-                <h1>
-                  {t(title[0], title[1])}
-                  <span className="heading-dot">.</span>
-                </h1>
-                <p>{t(title[2], title[3])}</p>
-              </div>
+              <h1>{t(title[0], title[1])}</h1>
               <div className="heading-actions">{headerAction()}</div>
             </div>
-            {offline && (
-              <div className="info-banner offline-banner">
-                <WifiOff size={19} />
-                {t(
-                  "You’re offline. Practice entries will still save on this device.",
-                  "آپ آف لائن ہیں۔ مشق کے اندراجات پھر بھی ڈیوائس پر محفوظ ہوں گے۔",
-                )}
-                <button
-                  className="text-button"
-                  onClick={() => navigate("sync")}
-                >
-                  {t("Details", "تفصیل")}
-                </button>
-              </div>
-            )}
             {closed === today() && route !== "close" && (
               <div className="warning-banner">
                 <LockKeyhole size={18} />
-                {t(
-                  "Today is closed. Reopen the practice day to record more entries.",
-                  "آج کا دن بند ہے۔ مزید اندراجات کے لیے دن دوبارہ کھولیں۔",
-                )}
+                {t(copy.todayIsClosedReopenThePracticeDay, copy.urdu324)}
                 <button
                   className="text-button"
                   onClick={() => navigate("close")}
                 >
-                  {t("View day close", "دن بند کرنے کی تفصیل")}
+                  {t(copy.viewDayClose, copy.urdu325)}
                 </button>
               </div>
             )}
             {content()}
-            <footer className="page-footer">
-              <span>
-                <img src="/icon.svg" alt="" />
-                {t(
-                  "A little more flow. A lot less paperwork.",
-                  "کام رواں، کاغذی کام کم۔",
-                )}
-              </span>
-              <span>
-                {t(
-                  "Practice data · Stored on this device",
-                  "مشق کا ڈیٹا · ڈیوائس پر محفوظ",
-                )}
-                <span className="footer-dot" />
-                Yarnflow v0.1
-              </span>
-            </footer>
           </main>
         </div>
+        <div
+          className={`save-status ${storageError ? "storage-error" : ""}`}
+          role={storageError ? "alert" : "status"}
+        >
+          {storageError ? (
+            <AlertTriangle size={20} />
+          ) : offline ? (
+            <WifiOff size={20} />
+          ) : (
+            <CheckCheck size={20} />
+          )}
+          <span>
+            {storageError
+              ? t(copy.storageFailed, copy.storageFailedUr)
+              : offline
+                ? t(copy.offlineEntriesStillSaveOnThisDevice, copy.urdu326)
+                : t(copy.allEntriesSavedOnThisDevicePractice, copy.urdu327)}
+          </span>
+          {storageError && (
+            <Button onClick={retryStorage}>
+              {t(copy.tryAgain, copy.urdu315)}
+            </Button>
+          )}
+        </div>
+        <nav
+          className="bottom-tabs"
+          aria-label={t(copy.mainNavigation, copy.urdu320)}
+        >
+          {navItems
+            .filter(([to]) =>
+              [
+                "overview",
+                "production",
+                "inventory",
+                "orders",
+                "more",
+              ].includes(to),
+            )
+            .map(([to, en, urdu, I]) => (
+              <button
+                key={to}
+                className={
+                  route === to ||
+                  (to === "more" &&
+                    !["overview", "production", "inventory", "orders"].includes(
+                      route,
+                    ))
+                    ? "active"
+                    : ""
+                }
+                aria-current={route === to ? "page" : undefined}
+                onClick={() => {
+                  setQuery("");
+                  navigate(to);
+                }}
+              >
+                <Icon icon={I} />
+                <span>{t(en, urdu)}</span>
+              </button>
+            ))}
+        </nav>
         {modal && (
           <Modal
             title={
-              modal.type === "entry"
-                ? t(...kindNames[modal.kind || "production"])
-                : modal.type === "new"
-                  ? t(
-                      "What would you like to record?",
-                      "آپ کیا درج کرنا چاہتے ہیں؟",
-                    )
-                  : modal.type === "detail"
-                    ? t("Entry details", "اندراج کی تفصیل")
-                    : modal.type === "lot"
-                      ? `${t("Lot", "لاٹ")} ${modal.lot}`
-                      : modal.type === "date"
-                        ? t("Your business date", "آپ کی کاروباری تاریخ")
-                        : modal.type === "notifications"
-                          ? t("A little attention", "تھوڑی توجہ")
-                          : modal.type === "order"
-                            ? t("Create an order", "آرڈر بنائیں")
-                            : modal.type === "report"
-                              ? t("Report preview", "رپورٹ پیش نظارہ")
-                              : modal.type === "order-detail"
-                                ? t("Order details", "آرڈر کی تفصیل")
-                                : modal.type === "void"
-                                  ? t("Reverse this entry", "اندراج واپس کریں")
-                                  : modal.type === "reopen"
-                                    ? t(
-                                        "Reopen the practice day",
-                                        "مشق کا دن دوبارہ کھولیں",
-                                      )
-                                    : t(
-                                        "Close the practice day",
-                                        "مشق کا دن بند کریں",
-                                      )
+              modal.type === "workspace"
+                ? t(copy.realWorkspace, copy.urdu328)
+                : modal.type === "saved"
+                  ? t(copy.entrySaved, copy.urdu329)
+                  : modal.type === "entry"
+                    ? t(...kindNames[modal.kind || "production"])
+                    : modal.type === "new"
+                      ? t(copy.whatWouldYouLikeToRecord, copy.urdu330)
+                      : modal.type === "detail"
+                        ? t(copy.entryDetails, copy.urdu331)
+                        : modal.type === "lot"
+                          ? `${t(copy.lot, copy.urdu22)} ${modal.lot}`
+                          : modal.type === "date"
+                            ? t(copy.yourBusinessDate, copy.urdu332)
+                            : modal.type === "notifications"
+                              ? t(copy.needsAttention, copy.urdu333)
+                              : modal.type === "order"
+                                ? t(copy.createAnOrder, copy.urdu334)
+                                : modal.type === "report"
+                                  ? t(copy.reportPreview, copy.urdu335)
+                                  : modal.type === "order-detail"
+                                    ? t(copy.orderDetails, copy.urdu336)
+                                    : modal.type === "void"
+                                      ? t(copy.reverseThisEntry, copy.urdu337)
+                                      : modal.type === "reopen"
+                                        ? t(
+                                            copy.reopenThePracticeDay,
+                                            copy.urdu338,
+                                          )
+                                        : t(
+                                            copy.closeThePracticeDay,
+                                            copy.urdu339,
+                                          )
             }
             onClose={() => setModal(null)}
             wide={["report", "lot"].includes(modal.type)}
           >
+            {modal.type === "workspace" && (
+              <div className="workspace-explanation">
+                <p>
+                  {t(copy.aRealFactoryWorkspaceIsNotConnected, copy.urdu340)}
+                </p>
+                <p>
+                  {t(
+                    copy.askYourAdministratorToConnectTheFactory,
+                    copy.urdu341,
+                  )}
+                </p>
+                <div className="modal-actions">
+                  <Button variant="primary" onClick={() => setModal(null)}>
+                    {t(copy.returnToPractice, copy.urdu342)}
+                  </Button>
+                </div>
+              </div>
+            )}
+            {modal.type === "saved" && modal.entry && (
+              <div className="saved-result">
+                <CircleCheck size={36} />
+                <h3>
+                  {t(
+                    copy.saved0Kg(fmt(modal.entry.grams / 1000, 3)),
+                    copy.label010(fmt(modal.entry.grams / 1000, 3)),
+                  )}
+                </h3>
+                <p>
+                  {modal.entry.machine}
+                  {copy.urdu21}
+                  {t(copy.shift, copy.urdu23)} {modal.entry.shift}
+                  {copy.urdu21}
+                  {t(copy.lot, copy.urdu22)} {modal.entry.lot}
+                </p>
+                <p>{t(copy.savedOnThisDevicePracticeStockHas, copy.urdu343)}</p>
+                <div className="modal-actions">
+                  <Button onClick={() => undo(modal.entry!)}>
+                    {t(copy.undo, copy.urdu384)}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setToast(null);
+                      setModal({ type: "entry", kind: modal.entry!.kind });
+                    }}
+                  >
+                    {t(copy.recordAnother, copy.urdu344)}
+                  </Button>
+                  <Button variant="primary" onClick={() => setModal(null)}>
+                    {t(copy.done, copy.urdu162)}
+                  </Button>
+                </div>
+              </div>
+            )}
             {modal.type === "entry" && (
               <EntryForm
                 user={user}
@@ -4162,16 +3671,16 @@ function Workspace({
                       <span>
                         {t(
                           [
-                            "Pack the shift’s finished yarn",
-                            "Bring new material into stock",
-                            "Keep your machines in flow",
-                            "Prepare a customer delivery",
+                            copy.packTheShiftSFinishedYarn,
+                            copy.bringNewMaterialIntoStock,
+                            copy.recordYarnIssuedToAMachine,
+                            copy.prepareACustomerDelivery,
                           ][i],
                           [
-                            "شفٹ کا تیار یارن پیک کریں",
-                            "نیا یارن اسٹاک میں لائیں",
-                            "مشین کو یارن جاری کریں",
-                            "کسٹمر کی ترسیل تیار کریں",
+                            copy.urdu345,
+                            copy.urdu346,
+                            copy.urdu347,
+                            copy.urdu348,
                           ][i],
                         )}
                       </span>
@@ -4186,17 +3695,14 @@ function Workspace({
                 <div className="date-card">
                   <CalendarDays size={36} />
                   <h3>{dateLabel}</h3>
-                  <p>Asia/Karachi · UTC +05:00</p>
+                  <p>{copy.asiaKarachiUtc0500}</p>
                 </div>
                 <div className="info-banner">
-                  {t(
-                    "The overview shows today’s practice data. Change the business date inside an entry form when needed.",
-                    "جائزے میں آج کا مشق ڈیٹا ہے۔ ضرورت ہو تو اندراج میں تاریخ بدلیں۔",
-                  )}
+                  {t(copy.theOverviewShowsTodaySPracticeData, copy.urdu349)}
                 </div>
                 <div className="modal-actions">
                   <Button onClick={() => setModal(null)}>
-                    {t("Got it", "سمجھ گیا")}
+                    {t(copy.gotIt, copy.urdu350)}
                   </Button>
                 </div>
               </>
@@ -4213,17 +3719,15 @@ function Workspace({
                   </span>
                   <div>
                     <strong>
-                      {t("Lot 1216 is on QC hold", "لاٹ 1216 کی جانچ باقی ہے")}
+                      {t(copy.lot1216IsOnQcHold, copy.label12162)}
                     </strong>
                     <p>
                       {t(
-                        "Dispatch is blocked until quality approval.",
-                        "کوالٹی منظوری تک ترسیل بند ہے۔",
+                        copy.dispatchIsBlockedUntilQualityApproval,
+                        copy.urdu351,
                       )}
                     </p>
-                    <small>
-                      {t("Sample alert · Quality", "نمونہ اطلاع · کوالٹی")}
-                    </small>
+                    <small>{t(copy.sampleAlertQuality, copy.urdu352)}</small>
                   </div>
                   <ChevronRight size={18} />
                 </button>
@@ -4238,20 +3742,15 @@ function Workspace({
                   </span>
                   <div>
                     <strong>
-                      {t(
-                        "Your next orders are getting closer",
-                        "اگلے آرڈرز کی تاریخ قریب ہے",
-                      )}
+                      {t(copy.ordersAreDueThisWeek, copy.urdu353)}
                     </strong>
                     <p>
                       {t(
-                        "Review material availability for this week’s orders.",
-                        "اس ہفتے کے آرڈرز کے لیے یارن کی دستیابی دیکھیں۔",
+                        copy.reviewMaterialAvailabilityForThisWeekS,
+                        copy.urdu354,
                       )}
                     </p>
-                    <small>
-                      {t("Sample alert · Orders", "نمونہ اطلاع · آرڈرز")}
-                    </small>
+                    <small>{t(copy.sampleAlertOrders, copy.urdu355)}</small>
                   </div>
                   <ChevronRight size={18} />
                 </button>
@@ -4278,36 +3777,36 @@ function Workspace({
                       }
                     >
                       {entries.some((e) => e.reverses === currentEntry.id)
-                        ? t("Reversed", "واپس کیا گیا")
-                        : t("Saved locally", "مقامی محفوظ")}
+                        ? t(copy.reversed, copy.urdu25)
+                        : t(copy.savedLocally, copy.urdu300)}
                     </Status>
                   </div>
                 </div>
                 <dl className="detail-grid">
                   {[
                     [
-                      t("Yarn", "یارن"),
+                      t(copy.yarn, copy.urdu57),
                       lots.find((l) => l.id === currentEntry.lot)?.spec,
                     ],
-                    [t("Lot", "لاٹ"), currentEntry.lot],
+                    [t(copy.lot, copy.urdu22), currentEntry.lot],
                     [
-                      t("Weight", "وزن"),
+                      t(copy.weight, copy.urdu356),
                       `${fmt(currentEntry.grams / 1000, 3)} kg`,
                     ],
                     [
-                      t("Cartons / cones", "کارٹن / کونز"),
+                      t(copy.cartonsCones, copy.urdu151),
                       `${currentEntry.cartons} / ${currentEntry.cones}`,
                     ],
                     [
-                      t("Machine / customer", "مشین / کسٹمر"),
+                      t(copy.machineCustomer, copy.urdu16),
                       currentEntry.machine,
                     ],
                     [
-                      t("Date / shift", "تاریخ / شفٹ"),
+                      t(copy.dateShift, copy.urdu357),
                       `${currentEntry.date} · ${currentEntry.shift}`,
                     ],
-                    [t("Recorded by", "درج کرنے والا"), currentEntry.by],
-                    [t("Notes", "نوٹس"), currentEntry.notes || "—"],
+                    [t(copy.recordedBy, copy.urdu18), currentEntry.by],
+                    [t(copy.notes, copy.urdu58), currentEntry.notes || "—"],
                   ].map(([label, value]) => (
                     <div key={label}>
                       <dt>{label}</dt>
@@ -4320,8 +3819,8 @@ function Workspace({
                 <div className="audit-note">
                   <ShieldCheck size={19} />
                   {t(
-                    "Original entry retained. Corrections create a reversing record.",
-                    "اصل اندراج محفوظ ہے۔ تصحیح کے لیے واپسی کا اندراج بنتا ہے۔",
+                    copy.originalEntryRetainedCorrectionsCreateAReversing,
+                    copy.urdu358,
                   )}
                 </div>
                 <div className="modal-actions">
@@ -4329,7 +3828,7 @@ function Workspace({
                     icon={Download}
                     onClick={() => exportEntries([currentEntry])}
                   >
-                    {t("Export entry", "اندراج برآمد")}
+                    {t(copy.exportEntry, copy.urdu359)}
                   </Button>
                   {currentEntry.kind !== "reversal" &&
                     !entries.some((e) => e.reverses === currentEntry.id) && (
@@ -4339,7 +3838,7 @@ function Workspace({
                         }
                         icon={RefreshCw}
                       >
-                        {t("Reverse entry", "اندراج واپس کریں")}
+                        {t(copy.reverseEntry, copy.urdu337)}
                       </Button>
                     )}
                 </div>
@@ -4348,27 +3847,25 @@ function Workspace({
             {modal.type === "void" && currentEntry && (
               <ReasonForm
                 text={t(
-                  "This creates a reversing entry. The original stays in history. Stock must still be available.",
-                  "واپسی کا اندراج بنایا جائے گا۔ اصل تاریخ برقرار رہے گی۔ اسٹاک دستیاب ہونا ضروری ہے۔",
+                  copy.thisCreatesAReversingEntryTheOriginal,
+                  copy.urdu360,
                 )}
-                button={t("Confirm reversal", "واپسی کی تصدیق")}
+                button={t(copy.confirmReversal, copy.urdu361)}
                 onSubmit={(reason) => undo(currentEntry, reason)}
               />
             )}
             {modal.type === "reopen" && (
               <ReasonForm
                 text={t(
-                  "Reopening allows new entries for today. Give a reason for the practice audit trail.",
-                  "دوبارہ کھولنے سے آج نئے اندراجات ممکن ہوں گے۔ وجہ درج کریں۔",
+                  copy.reopeningAllowsNewEntriesForTodayGive,
+                  copy.urdu362,
                 )}
-                button={t("Reopen day", "دن دوبارہ کھولیں")}
+                button={t(copy.reopenDay, copy.urdu363)}
                 onSubmit={(reason) => {
                   localStorage.setItem("yf-reopen-reason", reason);
                   setClosed("");
                   setModal(null);
-                  notify(
-                    t("Practice day reopened.", "مشق کا دن دوبارہ کھل گیا۔"),
-                  );
+                  notify(t(copy.practiceDayReopened, copy.urdu364));
                 }}
               />
             )}
@@ -4376,14 +3873,11 @@ function Workspace({
               <>
                 <div className="warning-banner">
                   <LockKeyhole size={24} />
-                  {t(
-                    "New entries for today will be blocked. The practice day can be reopened with a reason.",
-                    "آج کے نئے اندراجات بند ہو جائیں گے۔ وجہ کے ساتھ دوبارہ کھولا جا سکتا ہے۔",
-                  )}
+                  {t(copy.newEntriesForTodayWillBeBlocked, copy.urdu365)}
                 </div>
                 <div className="modal-actions">
                   <Button onClick={() => setModal(null)}>
-                    {t("Keep reviewing", "مزید جائزہ")}
+                    {t(copy.keepReviewing, copy.urdu366)}
                   </Button>
                   <Button
                     variant="primary"
@@ -4394,13 +3888,13 @@ function Workspace({
                       setModal(null);
                       notify(
                         t(
-                          "Practice day closed. Everything is accounted for.",
-                          "مشق کا دن بند۔ حساب مکمل ہے۔",
+                          copy.practiceDayClosedEverythingIsAccountedFor,
+                          copy.urdu367,
                         ),
                       );
                     }}
                   >
-                    {t("Approve & close", "منظور اور بند کریں")}
+                    {t(copy.approveClose, copy.urdu368)}
                   </Button>
                 </div>
               </>
@@ -4417,7 +3911,9 @@ function Workspace({
                   <div>
                     <h3>{currentLot.spec}</h3>
                     <p>
-                      {currentLot.supplier} · {t("Received", "وصولی")}{" "}
+                      {currentLot.supplier}
+                      {copy.urdu21}
+                      {t(copy.received, copy.urdu369)}{" "}
                       <bdi>{currentLot.received}</bdi>
                     </p>
                   </div>
@@ -4425,36 +3921,36 @@ function Workspace({
                     tone={currentLot.status === "hold" ? "amber" : "green"}
                   >
                     {currentLot.status === "hold"
-                      ? t("QC hold", "جانچ باقی")
-                      : t("Active", "فعال")}
+                      ? t(copy.qcHold, copy.urdu48)
+                      : t(copy.active, copy.urdu278)}
                   </Status>
                 </div>
                 <div className="close-totals">
                   <div>
-                    <span>{t("Finished stock", "تیار اسٹاک")}</span>
+                    <span>{t(copy.finishedStock, copy.urdu105)}</span>
                     <strong>
                       <bdi>
                         {fmt(
                           balance(entries, currentLot.id, "finished").grams /
                             1000,
                         )}{" "}
-                        kg
+                        {copy.kg}
                       </bdi>
                     </strong>
                   </div>
                   <div>
-                    <span>{t("Raw stock", "خام اسٹاک")}</span>
+                    <span>{t(copy.rawStock, copy.urdu370)}</span>
                     <strong>
                       <bdi>
                         {fmt(
                           balance(entries, currentLot.id, "raw").grams / 1000,
                         )}{" "}
-                        kg
+                        {copy.kg}
                       </bdi>
                     </strong>
                   </div>
                   <div>
-                    <span>{t("Finished cartons", "تیار کارٹن")}</span>
+                    <span>{t(copy.finishedCartons, copy.urdu371)}</span>
                     <strong>
                       {balance(entries, currentLot.id, "finished").cartons}
                     </strong>
@@ -4463,14 +3959,11 @@ function Workspace({
                 {currentLot.status === "hold" && (
                   <div className="warning-banner">
                     <AlertTriangle size={20} />
-                    {t(
-                      "QC hold · Sample hold placed by Ahmed Khan. Dispatch is blocked. Live hold changes require the factory backend.",
-                      "کوالٹی جانچ · احمد خان کا نمونہ ہولڈ۔ ترسیل بند ہے۔ اصل تبدیلی کے لیے سرور ضروری ہے۔",
-                    )}
+                    {t(copy.qcHoldSampleHoldPlacedByAhmed, copy.urdu372)}
                   </div>
                 )}
                 <h3 className="timeline-title">
-                  {t("The story of this lot", "اس لاٹ کی تاریخ")}
+                  {t(copy.theStoryOfThisLot, copy.urdu373)}
                 </h3>
                 <div className="timeline">
                   {entries
@@ -4483,15 +3976,22 @@ function Workspace({
                         <div>
                           <strong>
                             {e.opening
-                              ? t("Opening stock", "ابتدائی اسٹاک")
+                              ? t(copy.openingStock, copy.urdu374)
                               : t(...kindNames[e.kind])}
                           </strong>
                           <p>
-                            <bdi>{fmt(e.grams / 1000, 3)} kg</bdi> · {e.cartons}{" "}
-                            {t("cartons", "کارٹن")} · {e.by}
+                            <bdi>
+                              {fmt(e.grams / 1000, 3)}
+                              {copy.kg}
+                            </bdi>
+                            {copy.urdu21}
+                            {e.cartons} {t(copy.cartons, copy.urdu24)}
+                            {copy.urdu21}
+                            {e.by}
                           </p>
                           <small>
-                            <bdi>{e.serial}</bdi> ·{" "}
+                            <bdi>{e.serial}</bdi>
+                            {copy.urdu21}{" "}
                             <bdi>
                               {e.date} {e.time}
                             </bdi>
@@ -4506,10 +4006,7 @@ function Workspace({
               <OrderForm
                 onSave={(o) => {
                   setOrders([...orders, o]);
-                  setModal(null);
-                  notify(
-                    t("Practice order saved.", "مشق کا آرڈر محفوظ ہوگیا۔"),
-                  );
+                  notify(t(copy.practiceOrderSaved, copy.urdu375));
                 }}
               />
             )}
@@ -4522,22 +4019,24 @@ function Workspace({
                     }
                   >
                     {currentOrder.status === "completed"
-                      ? t("Completed", "مکمل")
-                      : t("In progress", "جاری")}
+                      ? t(copy.completed, copy.urdu162)
+                      : t(copy.inProgress, copy.urdu161)}
                   </Status>
                   <h3>{currentOrder.customer}</h3>
                   <p>
-                    <bdi>{currentOrder.id}</bdi> · {currentOrder.fabric}
+                    <bdi>{currentOrder.id}</bdi>
+                    {copy.urdu21}
+                    {currentOrder.fabric}
                   </p>
                   <h2>
                     <bdi>
                       {fmt(
                         (currentOrder.grams - currentOrder.delivered) / 1000,
                       )}{" "}
-                      kg
+                      {copy.kg}
                     </bdi>
                   </h2>
-                  <span>{t("remaining to fulfill", "مزید ترسیل باقی")}</span>
+                  <span>{t(copy.remainingToFulfill, copy.urdu376)}</span>
                   <div className="progress-track">
                     <i
                       style={{
@@ -4546,14 +4045,15 @@ function Workspace({
                     />
                   </div>
                   <p>
-                    {currentOrder.spec} · {t("Due", "تاریخ")}{" "}
-                    <bdi>{currentOrder.due}</bdi>
+                    {currentOrder.spec}
+                    {copy.urdu21}
+                    {t(copy.due, copy.urdu33)} <bdi>{currentOrder.due}</bdi>
                   </p>
                 </div>
                 <div className="info-banner">
                   {t(
-                    "Dispatch entries in this preview are independent from orders. Order linking is part of the server integration.",
-                    "اس پیش نظارے میں ترسیل اور آرڈر الگ ہیں۔ آرڈر لنک سرور انٹیگریشن میں ہوگا۔",
+                    copy.dispatchEntriesInThisPreviewAreIndependent,
+                    copy.urdu377,
                   )}
                 </div>
                 <div className="modal-actions">
@@ -4563,7 +4063,7 @@ function Workspace({
                       navigate("inventory");
                     }}
                   >
-                    {t("Check inventory", "اسٹاک چیک کریں")}
+                    {t(copy.checkInventory, copy.urdu378)}
                   </Button>
                   <Button
                     variant="primary"
@@ -4572,7 +4072,7 @@ function Workspace({
                       setModal({ type: "entry", kind: "dispatch" })
                     }
                   >
-                    {t("Prepare dispatch", "ترسیل تیار کریں")}
+                    {t(copy.prepareDispatch, copy.urdu379)}
                   </Button>
                 </div>
               </>
@@ -4585,7 +4085,9 @@ function Workspace({
                     <div>
                       <strong>{factoryName}</strong>
                       <small>
-                        {dateLabel} · {t("PRACTICE DATA", "مشق کا ڈیٹا")}
+                        {dateLabel}
+                        {copy.urdu21}
+                        {t(copy.practiceData2, copy.urdu131)}
                       </small>
                     </div>
                   </div>
@@ -4596,18 +4098,19 @@ function Workspace({
                     )}
                   </h2>
                   <p className="muted">
-                    {t("Business date", "کاروباری تاریخ")}: <bdi>{today()}</bdi>{" "}
-                    · Asia/Karachi
+                    {t(copy.businessDate, copy.urdu380)}
+                    {copy.urdu49}
+                    <bdi>{today()}</bdi> {copy.asiaKarachi2}
                   </p>
-                  {modal.report === "Stock report" ||
-                  modal.report === "Lot ledger" ? (
+                  {modal.report === copy.stockReport ||
+                  modal.report === copy.lotLedger ? (
                     <table>
                       <thead>
                         <tr>
-                          <th>{t("Lot", "لاٹ")}</th>
-                          <th>{t("Yarn", "یارن")}</th>
-                          <th>{t("Stock (kg)", "اسٹاک کلو")}</th>
-                          <th>{t("Cartons", "کارٹن")}</th>
+                          <th>{t(copy.lot, copy.urdu22)}</th>
+                          <th>{t(copy.yarn, copy.urdu57)}</th>
+                          <th>{t(copy.stockKg, copy.urdu182)}</th>
+                          <th>{t(copy.cartons2, copy.urdu24)}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4628,13 +4131,13 @@ function Workspace({
                         ))}
                       </tbody>
                     </table>
-                  ) : modal.report === "Order status" ? (
+                  ) : modal.report === copy.orderStatus ? (
                     <table>
                       <thead>
                         <tr>
-                          <th>{t("Customer", "کسٹمر")}</th>
-                          <th>{t("Ordered (kg)", "آرڈر کلو")}</th>
-                          <th>{t("Remaining (kg)", "باقی کلو")}</th>
+                          <th>{t(copy.customer, copy.urdu40)}</th>
+                          <th>{t(copy.orderedKg2, copy.urdu381)}</th>
+                          <th>{t(copy.remainingKg, copy.urdu382)}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4651,21 +4154,30 @@ function Workspace({
                     <>
                       <div className="close-totals">
                         <div>
-                          <span>{t("Production", "پیداوار")}</span>
-                          <strong>{fmt(produced / 1000)} kg</strong>
+                          <span>{t(copy.production, copy.urdu3)}</span>
+                          <strong>
+                            {fmt(produced / 1000, 0)}
+                            {copy.kg}
+                          </strong>
                         </div>
                         <div>
-                          <span>{t("Dispatch", "ترسیل")}</span>
-                          <strong>{fmt(dispatched / 1000)} kg</strong>
+                          <span>{t(copy.dispatch, copy.urdu6)}</span>
+                          <strong>
+                            {fmt(dispatched / 1000, 0)}
+                            {copy.kg}
+                          </strong>
                         </div>
                         <div>
-                          <span>{t("Closing stock", "اختتامی اسٹاک")}</span>
-                          <strong>{fmt(finished.grams / 1000)} kg</strong>
+                          <span>{t(copy.closingStock, copy.urdu254)}</span>
+                          <strong>
+                            {fmt(finished.grams / 1000, 0)}
+                            {copy.kg}
+                          </strong>
                         </div>
                       </div>
                       <EntryTable
                         entries={
-                          modal.report === "Production register"
+                          modal.report === copy.productionRegister
                             ? active.filter((e) => e.kind === "production")
                             : visible.slice(0, 8)
                         }
@@ -4682,11 +4194,11 @@ function Workspace({
                     icon={Download}
                     onClick={() => {
                       if (
-                        modal.report === "Stock report" ||
-                        modal.report === "Lot ledger"
+                        modal.report === copy.stockReport ||
+                        modal.report === copy.lotLedger
                       )
                         downloadCsv("yarnflow-stock.csv", [
-                          ["Lot", "Spec", "Finished kg", "Cartons"],
+                          [copy.lot, copy.spec, copy.finishedKg, copy.cartons2],
                           ...lots.map((l) => [
                             l.id,
                             l.spec,
@@ -4694,9 +4206,14 @@ function Workspace({
                             balance(entries, l.id, "finished").cartons,
                           ]),
                         ]);
-                      else if (modal.report === "Order status")
+                      else if (modal.report === copy.orderStatus)
                         downloadCsv("yarnflow-orders.csv", [
-                          ["Order", "Customer", "Ordered kg", "Remaining kg"],
+                          [
+                            copy.order,
+                            copy.customer,
+                            copy.orderedKg,
+                            copy.remainingKg2,
+                          ],
                           ...orders.map((o) => [
                             o.id,
                             o.customer,
@@ -4706,27 +4223,27 @@ function Workspace({
                         ]);
                       else
                         exportEntries(
-                          modal.report === "Production register"
+                          modal.report === copy.productionRegister
                             ? active.filter((e) => e.kind === "production")
                             : visible,
                         );
                     }}
                   >
-                    {t("Export CSV", "CSV برآمد")}
+                    {t(copy.exportCsv, copy.csv4)}
                   </Button>
                   <Button
                     variant="primary"
                     icon={Printer}
                     onClick={() => window.print()}
                   >
-                    {t("Print / save PDF", "پرنٹ / پی ڈی ایف محفوظ")}
+                    {t(copy.printSavePdf, copy.urdu383)}
                   </Button>
                 </div>
               </>
             )}
           </Modal>
         )}
-        {toast && (
+        {toast && !modal && (
           <div className="toast glass" role="status">
             <span className="toast-check">
               <Check size={18} />
@@ -4734,15 +4251,18 @@ function Workspace({
             <span>{toast.text}</span>
             {toast.entry && (
               <button onClick={() => undo(toast.entry!)}>
-                {t("Undo", "واپس کریں")}
+                {t(copy.undo, copy.urdu384)}
               </button>
             )}
             <button
               className="icon-button"
-              aria-label={t("Dismiss notification", "اطلاع بند کریں")}
+              aria-label={t(copy.dismissNotification, copy.urdu385)}
               onClick={() => setToast(null)}
             >
               <X size={17} />
+              <span className="control-label">
+                {t(copy.dismissNotification, copy.urdu385)}
+              </span>
             </button>
           </div>
         )}
@@ -4770,7 +4290,7 @@ function ReasonForm({
     >
       <p className="reason-text">{text}</p>
       <label>
-        {t("Reason", "وجہ")}
+        {t(copy.reason, copy.urdu386)}
         <textarea
           required
           minLength={3}
@@ -4794,110 +4314,212 @@ function ReasonForm({
 }
 function OrderForm({ onSave }: { onSave: (order: Order) => void }) {
   const t = useT();
-  const [customer, setCustomer] = useState("Lahore Knitwear");
-  const [spec, setSpec] = useState(lots[0].spec);
-  const [fabric, setFabric] = useState("Single Jersey · 160 GSM");
-  const [weight, setWeight] = useState("1500");
-  const [due, setDue] = useState(today());
+  const [d, setDraft] = useStored("yf-order-draft-v2", {
+    customer: copy.lahoreKnitwear,
+    spec: lots[0].spec,
+    fabric: copy.singleJersey160Gsm,
+    weight: "",
+    due: today(),
+  });
+  const [review, setReview] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const set = (key: keyof typeof d, value: string) => {
+    setDraft({ ...d, [key]: value });
+    setError("");
+  };
+  const weightError =
+    d.weight && (!/^\d+(\.\d{1,3})?$/.test(d.weight) || Number(d.weight) <= 0)
+      ? t(copy.enterAWeightGreaterThanZeroWith, copy.urdu387)
+      : "";
+  const dateError =
+    !d.due || d.due < today()
+      ? t(copy.chooseTodayOrALaterDate, copy.urdu388)
+      : "";
+  if (saved)
+    return (
+      <div className="saved-result">
+        <CircleCheck size={36} />
+        <h3>{t(copy.orderSaved, copy.urdu389)}</h3>
+        <p>
+          {d.customer}
+          {copy.urdu21}
+          {fmt(Number(d.weight), 3)}
+          {copy.kg2}
+          {d.due}
+        </p>
+        <div className="modal-actions">
+          <Button
+            onClick={() => {
+              setDraft({ ...d, weight: "" });
+              setSaved(false);
+              setReview(false);
+            }}
+          >
+            {t(copy.recordAnother, copy.urdu344)}
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent("yf-close-modal"))
+            }
+          >
+            {t(copy.done, copy.urdu162)}
+          </Button>
+        </div>
+      </div>
+    );
   return (
     <form
       className="entry-form"
       onSubmit={(e) => {
         e.preventDefault();
+        if (weightError || dateError || !d.weight) return;
+        if (!review) {
+          setReview(true);
+          return;
+        }
         try {
-          const grams = kgToGrams(weight);
-          if (due < today()) throw new Error();
           onSave({
             id: `ORD-26-${crypto.randomUUID().slice(0, 6).toUpperCase()}`,
-            customer,
-            spec,
-            fabric,
-            grams,
+            customer: d.customer,
+            spec: d.spec,
+            fabric: d.fabric,
+            grams: kgToGrams(d.weight),
             delivered: 0,
-            due,
+            due: d.due,
             status: "in-progress",
           });
+          localStorage.removeItem("yf-order-draft-v2");
+          setSaved(true);
         } catch {
-          setError(
-            t(
-              "Check the weight and choose today or a later due date.",
-              "وزن چیک کریں اور آج یا بعد کی تاریخ منتخب کریں۔",
-            ),
-          );
+          setError(t(copy.couldNotSaveYourDraftIsStill, copy.urdu390));
         }
       }}
     >
-      <label>
-        {t("Customer", "کسٹمر")}
-        <select value={customer} onChange={(e) => setCustomer(e.target.value)}>
-          {[
-            "Lahore Knitwear",
-            "Style Textile",
-            "Sapphire Finishing",
-            "Masood Textile",
-          ].map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
-      </label>
-      <div className="form-grid">
-        <label>
-          {t("Fabric & GSM", "کپڑا اور جی ایس ایم")}
-          <select value={fabric} onChange={(e) => setFabric(e.target.value)}>
-            {[
-              "Single Jersey · 160 GSM",
-              "Fleece · 280 GSM",
-              "Polo PK · 200 GSM",
-              "Thermal · 220 GSM",
-            ].map((f) => (
-              <option key={f}>{f}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("Yarn specification", "یارن کی تفصیل")}
-          <select value={spec} onChange={(e) => setSpec(e.target.value)}>
-            {lots.map((l) => (
-              <option key={l.id}>{l.spec}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("Required weight (kg)", "مطلوبہ وزن کلو")}
-          <input
-            required
-            inputMode="decimal"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-          />
-        </label>
-        <label>
-          {t("Required by", "مطلوبہ تاریخ")}
-          <input
-            required
-            type="date"
-            value={due}
-            min={today()}
-            onChange={(e) => setDue(e.target.value)}
-          />
-        </label>
+      <div className="form-step-heading">
+        <strong>
+          {review
+            ? t(copy.step2Of2, copy.label22)
+            : t(copy.step1Of2, copy.label12)}
+        </strong>
+        <span>
+          {review
+            ? t(copy.reviewOrder, copy.urdu391)
+            : t(copy.orderDetails, copy.urdu336)}
+        </span>
       </div>
-      <div className="info-banner">
-        <Boxes size={19} />
-        {t(
-          "Orders reserve no stock. Check lot availability before dispatch.",
-          "آرڈر اسٹاک محفوظ نہیں کرتا۔ ترسیل سے پہلے لاٹ کی دستیابی چیک کریں۔",
-        )}
-      </div>
+      {!review ? (
+        <>
+          <Choices
+            label={t(copy.customer, copy.urdu40)}
+            value={d.customer}
+            options={[
+              copy.lahoreKnitwear,
+              copy.styleTextile,
+              copy.sapphireFinishing,
+              copy.masoodTextile,
+            ].map((c) => ({ value: c, label: c }))}
+            onChange={(v) => set("customer", v)}
+          />
+          <Choices
+            label={t(copy.fabricAndGsm, copy.urdu392)}
+            value={d.fabric}
+            options={[
+              copy.singleJersey160Gsm,
+              copy.fleece280Gsm,
+              copy.poloPk200Gsm,
+              copy.thermal220Gsm,
+            ].map((f) => ({ value: f, label: f }))}
+            onChange={(v) => set("fabric", v)}
+          />
+          <Choices
+            label={t(copy.yarnSpecification, copy.urdu148)}
+            value={d.spec}
+            options={lots.map((l) => ({ value: l.spec, label: l.spec }))}
+            onChange={(v) => set("spec", v)}
+          />
+          <label>
+            {t(copy.requiredWeightKg, copy.urdu393)}
+            <input
+              required
+              inputMode="decimal"
+              value={d.weight}
+              onChange={(e) => set("weight", e.target.value)}
+              aria-invalid={!!weightError}
+              aria-describedby={weightError ? "order-weight-error" : undefined}
+            />
+            {weightError && (
+              <span className="field-error" id="order-weight-error">
+                {weightError}
+              </span>
+            )}
+          </label>
+          <label>
+            {t(copy.requiredBy, copy.urdu394)}
+            <input
+              required
+              type="date"
+              min={today()}
+              value={d.due}
+              onChange={(e) => set("due", e.target.value)}
+              aria-invalid={!!dateError}
+              aria-describedby={dateError ? "order-date-error" : undefined}
+            />
+            {dateError && (
+              <span className="field-error" id="order-date-error">
+                {dateError}
+              </span>
+            )}
+          </label>
+          <p className="draft-status">
+            <CheckCheck size={18} />
+            {t(copy.draftSavedOnThisDevice, copy.urdu46)}
+          </p>
+        </>
+      ) : (
+        <section className="entry-review">
+          <h3>{t(copy.checkBeforeSaving, copy.urdu56)}</h3>
+          <p className="register-line">
+            {t(
+              copy.orderSummary(
+                d.customer,
+                d.fabric,
+                d.spec,
+                fmt(Number(d.weight), 3),
+                d.due,
+              ),
+              copy.orderSummaryUr(
+                d.customer,
+                d.fabric,
+                d.spec,
+                fmt(Number(d.weight), 3),
+                d.due,
+              ),
+            )}
+          </p>
+          <p>{t(copy.ordersDoNotReserveStockCheckAvailable, copy.urdu395)}</p>
+        </section>
+      )}
       {error && (
-        <div className="error-banner" role="alert">
+        <p className="error-banner" role="alert">
           {error}
-        </div>
+        </p>
       )}
       <div className="modal-actions">
-        <Button type="submit" variant="primary" icon={Check}>
-          {t("Save practice order", "مشق کا آرڈر محفوظ کریں")}
+        {review && (
+          <Button onClick={() => setReview(false)}>
+            {t(copy.back, copy.urdu61)}
+          </Button>
+        )}
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={!!weightError || !!dateError || !d.weight}
+        >
+          {review
+            ? t(copy.saveOrder, copy.urdu396)
+            : t(copy.reviewOrder, copy.urdu391)}
         </Button>
       </div>
     </form>
@@ -4941,34 +4563,25 @@ function ImportPage({ onNotify }: { onNotify: (text: string) => void }) {
     <>
       <div className="info-banner">
         <ShieldCheck size={20} />
-        {t(
-          "Preview and validate a CSV file here. Factory imports require the server and do not change stock in this preview.",
-          "یہاں CSV فائل کا جائزہ لیں۔ اصل درآمد کے لیے سرور ضروری ہے، یہاں اسٹاک تبدیل نہیں ہوگا۔",
-        )}
+        {t(copy.previewAndValidateACsvFileHere, copy.csv5)}
       </div>
       <section className="panel glass import-panel">
         <div className="step-indicator">
-          <span className="current">1</span>
-          <b>{t("Choose a file", "فائل چنیں")}</b>
+          <span className="current">{copy.label1}</span>
+          <b>{t(copy.chooseAFile, copy.urdu397)}</b>
           <div />
-          <span className={rows.length ? "current" : ""}>2</span>
-          <b>{t("Review rows", "سطروں کا جائزہ")}</b>
+          <span className={rows.length ? "current" : ""}>{copy.label2}</span>
+          <b>{t(copy.reviewRows, copy.urdu398)}</b>
           <div />
-          <span className={accepted ? "current" : ""}>3</span>
-          <b>{t("Save preview", "پیش نظارہ محفوظ")}</b>
+          <span className={accepted ? "current" : ""}>{copy.label3}</span>
+          <b>{t(copy.savePreview, copy.urdu399)}</b>
         </div>
         <label className="upload-zone">
           <Upload size={36} />
           <strong>
-            {fileName ||
-              t("Bring your register into view", "اپنا رجسٹر یہاں لائیں")}
+            {fileName || t(copy.bringYourRegisterIntoView, copy.urdu400)}
           </strong>
-          <span>
-            {t(
-              "Choose a CSV file · maximum 2 MB",
-              "CSV فائل منتخب کریں · زیادہ سے زیادہ ۲ ایم بی",
-            )}
-          </span>
+          <span>{t(copy.chooseACsvFileMaximum2Mb, copy.csv6)}</span>
           <input
             type="file"
             accept=".csv,text/csv"
@@ -4979,12 +4592,7 @@ function ImportPage({ onNotify }: { onNotify: (text: string) => void }) {
               if (!file) return;
               setFileName(file.name);
               if (file.size > 2 * 1024 * 1024) {
-                setError(
-                  t(
-                    "Choose a file smaller than 2 MB.",
-                    "۲ ایم بی سے چھوٹی فائل منتخب کریں۔",
-                  ),
-                );
+                setError(t(copy.chooseAFileSmallerThan2Mb, copy.urdu401));
                 return;
               }
               try {
@@ -5000,8 +4608,8 @@ function ImportPage({ onNotify }: { onNotify: (text: string) => void }) {
                 setRows([]);
                 setError(
                   t(
-                    "Use the template columns: lot, spec, cartons, weight_kg. Check that each quoted cell is closed.",
-                    "ٹیمپلیٹ کے کالم استعمال کریں: lot, spec, cartons, weight_kg۔",
+                    copy.useTheTemplateColumnsLotSpecCartons,
+                    copy.lotSpecCartonsWeightKg,
                   ),
                 );
               }
@@ -5018,7 +4626,7 @@ function ImportPage({ onNotify }: { onNotify: (text: string) => void }) {
           }
         >
           <Download size={16} />
-          {t("Download CSV template", "CSV ٹیمپلیٹ ڈاؤن لوڈ")}
+          {t(copy.downloadCsvTemplate, copy.csv7)}
         </button>
         {error && (
           <div className="error-banner" role="alert">
@@ -5031,7 +4639,7 @@ function ImportPage({ onNotify }: { onNotify: (text: string) => void }) {
               className="table-scroll"
               tabIndex={0}
               role="region"
-              aria-label={t("Scrollable table", "اسکرول جدول")}
+              aria-label={t(copy.scrollableTable, copy.urdu14)}
             >
               <table>
                 <thead>
@@ -5039,7 +4647,7 @@ function ImportPage({ onNotify }: { onNotify: (text: string) => void }) {
                     {rows[0].map((h) => (
                       <th key={h}>{h}</th>
                     ))}
-                    <th>{t("Check", "جانچ")}</th>
+                    <th>{t(copy.check, copy.urdu402)}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5059,11 +4667,8 @@ function ImportPage({ onNotify }: { onNotify: (text: string) => void }) {
                         <td>
                           <Status tone={valid ? "green" : "amber"}>
                             {valid
-                              ? t("Valid preview", "درست پیش نظارہ")
-                              : t(
-                                  "Check lot or quantity",
-                                  "لاٹ یا مقدار چیک کریں",
-                                )}
+                              ? t(copy.validPreview, copy.urdu403)
+                              : t(copy.checkLotOrQuantity, copy.urdu404)}
                           </Status>
                         </td>
                       </tr>
@@ -5074,11 +4679,7 @@ function ImportPage({ onNotify }: { onNotify: (text: string) => void }) {
             </div>
             <div className="modal-actions">
               <span className="muted">
-                {rows.length - 1}{" "}
-                {t(
-                  "rows found · first 100 shown",
-                  "سطریں ملیں · پہلی ۱۰۰ دکھائی گئیں",
-                )}
+                {rows.length - 1} {t(copy.rowsFoundFirst100Shown, copy.urdu405)}
               </span>
               <Button
                 variant="primary"
@@ -5092,15 +4693,15 @@ function ImportPage({ onNotify }: { onNotify: (text: string) => void }) {
                   setAccepted(true);
                   onNotify(
                     t(
-                      "Import preview saved. No stock movements were posted.",
-                      "درآمد کا پیش نظارہ محفوظ ہے۔ اسٹاک تبدیل نہیں ہوا۔",
+                      copy.importPreviewSavedNoStockMovementsWere,
+                      copy.urdu406,
                     ),
                   );
                 }}
               >
                 {accepted
-                  ? t("Preview saved", "پیش نظارہ محفوظ")
-                  : t("Save preview locally", "پیش نظارہ مقامی محفوظ کریں")}
+                  ? t(copy.previewSaved, copy.urdu399)
+                  : t(copy.savePreviewLocally, copy.urdu407)}
               </Button>
             </div>
           </>

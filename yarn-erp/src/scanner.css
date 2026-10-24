@@ -13,11 +13,11 @@
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 16px;
 }
 .scan-connection-button {
   min-height: 44px;
-  font-size: 11px;
+  font-size: 16px;
 }
 .scanner-grid {
   display: grid;
@@ -35,15 +35,15 @@
 .scanner-page .panel-heading h2 {
   font-size: 16px;
   font-weight: 500;
-  letter-spacing: -0.3px;
+  letter-spacing: normal;
 }
 .scanner-page .panel-heading p {
-  font-size: 11px;
+  font-size: 16px;
   color: var(--muted);
   line-height: 1.8;
 }
 .scan-step-count {
-  font-size: 10px;
+  font-size: 16px;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -65,7 +65,7 @@
   border-radius: 9px;
   padding: 9px 11px;
   min-height: 48px;
-  font-size: 11px;
+  font-size: 16px;
   color: var(--muted);
   text-align: start;
   flex: 1;
@@ -73,7 +73,7 @@
   background: var(--surface-solid);
 }
 .scan-photo-tabs button.active {
-  border-color: #c9b7e4;
+  border-color: #f3f3f3;
   background: var(--purple-light);
   color: var(--purple);
 }
@@ -86,7 +86,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: 16px;
 }
 .scan-photo-tabs button.active .scan-tab-number {
   background: var(--purple);
@@ -94,14 +94,14 @@
   border-color: var(--purple);
 }
 .scan-photo-attached {
-  font-size: 8px;
+  font-size: 16px;
   margin-inline-start: auto;
   color: var(--muted);
 }
 .scan-viewfinder {
   height: 350px;
   border-radius: 12px;
-  background: radial-gradient(ellipse at 45% 20%, #41364d 0%, #302a3b 65%);
+  background: var(--surface-solid);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -112,9 +112,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-image:
-    linear-gradient(#ffffff04 1px, transparent 1px),
-    linear-gradient(90deg, #ffffff04 1px, transparent 1px);
+  background: var(--surface-solid);
   background-size: 32px 32px;
   pointer-events: none;
 }
@@ -136,23 +134,23 @@
   width: 73px;
   height: 73px;
   border-radius: 22px;
-  background: linear-gradient(130deg, #ffffff13, #ffffff05);
+  background: var(--surface-solid);
   border: 1px solid #ffffff21;
-  color: #c6b4de;
-  box-shadow: inset 0 1px #ffffff18;
+  color: var(--muted);
+  box-shadow: none;
   margin-block-end: 22px;
 }
 .scan-camera-empty h3 {
   font-size: 21px;
   font-weight: 400;
-  color: #e9deef;
+  color: var(--muted);
   line-height: 1.5;
-  letter-spacing: -0.5px;
+  letter-spacing: normal;
 }
 .scan-camera-empty > p {
-  font-size: 11px;
+  font-size: 16px;
   line-height: 1.9;
-  color: #c1b5cc;
+  color: var(--muted);
   margin-block: 11px 20px;
   max-width: 230px;
 }
@@ -160,14 +158,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 9px;
-  color: #b6a6c7;
+  font-size: 16px;
+  color: var(--muted);
 }
 .scan-corner {
   position: absolute;
   width: 23px;
   height: 23px;
-  border-color: #c2a9e4;
+  border-color: #767676;
   border-style: solid;
   border-width: 0;
   opacity: 0.65;
@@ -220,19 +218,19 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #fff;
-  background: #1c172b99;
-  backdrop-filter: blur(8px);
+  color: var(--muted);
+  background: #202020;
+  backdrop-filter: none;
   padding: 5px 8px;
   border-radius: 4px;
-  font-size: 7px;
-  letter-spacing: 1px;
+  font-size: 16px;
+  letter-spacing: normal;
   z-index: 2;
 }
 .scan-live-label > span {
   width: 4px;
   height: 4px;
-  background: #a5c8ab;
+  background: #767676;
   border-radius: 50%;
 }
 .scan-camera-controls {
@@ -243,7 +241,7 @@
 }
 .scan-camera-controls > .button {
   flex: 1;
-  font-size: 12px;
+  font-size: 16px;
   min-height: 48px;
 }
 .scan-upload-button {
@@ -274,7 +272,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  font-size: 9px;
+  font-size: 16px;
   color: var(--muted);
   padding-block: 0 16px;
 }
@@ -292,7 +290,7 @@
   overflow: hidden;
 }
 .scan-photo-meta .text-button {
-  font-size: 10px;
+  font-size: 16px;
 }
 .scan-manual-label {
   border-block-start: 1px solid var(--line);
@@ -303,7 +301,7 @@
   align-items: center;
   gap: 8px;
   list-style: none;
-  font-size: 11px;
+  font-size: 16px;
   min-height: 48px;
   cursor: pointer;
   color: var(--muted);
@@ -313,17 +311,17 @@
 }
 .scan-manual-label summary > span {
   margin-inline-start: auto;
-  font-size: 9px;
+  font-size: 16px;
   color: var(--muted);
 }
 .scan-manual-label label {
-  font-size: 11px;
+  font-size: 16px;
 }
 .scan-manual-label label textarea {
-  font-size: 13px;
+  font-size: 16px;
 }
 .scan-manual-label p {
-  font-size: 10px;
+  font-size: 16px;
   color: var(--muted);
   line-height: 1.8;
   margin-block: 9px 0;
@@ -341,17 +339,17 @@
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 16px;
   max-width: 180px;
   line-height: 1.8;
 }
 .scan-analyze-row > .button {
-  font-size: 12px;
+  font-size: 16px;
   min-height: 52px;
   padding-inline: 17px;
 }
 .scan-analysis-hint {
-  font-size: 10px;
+  font-size: 16px;
   line-height: 1.8;
   color: var(--muted);
   margin-block-start: 12px;
@@ -366,7 +364,7 @@
   padding: 22px;
 }
 .scan-result-icon {
-  color: #b6a2cf;
+  color: var(--muted);
   width: 37px;
   height: 37px;
   display: flex;
@@ -389,15 +387,15 @@
   justify-content: center;
   width: 90px;
   height: 90px;
-  background: radial-gradient(ellipse, #eae0f8, #f6f3fa00 72%);
-  color: #b5a0d1;
+  background: var(--surface-solid);
+  color: var(--muted);
   margin-block-end: 20px;
 }
 .scan-empty-orbit > span {
   position: absolute;
   width: 80px;
   height: 80px;
-  border: 1px solid #e1d7ed;
+  border: 1px solid #f3f3f3;
   border-radius: 50%;
   transform: rotate(-30deg) scaleY(0.65);
 }
@@ -412,11 +410,11 @@
   font-size: 19px;
   line-height: 1.5;
   font-weight: 400;
-  letter-spacing: -0.4px;
+  letter-spacing: normal;
   color: var(--text);
 }
 .scan-empty-results > p {
-  font-size: 11px;
+  font-size: 16px;
   line-height: 1.9;
   color: var(--muted);
   max-width: 245px;
@@ -432,11 +430,11 @@
   gap: 10px;
   padding: 15px 0;
   border-block-start: 1px solid var(--line);
-  font-size: 11px;
+  font-size: 16px;
   color: var(--muted);
 }
 .scan-result-placeholders > div > svg {
-  color: #a28cbf;
+  color: var(--muted);
 }
 .scan-result-placeholders i {
   width: 37px;
@@ -451,7 +449,7 @@
   gap: 13px;
   padding: 21px;
   border-radius: 12px;
-  background: linear-gradient(130deg, #f0ebf8aa, #fff9);
+  background: var(--surface-solid);
 }
 .scan-tip-card > span {
   display: flex;
@@ -465,13 +463,13 @@
   flex-shrink: 0;
 }
 .scan-tip-card h3 {
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.8;
   font-weight: 500;
-  letter-spacing: -0.1px;
+  letter-spacing: normal;
 }
 .scan-tip-card p {
-  font-size: 11px;
+  font-size: 16px;
   color: var(--muted);
   line-height: 1.9;
   margin-block-start: 6px;
@@ -481,7 +479,7 @@
   align-items: flex-start;
   gap: 8px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 16px;
   line-height: 1.9;
   padding-inline: 5px;
 }
@@ -509,13 +507,13 @@
   line-height: 1.6;
 }
 .scan-connect-heading p {
-  font-size: 11px;
+  font-size: 16px;
   color: var(--muted);
   margin-block-start: 3px;
   line-height: 1.8;
 }
 .scan-connect form > label {
-  font-size: 11px;
+  font-size: 16px;
   margin-block-end: 8px;
 }
 .scan-url-row {
@@ -527,16 +525,16 @@
   flex: 1;
   min-width: 0;
   margin: 0;
-  font-size: 13px;
+  font-size: 16px;
   height: 49px;
 }
 .scan-url-row .button {
   min-height: 49px;
   padding-inline: 18px;
-  font-size: 12px;
+  font-size: 16px;
 }
 .scan-connect-note {
-  font-size: 10px;
+  font-size: 16px;
   color: var(--muted);
   line-height: 1.9;
   margin-block-start: 12px;
@@ -556,18 +554,18 @@
   gap: 15px;
   padding: 25px;
   text-align: center;
-  background: #251c35bb;
-  backdrop-filter: blur(6px);
-  color: #e2d5ee;
+  background: #202020;
+  backdrop-filter: none;
+  color: var(--muted);
 }
 .scan-progress-overlay strong {
   font-size: 16px;
   font-weight: 400;
 }
 .scan-progress-overlay > span {
-  font-size: 11px;
+  font-size: 16px;
   line-height: 1.8;
-  color: #d0bddf;
+  color: var(--muted);
 }
 .scan-verdict {
   display: flex;
@@ -575,33 +573,33 @@
   gap: 11px;
   padding: 19px 20px;
   margin: 20px 20px 6px;
-  border: 1px solid #d6e5d9;
-  background: #f0f6f1;
+  border: 1px solid #f3f3f3;
+  background: #ffffff;
   border-radius: 10px;
-  color: #497052;
+  color: var(--muted);
 }
 .scan-verdict > span {
   padding-block-start: 2px;
 }
 .scan-verdict strong {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 500;
   line-height: 1.7;
 }
 .scan-verdict p {
-  font-size: 10px;
+  font-size: 16px;
   line-height: 1.9;
   margin-block-start: 5px;
 }
 .scan-verdict.flag {
-  background: #fbf4e6;
-  border-color: #ecdfc8;
-  color: #815a24;
+  background: #ffffff;
+  border-color: #f3f3f3;
+  color: var(--muted);
 }
 .scan-verdict.insufficient_evidence {
   background: var(--purple-light);
-  border-color: #dfd3ee;
-  color: #76558f;
+  border-color: #f3f3f3;
+  color: var(--muted);
 }
 .scan-predictions {
   padding: 0 21px;
@@ -630,13 +628,13 @@
 }
 .scan-prediction > div > span {
   display: block;
-  font-size: 10px;
+  font-size: 16px;
   color: var(--muted);
   margin-block-end: 6px;
 }
 .scan-prediction strong {
   display: block;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
   text-transform: capitalize;
   line-height: 1.7;
@@ -661,7 +659,7 @@
   font-family: Inter, sans-serif;
 }
 .scan-confidence bdi {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--purple);
   font-weight: 500;
 }
@@ -677,7 +675,7 @@
 .scan-confidence i {
   display: block;
   height: 100%;
-  background: #ab92cf;
+  background: #767676;
   border-radius: 4px;
 }
 .scan-abstain {
@@ -688,7 +686,7 @@
   align-items: center;
   gap: 10px;
   padding: 17px 21px;
-  font-size: 11px;
+  font-size: 16px;
 }
 .scan-garment > span {
   color: var(--muted);
@@ -699,7 +697,7 @@
   font-weight: 500;
 }
 .scan-garment > bdi {
-  font-size: 10px;
+  font-size: 16px;
   color: var(--purple);
 }
 .scan-composition {
@@ -708,8 +706,8 @@
   background: color-mix(in srgb, var(--sunken) 40%, transparent);
 }
 .scan-composition > .eyebrow {
-  font-size: 8px;
-  letter-spacing: 1.2px;
+  font-size: 16px;
+  letter-spacing: normal;
   margin-block-end: 12px;
 }
 .scan-composition > div {
@@ -724,7 +722,7 @@
   padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 16px;
   color: var(--muted);
   background: var(--surface-solid);
 }
@@ -734,7 +732,7 @@
   font-weight: 500;
 }
 .scan-composition p {
-  font-size: 11px;
+  font-size: 16px;
   color: var(--muted);
   line-height: 1.9;
 }
@@ -742,10 +740,10 @@
   padding: 21px;
 }
 .scan-flags h3 {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 500;
   margin-block-end: 9px;
-  letter-spacing: 0;
+  letter-spacing: normal;
 }
 .scan-flags > div {
   display: flex;
@@ -758,12 +756,12 @@
   margin-block-start: 3px;
 }
 .scan-flags p {
-  font-size: 11px;
+  font-size: 16px;
   line-height: 1.8;
   overflow-wrap: anywhere;
 }
 .scan-flags small {
-  font-size: 8px;
+  font-size: 16px;
   margin-block-start: 4px;
 }
 .scan-result-meta {
@@ -772,7 +770,7 @@
   gap: 8px;
   padding: 20px 21px;
   background: var(--sunken);
-  font-size: 9px;
+  font-size: 16px;
   color: var(--muted);
   line-height: 1.8;
   overflow-wrap: anywhere;
@@ -795,10 +793,10 @@
 }
 .scan-result-actions > .button {
   min-height: 44px;
-  font-size: 11px;
+  font-size: 16px;
 }
 .scan-result-actions > .text-button {
-  font-size: 10px;
+  font-size: 16px;
 }
 .scan-page-heading-action {
   gap: 8px;
@@ -813,11 +811,11 @@
   }
   .scan-photo-tabs button {
     padding-inline: 8px;
-    font-size: 10px;
+    font-size: 16px;
     gap: 6px;
   }
   .scan-photo-attached {
-    font-size: 7px;
+    font-size: 16px;
   }
   .scan-viewfinder {
     height: 330px;
@@ -836,7 +834,7 @@
     padding-inline: 18px;
   }
   .scan-results .panel-heading h2 {
-    font-size: 15px;
+    font-size: 16px;
   }
   .scan-empty-results {
     padding-inline: 20px;
@@ -849,7 +847,7 @@
     padding-inline: 17px;
   }
   .scan-prediction strong {
-    font-size: 13px;
+    font-size: 16px;
   }
 }
 @media (max-width: 1023px) {
@@ -869,11 +867,11 @@
     height: 350px;
   }
   .scan-photo-tabs button {
-    font-size: 12px;
+    font-size: 16px;
     padding-inline: 13px;
   }
   .scan-photo-attached {
-    font-size: 9px;
+    font-size: 16px;
   }
   .scan-analyze-row {
     flex-wrap: nowrap;
@@ -885,10 +883,10 @@
     max-width: 190px;
   }
   .scan-prediction strong {
-    font-size: 15px;
+    font-size: 16px;
   }
   .scan-evidence-note {
-    font-size: 11px;
+    font-size: 16px;
   }
   .scan-empty-results h3 {
     font-size: 20px;
@@ -902,7 +900,7 @@
     height: 26px;
   }
   .scan-tip-card p {
-    font-size: 10px;
+    font-size: 16px;
   }
   .scan-connection-button {
     min-height: 48px;
@@ -915,13 +913,13 @@
     margin-block-end: 18px;
   }
   .scan-model-badge {
-    font-size: 10px;
+    font-size: 16px;
     line-height: 1.9;
     max-width: 185px;
     padding-block-start: 12px;
   }
   .scan-connection-button {
-    font-size: 10px;
+    font-size: 16px;
     padding-inline: 10px;
     min-height: 48px;
   }
@@ -944,7 +942,7 @@
     line-height: 1.5;
   }
   .scan-connect-heading p {
-    font-size: 11px;
+    font-size: 16px;
     line-height: 1.9;
     margin-block-start: 8px;
   }
@@ -957,15 +955,15 @@
     flex: auto;
     width: 100%;
     min-height: 52px;
-    font-size: 12px;
+    font-size: 16px;
   }
   .scan-url-row .button {
     width: 100%;
     min-height: 52px;
-    font-size: 12px;
+    font-size: 16px;
   }
   .scan-connect-note {
-    font-size: 11px;
+    font-size: 16px;
     line-height: 1.9;
     margin-block-start: 14px;
   }
@@ -983,11 +981,11 @@
     line-height: 1.6;
   }
   .scanner-page .panel-heading p {
-    font-size: 11px;
+    font-size: 16px;
     line-height: 1.8;
   }
   .scan-step-count {
-    font-size: 9px;
+    font-size: 16px;
   }
   .scan-step-count bdi {
     font-size: 16px;
@@ -996,14 +994,14 @@
     gap: 8px;
   }
   .scan-photo-tabs button {
-    font-size: 10px;
+    font-size: 16px;
     padding: 10px 8px;
     gap: 7px;
     min-height: 51px;
     flex-wrap: wrap;
   }
   .scan-photo-tabs button .scan-photo-attached {
-    font-size: 8px;
+    font-size: 16px;
     margin-inline-start: 30px;
     margin-block-start: -7px;
     width: 100%;
@@ -1012,7 +1010,7 @@
   .scan-tab-number {
     width: 22px;
     height: 22px;
-    font-size: 10px;
+    font-size: 16px;
   }
   .scan-viewfinder {
     height: 300px;
@@ -1032,12 +1030,12 @@
     max-width: 250px;
   }
   .scan-camera-empty > p {
-    font-size: 11px;
+    font-size: 16px;
     line-height: 1.9;
     max-width: 220px;
   }
   .scan-viewfinder-tip {
-    font-size: 9px;
+    font-size: 16px;
   }
   .scan-corner {
     width: 21px;
@@ -1065,7 +1063,7 @@
   }
   .scan-camera-controls > .button {
     min-height: 52px;
-    font-size: 11px;
+    font-size: 16px;
     padding-inline: 10px;
     gap: 7px;
   }
@@ -1076,36 +1074,36 @@
     width: 100%;
     min-height: 40px;
     background: var(--sunken);
-    font-size: 10px;
+    font-size: 16px;
   }
   .scan-camera-controls .scan-upload-button:focus-within {
     outline-offset: 1px;
   }
   .scan-photo-meta {
-    font-size: 9px;
+    font-size: 16px;
     align-items: flex-start;
     flex-direction: column;
     gap: 7px;
     padding-block-end: 15px;
   }
   .scan-photo-meta > .text-button {
-    font-size: 11px;
+    font-size: 16px;
     min-height: 44px;
   }
   .scan-manual-label summary {
-    font-size: 11px;
+    font-size: 16px;
     line-height: 1.8;
     gap: 7px;
     min-height: 52px;
   }
   .scan-manual-label summary > span {
-    font-size: 8px;
+    font-size: 16px;
   }
   .scan-manual-label label {
-    font-size: 12px;
+    font-size: 16px;
   }
   .scan-manual-label p {
-    font-size: 11px;
+    font-size: 16px;
   }
   .scan-analyze-row {
     flex-direction: column;
@@ -1114,15 +1112,15 @@
   }
   .scan-analyze-row > span {
     max-width: none;
-    font-size: 10px;
+    font-size: 16px;
   }
   .scan-analyze-row > .button {
     width: 100%;
     min-height: 56px;
-    font-size: 13px;
+    font-size: 16px;
   }
   .scan-analysis-hint {
-    font-size: 11px;
+    font-size: 16px;
     line-height: 1.9;
   }
   .scan-results-column {
@@ -1140,7 +1138,7 @@
     font-size: 18px;
   }
   .scan-results .panel-heading p {
-    font-size: 11px;
+    font-size: 16px;
   }
   .scan-empty-results {
     padding: 28px 23px 22px;
@@ -1150,11 +1148,11 @@
   }
   .scan-empty-results > p {
     max-width: 280px;
-    font-size: 12px;
+    font-size: 16px;
   }
   .scan-result-placeholders > div {
     min-height: 53px;
-    font-size: 12px;
+    font-size: 16px;
   }
   .scan-tip-card {
     padding: 22px 19px;
@@ -1165,13 +1163,13 @@
     height: 32px;
   }
   .scan-tip-card h3 {
-    font-size: 13px;
+    font-size: 16px;
   }
   .scan-tip-card p {
-    font-size: 12px;
+    font-size: 16px;
   }
   .scan-evidence-note {
-    font-size: 11px;
+    font-size: 16px;
     padding: 0 5px;
   }
   .scan-verdict {
@@ -1179,10 +1177,10 @@
     padding: 18px 16px;
   }
   .scan-verdict strong {
-    font-size: 14px;
+    font-size: 16px;
   }
   .scan-verdict p {
-    font-size: 11px;
+    font-size: 16px;
     line-height: 1.9;
   }
   .scan-predictions {
@@ -1195,45 +1193,45 @@
     font-size: 16px;
   }
   .scan-prediction > div > span {
-    font-size: 11px;
+    font-size: 16px;
   }
   .scan-confidence bdi {
-    font-size: 13px;
+    font-size: 16px;
   }
   .scan-composition {
     padding: 21px 19px;
   }
   .scan-composition > .eyebrow {
-    font-size: 9px;
+    font-size: 16px;
   }
   .scan-composition > div > span {
-    font-size: 12px;
+    font-size: 16px;
     padding: 8px 10px;
   }
   .scan-composition p {
-    font-size: 12px;
+    font-size: 16px;
   }
   .scan-garment {
-    font-size: 12px;
+    font-size: 16px;
     padding: 17px 19px;
   }
   .scan-garment > bdi {
-    font-size: 11px;
+    font-size: 16px;
   }
   .scan-flags {
     padding: 21px 19px;
   }
   .scan-flags h3 {
-    font-size: 13px;
+    font-size: 16px;
   }
   .scan-flags p {
-    font-size: 12px;
+    font-size: 16px;
   }
   .scan-flags small {
-    font-size: 10px;
+    font-size: 16px;
   }
   .scan-result-meta {
-    font-size: 10px;
+    font-size: 16px;
     padding: 20px 19px;
     line-height: 1.9;
   }
@@ -1242,14 +1240,14 @@
   }
   .scan-result-actions > .button {
     min-height: 48px;
-    font-size: 12px;
+    font-size: 16px;
   }
   .scan-result-actions > .text-button {
     min-height: 48px;
-    font-size: 11px;
+    font-size: 16px;
   }
   .scan-capture-panel .error-banner {
-    font-size: 12px;
+    font-size: 16px;
     line-height: 1.9;
   }
   .scan-live-label {
@@ -1260,70 +1258,11 @@
     font-size: 16px;
   }
   .scan-progress-overlay > span {
-    font-size: 12px;
+    font-size: 16px;
   }
 }
-:root[data-theme="dark"] .scan-tip-card {
-  background: linear-gradient(130deg, #382b46, #2d2737);
-  border-color: var(--line);
-}
-:root[data-theme="dark"] .scan-empty-orbit {
-  background: radial-gradient(ellipse, #4a365a, #302b3c00 72%);
-}
-:root[data-theme="dark"] .scan-empty-orbit > span {
-  border-color: #675178;
-}
-:root[data-theme="dark"] .scan-verdict {
-  background: #2e4034;
-  border-color: #4b6451;
-  color: #b2d0b7;
-}
-:root[data-theme="dark"] .scan-verdict.flag {
-  background: #443924;
-  border-color: #69522c;
-  color: #e2c492;
-}
-:root[data-theme="dark"] .scan-verdict.insufficient_evidence {
-  background: #42304e;
-  border-color: #675179;
-  color: #d2bae9;
-}
-:root[data-theme="dark"] .scan-photo-tabs button.active {
-  border-color: #715587;
-}
-:root[data-theme="factory"] .scan-capture-panel,
-:root[data-theme="factory"] .scan-connect,
-:root[data-theme="factory"] .scan-results {
-  border: 2px solid var(--line);
-}
-:root[data-theme="factory"] .scan-model-badge,
-:root[data-theme="factory"] .scan-connect-note,
-:root[data-theme="factory"] .scan-analysis-hint {
-  font-size: 12px;
-}
-:root[data-theme="factory"] .scan-photo-tabs button,
-:root[data-theme="factory"] .scan-result-placeholders > div {
-  font-size: 13px;
-  min-height: 52px;
-}
-:root[data-theme="factory"] .scan-camera-controls > .button {
-  min-height: 52px;
-}
-:root[data-theme="factory"] .scan-analyze-row > .button {
-  min-height: 56px;
-}
-:root[data-theme="factory"] .scan-tab-number {
-  background: #553382;
-  color: white;
-}
-:root[data-theme="factory"] .scan-prediction strong {
-  font-size: 17px;
-}
-:root[data-theme="factory"] .scan-camera-empty > p {
-  font-size: 13px;
-}
 :root[lang="ur"] .scan-photo-tabs button {
-  font-size: 12px;
+  font-size: 16px;
 }
 :root[lang="ur"] .scan-connect-heading h2 {
   font-size: 21px;
@@ -1332,14 +1271,14 @@
 :root[lang="ur"] .scan-connect-note,
 :root[lang="ur"] .scan-analysis-hint,
 :root[lang="ur"] .scan-evidence-note {
-  font-size: 12px;
+  font-size: 16px;
 }
 :root[lang="ur"] .scan-camera-empty h3 {
   font-size: 23px;
   line-height: 2;
 }
 :root[lang="ur"] .scan-camera-empty > p {
-  font-size: 13px;
+  font-size: 16px;
   line-height: 2.2;
 }
 :root[lang="ur"] .scanner-page .panel-heading h2 {
@@ -1347,37 +1286,37 @@
   line-height: 2;
 }
 :root[lang="ur"] .scanner-page .panel-heading p {
-  font-size: 12px;
+  font-size: 16px;
 }
 :root[lang="ur"] .scan-empty-results h3 {
   font-size: 23px;
   line-height: 2;
 }
 :root[lang="ur"] .scan-empty-results > p {
-  font-size: 13px;
+  font-size: 16px;
   line-height: 2.2;
 }
 :root[lang="ur"] .scan-photo-tabs button .scan-photo-attached {
-  font-size: 10px;
+  font-size: 16px;
 }
 :root[lang="ur"] .scan-composition > .eyebrow {
-  font-size: 11px;
-  letter-spacing: 0;
+  font-size: 16px;
+  letter-spacing: normal;
 }
 :root[lang="ur"] .scan-url-row input {
   font-family: Inter, sans-serif;
 }
 :root[lang="ur"] .scan-camera-empty .scan-viewfinder-tip {
-  font-size: 11px;
+  font-size: 16px;
 }
 :root[lang="ur"] .scan-analyze-row > span {
-  font-size: 11px;
+  font-size: 16px;
 }
 :root[lang="ur"] .scan-tip-card h3 {
-  font-size: 15px;
+  font-size: 16px;
 }
 :root[lang="ur"] .scan-tip-card p {
-  font-size: 13px;
+  font-size: 16px;
 }
 @media print {
   .scan-capture-panel,
@@ -1409,16 +1348,16 @@
     break-inside: avoid;
   }
   .scan-confidence i {
-    background: #777;
+    background: #595959;
   }
 }
 .scan-quality {
   padding: 0 21px 21px;
 }
 .scan-quality h3 {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 500;
-  letter-spacing: 0;
+  letter-spacing: normal;
   margin-block: 18px 12px;
 }
 .scan-quality > div {
@@ -1430,15 +1369,18 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 9px;
+  font-size: 16px;
   color: var(--muted);
   line-height: 1.8;
 }
 .scan-quality strong {
-  font-size: 11px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--text);
   text-transform: capitalize;
   overflow-wrap: anywhere;
 }
-.scan-photo-tabs button.active .scan-tab-number{background:#7152b0;border-color:#7152b0}
+.scan-photo-tabs button.active .scan-tab-number {
+  background: #767676;
+  border-color: #767676;
+}

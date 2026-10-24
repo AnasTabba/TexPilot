@@ -1,1 +1,20 @@
-{"name":"Yarnflow Factory Workspace","short_name":"Yarnflow","start_url":"/","display":"standalone","background_color":"#f6f6fa","theme_color":"#7461cf","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]}
+{
+  "id": "/",
+  "name": "Yarnflow Factory Workspace",
+  "short_name": "Yarnflow",
+  "description": "Shared inventory, batch tracking and material inspection.",
+  "start_url": "/#/overview",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f6f9",
+  "theme_color": "#6b4fd8",
+  "icons": [
+    {"src":"/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}
+  ],
+  "shortcuts": [
+    {"name":"Scan a batch","url":"/#/scanner","icons":[{"src":"/icon-192.png","sizes":"192x192"}]},
+    {"name":"Inventory","url":"/#/inventory"}
+  ]
+}

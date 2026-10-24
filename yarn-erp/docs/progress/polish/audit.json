@@ -1,0 +1,1499 @@
+{
+  "results": [
+    {
+      "name": "overview",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "inventory",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "orders",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "register",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "more",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "scanner",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "reports",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "help",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "search",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "close",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "masters",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "users",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "import",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "home",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "components",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "sync",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "login",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production-step1",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production-step2",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production-review",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "receipt-step1",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "receipt-step2",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "receipt-review",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch-step1",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch-step2",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch-review",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "issue-step1",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "issue-step2",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "issue-review",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "order-form",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "order-review",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "entry-detail",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "entry-reversal",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "lot-detail",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "order-detail",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "report-detail",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings-appearance",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings-datamasters",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings-peopledevices",
+      "width": 1440,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "overview",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "inventory",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "orders",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "register",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "more",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "scanner",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "reports",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "help",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "search",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "close",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "masters",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "users",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "import",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "home",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "components",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "sync",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "login",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production-step1",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production-step2",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production-review",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "receipt-step1",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "receipt-step2",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "receipt-review",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch-step1",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch-step2",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch-review",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "issue-step1",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "issue-step2",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "issue-review",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "order-form",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "order-review",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "entry-detail",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "entry-reversal",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "lot-detail",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "order-detail",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "report-detail",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings-appearance",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings-datamasters",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings-peopledevices",
+      "width": 1024,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "overview",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "inventory",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "orders",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "register",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "more",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "scanner",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "reports",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "help",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "search",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "close",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "masters",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "users",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "import",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "home",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "components",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "sync",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "login",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production-step1",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production-step2",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production-review",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "receipt-step1",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "receipt-step2",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "receipt-review",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch-step1",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch-step2",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch-review",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "issue-step1",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "issue-step2",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "issue-review",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "order-form",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "order-review",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "entry-detail",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "entry-reversal",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "lot-detail",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "order-detail",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "report-detail",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings-appearance",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings-datamasters",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings-peopledevices",
+      "width": 390,
+      "ur": false,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "overview",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "inventory",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "orders",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "register",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "more",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "scanner",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "reports",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "help",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "search",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "close",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "masters",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "users",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "import",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "home",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "components",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "sync",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "login",
+      "width": 390,
+      "ur": true,
+      "theme": "light",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "overview",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "production",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "inventory",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "orders",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "dispatch",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "register",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "more",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "scanner",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "reports",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "settings",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "help",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "search",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "close",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "masters",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "users",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "import",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "home",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "components",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "sync",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    },
+    {
+      "name": "login",
+      "width": 1440,
+      "ur": false,
+      "theme": "dark",
+      "overflow": false,
+      "smallText": [],
+      "violations": []
+    }
+  ],
+  "errors": []
+}

@@ -1,3 +1,4 @@
+import { copy } from "./ui-copy";
 import { useEffect, useRef, useState } from "react";
 import {
   Camera,
@@ -37,13 +38,18 @@ import {
 } from "./scanner-client";
 import "./scanner.css";
 type T = (en: string, ur?: string) => string;
-type Photo = { file: File; url: string };
+type Photo = {
+  file: File;
+  url: string;
+};
 export default function Scanner({
   t,
   onInventory,
+  onResult,
 }: {
   t: T;
   onInventory: () => void;
+  onResult?: (result: ScanResult) => void;
 }) {
   const [endpoint, setEndpoint] = useState(() => {
     try {
@@ -85,54 +91,21 @@ export default function Scanner({
   const msg = (e: unknown) => {
     const code = e instanceof ScanError ? e.code : "server";
     return {
-      endpoint: t(
-        "Enter your TexPilot server URL, for example https://scanner.yourfactory.com.",
-        "اپنے ٹیکس پائلٹ سرور کا درست URL درج کریں۔",
-      ),
-      insecure: t(
-        "This published workspace needs an HTTPS model server. For a local HTTP server, use the local Yarnflow development app.",
-        "اس شائع شدہ ورک اسپیس کے لیے HTTPS ماڈل سرور درکار ہے۔",
-      ),
-      unreachable: t(
-        "Could not reach TexPilot. Check the server address, internet connection, and whether this workspace is allowed by the server. Your photo is still here.",
-        "ٹیکس پائلٹ سے رابطہ نہیں ہوا۔ پتہ، انٹرنیٹ اور سرور کی اجازت چیک کریں۔ تصویر محفوظ ہے۔",
-      ),
-      timeout: t(
-        "The model took too long to respond. Your photo is still here; try again when the server is ready.",
-        "ماڈل کا جواب آنے میں زیادہ وقت لگا۔ تصویر برقرار ہے، دوبارہ کوشش کریں۔",
-      ),
+      endpoint: t(copy.enterYourTexpilotServerUrlForExample, copy.url),
+      insecure: t(copy.thisPublishedWorkspaceNeedsAnHttpsModel, copy.https),
+      unreachable: t(copy.couldNotReachTexpilotCheckTheServer, copy.urdu408),
+      timeout: t(copy.theModelTookTooLongToRespond, copy.urdu409),
       aborted: t(
-        "Analysis cancelled. Your photos are still available.",
-        "تجزیہ روک دیا گیا۔ تصاویر برقرار ہیں۔",
+        copy.analysisCancelledYourPhotosAreStillAvailable,
+        copy.urdu410,
       ),
-      stub: t(
-        "TexPilot is running without its trained model. Start the server with the scanner-v2 bundle; sample predictions are never shown here.",
-        "ٹیکس پائلٹ میں تربیت یافتہ ماڈل لوڈ نہیں ہے۔ scanner-v2 کے ساتھ سرور چلائیں۔",
-      ),
-      response: t(
-        "The server returned an unexpected result. Check that it serves the TexPilot scan API from main.",
-        "سرور کا جواب متوقع فارمیٹ میں نہیں۔ main کا ٹیکس پائلٹ API چیک کریں۔",
-      ),
-      server: t(
-        "The TexPilot server could not finish this request. Try again or check the model server.",
-        "ٹیکس پائلٹ سرور درخواست مکمل نہیں کر سکا۔ دوبارہ کوشش کریں۔",
-      ),
-      unsupported: t(
-        "Use a JPEG, PNG, or WebP photo. HEIC is not supported; choose Most Compatible in your phone’s camera settings.",
-        "JPEG، PNG یا WebP تصویر استعمال کریں۔ HEIC دستیاب نہیں۔",
-      ),
-      "too-large": t(
-        "This photo is larger than 10 MB. Choose a smaller photo or take a new camera capture.",
-        "تصویر ۱۰ ایم بی سے بڑی ہے۔ چھوٹی تصویر یا نیا کیمرا شاٹ استعمال کریں۔",
-      ),
-      "invalid-image": t(
-        "This photo could not be read. Choose a valid image or take another capture.",
-        "تصویر پڑھی نہیں جا سکی۔ درست تصویر یا نیا شاٹ استعمال کریں۔",
-      ),
-      offline: t(
-        "You are offline. Your selected photos stay here, but analysis needs your TexPilot server.",
-        "آپ آف لائن ہیں۔ تجزیے کے لیے ٹیکس پائلٹ سرور سے رابطہ ضروری ہے۔",
-      ),
+      stub: t(copy.texpilotIsRunningWithoutItsTrainedModel, copy.scannerV2),
+      response: t(copy.theServerReturnedAnUnexpectedResultCheck, copy.mainApi),
+      server: t(copy.theTexpilotServerCouldNotFinishThis, copy.urdu411),
+      unsupported: t(copy.useAJpegPngOrWebpPhoto, copy.jpegPngWebpHeic),
+      "too-large": t(copy.thisPhotoIsLargerThan10Mb, copy.urdu412),
+      "invalid-image": t(copy.thisPhotoCouldNotBeReadChoose, copy.urdu413),
+      offline: t(copy.youAreOfflineYourSelectedPhotosStay, copy.urdu414),
     }[code];
   };
   function stopCamera() {
@@ -165,12 +138,7 @@ export default function Scanner({
       video.current
         .play()
         .catch(() =>
-          setCameraError(
-            t(
-              "Tap the video to start the preview, or upload a photo.",
-              "پیش نظارہ شروع کریں یا تصویر اپ لوڈ کریں۔",
-            ),
-          ),
+          setCameraError(t(copy.tapTheVideoToStartThePreview, copy.urdu415)),
         );
     }
   }, [camera, t]);
@@ -245,17 +213,13 @@ export default function Scanner({
       if (!mounted.current || generation !== cameraGeneration.current) return;
       const denied =
         e instanceof DOMException &&
-        ["NotAllowedError", "PermissionDeniedError"].includes(e.name);
+        (
+          [copy.notallowederror, copy.permissiondeniederror] as string[]
+        ).includes(e.name);
       setCameraError(
         denied
-          ? t(
-              "Camera access is blocked. Allow camera access in your browser, or use Upload photo.",
-              "کیمرا کی اجازت نہیں۔ براؤزر میں اجازت دیں یا تصویر اپ لوڈ کریں۔",
-            )
-          : t(
-              "The camera could not start. Close other camera apps, then try again or upload a photo.",
-              "کیمرا شروع نہیں ہوا۔ دوسری کیمرا ایپس بند کریں یا تصویر اپ لوڈ کریں۔",
-            ),
+          ? t(copy.cameraAccessIsBlockedAllowCameraAccess, copy.urdu416)
+          : t(copy.theCameraCouldNotStartCloseOther, copy.urdu417),
       );
     } finally {
       if (mounted.current && generation === cameraGeneration.current)
@@ -285,12 +249,7 @@ export default function Scanner({
   function capture() {
     const v = video.current;
     if (!v || !v.videoWidth) {
-      setCameraError(
-        t(
-          "Wait for the camera preview, then capture again.",
-          "کیمرا پیش نظارہ آنے کے بعد دوبارہ شاٹ لیں۔",
-        ),
-      );
+      setCameraError(t(copy.waitForTheCameraPreviewThenCapture, copy.urdu418));
       return;
     }
     const canvas = document.createElement("canvas");
@@ -346,6 +305,7 @@ export default function Scanner({
       );
       if (mounted.current && !controller.signal.aborted) {
         setResult(response);
+        onResult?.(response);
         setInfo({
           ready: true,
           model_version: response.model_version,
@@ -373,18 +333,18 @@ export default function Scanner({
   }
   const labelFor = (value: string) =>
     ({
-      cellulosic: t("Cellulosic", "سیلولوزی"),
-      protein: t("Protein", "پروٹین"),
-      synthetic: t("Synthetic", "مصنوعی"),
-      blend: t("Blend", "مخلوط"),
-      knit: t("Knit", "نِٹ"),
-      woven: t("Woven", "وون"),
-      cotton: t("Cotton", "کپاس"),
-      polyester: t("Polyester", "پولیسٹر"),
-      plain: t("Plain", "سادہ"),
-      printed: t("Printed", "پرنٹ شدہ"),
-      dyed: t("Dyed", "رنگا ہوا"),
-      untreated: t("Untreated", "بغیر ٹریٹمنٹ"),
+      cellulosic: t(copy.cellulosic, copy.urdu419),
+      protein: t(copy.protein, copy.urdu420),
+      synthetic: t(copy.synthetic, copy.urdu421),
+      blend: t(copy.blend, copy.urdu422),
+      knit: t(copy.knit, copy.urdu423),
+      woven: t(copy.woven, copy.urdu424),
+      cotton: t(copy.cotton, copy.urdu425),
+      polyester: t(copy.polyester, copy.urdu426),
+      plain: t(copy.plain, copy.urdu427),
+      printed: t(copy.printed, copy.urdu428),
+      dyed: t(copy.dyed, copy.urdu429),
+      untreated: t(copy.untreated, copy.urdu430),
     })[value] || value.replaceAll("_", " ");
   const headRow = (
     en: string,
@@ -402,11 +362,11 @@ export default function Scanner({
         <strong>
           {head
             ? labelFor(head.label)
-            : t("Not enough evidence", "شواہد ناکافی ہیں")}
+            : t(copy.notEnoughEvidence, copy.urdu431)}
         </strong>
         {!head && near && near.length > 0 && (
           <small className="scan-candidates">
-            {t("Closest, not confident:", "قریب ترین، یقینی نہیں:")}{" "}
+            {t(copy.closestNotConfident, copy.closestNotConfidentUr)}{" "}
             <bdi>
               {near
                 .map(([label, p]) => `${labelFor(label)} ${Math.round(p * 100)}%`)
@@ -417,13 +377,16 @@ export default function Scanner({
       </div>
       {head ? (
         <div className="scan-confidence">
-          <bdi>{Math.round(head.confidence * 100)}%</bdi>
+          <bdi>
+            {Math.round(head.confidence * 100)}
+            {copy.urdu432}
+          </bdi>
           <span>
             <i style={{ width: head.confidence * 100 + "%" }} />
           </span>
         </div>
       ) : (
-        <span className="scan-abstain">—</span>
+        <span className="scan-abstain">{copy.urdu433}</span>
       )}
     </div>
   );
@@ -433,15 +396,12 @@ export default function Scanner({
         <span className="scan-model-badge">
           <span className={info ? "live-dot" : "offline-dot"} />
           {connecting
-            ? t("Checking model…", "ماڈل چیک ہو رہا ہے…")
+            ? t(copy.checkingModel, copy.urdu434)
             : info
               ? info.verified
-                ? t("TexPilot model connected", "ٹیکس پائلٹ ماڈل منسلک")
-                : t(
-                    "Server reachable · verify on scan",
-                    "سرور دستیاب · اسکین پر تصدیق",
-                  )
-              : t("Model not connected", "ماڈل منسلک نہیں")}
+                ? t(copy.texpilotModelConnected, copy.urdu435)
+                : t(copy.serverReachableVerifyOnScan, copy.urdu436)
+              : t(copy.modelNotConnected, copy.urdu437)}
         </span>
         <button
           className="button scan-connection-button"
@@ -449,7 +409,7 @@ export default function Scanner({
           onClick={() => setConfigOpen(!configOpen)}
         >
           <Settings2 size={16} />
-          {t("Model connection", "ماڈل کنکشن")}
+          {t(copy.modelConnection, copy.urdu438)}
         </button>
       </div>
       {configOpen && (
@@ -459,18 +419,8 @@ export default function Scanner({
               <PlugZap size={23} />
             </span>
             <div>
-              <h2>
-                {t(
-                  "Connect your TexPilot model",
-                  "اپنا ٹیکس پائلٹ ماڈل منسلک کریں",
-                )}
-              </h2>
-              <p>
-                {t(
-                  "Connect the model server used by your factory.",
-                  "اپنی فیکٹری کے ماڈل سرور سے منسلک ہوں۔",
-                )}
-              </p>
+              <h2>{t(copy.connectYourTexpilotModel, copy.urdu439)}</h2>
+              <p>{t(copy.connectTheModelServerUsedByYour, copy.urdu440)}</p>
             </div>
           </div>
           <form
@@ -480,7 +430,7 @@ export default function Scanner({
             }}
           >
             <label htmlFor="scan-endpoint">
-              {t("TexPilot server URL", "ٹیکس پائلٹ سرور URL")}
+              {t(copy.texpilotServerUrl, copy.url2)}
             </label>
             <div className="scan-url-row">
               <input
@@ -488,7 +438,7 @@ export default function Scanner({
                 type="url"
                 required
                 dir="ltr"
-                placeholder="https://scanner.yourfactory.com"
+                placeholder={copy.httpsScannerYourfactoryCom}
                 value={draftUrl}
                 onChange={(e) => {
                   setDraftUrl(e.target.value);
@@ -507,16 +457,13 @@ export default function Scanner({
                   <PlugZap size={17} />
                 )}{" "}
                 {connecting
-                  ? t("Connecting…", "منسلک ہو رہا ہے…")
-                  : t("Connect model", "ماڈل منسلک کریں")}
+                  ? t(copy.connecting, copy.urdu441)
+                  : t(copy.connectModel, copy.urdu442)}
               </button>
             </div>
           </form>
           <p className="scan-connect-note">
-            {t(
-              "The server URL is saved on this device. Photos go directly to your TexPilot server only when you choose Analyze material.",
-              "سرور URL اس ڈیوائس پر محفوظ ہوگا۔ تجزیہ منتخب کرنے پر تصاویر آپ کے ٹیکس پائلٹ سرور کو بھیجی جائیں گی۔",
-            )}
+            {t(copy.theServerUrlIsSavedOnThis, copy.url3)}
           </p>
           {connectionError && (
             <div className="error-banner" role="alert">
@@ -537,7 +484,7 @@ export default function Scanner({
           <AlertTriangle size={18} />
           {connectionError}
           <button className="text-button" onClick={() => setConfigOpen(true)}>
-            {t("Check connection", "کنکشن چیک کریں")}
+            {t(copy.checkConnection, copy.urdu443)}
           </button>
         </div>
       )}
@@ -545,27 +492,18 @@ export default function Scanner({
         <section className="scan-capture-panel panel glass">
           <div className="panel-heading">
             <div>
-              <h2>
-                {t(
-                  "A closer look at your material",
-                  "اپنے یارن اور کپڑے کو قریب سے دیکھیں",
-                )}
-              </h2>
-              <p>
-                {t(
-                  "Capture the fabric or garment in good, even light.",
-                  "یکساں اور اچھی روشنی میں کپڑے یا گارمنٹ کی تصویر لیں۔",
-                )}
-              </p>
+              <h2>{t(copy.aCloserLookAtYourMaterial, copy.urdu444)}</h2>
+              <p>{t(copy.captureTheFabricOrGarmentInGood, copy.urdu445)}</p>
             </div>
             <span className="scan-step-count">
-              <bdi>{slot === "surface" ? "01" : "02"}</bdi> / 02
+              <bdi>{slot === "surface" ? "01" : "02"}</bdi>
+              {copy.label022}
             </span>
           </div>
           <div
             className="scan-photo-tabs"
             role="group"
-            aria-label={t("Photo to capture", "تصویر کی قسم")}
+            aria-label={t(copy.photoToCapture, copy.urdu446)}
           >
             <button
               disabled={scanning}
@@ -579,10 +517,10 @@ export default function Scanner({
               <span className="scan-tab-number">
                 {surface ? <Check size={14} /> : "1"}
               </span>
-              {t("Fabric / garment", "کپڑا / گارمنٹ")}
+              {t(copy.fabricGarment, copy.urdu447)}
               {surface && (
                 <span className="scan-photo-attached">
-                  {t("Added", "شامل")}
+                  {t(copy.added, copy.urdu448)}
                 </span>
               )}
             </button>
@@ -598,9 +536,11 @@ export default function Scanner({
               <span className="scan-tab-number">
                 {label ? <Check size={14} /> : "2"}
               </span>
-              {t("Care label", "کیئر لیبل")}
+              {t(copy.careLabel, copy.urdu449)}
               <span className="scan-photo-attached">
-                {label ? t("Added", "شامل") : t("Optional", "اختیاری")}
+                {label
+                  ? t(copy.added, copy.urdu448)
+                  : t(copy.optional, copy.urdu450)}
               </span>
             </button>
           </div>
@@ -614,7 +554,7 @@ export default function Scanner({
                 autoPlay
                 playsInline
                 muted
-                aria-label={t("Live camera preview", "کیمرا پیش نظارہ")}
+                aria-label={t(copy.liveCameraPreview, copy.urdu451)}
                 onClick={() => video.current?.play()}
               />
             ) : activePhoto ? (
@@ -622,11 +562,9 @@ export default function Scanner({
                 src={activePhoto.url}
                 alt={t(
                   slot === "surface"
-                    ? "Selected fabric photo"
-                    : "Selected care label photo",
-                  slot === "surface"
-                    ? "کپڑے کی منتخب تصویر"
-                    : "کیئر لیبل کی منتخب تصویر",
+                    ? copy.selectedFabricPhoto
+                    : copy.selectedCareLabelPhoto,
+                  slot === "surface" ? copy.urdu452 : copy.urdu453,
                 )}
               />
             ) : (
@@ -636,29 +574,17 @@ export default function Scanner({
                 </span>
                 <h3>
                   {slot === "surface"
-                    ? t(
-                        "Every material has a story.",
-                        "ہر کپڑے کی ایک پہچان ہے۔",
-                      )
-                    : t(
-                        "Let the label fill in the details.",
-                        "لیبل سے مزید تفصیل حاصل کریں۔",
-                      )}
+                    ? t(copy.everyMaterialHasAStory, copy.urdu454)
+                    : t(copy.letTheLabelFillInTheDetails, copy.urdu455)}
                 </h3>
                 <p>
                   {slot === "surface"
-                    ? t(
-                        "Get close: fill the frame with the fabric, 10–15 cm away, so the weave is sharp.",
-                        "قریب سے لیں: کپڑے کو 10–15 سینٹی میٹر سے پورے فریم میں لیں تاکہ بُنائی صاف نظر آئے۔",
-                      )
-                    : t(
-                        "Fill the frame with the composition label. Keep the text sharp.",
-                        "ترکیب والے لیبل کو فریم میں لیں، متن صاف رکھیں۔",
-                      )}
+                    ? t(copy.getCloseFillTheFrameWithFabric, copy.getCloseFillTheFrameWithFabricUr)
+                    : t(copy.fillTheFrameWithTheCompositionLabel, copy.urdu457)}
                 </p>
                 <span className="scan-viewfinder-tip">
                   <Focus size={14} />
-                  {t("Clear photo. Better evidence.", "صاف تصویر، بہتر شواہد۔")}
+                  {t(copy.clearPhotoBetterEvidence, copy.urdu458)}
                 </span>
               </div>
             )}
@@ -670,23 +596,20 @@ export default function Scanner({
               <span className="scan-live-label">
                 <span />
                 {camera
-                  ? t("CAMERA LIVE", "کیمرا فعال")
-                  : t("READY TO ANALYZE", "تجزیے کے لیے تیار")}
+                  ? t(copy.cameraLive, copy.urdu459)
+                  : t(copy.readyToAnalyze, copy.urdu460)}
               </span>
             )}
             {scanning && (
               <div className="scan-progress-overlay" role="status">
                 <LoaderCircle className="spin" size={30} />
                 <strong>
-                  {t(
-                    "TexPilot is taking a closer look…",
-                    "ٹیکس پائلٹ تجزیہ کر رہا ہے…",
-                  )}
+                  {t(copy.texpilotIsTakingACloserLook, copy.urdu461)}
                 </strong>
                 <span>
                   {t(
-                    "Detecting fabric structure and checking the label.",
-                    "کپڑے کی ساخت اور لیبل چیک ہو رہے ہیں۔",
+                    copy.detectingFabricStructureAndCheckingTheLabel,
+                    copy.urdu462,
                   )}
                 </span>
               </div>
@@ -697,17 +620,17 @@ export default function Scanner({
               <>
                 <button className="button" onClick={stopCamera}>
                   <StopCircle size={18} />
-                  {t("Stop camera", "کیمرا بند کریں")}
+                  {t(copy.stopCamera, copy.urdu463)}
                 </button>
                 <button className="button primary" onClick={capture}>
                   <Camera size={19} />
-                  {t("Capture photo", "تصویر لیں")}
+                  {t(copy.capturePhoto, copy.urdu464)}
                 </button>
               </>
             ) : (
               <>
                 <button
-                  className="button primary"
+                  className="button"
                   onClick={openCamera}
                   disabled={openingCamera || scanning}
                 >
@@ -717,10 +640,10 @@ export default function Scanner({
                     <Camera size={19} />
                   )}{" "}
                   {openingCamera
-                    ? t("Opening camera…", "کیمرا کھل رہا ہے…")
+                    ? t(copy.openingCamera, copy.urdu465)
                     : activePhoto
-                      ? t("Retake photo", "دوبارہ تصویر لیں")
-                      : t("Open camera", "کیمرا کھولیں")}
+                      ? t(copy.retakePhoto, copy.urdu466)
+                      : t(copy.openCamera, copy.urdu467)}
                 </button>
                 <input
                   ref={nativeCamera}
@@ -738,15 +661,12 @@ export default function Scanner({
                   className={`button scan-upload-button ${scanning ? "disabled" : ""}`}
                 >
                   <Upload size={18} />
-                  {t("Upload photo", "تصویر اپ لوڈ کریں")}
+                  {t(copy.uploadPhoto, copy.urdu468)}
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif,image/bmp"
                     disabled={scanning}
-                    aria-label={t(
-                      "Upload material photo",
-                      "کپڑے کی تصویر اپ لوڈ کریں",
-                    )}
+                    aria-label={t(copy.uploadMaterialPhoto, copy.urdu469)}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) choosePhoto(file);
@@ -757,14 +677,14 @@ export default function Scanner({
                 {activePhoto && (
                   <button
                     className="icon-button"
-                    aria-label={t(
-                      "Remove selected photo",
-                      "منتخب تصویر ہٹائیں",
-                    )}
+                    aria-label={t(copy.removeSelectedPhoto, copy.urdu470)}
                     disabled={scanning}
                     onClick={removePhoto}
                   >
                     <X size={18} />
+                    <span className="control-label">
+                      {t(copy.removeSelectedPhoto, copy.urdu470)}
+                    </span>
                   </button>
                 )}
               </>
@@ -781,14 +701,13 @@ export default function Scanner({
               <ImagePlus size={14} />
               {activePhoto ? (
                 <bdi>
-                  {activePhoto.file.name} ·{" "}
-                  {(activePhoto.file.size / 1024 / 1024).toFixed(1)} MB
+                  {activePhoto.file.name}
+                  {copy.urdu21}{" "}
+                  {(activePhoto.file.size / 1024 / 1024).toFixed(1)}
+                  {copy.mb}
                 </bdi>
               ) : (
-                t(
-                  "JPEG, PNG or WebP · up to 10 MB",
-                  "JPEG، PNG یا WebP · ۱۰ ایم بی تک",
-                )
+                t(copy.jpegPngOrWebpUpTo10, copy.jpegPngWebp)
               )}
             </span>
             {surface && slot === "surface" && !label && (
@@ -800,7 +719,7 @@ export default function Scanner({
                   setSlot("label");
                 }}
               >
-                {t("Add care label", "کیئر لیبل شامل کریں")}
+                {t(copy.addCareLabel, copy.urdu471)}
                 <ArrowRight size={13} />
               </button>
             )}
@@ -808,14 +727,11 @@ export default function Scanner({
           <details className="scan-manual-label">
             <summary>
               <Tag size={16} />
-              {t("Type label composition instead", "لیبل کی ترکیب خود لکھیں")}
-              <span>{t("Optional", "اختیاری")}</span>
+              {t(copy.typeLabelCompositionInstead, copy.urdu472)}
+              <span>{t(copy.optional, copy.urdu450)}</span>
             </summary>
             <label>
-              {t(
-                "Composition printed on the care label",
-                "کیئر لیبل پر لکھی ترکیب",
-              )}
+              {t(copy.compositionPrintedOnTheCareLabel, copy.urdu473)}
               <textarea
                 value={labelText}
                 onChange={(e) => {
@@ -825,14 +741,11 @@ export default function Scanner({
                 maxLength={2000}
                 rows={2}
                 disabled={scanning}
-                placeholder="60% cotton, 40% polyester"
+                placeholder={copy.label60Cotton40Polyester}
               />
             </label>
             <p>
-              {t(
-                "Typed composition takes priority over the label photo.",
-                "لکھی گئی ترکیب کو لیبل کی تصویر پر ترجیح دی جائے گی۔",
-              )}
+              {t(copy.typedCompositionTakesPriorityOverTheLabel, copy.urdu474)}
             </p>
           </details>
           {error && (
@@ -844,10 +757,7 @@ export default function Scanner({
           <div className="scan-analyze-row">
             <span>
               <ShieldCheck size={16} />
-              {t(
-                "Real model results. No simulated predictions.",
-                "اصل ماڈل کے نتائج۔ کوئی فرضی اندازہ نہیں۔",
-              )}
+              {t(copy.realModelResultsNoSimulatedPredictions, copy.urdu475)}
             </span>
             {scanning ? (
               <button
@@ -855,7 +765,7 @@ export default function Scanner({
                 onClick={() => scanRequest.current?.abort()}
               >
                 <X size={16} />
-                {t("Cancel analysis", "تجزیہ روکیں")}
+                {t(copy.cancelAnalysis, copy.urdu476)}
               </button>
             ) : (
               <button
@@ -864,17 +774,14 @@ export default function Scanner({
                 onClick={analyze}
               >
                 <ScanLine size={19} />
-                {t("Analyze material", "کپڑے کا تجزیہ کریں")}
+                {t(copy.analyzeMaterial, copy.urdu477)}
                 <ArrowRight size={16} />
               </button>
             )}
           </div>
           {!info && (
             <p className="scan-analysis-hint">
-              {t(
-                "Capture or upload a photo, then connect your model to analyze it.",
-                "تصویر لیں یا اپ لوڈ کریں، پھر تجزیے کے لیے ماڈل منسلک کریں۔",
-              )}
+              {t(copy.captureOrUploadAPhotoThenConnect, copy.urdu478)}
             </p>
           )}
         </section>
@@ -885,14 +792,9 @@ export default function Scanner({
             <div className="panel-heading">
               <div>
                 <h2 ref={resultHeading} tabIndex={-1}>
-                  {t("What the model sees", "ماڈل کیا دیکھتا ہے")}
+                  {t(copy.whatTheModelSees, copy.urdu479)}
                 </h2>
-                <p>
-                  {t(
-                    "Evidence first. A confident next step.",
-                    "پہلے شواہد، پھر درست فیصلہ۔",
-                  )}
-                </p>
+                <p>{t(copy.evidenceFirstAConfidentNextStep, copy.urdu480)}</p>
               </div>
               <span className="scan-result-icon">
                 <Layers3 size={20} />
@@ -902,9 +804,9 @@ export default function Scanner({
               <>
                 <div className={`scan-verdict ${result.verdict.toLowerCase()}`}>
                   <span>
-                    {result.verdict === "PASS" ? (
+                    {result.verdict === copy.pass ? (
                       <ShieldCheck size={24} />
-                    ) : result.verdict === "FLAG" ? (
+                    ) : result.verdict === copy.flag ? (
                       <AlertTriangle size={24} />
                     ) : (
                       <CircleHelp size={24} />
@@ -912,48 +814,45 @@ export default function Scanner({
                   </span>
                   <div>
                     <strong>
-                      {result.verdict === "PASS"
-                        ? t("Consistent with the label", "لیبل کے مطابق")
-                        : result.verdict === "FLAG"
-                          ? t("Needs a closer look", "مزید جانچ ضروری")
-                          : t("More evidence needed", "مزید شواہد درکار")}
+                      {result.verdict === copy.pass
+                        ? t(copy.consistentWithTheLabel, copy.urdu481)
+                        : result.verdict === copy.flag
+                          ? t(copy.needsACloserLook, copy.urdu482)
+                          : t(copy.moreEvidenceNeeded, copy.urdu483)}
                     </strong>
                     <p>
-                      {result.verdict === "PASS"
+                      {result.verdict === copy.pass
                         ? t(
-                            "No inconsistency was flagged by the model.",
-                            "ماڈل نے کوئی تضاد ظاہر نہیں کیا۔",
+                            copy.noInconsistencyWasFlaggedByTheModel,
+                            copy.urdu484,
                           )
-                        : result.verdict === "FLAG"
+                        : result.verdict === copy.flag
                           ? t(
-                              "Review the flagged evidence before accepting this material.",
-                              "قبول کرنے سے پہلے دکھائے گئے شواہد دیکھیں۔",
+                              copy.reviewTheFlaggedEvidenceBeforeAcceptingThis,
+                              copy.urdu485,
                             )
-                          : t(
-                              "Try a clearer photo and add the care label.",
-                              "صاف تصویر اور کیئر لیبل شامل کریں۔",
-                            )}
+                          : t(copy.tryAClearerPhotoAndAddThe, copy.urdu486)}
                     </p>
                   </div>
                 </div>
                 <div className="scan-predictions">
                   {headRow(
-                    "Fabric structure",
-                    "کپڑے کی ساخت",
+                    copy.fabricStructure,
+                    copy.urdu487,
                     result.structure,
                     Layers3,
                     result.candidates.structure,
                   )}
                   {headRow(
-                    "Surface treatment",
-                    "سطح کی ٹریٹمنٹ",
+                    copy.surfaceTreatment,
+                    copy.urdu488,
                     result.treatment,
                     Sun,
                     result.candidates.treatment,
                   )}
                   {headRow(
-                    "Fibre family",
-                    "فائبر کی قسم",
+                    copy.fibreFamily,
+                    copy.urdu489,
                     result.fibre_family,
                     Tag,
                     result.candidates.fibre_family,
@@ -961,37 +860,39 @@ export default function Scanner({
                 </div>
                 {result.garment && (
                   <div className="scan-garment">
-                    <span>{t("Garment detected", "گارمنٹ کی شناخت")}</span>
+                    <span>{t(copy.garmentDetected, copy.urdu490)}</span>
                     <strong>{labelFor(result.garment.label)}</strong>
                     {result.garment.confidence !== null && (
-                      <bdi>{Math.round(result.garment.confidence * 100)}%</bdi>
+                      <bdi>
+                        {Math.round(result.garment.confidence * 100)}
+                        {copy.urdu432}
+                      </bdi>
                     )}
                   </div>
                 )}
                 <div className="scan-composition">
                   <span className="eyebrow">
-                    {t("COMPOSITION FROM THE LABEL", "لیبل سے حاصل ترکیب")}
+                    {t(copy.compositionFromTheLabel, copy.urdu491)}
                   </span>
                   {result.stated_composition.fibers.length ? (
                     <div>
                       {result.stated_composition.fibers.map((fiber, i) => (
                         <span key={fiber.name + i}>
-                          <bdi>{fiber.pct}%</bdi> {labelFor(fiber.name)}
+                          <bdi>
+                            {fiber.pct}
+                            {copy.urdu432}
+                          </bdi>{" "}
+                          {labelFor(fiber.name)}
                         </span>
                       ))}
                     </div>
                   ) : (
-                    <p>
-                      {t(
-                        "No composition was read. Add a label photo or type its text.",
-                        "ترکیب پڑھی نہیں گئی۔ لیبل کی تصویر یا متن شامل کریں۔",
-                      )}
-                    </p>
+                    <p>{t(copy.noCompositionWasReadAddALabel, copy.urdu492)}</p>
                   )}
                 </div>
                 {result.flags.length > 0 && (
                   <div className="scan-flags">
-                    <h3>{t("Things to review", "جائزے کے نکات")}</h3>
+                    <h3>{t(copy.thingsToReview, copy.urdu493)}</h3>
                     {result.flags.map((flag, i) => (
                       <div key={flag.code + i}>
                         <AlertTriangle size={15} />
@@ -1006,18 +907,18 @@ export default function Scanner({
                   </div>
                 )}
                 <div className="scan-quality">
-                  <h3>{t("Capture quality", "تصویر کی کوالٹی")}</h3>
+                  <h3>{t(copy.captureQuality, copy.urdu494)}</h3>
                   <div>
                     <span>
-                      {t("Exposure", "روشنی")}
+                      {t(copy.exposure, copy.urdu495)}
                       <strong>{result.capture_quality.exposure || "—"}</strong>
                     </span>
                     <span>
-                      {t("Framing", "فریم")}
+                      {t(copy.framing, copy.urdu496)}
                       <strong>{result.capture_quality.framing || "—"}</strong>
                     </span>
                     <span>
-                      {t("Sharpness score", "نفاست کا اسکور")}
+                      {t(copy.sharpnessScore, copy.urdu497)}
                       <strong>
                         <bdi>
                           {result.capture_quality.blur === null
@@ -1031,16 +932,21 @@ export default function Scanner({
                 <div className="scan-result-meta">
                   <span>
                     <CheckCheck size={14} />
-                    {t("Model", "ماڈل")}: <bdi>{result.model_version}</bdi>
+                    {t(copy.model, copy.urdu498)}
+                    {copy.urdu49}
+                    <bdi>{result.model_version}</bdi>
                   </span>
                   <span>
-                    {t("Scan", "اسکین")}: <bdi>{result.scan_id}</bdi>
+                    {t(copy.scan, copy.urdu499)}
+                    {copy.urdu49}
+                    <bdi>{result.scan_id}</bdi>
                   </span>
                   <span>
-                    {t("Scanned", "وقت")}:{" "}
+                    {t(copy.scanned, copy.urdu500)}
+                    {copy.urdu49}{" "}
                     <bdi>
                       {new Intl.DateTimeFormat("en-GB", {
-                        timeZone: "Asia/Karachi",
+                        timeZone: copy.asiaKarachi,
                         dateStyle: "medium",
                         timeStyle: "short",
                       }).format(new Date(result.timestamp))}
@@ -1050,10 +956,10 @@ export default function Scanner({
                 <div className="scan-result-actions">
                   <button className="button" onClick={download}>
                     <Download size={16} />
-                    {t("Save result", "نتیجہ محفوظ کریں")}
+                    {t(copy.saveResult, copy.urdu501)}
                   </button>
                   <button className="text-button" onClick={onInventory}>
-                    {t("Open inventory", "اسٹاک کھولیں")}
+                    {t(copy.openInventory, copy.urdu99)}
                     <ArrowUpRight size={15} />
                   </button>
                 </div>
@@ -1067,26 +973,20 @@ export default function Scanner({
                 </div>
                 <h3>
                   {scanning
-                    ? t(
-                        "Finding the finer details…",
-                        "باریک تفصیلات تلاش ہو رہی ہیں…",
-                      )
-                    : t(
-                        "A little clarity starts here.",
-                        "وضاحت کی شروعات یہاں سے۔",
-                      )}
+                    ? t(copy.findingTheFinerDetails, copy.urdu502)
+                    : t(copy.aLittleClarityStartsHere, copy.urdu503)}
                 </h3>
                 <p>
                   {t(
-                    "Your material’s structure, surface treatment, and fibre family will appear after analysis.",
-                    "تجزیے کے بعد کپڑے کی ساخت، سطح اور فائبر کی قسم یہاں نظر آئے گی۔",
+                    copy.yourMaterialSStructureSurfaceTreatmentAnd,
+                    copy.urdu504,
                   )}
                 </p>
                 <div className="scan-result-placeholders">
                   {[
-                    [Layers3, "Fabric structure", "کپڑے کی ساخت"],
-                    [Sun, "Surface treatment", "سطح کی ٹریٹمنٹ"],
-                    [Tag, "Fibre family", "فائبر کی قسم"],
+                    [Layers3, copy.fabricStructure, copy.urdu487],
+                    [Sun, copy.surfaceTreatment, copy.urdu488],
+                    [Tag, copy.fibreFamily, copy.urdu489],
                   ].map(([I, en, ur]) => {
                     const C = I as typeof Layers3;
                     return (
@@ -1106,26 +1006,13 @@ export default function Scanner({
               <Focus size={19} />
             </span>
             <div>
-              <h3>
-                {t(
-                  "Good light makes the difference.",
-                  "اچھی روشنی سے بہتر نتیجہ۔",
-                )}
-              </h3>
-              <p>
-                {t(
-                  "Use bright, even light, such as a window. Avoid flash and deep shadows. The fabric should fill the photo, not the room or the person wearing it.",
-                  "روشن اور یکساں روشنی استعمال کریں، جیسے کھڑکی کی روشنی۔ فلیش اور گہرے سائے سے بچیں۔ تصویر میں کپڑا ہو، کمرہ یا پہننے والا نہیں۔",
-                )}
-              </p>
+              <h3>{t(copy.goodLightMakesTheDifference, copy.urdu505)}</h3>
+              <p>{t(copy.brightEvenLightFabricFillsPhoto, copy.brightEvenLightFabricFillsPhotoUr)}</p>
             </div>
           </section>
           <p className="scan-evidence-note">
             <ShieldCheck size={15} />
-            {t(
-              "Visual evidence helps verify material. Exact fibre percentages come from the care label, not the photo.",
-              "تصویر سے مواد کی تصدیق میں مدد ملتی ہے۔ درست فیصد کیئر لیبل سے ملتا ہے۔",
-            )}
+            {t(copy.visualEvidenceHelpsVerifyMaterialExactFibre, copy.urdu507)}
           </p>
         </aside>
       </div>
