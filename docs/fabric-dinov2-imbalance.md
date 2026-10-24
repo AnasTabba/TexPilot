@@ -232,3 +232,35 @@ done
 Each `runs/imbalance/fabric/<tag>/seed<k>/` holds `test_metrics.json` (test, test_by_source,
 per-class precision/recall/F1, confusion matrix, minority recall), `log.jsonl`, `head.pt`
 (head + feature standardisation) and `confusion.png`.
+
+## 10. Update, same night: IRUS, 2x augmentation and LoRA (scanner-v3)
+
+The user then asked for IRUS, a 2x train set (each image once as val sees it, once with 4-5
+random Albumentations) and small LoRA adapters. All numbers: archive test, n = 24,628.
+
+| Run | top-1 | macro F1 | Notes |
+|---|---|---|---|
+| Frozen DINOv2 linear, IRUS cap 1000 (3 seeds) | 0.6153 | 0.4531 | IRUS alone hurts |
+| ... + val-tuned prior correction | 0.672 | 0.489 | ties plain CE on macro F1, loses top-1 |
+| **LoRA r=8, all 12 blocks, IRUS 1000, 2x aug, 6 ep** (Kaggle T4, 1 seed) | 0.6691 | 0.5074 | raw |
+| **... + prior correction (tau 0.7, chosen on val)** | **0.7240** | **0.5455** | installed as scanner-v3 Head A |
+
+Against the baseline (0.6923 / 0.4662): **+3.2 pts top-1, +0.079 macro F1**. Calibrated at
+the 90% target, scanner-v3 answers 55.0% of the archive test at 89.6% accuracy (scanner-v2's
+linear head: 53.3% at 88.4%). One seed only; the frozen results above had std <= 0.003.
+
+The prior correction (`training/scanner/prior_correct.py`) adds tau * log(true prior / IRUS
+prior) to the logits, with tau picked on val macro F1, re-fits temperature and threshold on
+val, and folds the shift into the classifier bias, so serving is unchanged.
+
+**Through the live scanner** (detector -> SAM -> masked crop), on 108 archive test photos
+(4 per class, so rare classes weigh as much as lace): scanner-v2 linear 40.7% top-1 (answers
+28%, 73% right when answering) vs scanner-v3 Head A 50.9% (answers 31%, 79% right). On the
+whole photo instead of the masked crop: 49.1% vs 58.3%. scanner-v3 wins on both, and the
+masked crop costs both heads ~8 pts on catalog photos: a pipeline issue worth a look
+(e.g. averaging the crop and whole-photo views). Phone photos remain unmeasured.
+
+Reproduce: `train.py --model dinov2_vitb14 --lora-rank 8 --sampler irus --irus-cap 1000
+--double-aug --epochs 6 --batch-size 64 --amp fp16 --lr 3e-4 --layer-decay 1.0 --drop-path 0
+--select macro_f1 --no-tta --mixup 0 --cutmix 0`, then `export_head_a`, `prior_correct`,
+`install_head_a --bundle models/scanner-v2 --out models/scanner-v3`.
