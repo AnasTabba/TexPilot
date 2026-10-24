@@ -81,6 +81,8 @@ def extract(
         print(f"extracting {len(todo)} of {len(rows)} images (rest cached)", flush=True)
         name = PRESETS.get(args.model, {"timm_name": args.model})["timm_name"]
         kw = {"img_size": args.img_size} if name.startswith(("vit_", "eva")) else {}
+        if args.weights_file:  # pretrained weights from disk (the Hub can be slow to reach)
+            kw["pretrained_cfg_overlay"] = {"file": str(args.weights_file)}
         model = timm.create_model(name, pretrained=True, num_classes=0, **kw).eval().to(device)
         half = device.type in ("cuda", "mps")
         if half:
@@ -190,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--epochs", type=int, default=30)
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     ap.add_argument("--device", default="auto")
+    ap.add_argument("--weights-file", type=Path, help="encoder weights on disk instead of the Hub")
     ap.add_argument(
         "--sampler",
         choices=[*SAMPLER_POWER, "irus"],
