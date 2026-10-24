@@ -31,22 +31,25 @@ from training.textilenet.recipe import lr_at
 from training.textilenet.splits import class_index, read_csv
 
 
-def make_head(kind: str, dim: int, n_classes: int, hidden: int = 1024) -> torch.nn.Module:
+def make_head(
+    kind: str, dim: int, n_classes: int, hidden: int = 1024, dropout: float = 0.2
+) -> torch.nn.Module:
     if kind == "linear":
         return torch.nn.Linear(dim, n_classes)
     return torch.nn.Sequential(  # "mlp"
         torch.nn.Linear(dim, hidden),
         torch.nn.GELU(),
-        torch.nn.Dropout(0.2),
+        torch.nn.Dropout(dropout),
         torch.nn.Linear(hidden, n_classes),
     )
 
 
-def train_head(kind, xtr, ytr, xva, yva, classes, lr, wd, epochs, seed, device):
+def train_head(kind, xtr, ytr, xva, yva, classes, lr, wd, epochs, seed, device, hidden=1024,
+               dropout=0.2):  # fmt: skip
     """The head from the epoch with the best val macro F1, and that score."""
     torch.manual_seed(seed)
     g = torch.Generator().manual_seed(seed)
-    head = make_head(kind, xtr.shape[1], len(classes)).to(device)
+    head = make_head(kind, xtr.shape[1], len(classes), hidden, dropout).to(device)
     opt = torch.optim.AdamW(head.parameters(), lr=lr, weight_decay=wd)
     steps = epochs * math.ceil(len(xtr) / 1024)
     best, step = (-1.0, None), 0
@@ -77,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--feature-dir", type=Path, default=Path("data/features/fabric"))
     ap.add_argument("--kinds", nargs="+", default=["linear", "mlp"])
     ap.add_argument("--epochs", type=int, default=30)
+    ap.add_argument("--hidden", type=int, default=1024, help="MLP hidden width")
+    ap.add_argument("--dropout", type=float, default=0.2, help="MLP dropout")
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     ap.add_argument("--out", type=Path, default=Path("runs/heads"))
     ap.add_argument("--device", default="mps" if torch.backends.mps.is_available() else "cpu")
@@ -109,13 +114,13 @@ def main(argv: list[str] | None = None) -> int:
         grid = {}
         for lr, wd in itertools.product((1e-3, 3e-3), (1e-4, 5e-2)):
             grid[(lr, wd)] = train_head(kind, xtr, ytr, xva, yva, classes, lr, wd, args.epochs, 0,
-                                        args.device)[1]  # fmt: skip
+                                        args.device, args.hidden, args.dropout)[1]  # fmt: skip
         lr, wd = max(grid, key=grid.get)
         tag = f"{kind}_{'+'.join(n.split('_')[0] for n in names)}"
         runs = []
         for seed in args.seeds:
             head, val_f1 = train_head(kind, xtr, ytr, xva, yva, classes, lr, wd, args.epochs, seed,
-                                      args.device)  # fmt: skip
+                                      args.device, args.hidden, args.dropout)  # fmt: skip
             with torch.no_grad():
                 lv, lt = (head(v).float().cpu().numpy() for v in (xva, xte))
             temp = fit_temperature(lv, yva)
