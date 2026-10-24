@@ -264,3 +264,30 @@ Reproduce: `train.py --model dinov2_vitb14 --lora-rank 8 --sampler irus --irus-c
 --double-aug --epochs 6 --batch-size 64 --amp fp16 --lr 3e-4 --layer-decay 1.0 --drop-path 0
 --select macro_f1 --no-tta --mixup 0 --cutmix 0`, then `export_head_a`, `prior_correct`,
 `install_head_a --bundle models/scanner-v2 --out models/scanner-v3`.
+
+## 11. Encoder bake-off and scanner-v4 (2026-10-25)
+
+Same split; frozen encoder + linear head (probe.py, plain CE, select on val macro F1); train
+capped at 1,500 images per class for the bake-off; archive test n = 24,628 (Kaggle T4).
+
+| Encoder | val macro F1 | test top-1 | test macro F1 |
+|---|---|---|---|
+| **vit_so400m_patch14_siglip_224.v2_webli (SigLIP 2)** | **0.6025** | **0.7235** | **0.6024** |
+| vit_pe_core_large_patch14_336.fb (Perception Encoder L, at 224) | 0.5732 | 0.6988 | 0.5505 |
+| vit_large_patch14_dinov2.lvd142m | 0.5103 | 0.6456 | 0.4823 |
+| vit_base_patch14_dinov2.lvd142m (current, control) | 0.4894 | 0.6187 | 0.4623 |
+| swinv2_large_window12to16_192to256.ms_in22k_ft_in1k (at 256) | 0.4814 | 0.6196 | 0.4751 |
+| convnext_large.dinov3_lvd1689m | 0.4692 | 0.6048 | 0.4430 |
+| vit_large_patch16_dinov3.lvd1689m | invalid: fp16 overflow -> inf features (fixed: probe.py now falls back to fp32; not rerun) | | |
+
+The two vision-language encoders lead; texture-oriented Swin and the DINOv3 ConvNeXt do not beat
+DINOv2-B. Caveat: web-scale pretraining (SigLIP's WebLI, DINOv2's LVD) may include some catalog
+images; not checked.
+
+**SigLIP 2, full train (85,272), as scanner-v4 Head A:** archive test top-1 **0.7826**, macro F1
+**0.6174**, weighted F1 0.7782; calibrated, answers 68.7% at 90.1% accuracy. Baseline 0.6923 / 0.4662,
+scanner-v3 (LoRA DINOv2-B) 0.7240 / 0.5455. Re-checked on the Mac with the serving preprocessing (2,000
+random test photos): 0.7775, answers 68.8% at 89.3% (scanner-v3 on the same photos: 0.7165, 54.0%).
+Through the live pipeline on 108 photos (4 per class): 50.9% on the garment cut-out vs **62.0%** on the
+whole photo (answers 39% vs 56%), so scanner-v4 classifies the whole photo (`views: whole`).
+Black jersey T-shirt photo: still abstains. Phone photos remain unmeasured.
