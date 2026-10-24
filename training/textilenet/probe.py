@@ -56,6 +56,19 @@ GRID = list(itertools.product([1e-3, 3e-3], [1e-4, 1e-3, 1e-2, 5e-2]))
 SAMPLER_POWER = {"none": 0.0, "sqrt": 0.5, "inverse": 1.0}
 
 
+def pooled(model, x, half: bool):
+    """Pooled features as float32, computed in fp16 when ``half``. A model whose fp16
+    activations overflow (DINOv3 does) is switched to fp32 for good, instead of a head
+    silently training on inf. Returns (features, half still on)."""
+    if half:
+        f = pool(model, x.half()).float()
+        if torch.isfinite(f).all():
+            return f, True
+        print("non-finite fp16 features: switching this encoder to fp32", flush=True)
+        model.float()
+    return pool(model, x.float()).float(), False
+
+
 @torch.no_grad()
 def extract(
     args: argparse.Namespace, rows, device, cache: FeatureCache, augment_seed: int | None = None
@@ -94,9 +107,12 @@ def extract(
             feats, t0 = [], time.time()
             for x, _ in loader:
                 gov.pause_if_needed()
-                x = x.to(device)
-                feats.append(pool(model, x.half() if half else x).float().cpu().numpy())
-            cache.add([todo[i].path for i in idx], np.concatenate(feats))
+                f, half = pooled(model, x.to(device), half)
+                feats.append(f.cpu().numpy())
+            feats = np.concatenate(feats)
+            if not np.isfinite(feats).all():
+                raise FloatingPointError(f"{name}: non-finite features even in fp32")
+            cache.add([todo[i].path for i in idx], feats)
             rate = len(idx) / (time.time() - t0)
             left = (len(todo) - idx.stop) / max(idx.stop / (time.time() - t_all), 1e-9) / 60
             print(

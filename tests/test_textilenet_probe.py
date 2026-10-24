@@ -54,3 +54,17 @@ def test_fit_linear_with_irus_over_two_stacked_views():
     )  # fmt: skip
     assert len(seen) == 30 and seen[-1] < seen[0]
     assert (head(x).argmax(1) == y).float().mean().item() > 0.95
+
+
+def test_fp16_overflow_switches_the_encoder_to_fp32_instead_of_returning_inf(monkeypatch):
+    from training.textilenet import probe
+
+    def fake_pool(model, x):  # e.g. DINOv3: activations past the fp16 range
+        if x.dtype == torch.float16:
+            return torch.full((len(x), 2), float("inf"), dtype=torch.float16)
+        return torch.ones(len(x), 2)
+
+    monkeypatch.setattr(probe, "pool", fake_pool)
+    model = torch.nn.Linear(2, 2).half()
+    f, half = probe.pooled(model, torch.zeros(3, 2), half=True)
+    assert torch.isfinite(f).all() and not half and model.weight.dtype == torch.float32
