@@ -70,7 +70,10 @@ def timm_classifier(timm_name: str, n_classes: int, img_size: int, pretrained: b
 
 class FineTunedHead:
     """A fine-tuned TextileNet classifier as a scanner head: runs on the garment's views,
-    averages calibrated probabilities over them, abstains below its threshold."""
+    averages calibrated probabilities over them, abstains below its threshold.
+
+    With ``pool: probe`` (training/scanner/export_probe_head.py) it is instead a frozen
+    public encoder plus a linear head on its pooled features; only the head is stored."""
 
     def __init__(self, head_dir: Path, device):
         import torch
@@ -81,8 +84,16 @@ class FineTunedHead:
         self.classes = tuple(self.meta["classes"])
         self.device, self._torch = device, torch
         self.half = device.type in ("mps", "cuda")
-        model = timm_classifier(self.meta["timm_name"], len(self.classes), self.meta["img_size"])
-        model.load_state_dict(load_file(str(head_dir / "model.safetensors")))
+        m, self.probe = self.meta, None
+        if m.get("pool") == "probe":
+            model = timm_classifier(m["timm_name"], 0, m["img_size"], pretrained=True)
+            w = load_file(str(head_dir / "probe.safetensors"))
+            self.probe = torch.nn.Linear(*w["probe.weight"].shape[::-1])
+            self.probe.load_state_dict({"weight": w["probe.weight"], "bias": w["probe.bias"]})
+            self.probe = self.probe.to(device)
+        else:
+            model = timm_classifier(m["timm_name"], len(self.classes), m["img_size"])
+            model.load_state_dict(load_file(str(head_dir / "model.safetensors")))
         model = model.eval().to(device)
         self.model = model.half() if self.half else model
 
@@ -98,8 +109,14 @@ class FineTunedHead:
         )
         t = self._torch.from_numpy(x).to(self.device)
         with self._torch.no_grad():
-            logits = self.model(t.half() if self.half else t).float().cpu().numpy()
-        return softmax(logits, m["temperature"]).mean(0)
+            t = t.half() if self.half else t
+            if self.probe is None:
+                logits = self.model(t).float()
+            else:
+                from services.vision.backbone import pool_features
+
+                logits = self.probe(pool_features(self.model, t).float())
+        return softmax(logits.cpu().numpy(), m["temperature"]).mean(0)
 
 
 def load_structure_model(bundle_dir: Path, meta: dict, device) -> FineTunedHead | None:

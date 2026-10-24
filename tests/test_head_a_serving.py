@@ -66,3 +66,34 @@ def test_a_bundle_names_its_structure_model_or_keeps_the_linear_head(tmp_path):
     assert load_structure_model(tmp_path, {"version": 1}, CPU) is None
     head = load_structure_model(tmp_path, {"structure_model": {"dir": "head_a"}}, CPU)
     assert isinstance(head, FineTunedHead) and head.classes == CLASSES
+
+
+def test_a_probe_head_runs_its_linear_layer_on_the_frozen_encoders_pooled_features(
+    tmp_path, monkeypatch
+):
+    from safetensors.numpy import save_file
+
+    from services.vision import heads
+    from services.vision.backbone import pool_features, preprocess
+
+    torch.manual_seed(0)
+    encoder = timm_classifier("resnet10t", 0, 64)
+    monkeypatch.setattr(heads, "timm_classifier", lambda *a, **k: encoder)  # no download
+    d = tmp_path / "head_a"
+    d.mkdir()
+    rng = np.random.default_rng(0)
+    w, b = rng.normal(size=(3, encoder.num_features)), rng.normal(size=3)
+    save_file(
+        {"probe.weight": w.astype(np.float32), "probe.bias": b.astype(np.float32)},
+        str(d / "probe.safetensors"),
+    )
+    meta = dict(classes=list(CLASSES), timm_name="resnet10t", img_size=64, crop_pct=0.875)
+    meta |= dict(mean=[0.5] * 3, std=[0.5] * 3, temperature=1.0, threshold=0.0, pool="probe")
+    (d / "head.json").write_text(json.dumps(meta))
+    head = FineTunedHead(d, CPU)
+    view = np.random.default_rng(1).integers(0, 255, (80, 100, 3), dtype=np.uint8)
+    x = torch.from_numpy(preprocess(view, meta["mean"], meta["std"], 64, 0.875))[None]
+    with torch.no_grad():
+        logits = pool_features(encoder.eval(), x).numpy() @ w.T + b
+    want = np.exp(logits - logits.max()) / np.exp(logits - logits.max()).sum()
+    assert np.allclose(head.probs([view]), want[0], atol=1e-4)
