@@ -130,3 +130,9 @@ def test_knit_yarn_count_round_trips_through_the_tightness_relation():
     stitches_per_cm2 = (wpi / 2.54) * (cpi / 2.54)
     gsm = stitches_per_cm2 * (tex**0.5 / tf) * tex / 100  # loop length (mm) = sqrt(tex) / TF
     assert yarn_count_knit_ne(gsm, wpi, cpi, tightness=tf) == pytest.approx(30.0, rel=1e-3)
+
+
+def test_the_finest_count_a_resolution_allows_is_not_refused_by_rounding():
+    ppi = 480.02770222981763  # from a card photo: ppi / 2.5 * 2.5 > ppi in floating point
+    d = thread_density(render("plain", 110, 70, ppi, size=1200), ppi, max_tpi=ppi / 2.5)
+    assert d.ends_per_inch is not None

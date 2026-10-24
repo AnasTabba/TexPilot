@@ -103,7 +103,7 @@ def thread_density(
     gray: np.ndarray, ppi: float, min_tpi: float = 15, max_tpi: float = 200, tile: int = 512
 ) -> Density:
     """Ends and picks per inch of a woven fabric scanned at ``ppi`` pixels per inch."""
-    if ppi < MIN_PERIOD_PX * max_tpi:
+    if ppi < MIN_PERIOD_PX * max_tpi * (1 - 1e-9):  # max_tpi = ppi / 2.5 may round up
         return Density(
             None,
             None,
