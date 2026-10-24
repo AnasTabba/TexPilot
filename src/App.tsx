@@ -8,6 +8,7 @@ import {
   type FormEvent,
 } from "react";
 import {
+  ScanLine,
   LayoutDashboard,
   Factory,
   Boxes,
@@ -78,6 +79,7 @@ import {
   type Kind,
   type Stage,
 } from "./domain";
+import Scanner from "./Scanner";
 const Language = createContext(false);
 const LedgerContext = createContext<Entry[]>([]);
 function useT() {
@@ -341,6 +343,7 @@ function YarnArt({ large = false }: { large?: boolean }) {
 }
 const navItems: [string, string, string, LucideIcon][] = [
   ["overview", "Overview", "جائزہ", LayoutDashboard],
+  ["scanner", "Material scanner", "کپڑے کا اسکینر", ScanLine],
   ["production", "Production", "پیداوار", Factory],
   ["inventory", "Inventory", "اسٹاک", Boxes],
   ["orders", "Orders", "آرڈرز", ShoppingBag],
@@ -1404,6 +1407,12 @@ function Workspace({
     year: "numeric",
   }).format(new Date());
   const titles: Record<string, [string, string, string, string]> = {
+    scanner: [
+      "Material scanner",
+      "کپڑے کا اسکینر",
+      "From a closer look to a clearer decision.",
+      "قریب سے دیکھیں، بہتر فیصلہ کریں۔",
+    ],
     overview: [
       "Overview",
       "جائزہ",
@@ -1520,6 +1529,27 @@ function Workspace({
       />
     );
   function headerAction() {
+    if (route === "scanner")
+      return (
+        <Button icon={ShieldCheck} onClick={() => navigate("inventory")}>
+          {t("Open inventory", "اسٹاک کھولیں")}
+        </Button>
+      );
+    if (route === "overview")
+      return (
+        <>
+          <Button icon={ScanLine} onClick={() => navigate("scanner")}>
+            {t("Scan material", "کپڑا اسکین کریں")}
+          </Button>
+          <Button
+            variant="primary"
+            icon={Plus}
+            onClick={() => setModal({ type: "new" })}
+          >
+            {t("New entry", "نیا اندراج")}
+          </Button>
+        </>
+      );
     if (route === "production")
       return (
         <Button
@@ -3613,6 +3643,16 @@ function Workspace({
   function home() {
     return (
       <div className="quick-actions">
+        <button
+          className="quick-action glass"
+          onClick={() => navigate("scanner")}
+        >
+          <span className="feature-icon">
+            <ScanLine size={30} />
+          </span>
+          <h3>{t("Scan material", "کپڑا اسکین کریں")}</h3>
+          <ArrowUpRight size={20} />
+        </button>
         {[
           ["production", "Record production", "پیداوار درج کریں", Factory],
           ["issue", "Issue to machine", "مشین کو اجرا", Layers3],
@@ -3766,6 +3806,8 @@ function Workspace({
     switch (route) {
       case "overview":
         return overview();
+      case "scanner":
+        return <Scanner t={t} onInventory={() => navigate("inventory")} />;
       case "production":
       case "dispatch":
         return listPage();
@@ -3990,7 +4032,9 @@ function Workspace({
                   </span>
                   <span className="practice-label">
                     <span />
-                    {t("Practice workspace", "مشق کا ورک اسپیس")}
+                    {route === "scanner"
+                      ? t("TexPilot integration", "ٹیکس پائلٹ انٹیگریشن")
+                      : t("Practice workspace", "مشق کا ورک اسپیس")}
                   </span>
                 </div>
                 <h1>
