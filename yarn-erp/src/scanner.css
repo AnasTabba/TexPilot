@@ -25,6 +25,9 @@
   gap: 24px;
   align-items: start;
 }
+.scanner-grid > * {
+  min-width: 0;
+}
 .scan-capture-panel {
   padding: 0 22px 20px;
 }

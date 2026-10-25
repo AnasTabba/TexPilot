@@ -46,3 +46,7 @@ yarn-erp/.local/
 yarn-erp/server/assets.generated.mjs
 yarn-erp/test-results/
 yarn-erp/playwright-report/
+
+# Generated Expo session state (not application source)
+app/.expo/
+app/expo-env.d.ts

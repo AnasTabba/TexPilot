@@ -1,0 +1,65 @@
+.scanner-artwork {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 64px;
+  width: 64px;
+  height: 64px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--sunken);
+}
+.scanner-artwork img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  animation: scanner-art-float 4.2s ease-in-out infinite;
+}
+.scan-fabric-illustration {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 180px;
+  margin: 0 0 14px;
+  border-radius: 18px;
+  background: radial-gradient(circle, #f6d7a34d 0, #f6d7a31a 40%, transparent 41%), var(--brand, #b4441b);
+  overflow: hidden;
+}
+.scan-fabric-illustration .scanner-artwork {
+  width: 170px;
+  height: 170px;
+  background: none;
+  overflow: visible;
+}
+.scan-fabric-illustration figcaption {
+  position: absolute;
+  inset-inline-start: 10px;
+  top: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: #3a261b;
+  background: #fff5e8;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+.scan-verdict .scanner-artwork {
+  flex-basis: 50px;
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  background: none;
+}
+.scan-garment {
+  flex-wrap: wrap;
+}
+@keyframes scanner-art-float {
+  0%, 100% { transform: translateY(0) rotate(-12deg); }
+  50% { transform: translateY(-4%) rotate(-8deg); }
+}
+@media (max-width: 480px) {
+  .scan-prediction > .scanner-artwork { flex-basis: 52px; width: 52px; height: 52px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanner-artwork img { animation: none; }
+}

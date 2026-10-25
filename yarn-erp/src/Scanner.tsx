@@ -22,7 +22,6 @@ import {
   Sun,
   StopCircle,
   PlugZap,
-  CircleHelp,
   CheckCheck,
 } from "lucide-react";
 import {
@@ -38,6 +37,8 @@ import {
 } from "./scanner-client";
 import "./scanner.css";
 import FabricHero from "./FabricHero";
+import ScannerArtwork from "./ScannerArtwork";
+import type { ArtworkKind } from "./scanner-artwork";
 type T = (en: string, ur?: string) => string;
 type Photo = {
   file: File;
@@ -356,11 +357,16 @@ export default function Scanner({
     head: HeadPrediction | null,
     I: typeof Layers3,
     near?: [string, number][],
+    artworkKind?: ArtworkKind,
   ) => (
     <div className="scan-prediction">
-      <span className="scan-prediction-icon">
-        <I size={19} />
-      </span>
+      {artworkKind ? (
+        <ScannerArtwork kind={artworkKind} label={head?.label} />
+      ) : (
+        <span className="scan-prediction-icon">
+          <I size={19} />
+        </span>
+      )}
       <div>
         <span>{t(en, ur)}</span>
         <strong>
@@ -842,6 +848,10 @@ export default function Scanner({
                     )}
                   </figure>
                 )}
+                <figure className="scan-fabric-illustration" key={result.scan_id}>
+                  <ScannerArtwork kind="structure" label={result.structure?.label} />
+                  <figcaption>{t("Fabric illustration", "کپڑے کی مثالی تصویر")}</figcaption>
+                </figure>
                 <div className="scan-answer">
                   <span>{t("Fabric", "کپڑا")}</span>
                   <h3 className={result.structure ? "is-label" : ""}>
@@ -921,17 +931,8 @@ export default function Scanner({
                       .join(" · ")}
                   </p>
                 )}
-                {result.verdict !== "INSUFFICIENT_EVIDENCE" && (
                 <div className={`scan-verdict ${result.verdict.toLowerCase()}`}>
-                  <span>
-                    {result.verdict === "PASS" ? (
-                      <ShieldCheck size={24} />
-                    ) : result.verdict === "FLAG" ? (
-                      <AlertTriangle size={24} />
-                    ) : (
-                      <CircleHelp size={24} />
-                    )}
-                  </span>
+                  <ScannerArtwork kind="verdict" label={result.verdict} />
                   <div>
                     <strong>
                       {result.verdict === "PASS"
@@ -955,7 +956,6 @@ export default function Scanner({
                     </p>
                   </div>
                 </div>
-                )}
                 <div className="scan-predictions">
                   {headRow(
                     copy.fabricStructure,
@@ -963,6 +963,7 @@ export default function Scanner({
                     result.structure,
                     Layers3,
                     result.candidates.structure,
+                    "structure",
                   )}
                   {headRow(
                     copy.surfaceTreatment,
@@ -970,6 +971,7 @@ export default function Scanner({
                     result.treatment,
                     Sun,
                     result.candidates.treatment,
+                    "treatment",
                   )}
                   {headRow(
                     copy.fibreFamily,
@@ -977,6 +979,7 @@ export default function Scanner({
                     result.fibre_family,
                     Tag,
                     result.candidates.fibre_family,
+                    "fibre_family",
                   )}
                   {Object.entries(result.custom).map(([name, head]) => {
                     const title = name.charAt(0).toUpperCase() + name.slice(1).replaceAll("_", " ");
@@ -989,6 +992,7 @@ export default function Scanner({
                 </div>
                 {result.garment && (
                   <div className="scan-garment">
+                    <ScannerArtwork kind="garment" label={result.garment.label} />
                     <span>{t(copy.garmentDetected, copy.urdu490)}</span>
                     <strong>{labelFor(result.garment.label)}</strong>
                     {result.garment.confidence !== null && (

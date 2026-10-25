@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TexPilot · Scanner artwork</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f7f1e7;color:#302219;font-family:system-ui,sans-serif}main{max-width:1440px;margin:auto;padding:40px 24px}header{margin-bottom:36px}h1{font-size:clamp(30px,5vw,52px);letter-spacing:-.05em;margin:12px 0}p{line-height:1.6;max-width:720px;color:#735f50}.brand{color:#b4441b;font-weight:750;letter-spacing:.08em;font-size:13px}h2{font-size:22px;margin:40px 0 16px}nav{display:flex;gap:10px;flex-wrap:wrap}a,button{color:inherit}nav a,button{background:#fffaf1;border:1px solid #d6c7b6;border-radius:100px;padding:10px 16px;font:inherit;text-decoration:none;cursor:pointer}a:focus-visible,button:focus-visible{outline:3px solid #b4441b;outline-offset:3px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}.card{margin:0;padding:14px;border:1px solid #e4d7c7;border-radius:20px;background:#fffcf6}.stage{height:210px;border-radius:14px;background:radial-gradient(circle at center,#d2ae6a77 0, #e7d3ad55 44%,transparent 45%),#3a261b;display:grid;place-items:center;overflow:hidden}.card:nth-child(3n+1) .stage{background:radial-gradient(circle,#ffd18e55 0,#f6dab322 44%,transparent 45%),#b4441b}.card:nth-child(3n+2) .stage{background:radial-gradient(circle,#ffe4a255 0,#f6dab322 44%,transparent 45%),#8a5a12}.stage img{width:205px;height:205px;object-fit:contain;filter:drop-shadow(0 10px 8px #0003)}figcaption{padding:14px 2px 2px;display:grid;gap:7px}figcaption strong{font-size:15px}small{color:#836d59;font-size:12px}.downloads{display:flex;gap:14px;font-size:12px}.notice{padding:12px 16px;background:#eee1c9;border-radius:12px;font-size:14px}footer{margin-top:40px}button[aria-pressed=true]{background:#302219;color:#fff}
+@media(max-width:500px){main{padding:24px 14px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stage{height:155px}.stage img{width:150px;height:150px}.card{padding:8px}}
+</style>
+<main>
+<header><span class="brand">TEXPILOT / MATERIAL LIBRARY</span><h1>Every outcome, in motion.</h1><p>53 scanner outcomes, 52 illustrations. Matching the original cotton, denim and polyester cutouts with a gentle, seamless 4.2-second float.</p><p class="notice">Reference artwork only. The scanner’s analysed photo and predictions remain the evidence. Blend is defined in the vocabulary but is not currently trained.</p><nav id="navigation"><button id="motion" type="button" aria-pressed="false">Pause motion</button></nav></header>
+<div id="gallery"></div><footer><p>Animated WebP · transparent backgrounds · still alternatives for reduced motion · <a href="manifest.json">Asset manifest</a> · <a href="OUTCOMES.md">Full outcome list</a></p></footer>
+</main>
+<script>
+const manifest=__MANIFEST__;
+const preference=matchMedia('(prefers-reduced-motion: reduce)');
+let paused=preference.matches;
+const label=id=>id.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+for(const [name,mapping] of Object.entries(manifest.groups)){
+ const section=document.createElement('section');section.id=name.toLowerCase().replaceAll(' ','-');
+ const heading=document.createElement('h2');heading.textContent=`${name} · ${Object.keys(mapping).length}`;section.append(heading);
+ const grid=document.createElement('div');grid.className='grid';section.append(grid);
+ const link=document.createElement('a');link.href='#'+section.id;link.textContent=name;document.querySelector('#navigation').append(link);
+ for(const [outcome,id] of Object.entries(mapping)){
+  const asset=manifest.assets[id];const card=document.createElement('figure');card.className='card';
+  const stage=document.createElement('div');stage.className='stage';const img=document.createElement('img');
+  img.alt=label(outcome)+' illustrative artwork';img.dataset.animated=asset.animated;img.dataset.still=asset.still;img.src=paused?asset.still:asset.animated;stage.append(img);card.append(stage);
+  const caption=document.createElement('figcaption');const title=document.createElement('strong');title.textContent=label(outcome);caption.append(title);
+  const note=document.createElement('small');note.textContent=id==='blend'?'Defined family · not trained':asset.generated?'New illustration':'Original illustration';caption.append(note);
+  const downloads=document.createElement('div');downloads.className='downloads';for(const [text,key] of [['Animation','animated'],['Still','still']]){const a=document.createElement('a');a.href=asset[key];a.download='';a.textContent=text;downloads.append(a)}caption.append(downloads);card.append(caption);grid.append(card);
+ }
+ document.querySelector('#gallery').append(section);
+}
+function updateMotion(){for(const img of document.querySelectorAll('.stage img'))img.src=paused?img.dataset.still:img.dataset.animated;const b=document.querySelector('#motion');b.textContent=paused?'Play motion':'Pause motion';b.setAttribute('aria-pressed',String(paused));}
+document.querySelector('#motion').onclick=()=>{paused=!paused;updateMotion()};preference.addEventListener('change',e=>{paused=e.matches;updateMotion()});updateMotion();
+</script>
+</html>

@@ -5,12 +5,14 @@ import "@fontsource/ibm-plex-sans/latin-500.css";
 import "@fontsource/ibm-plex-sans/latin-600.css";
 import "@fontsource/noto-nastaliq-urdu/arabic-400.css";
 import LiveApp from "./LiveApp";
+import AccessGate from "./LoginPage";
 // The practice register (/?practice=1) loads only when asked for: the shared app opens faster.
 const App = lazy(() => import("./App"));
 import "./styles.css";
 import "./workspace.css";
 import "./live.css";
 import "./theme.css";
+import "./approved.css";
 // crypto.randomUUID exists only on HTTPS and localhost; phones testing over the LAN use plain
 // HTTP. getRandomValues works everywhere, so build the same random v4 UUID from it.
 if (typeof crypto.randomUUID !== "function")
@@ -20,7 +22,7 @@ if (typeof crypto.randomUUID !== "function")
     ) as ReturnType<Crypto["randomUUID"]>;
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {new URLSearchParams(location.search).get('practice') === '1' ? <Suspense fallback={null}><App /></Suspense> : <LiveApp />}
+    {new URLSearchParams(location.search).get('practice') === '1' ? <Suspense fallback={null}><App /></Suspense> : <AccessGate><LiveApp /></AccessGate>}
   </React.StrictMode>,
 );
 if ("serviceWorker" in navigator && import.meta.env.PROD)

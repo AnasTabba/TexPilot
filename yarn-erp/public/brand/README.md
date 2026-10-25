@@ -1,0 +1,1 @@
+User-supplied spool/checkmark logo, palette edited with ImageGen on 25 October 2026. Source: codex-clipboard-1acb71d8-ea68-4a34-b1db-451397edbc0b.png. Palette: lime #D0ED82, olive #769831, charcoal #252720. PNG has transparent alpha. App icons composite this mark onto #F5F6F2. No user or account data is embedded.
