@@ -1,13 +1,10 @@
-import React, { lazy, Suspense } from "react";
+import React from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource/ibm-plex-sans/latin-400.css";
 import "@fontsource/ibm-plex-sans/latin-500.css";
 import "@fontsource/ibm-plex-sans/latin-600.css";
 import "@fontsource/noto-nastaliq-urdu/arabic-400.css";
 import LiveApp from "./LiveApp";
-import AccessGate from "./LoginPage";
-// The practice register (/?practice=1) loads only when asked for: the shared app opens faster.
-const App = lazy(() => import("./App"));
 import "./styles.css";
 import "./workspace.css";
 import "./live.css";
@@ -22,10 +19,13 @@ if (typeof crypto.randomUUID !== "function")
     ) as ReturnType<Crypto["randomUUID"]>;
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {new URLSearchParams(location.search).get('practice') === '1' ? <Suspense fallback={null}><App /></Suspense> : <AccessGate><LiveApp /></AccessGate>}
+    <LiveApp />
   </React.StrictMode>,
 );
 if ("serviceWorker" in navigator && import.meta.env.PROD)
   window.addEventListener("load", () =>
     navigator.serviceWorker.register("/sw.js").catch(() => {}),
   );
+
+import "./reference-dashboard.css";
+import "./mvp.css";
