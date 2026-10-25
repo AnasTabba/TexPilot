@@ -206,8 +206,10 @@ svg.lucide { stroke-width: 1.75; }
 .live-content > :nth-child(3) { animation-delay: 80ms; }
 .live-content > :nth-child(4) { animation-delay: 120ms; }
 .live-content > :nth-child(n + 5) { animation-delay: 160ms; }
+/* Movement only: content is fully readable from the first frame (a fade made text briefly
+   fail contrast, and content must never depend on an animation finishing to be visible). */
 @keyframes page-settle {
-  from { opacity: 0; transform: translateY(10px); }
+  from { transform: translateY(10px); }
 }
 .live-summary > button { animation: page-settle 420ms var(--ease-out) backwards; }
 .live-summary > button:nth-child(2) { animation-delay: 60ms; }
