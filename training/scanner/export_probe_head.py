@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     rows = read_csv(args.split_csv)
     scores = {}
     for split in ("val", "test"):
-        rs = [r for r in rows if r.split == split]
+        rs = [r for r in rows if r.split == split and (split == "val" or r.source == "archive")]
         missing = set(cache.missing([r.path for r in rs]))
         rs = [r for r in rs if r.path not in missing]  # e.g. scraped rows absent on Kaggle
         f = cache.assemble([r.path for r in rs]).astype(np.float32)
