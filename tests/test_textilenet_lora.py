@@ -60,3 +60,18 @@ def test_saved_adapters_rebuild_the_merged_weights_from_the_pretrained_ones():
     rebuilt = apply_lora(pretrained, lora, scale=2.0)
     assert set(rebuilt) == set(merged)
     assert all(torch.allclose(rebuilt[k], merged[k], atol=1e-6) for k in merged)
+
+
+def test_lora_can_also_wrap_the_mlp_and_the_adapters_still_rebuild_the_merge():
+    model = _vit()
+    pretrained = {k: v.clone() for k, v in model.state_dict().items()}
+    assert add_lora(model, rank=4, alpha=4, target="attn.qkv,mlp.fc1,mlp.fc2") == 6
+    assert type(model.blocks[0].mlp.fc2).__name__ == "LoRALinear"
+    with torch.no_grad():
+        for n, p in model.named_parameters():
+            if "lora_b" in n:
+                p.normal_()
+    lora = {k: v for k, v in model.state_dict().items() if ".lora_" in k}
+    merged = merge_lora(model).state_dict()
+    rebuilt = apply_lora(pretrained, lora, scale=1.0)
+    assert all(torch.allclose(rebuilt[k], merged[k], atol=1e-6) for k in merged)

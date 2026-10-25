@@ -12,7 +12,8 @@ macro_f1). Test is evaluated once, at the end, with the weights (raw vs EMA) and
 setting that won on val.
 
 ``--lora-rank r`` freezes the backbone and trains LoRA adapters on the attention q/k/v
-projections plus the head; ``--probe-epochs N --epochs N`` trains the head alone.
+projections (``--lora-target`` adds e.g. mlp.fc1,mlp.fc2) plus the head;
+``--probe-epochs N --epochs N`` trains the head alone.
 
 Outputs go to runs/<partition>/<model>/seed<k>/: config.json, log.jsonl, best.pt,
 test_metrics.json, confusion.png. Summarise with ``training.textilenet.aggregate``.
@@ -236,11 +237,10 @@ def main(argv: list[str] | None = None) -> int:
 
     model = create_model(args, len(classes))
     if args.lora_rank:
-        n_lora = add_lora(
-            model, args.lora_rank, args.lora_alpha or args.lora_rank, last_blocks=args.lora_blocks
-        )
+        alpha = args.lora_alpha or args.lora_rank
+        n_lora = add_lora(model, args.lora_rank, alpha, args.lora_target, args.lora_blocks)
         n_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        print(f"LoRA r={args.lora_rank} on {n_lora} qkv layers; {n_train:,} trainable params")
+        print(f"LoRA r={args.lora_rank} on {n_lora} {args.lora_target} layers; {n_train:,} params")
     data_cfg = timm.data.resolve_model_data_config(model)
     train_tf, eval_tf = build_transforms(
         args.img_size, data_cfg["mean"], data_cfg["std"], args.crop_pct
@@ -685,6 +685,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     g.add_argument("--lora-rank", type=int, default=0, help="LoRA on attention qkv; 0 = off")
     g.add_argument("--lora-alpha", type=float, default=0, help="LoRA scale alpha/r; 0 = rank")
     g.add_argument("--lora-blocks", type=int, default=0, help="LoRA in the last k blocks; 0 = all")
+    g.add_argument("--lora-target", default="attn.qkv", help="e.g. attn.qkv,mlp.fc1,mlp.fc2")
     g.add_argument("--no-tta", action="store_true", help="skip the TTA check (4x eval time)")
 
     g = ap.add_argument_group("regularisation / imbalance")

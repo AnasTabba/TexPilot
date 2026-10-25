@@ -98,17 +98,20 @@ def add_lora(
     model: torch.nn.Module, rank: int, alpha: float, target: str = "attn.qkv", last_blocks: int = 0
 ) -> int:
     """Freeze all but the classifier and wrap every ``target`` Linear (the fused q/k/v
-    projection in timm ViTs) in LoRA, or only those in the last ``last_blocks`` blocks:
-    then backprop stops there, which is ~1.7x faster. Returns how many were wrapped."""
+    projection in timm ViTs; comma-separate several, e.g. ``attn.qkv,mlp.fc1,mlp.fc2``) in
+    LoRA, or only those in the last ``last_blocks`` blocks: then backprop stops there, which
+    is ~1.7x faster. Returns how many were wrapped."""
     model.requires_grad_(False)
     model.get_classifier().requires_grad_(True)
     depth = len(model.blocks)
     first = depth - last_blocks if last_blocks else 0
+    targets = target.split(",")
     for i in range(first, depth):
-        parent, attr = f"blocks.{i}.{target}".rsplit(".", 1)
-        base = model.get_submodule(f"{parent}.{attr}")
-        setattr(model.get_submodule(parent), attr, LoRALinear(base, rank, alpha))
-    return depth - first
+        for t in targets:
+            parent, attr = f"blocks.{i}.{t}".rsplit(".", 1)
+            base = model.get_submodule(f"{parent}.{attr}")
+            setattr(model.get_submodule(parent), attr, LoRALinear(base, rank, alpha))
+    return (depth - first) * len(targets)
 
 
 def merge_lora(model: torch.nn.Module) -> torch.nn.Module:

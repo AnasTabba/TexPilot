@@ -44,6 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     if not ck.get("lora"):
         raise SystemExit(f"{args.run} has no saved adapters (train.py --lora-rank)")
     meta = {"scale": str(ck["lora_scale"]), "timm_name": ck["timm_name"], "best": str(ck["best"])}
+    size = str(ck["img_size"])
     lora = {k: v.contiguous() for k, v in ck["lora"].items()}
     save_file(lora, str(args.out / "lora.safetensors"), metadata=meta)
     encoder = work / "encoder.safetensors"
@@ -52,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     del ck, weights
 
     feats, csv, root = work / "features", str(args.split_csv), str(args.data_root)
-    size, name = "224", f"{meta['timm_name']}_224"
+    name = f"{meta['timm_name']}_{size}"
     run(
         "training.textilenet.probe",
         "--partition",
