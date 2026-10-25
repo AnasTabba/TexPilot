@@ -1,0 +1,290 @@
+/* feat/app-scaffold's fabric explorer, for the web: one colour per garment, a floating
+   illustration on a soft circle and ring, white type, a white call to action. */
+.fabric-hero {
+  --hero: #2860d5;
+  --hero-soft: rgb(255 255 255 / 74%);
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 22px 22px 18px;
+  border-radius: 24px;
+  background: var(--hero);
+  color: #fff;
+  text-align: center;
+  overflow: hidden;
+  transition: background-color 0.6s ease;
+  margin-bottom: 18px;
+}
+.fabric-hero-denim {
+  --hero: #2860d5;
+}
+.fabric-hero-cotton {
+  --hero: #4b5a72;
+}
+.fabric-hero-polyester {
+  --hero: #c8322f;
+}
+.fabric-hero-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+.fabric-hero-brand i {
+  color: var(--hero-soft);
+  font-style: normal;
+}
+.fabric-hero-eyebrow {
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.28em;
+  color: var(--hero-soft);
+}
+.fabric-hero-art {
+  position: relative;
+  width: 100%;
+  height: 250px;
+  display: grid;
+  place-items: center;
+}
+.fabric-hero-ring,
+.fabric-hero-circle {
+  position: absolute;
+  border-radius: 50%;
+}
+.fabric-hero-ring {
+  width: 236px;
+  height: 236px;
+  border: 1px solid rgb(255 255 255 / 45%);
+}
+.fabric-hero-circle {
+  width: 204px;
+  height: 204px;
+  background: rgb(255 255 255 / 16%);
+}
+.fabric-hero-art img {
+  position: absolute;
+  width: 236px;
+  height: 236px;
+  object-fit: contain;
+  opacity: 0;
+  transform: rotate(-12deg) scale(0.92);
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+  filter: drop-shadow(0 18px 22px rgb(0 0 0 / 22%));
+}
+.fabric-hero-art img.is-active {
+  opacity: 1;
+  transform: rotate(-12deg) scale(1);
+  animation: fabric-float 4.2s ease-in-out infinite;
+}
+@keyframes fabric-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-12deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(-8deg);
+  }
+}
+.fabric-hero-tag {
+  position: absolute;
+  right: 4px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--hero);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  transform: rotate(-5deg);
+  box-shadow: 0 6px 16px rgb(0 0 0 / 14%);
+}
+.fabric-hero h2 {
+  margin: 4px 0 0;
+  font-size: 1.75rem;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: #fff;
+}
+.fabric-hero p {
+  color: var(--hero-soft);
+}
+.fabric-hero > div > p {
+  margin: 8px 0 0;
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+.fabric-hero-dots {
+  display: flex;
+}
+.fabric-hero-dots button {
+  width: 34px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.fabric-hero-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 45%);
+  transition:
+    width 0.3s ease,
+    background-color 0.3s ease;
+}
+.fabric-hero-dots button[aria-pressed="true"] i {
+  width: 20px;
+  background: #fff;
+}
+.fabric-hero-action {
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--hero);
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.6s ease;
+}
+.fabric-hero-action:focus-visible,
+.fabric-hero-dots button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+.fabric-hero-action:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+.fabric-hero-foot {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+/* The result's garment art: the same circle and floating illustration, smaller. */
+.scan-guide-art {
+  --hero: #2860d5;
+  position: relative;
+  height: 190px;
+  display: grid;
+  place-items: center;
+  border-radius: 20px;
+  background: var(--hero);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.scan-guide-art.fabric-hero-cotton {
+  --hero: #4b5a72;
+}
+.scan-guide-art.fabric-hero-polyester {
+  --hero: #c8322f;
+}
+.scan-guide-art .fabric-hero-circle {
+  width: 150px;
+  height: 150px;
+}
+.scan-guide-art img {
+  position: relative;
+  width: 170px;
+  height: 170px;
+  object-fit: contain;
+  animation: fabric-float 4.2s ease-in-out infinite;
+  filter: drop-shadow(0 14px 18px rgb(0 0 0 / 22%));
+}
+.scan-guide-art span.scan-guide-pill {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 92%);
+  color: var(--hero);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fabric-hero,
+  .fabric-hero-art img,
+  .fabric-hero-dots i,
+  .fabric-hero-action {
+    transition: none;
+  }
+  .fabric-hero-art img.is-active,
+  .scan-guide-art img {
+    animation: none;
+  }
+}
+
+/* Answer first: fabric, what it is made of, the yarn to buy, then the next step. */
+.scan-answer {
+  display: grid;
+  gap: 4px;
+  padding: 2px 2px 16px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.scan-answer > span {
+  margin-top: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.scan-answer > span:first-child {
+  margin-top: 0;
+}
+.scan-results .scan-answer h3 {
+  margin: 0;
+  font-size: 1.75rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-transform: capitalize;
+}
+.scan-answer strong {
+  font-size: 1.05rem;
+}
+.scan-answer ul {
+  margin: 2px 0 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: 6px;
+  line-height: 1.4;
+}
+.scan-answer p {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+.scan-next {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.scan-next .button {
+  justify-content: center;
+  min-height: 48px;
+  white-space: normal;
+  text-align: center;
+  height: auto;
+  padding-block: 10px;
+}

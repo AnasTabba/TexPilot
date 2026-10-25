@@ -37,6 +37,7 @@ import {
   type HeadPrediction,
 } from "./scanner-client";
 import "./scanner.css";
+import FabricHero, { artwork, type Art } from "./FabricHero";
 type T = (en: string, ur?: string) => string;
 type Photo = {
   file: File;
@@ -46,10 +47,13 @@ export default function Scanner({
   t,
   onInventory,
   onResult,
+  onMeasure,
 }: {
   t: T;
   onInventory: () => void;
   onResult?: (result: ScanResult) => void;
+  /** Opens the Yarn spec scan (printed card + weight), which measures the exact count. */
+  onMeasure?: () => void;
 }) {
   const [endpoint, setEndpoint] = useState(() => {
     try {
@@ -390,8 +394,23 @@ export default function Scanner({
       )}
     </div>
   );
+  const art: Art | null = !result
+    ? null
+    : ["denim", "chambray"].includes(result.structure?.label ?? "")
+      ? "denim"
+      : (result.fibre_family?.label ?? result.candidates.fibre_family?.[0]?.[0]) === "synthetic"
+        ? "polyester"
+        : "cotton";
   return (
     <div className="scanner-page">
+      <FabricHero
+        t={t}
+        busy={openingCamera || scanning}
+        onScan={() => {
+          document.querySelector(".scan-capture-panel")?.scrollIntoView({ behavior: "smooth" });
+          void openCamera();
+        }}
+      />
       <div className="scan-topline">
         <span className="scan-model-badge">
           {info ? <CheckCheck size={20} aria-hidden="true" /> : <WifiOff size={20} aria-hidden="true" />}
@@ -799,6 +818,75 @@ export default function Scanner({
             </div>
             {result ? (
               <>
+                {art && (
+                  <div className={`scan-guide-art fabric-hero-${art}`}>
+                    <span className="fabric-hero-circle" aria-hidden="true" />
+                    <img src={artwork[art]} alt="" />
+                    {result.structure && (
+                      <span className="scan-guide-pill">
+                        {labelFor(result.structure.label).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="scan-answer">
+                  <span>{t("Fabric", "کپڑا")}</span>
+                  <h3>
+                    {result.structure
+                      ? labelFor(result.structure.label)
+                      : t("Not sure which fabric yet", "ابھی پکا نہیں کہ کون سا کپڑا ہے")}
+                  </h3>
+                  <span>{t("Made of", "کس چیز سے بنا")}</span>
+                  <strong>
+                    {result.stated_composition.fibers.length
+                      ? result.stated_composition.fibers
+                          .map((f) => `${f.pct}% ${labelFor(f.name)}`)
+                          .join(" / ") + t(" (from the label)", " (لیبل سے)")
+                      : result.fibre_family
+                        ? {
+                            cellulosic: t("Plant fibre: cotton, linen or viscose", "پودوں کا ریشہ: کاٹن، لینن یا وسکوز"),
+                            synthetic: t("Synthetic: polyester, nylon or acrylic", "مصنوعی: پولیسٹر، نائلون یا ایکریلک"),
+                            protein: t("Animal fibre: wool or silk", "جانوروں کا ریشہ: اون یا ریشم"),
+                          }[result.fibre_family.label] ?? labelFor(result.fibre_family.label)
+                        : t("Not sure from the photo", "تصویر سے پکا نہیں")}
+                  </strong>
+                  <span>{t("Yarn to buy", "کون سا یارن خریدیں")}</span>
+                  {result.yarn_advice?.length ? (
+                    <ul>
+                      {result.yarn_advice.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>
+                      {t(
+                        "Get closer so the weave fills the frame, then scan again.",
+                        "قریب سے تصویر لیں تاکہ بُنائی پوری نظر آئے، پھر دوبارہ اسکین کریں۔",
+                      )}
+                    </p>
+                  )}
+                  <div className="scan-next">
+                    {!result.stated_composition.fibers.length && (
+                      <button
+                        className="button"
+                        onClick={() => {
+                          setSlot("label");
+                          document.querySelector(".scan-capture-panel")?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                      >
+                        <Tag size={17} />
+                        {t("Exact mix: add the care-label photo", "اصل مکس: کیئر لیبل کی تصویر لگائیں")}
+                      </button>
+                    )}
+                    {onMeasure && (
+                      <button className="button primary" onClick={onMeasure}>
+                        <ArrowRight size={17} />
+                        {t("Exact count: measure with the card", "اصل کاؤنٹ: کارڈ سے ناپیں")}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {result.verdict !== "INSUFFICIENT_EVIDENCE" && (
                 <div className={`scan-verdict ${result.verdict.toLowerCase()}`}>
                   <span>
                     {result.verdict === "PASS" ? (
@@ -832,6 +920,7 @@ export default function Scanner({
                     </p>
                   </div>
                 </div>
+                )}
                 <div className="scan-predictions">
                   {headRow(
                     copy.fabricStructure,

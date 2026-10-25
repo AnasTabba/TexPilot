@@ -84,6 +84,13 @@ test("Scanner keeps an abstaining head's closest matches, and older APIs without
   for (const bad of [{ structure: [["knit", 1.5]] }, { structure: "knit" }, []])
     assert.throws(() => parseScanResult({ ...fixture, candidates: bad }), ScanError);
 });
+test("Scanner carries the yarn to buy, and older APIs without it still parse", () => {
+  const lines = ["Warp: indigo-dyed cotton, Ne 7–12 (open-end or ring slub)"];
+  assert.deepEqual(parseScanResult({ ...fixture, yarn_advice: lines }).yarn_advice, lines);
+  assert.equal(parseScanResult(fixture).yarn_advice, undefined);
+  for (const bad of ["Ne 30", [30], null])
+    assert.throws(() => parseScanResult({ ...fixture, yarn_advice: bad }), ScanError);
+});
 test("Scanner rejects stub outputs, invalid confidence and malformed result contracts", () => {
   assert.throws(
     () => parseScanResult({ ...fixture, model_version: "stub-0" }),

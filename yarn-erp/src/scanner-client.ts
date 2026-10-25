@@ -27,6 +27,8 @@ export interface ScanResult {
   candidates: Partial<Record<HeadName | string, [string, number][]>>;
   /** Heads the factory taught the scanner (e.g. "wash"); null where that head abstained. */
   custom: Record<string, HeadPrediction | null>;
+  /** What to order to make this fabric: the label's blend, then the typical yarn. Older servers omit it. */
+  yarn_advice?: string[];
   capture_quality: {
     blur: number | null;
     exposure: string | null;
@@ -137,6 +139,11 @@ export function parseScanResult(value: unknown): ScanResult {
     throw new ScanError("response");
   if (value.model_version.toLowerCase().includes("stub"))
     throw new ScanError("stub");
+  if (
+    value.yarn_advice !== undefined &&
+    !(Array.isArray(value.yarn_advice) && value.yarn_advice.every((x) => typeof x === "string"))
+  )
+    throw new ScanError("response");
   const composition = value.stated_composition;
   const quality = value.capture_quality;
   if (
