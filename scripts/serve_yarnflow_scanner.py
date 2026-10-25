@@ -1,6 +1,6 @@
 """Start the real main-branch scanner, refusing missing weights and stub mode.
 
-Usage: .venv/bin/python scripts/serve_yarnflow_scanner.py --bundle models/scanner-v2
+Usage: .venv/bin/python scripts/serve_yarnflow_scanner.py --bundle models/scanner-v5
 Use a private authenticated HTTPS ingress for the hosted Yarnflow client.
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--bundle", type=Path, default=Path("models/scanner-v2"))
+    parser.add_argument("--bundle", type=Path, default=Path("models/scanner-v5"))
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
@@ -23,7 +23,7 @@ def main():
     if missing:
         parser.error(
             f"Trained model bundle missing in {args.bundle}: {', '.join(missing)}. "
-            "Copy the trained scanner-v2 bundle here, or pass --bundle /path/to/your/bundle. "
+            "Copy the trained scanner-v5 bundle here, or pass --bundle /path/to/your/bundle. "
             "Weights are intentionally excluded from Git. No stub server was started."
         )
     os.environ["TEXPILOT_VISION"] = "scanner"

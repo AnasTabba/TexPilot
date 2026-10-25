@@ -35,8 +35,8 @@ def browser_origins(env=os.environ) -> tuple[str, ...]:
 @dataclass(frozen=True)
 class Settings:
     vision: str = "stub"  # stub | scanner
-    bundle: Path = Path("models/scanner-v2")
-    detector: str = "gdino"  # gdino | owlv2 | rtdetr | florence2
+    bundle: Path = Path("models/scanner-v5")
+    detector: str = "owlv2"  # owlv2 | gdino | rtdetr | florence2
     ocr: str = "none"  # none | apple | paddle | florence2
     device: str = "auto"
     store: str = "none"  # none | a folder that keeps every scan (parent spec §9)
@@ -46,8 +46,8 @@ class Settings:
         vision = env.get("TEXPILOT_VISION", "stub")
         return cls(
             vision=vision,
-            bundle=Path(env.get("TEXPILOT_MODEL_BUNDLE", "models/scanner-v2")),
-            detector=env.get("TEXPILOT_GARMENT_DETECTOR", "gdino"),
+            bundle=Path(env.get("TEXPILOT_MODEL_BUNDLE", "models/scanner-v5")),
+            detector=env.get("TEXPILOT_GARMENT_DETECTOR", "owlv2"),
             # OCR defaults on only with the scanner, so stub mode runs on any OS.
             ocr=env.get("TEXPILOT_OCR_BACKEND", "apple" if vision == "scanner" else "none"),
             device=env.get("TEXPILOT_DEVICE", "auto"),
