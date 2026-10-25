@@ -1,18 +1,25 @@
 ---
 name: Yarnflow
-description: Calm factory work on warm cotton surfaces with deep teal actions.
+description: Factory work on clean surfaces under espresso chrome, with burnt-orange actions and gold for place.
 colors:
-  page: "#f7f6f3"
+  page: "#faf8f6"
   card: "#fff"
-  sunken: "#f1efea"
-  border: "#e4e1da"
-  input-border: "#858780"
-  text-primary: "#1b1d1f"
-  text-secondary: "#5a5e63"
-  brand: "#0f5f6b"
-  brand-hover: "#0b4c56"
-  brand-light: "#e6f0f1"
-  brand-mid: "#b9d3d6"
+  sunken: "#f3eee9"
+  border: "#e6ddd4"
+  input-border: "#8a7b6e"
+  text-primary: "#2a1d16"
+  text-secondary: "#66574c"
+  brand: "#b4441b"
+  brand-hover: "#923614"
+  brand-light: "#fbeae1"
+  brand-mid: "#f0c2a8"
+  chrome: "#2b1b13"
+  chrome-raised: "#3a261b"
+  on-chrome: "#f7ede4"
+  on-chrome-muted: "#cdb6a5"
+  gold: "#d6a23c"
+  gold-strong: "#8f6412"
+  gold-soft: "#f6e7c6"
   on-brand: "#fff"
   success: "#1f7a45"
   success-surface: "#e8f4ec"
@@ -20,30 +27,27 @@ colors:
   warning-surface: "#fff3df"
   error: "#b42b24"
   error-surface: "#fdebea"
-  glass-fill: "rgb(255 254 250 / 92%)"
-  glass-solid: "#fffefa"
-  glass-edge: "rgb(255 255 255 / 80%)"
-  dark-page: "#171c1c"
-  dark-card: "#222929"
-  dark-sunken: "#2c3433"
-  dark-border: "#46514e"
-  dark-input-border: "#8d9994"
-  dark-text-primary: "#f5f4ef"
-  dark-text-secondary: "#c1c7c3"
-  dark-brand: "#95d2d7"
-  dark-brand-hover: "#b5e1e4"
-  dark-brand-light: "#253f41"
-  dark-brand-mid: "#42676a"
-  dark-on-brand: "#132527"
+  dark-page: "#17100c"
+  dark-card: "#22170f"
+  dark-sunken: "#2d1f16"
+  dark-border: "#4b3729"
+  dark-input-border: "#9a8576"
+  dark-text-primary: "#f7ede4"
+  dark-text-secondary: "#cfbcad"
+  dark-brand: "#f2915a"
+  dark-brand-hover: "#f6ab7e"
+  dark-brand-light: "#3d2416"
+  dark-brand-mid: "#6e3d22"
+  dark-on-brand: "#2a1206"
+  dark-chrome: "#31211a"
+  dark-gold: "#e6b85c"
+  dark-gold-soft: "#3a2b12"
   dark-success: "#a1dbb8"
   dark-success-surface: "#233d2c"
   dark-warning: "#f4cf8c"
   dark-warning-surface: "#44351e"
   dark-error: "#ffb3aa"
   dark-error-surface: "#482d2b"
-  dark-glass-fill: "rgb(34 41 41 / 94%)"
-  dark-glass-solid: "#222929"
-  dark-glass-edge: "rgb(220 230 222 / 18%)"
 typography:
   headline:
     fontFamily: '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
@@ -155,28 +159,30 @@ components:
 
 ## Overview
 
-**Creative North Star: "The Calm Factory Register"**
+**Creative North Star: "The Mill at Golden Hour"**
 
-Yarnflow brings the confidence of a familiar paper register to a shared factory workspace. Warm cotton neutrals carry the work; deep teal identifies the next action, the current place and the data. Premium means calm, clear and confident for mill staff moving between office desktops and factory phones.
+Yarnflow brings the confidence of a familiar register to a shared factory workspace, dressed like good cloth. Espresso-brown chrome frames the work, burnt orange marks the next action, and gold marks where you are. Clean near-white surfaces keep quantities readable under factory tube light. Premium means warm, alive and confident for mill staff moving between office desktops and factory phones (redesigned 25 October 2026 at the user's request: "brown, orange and a little golden", flowing rather than static).
 
-Solid working surfaces sit beneath one restrained layer of floating glass. Large readable text, steady alignment and quiet state changes make each task predictable. Use plain factory wording, meaningful icons and recoverable forms; decoration must never compete with quantities, batch names or decisions.
+Solid working surfaces sit beneath solid espresso chrome (no backdrop blur: it made phones lag while scrolling). Motion is part of the material: a gold pill glides to the current tab, pages settle in, a slow silk sheen crosses the chrome, and scanning shows a small loom at work. Large readable text and steady alignment keep each task predictable. Use plain factory wording, meaningful icons and recoverable forms; decoration must never compete with quantities, batch names or decisions.
 
 This is a code-led capture of the implemented system, grounded in the user's complete 25 October 2026 brief, `PRODUCT.md`, `docs/design-direction.md`, `src/theme.css`, `src/live.css` and `src/workspace.css`. No approved visual comp is implied. `src/main.tsx` loads the shared theme last. The shared workspace is the default; the separate register interface at `/?practice=1` shares the visual language. Screenshot acceptance and the final capture matrix are separate verification work; this document does not certify a final review pass.
 
 **Key Characteristics:**
-- Warm cotton surfaces and a single deep teal brand accent.
+- Near-white work surfaces, espresso chrome, burnt-orange actions, gold for place and highlight.
 - Large text, tabular figures and clearly labelled controls.
-- Opaque content beneath restrained floating glass.
+- Solid content and solid chrome; motion (glide, settle, sheen, loom) instead of glass.
 - Spacious alignment with quiet row dividers.
 - Word, icon and color together for status.
 
 ## Colors
 
-The palette feels like clean cotton paper, dark ink and deep teal machinery: neutrals dominate, actions remain distinct, and status colors retain their meaning.
+The palette feels like a mill at golden hour: clean cloth, espresso wood, burnt-orange dye and gold light. Near-white surfaces dominate the work, actions remain distinct, and status colors retain their meaning.
 
 ### Primary
-- **Deep Teal** (`brand`): primary actions, active navigation, links, focus and chart data. `brand-hover` strengthens pointer feedback; `brand-light` marks selection; `brand-mid` supports secondary data marks.
-- **On Teal** (`on-brand`): readable text on a filled primary action. Use the semantic token so dark mode also receives the correct foreground.
+- **Burnt Orange** (`brand`): primary actions, links, focus and chart data. `brand-hover` strengthens pointer feedback; `brand-light` marks selection; `brand-mid` supports secondary data marks.
+- **On Orange** (`on-brand`): readable text on a filled primary action. Use the semantic token so dark mode also receives the correct foreground.
+- **Espresso** (`chrome`, `chrome-raised`, `on-chrome`, `on-chrome-muted`): sidebar, top bar, phone tab bar and the selected segmented control.
+- **Gold** (`gold`, `gold-strong`, `gold-soft`): the current place (the gliding nav pill), highlights and the silk sheen. `gold-strong` is the readable gold for text on light surfaces.
 
 ### Neutral
 - **Warm Cotton** (`page`): the application canvas.
@@ -185,7 +191,6 @@ The palette feels like clean cotton paper, dark ink and deep teal machinery: neu
 - **Paper Edge** (`border`): dividers and surface boundaries; it is not the field-recognition stroke.
 - **Register Stroke** (`input-border`): stronger edges for inputs and secondary controls.
 - **Factory Ink** (`text-primary`) and **Secondary Ink** (`text-secondary`): primary and supporting text. Supporting text remains readable rather than faint.
-- **Warm Glass** (`glass-fill`, `glass-solid`, `glass-edge`): floating chrome and its opaque fallback. High opacity is intentional to protect readability over scrolling content.
 
 ### Status
 - **Inspection Green** (`success`, `success-surface`): approved or confirmed states.
@@ -194,7 +199,7 @@ The palette feels like clean cotton paper, dark ink and deep teal machinery: neu
 
 The `dark-` frontmatter entries record the actual dark theme equivalents. Runtime CSS retains the same semantic custom-property names and changes their values under `data-theme="dark"`; consumers should use those properties rather than selecting raw light colors. The factory theme currently shares the light palette. No inferred color ramp is normative.
 
-**The Meaningful Color Rule.** Use teal for action, selection, links, focus and data; use green, amber and red for status. Let neutral surfaces occupy most of the screen.
+**The Meaningful Color Rule.** Burnt orange for action, links and focus; gold for the current place and highlights; espresso for chrome; green, amber and red for status. Let near-white surfaces carry the work.
 
 ## Typography
 
@@ -231,19 +236,27 @@ The register shell switches to bottom tabs at (900px), simplifies further at (60
 
 ## Elevation & Depth
 
-Content is flat and opaque at rest. Working panels have a light border and no card shadow. Floating navigation, top bars, phone bars, dialogs, sheets, popovers and segmented controls may use a single glass layer. Dialog form interiors remain opaque, and nested switches use the solid subtle surface. A standalone floating task control may use this same chrome material when present; do not add a second visual treatment.
+Content is flat and opaque at rest. Working panels have a light border and no card shadow. Chrome (sidebar, top bar, phone tab bar) is solid espresso; dialogs, popovers and segmented controls are solid card surfaces. Nothing uses backdrop blur: it forced phones to redraw the page under the bars on every scroll frame.
 
 ### Shadow Vocabulary
-- **Floating chrome:** the light glass uses a soft neutral drop shadow (`0 8px 24px rgb(27 29 31 / 8%)`) and an inset top highlight (`inset 0 1px 0 rgb(255 255 255 / 85%)`). Dark equivalents are recorded in the sidecar.
-- **Transient notice:** the register toast uses a very soft neutral shadow (`0 4px 16px rgb(0 0 0 / .08)`). Content cards remain shadowless.
+- **Chrome:** one defined shadow under the espresso bars (`0 6px 8px rgb(23 14 9 / 18%)`), no border.
+- **Lift:** a primary button lifts 1px with a warm shadow (`0 4px 8px rgb(180 68 27 / 24%)`) on hover; stock tiles lift 2px with a gold edge.
+- **Transient notice:** the register toast uses a very soft neutral shadow. Content cards remain shadowless.
 
-Glass starts solid. Only a successful backdrop-filter feature query enables warm translucent fill with blur (24px) and saturation (170%), including the Safari prefix. Reduced transparency restores the solid material; reduced motion removes transitions, animations and smooth scrolling. Routine interaction feedback uses (150ms) color and border transitions. The implemented system does not require decorative motion or sliding selection effects. Loading rotation is functional progress feedback and stops under reduced motion.
+### Motion
+Motion conveys place and progress, on transform and opacity with ease-out-quint (`--ease-out`):
+- **Glide:** the gold pill moves to the current tab (420 ms); it is placed without animation on first paint.
+- **Settle:** a new page's sections rise 10px into place in a 40 ms cascade (380 ms).
+- **Silk sheen:** a narrow band of gold light crosses each espresso bar every 9 s, offset per bar.
+- **Loom:** while TexPilot analyses, warp threads lift in turn and the weft shuttles across.
+- **Reveal:** a scan answer arrives garment first, then fabric, fibre and the yarn lines.
+- **Press:** controls scale to 97% while pressed.
 
-**The One Glass Layer Rule.** Glass floats above opaque work. Never place glass inside glass, blur content, or add decorative backgrounds to display the effect.
+Reduced motion removes every animation and transition (`theme.css`).
 
 ## Shapes
 
-Fields and ordinary buttons have modest control corners. Shared content uses the `card` radius; register panels use `register-panel`. Status tags use compact `status` corners. Floating shells use `glass-panel`, while their inset controls follow the capsule-like inner geometry represented by `glass-control`; the register phone tab has its observed `phone-register-tab` radius. Reserve these larger shapes for chrome.
+Fields and ordinary buttons have modest control corners. Shared content uses the `card` radius; register panels use `register-panel`. Status tags use compact `status` corners. Chrome uses 16px corners and its inset controls 14px; the register phone tab has its observed `phone-register-tab` radius. Reserve these larger shapes for chrome.
 
 Keep borders thin and neutral. Progress tracks and chart bars are square ended. Avoid nested framed cards; inner sections use space and dividers. Icons come from Lucide with a consistent stroke width (1.75); use them for navigation, status and recognizable actions.
 
@@ -251,7 +264,7 @@ Keep borders thin and neutral. Progress tracks and chart bars are square ended. 
 
 ### Buttons
 
-Confident, plainly labelled actions. Primary buttons use teal and its on-brand foreground; secondary buttons use opaque paper with the stronger recognition border. Both use control corners and padding from the component tokens, with targets of at least (48px). Pointer hover changes fill and border; press uses a subtle brightness change. Keyboard focus is an offset (3px) semantic teal outline with (4px) separation. Disabled buttons keep fully opaque readable secondary text, a subtle surface and the stronger border. Use one verb-led primary action per task state.
+Confident, plainly labelled actions. Primary buttons use burnt orange and its on-brand foreground; secondary buttons use opaque paper with the stronger recognition border. Both use control corners and padding from the component tokens, with targets of at least (48px). Pointer hover changes fill and border; press scales the control to 97%. Keyboard focus is an offset (3px) semantic orange outline with (4px) separation. Disabled buttons keep fully opaque readable secondary text, a subtle surface and the stronger border. Use one verb-led primary action per task state.
 
 ### Inputs / Fields
 
@@ -259,7 +272,7 @@ Readable register entries with a visible label above the field. Fields are solid
 
 ### Navigation
 
-Floating chrome with visible words and useful icons. Desktop destinations form a vertical list with restrained spacing; active destinations receive a teal tint and `aria-current="page"`. Phone navigation has five visible destinations. Hover uses the subtle surface; keyboard focus remains visible. Use the larger chrome radii and solid fallback, including under reduced transparency. Nested segmented controls become opaque instead of stacking another blur layer.
+Floating chrome with visible words and useful icons. Desktop destinations form a vertical list with restrained spacing; a gold pill glides to the active destination (420 ms, ease-out-quint), which also carries `aria-current="page"`. Phone navigation has five visible destinations. Hover uses the subtle surface; keyboard focus remains visible. Chrome is solid espresso with 16px corners; no blur.
 
 ### Chips / Status
 
@@ -267,14 +280,15 @@ Compact, informative labels rather than decoration. Approved, pending inspection
 
 ### Cards / Containers
 
-Opaque working paper, lightly bounded and flat. Shared panels use the card token, padding (24px) on desktop and (16px) on phones. Register panels use their observed modest larger corner. Inner panels lose their own border and radius. Empty states use a clear title, short explanation and the next real action; do not fabricate stock or add decorative illustrations. Tables use normal type, quiet dividers and neutral hover; chart marks use flat teal, light gridlines, direct values and a zero baseline.
+Opaque working paper, lightly bounded and flat. Shared panels use the card token, padding (24px) on desktop and (16px) on phones. Register panels use their observed modest larger corner. Inner panels lose their own border and radius. Empty states use a clear title, short explanation and the next real action; do not fabricate stock or add decorative illustrations. Tables use normal type, quiet dividers and neutral hover; chart marks use flat burnt orange, light gridlines, direct values and a zero baseline.
 
 The sidecar contains five framework-free HTML/CSS examples: a primary button, labelled field, floating navigation, meaningful status tag and solid panel. Their CSS custom properties inherit the active theme; inline SVG carries icons without a runtime library. They illustrate appearance and semantic structure, not application behavior or a completed acceptance audit.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** use warm cotton neutrals for the canvas, solid paper for work and teal for meaningful actions.
+- **Do** use near-white for the canvas, solid paper for work, espresso for chrome, orange for actions and gold for place.
+- **Do** give every animation a reduced-motion alternative and keep it on transform/opacity (150–420 ms, ease-out-quint).
 - **Do** keep body text at least 16px, controls 18px, supporting text at least 14px and interactive targets at least 48px.
 - **Do** pair each status with words, a meaningful icon and its semantic color.
 - **Do** preserve visible focus, readable disabled states, reduced motion and solid glass fallbacks.
@@ -282,7 +296,7 @@ The sidecar contains five framework-free HTML/CSS examples: a primary button, la
 - **Do** keep form labels, inline recovery and review-before-save patterns clear and consistent.
 
 ### Don't:
-- **Don't** introduce violet, default blue, glows, heavy colored shadows or gradients outside the permitted glass edge highlight.
+- **Don't** introduce violet, default blue or teal, heavy colored shadows, or gradients other than the gold sheen and the hero's warm light.
 - **Don't** put glass on tables, charts, forms, inputs or reading surfaces, or stack glass layers.
 - **Don't** add decorative illustrations, emoji, tinted icon tiles or badges without information.
 - **Don't** turn every item into a pill or nest framed cards to create hierarchy.
