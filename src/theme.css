@@ -1,0 +1,307 @@
+/* Shared product tokens: espresso chrome, burnt-orange actions, gold for place and highlight.
+   Content is opaque and solid; nothing blurs (backdrop blur made phones lag while scrolling). */
+:root, :root[data-theme="light"], :root[data-theme="factory"] {
+  --page: #faf8f6;
+  --card: #fff;
+  --bg: var(--page);
+  --surface: var(--card);
+  --surface-solid: var(--card);
+  --sunken: #f3eee9;
+  --border: #e6ddd4;
+  --line: var(--border);
+  --input-border: #8a7b6e;
+  --line-strong: var(--input-border);
+  --text-primary: #2a1d16;
+  --text-secondary: #66574c;
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --subtle: var(--text-secondary);
+  --brand: #b4441b;
+  --brand-hover: #923614;
+  --brand-light: #fbeae1;
+  --brand-mid: #f0c2a8;
+  --on-brand: #fff;
+  --chrome: #2b1b13;
+  --chrome-raised: #3a261b;
+  --on-chrome: #f7ede4;
+  --on-chrome-muted: #cdb6a5;
+  --gold: #d6a23c;
+  --gold-strong: #8f6412;
+  --gold-soft: #f6e7c6;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --success: #1f7a45;
+  --success-surface: #e8f4ec;
+  --warning: #9a5600;
+  --warning-surface: #fff3df;
+  --error: #b42b24;
+  --error-surface: #fdebea;
+  --green: var(--success);
+  --green-bg: var(--success-surface);
+  --amber: var(--warning);
+  --amber-bg: var(--warning-surface);
+  --danger: var(--error);
+  --danger-bg: var(--error-surface);
+  --focus: var(--brand);
+  --card-radius: 10px;
+  --control-radius: 8px;
+  --radius: var(--card-radius);
+  --card-shadow: none;
+  --shadow: 0 4px 8px rgb(43 27 19 / 8%);
+  --body-font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  color-scheme: light;
+  font-family: var(--body-font);
+  font-size: 16px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+:root[data-theme="dark"] {
+  --page: #17100c;
+  --card: #22170f;
+  --bg: var(--page);
+  --surface: var(--card);
+  --surface-solid: var(--card);
+  --sunken: #2d1f16;
+  --border: #4b3729;
+  --line: var(--border);
+  --input-border: #9a8576;
+  --line-strong: var(--input-border);
+  --text-primary: #f7ede4;
+  --text-secondary: #cfbcad;
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --subtle: var(--text-secondary);
+  --brand: #f2915a;
+  --brand-hover: #f6ab7e;
+  --brand-light: #3d2416;
+  --brand-mid: #6e3d22;
+  --on-brand: #2a1206;
+  --chrome: #31211a;
+  --chrome-raised: #45301f;
+  --gold: #e6b85c;
+  --gold-strong: #e6b85c;
+  --gold-soft: #3a2b12;
+  --success: #a1dbb8;
+  --success-surface: #233d2c;
+  --warning: #f4cf8c;
+  --warning-surface: #44351e;
+  --error: #ffb3aa;
+  --error-surface: #482d2b;
+  color-scheme: dark;
+}
+html { scroll-padding-block: 112px 160px; }
+body { font-family: var(--body-font); background: var(--bg); color: var(--text); }
+::selection { color: var(--text); background: var(--gold-soft); }
+input, textarea { caret-color: var(--brand); }
+button, input, select, textarea { font-family: inherit; }
+button, input:not([type="radio"]):not([type="checkbox"]), select, textarea { font-size: 18px; }
+button, a.button, summary { min-height: 48px; touch-action: manipulation; }
+a { text-underline-offset: 4px; }
+button, a, input, select, textarea {
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+button:active:not(:disabled), a.button:active { filter: brightness(.96); }
+button:disabled { opacity: .6; cursor: not-allowed; }
+:focus-visible { outline: 3px solid var(--focus) !important; outline-offset: 4px; }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+h1, h2, h3 { color: var(--text); text-wrap: balance; }
+svg.lucide { stroke-width: 1.75; }
+.button.primary, .live-app .button.primary, .live-welcome .button.primary {
+  background: var(--brand); border-color: var(--brand); color: var(--on-brand);
+}
+.button.primary:hover:not(:disabled), .live-app .button.primary:hover:not(:disabled), .live-welcome .button.primary:hover:not(:disabled) {
+  background: var(--brand-hover); border-color: var(--brand-hover);
+}
+/* Chrome is solid espresso: no backdrop blur, which made phones redraw on every scroll. */
+:is(.sidebar, .topbar, .bottom-tabs, .live-sidebar, .live-topbar, .live-bottom-nav) {
+  background: var(--chrome);
+  color: var(--on-chrome);
+  border: 0;
+  box-shadow: 0 6px 8px rgb(23 14 9 / 18%);
+  border-radius: 16px;
+  overflow: hidden;
+  isolation: isolate;
+}
+:is(.modal, .popover, .tabs, .live-segments, .scan-connection-modal) {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+:is(.live-sidebar, .live-topbar, .live-bottom-nav) :is(strong, span, small, a, button:not(.button)) { color: inherit; }
+.live-sidebar :is(small, .live-sidebar-footer), .live-topbar .live-account { color: var(--on-chrome-muted); }
+.live-sidebar .live-factory { border-color: rgb(247 237 228 / 14%); }
+:is(.live-sidebar, .live-topbar) .live-icon-button { color: var(--on-chrome); background: var(--chrome-raised); border-color: transparent; }
+.live-topbar > span:not(.is-offline) svg { color: var(--gold); }
+.live-topbar > span.is-offline svg { color: #f4cf8c; }
+
+/* The silk sheen: a slow band of gold light crossing the brown chrome, like light on cloth. */
+:is(.live-sidebar, .live-topbar, .live-bottom-nav)::after {
+  content: "";
+  position: absolute;
+  inset: -50% auto -50% 0;
+  width: 28%;
+  z-index: -1;
+  background: linear-gradient(100deg, transparent 20%, rgb(255 222 150 / 7%) 40%, rgb(255 232 180 / 20%) 50%, rgb(255 222 150 / 7%) 60%, transparent 80%);
+  transform: translateX(-120%) skewX(-12deg);
+  animation: silk-sheen 9s var(--ease-out) infinite;
+  pointer-events: none;
+}
+.live-topbar::after { animation-delay: 1.2s; }
+.live-bottom-nav::after { animation-delay: 2.4s; }
+@keyframes silk-sheen {
+  0% { transform: translateX(-120%) skewX(-12deg); }
+  38%, 100% { transform: translateX(480%) skewX(-12deg); }
+}
+
+/* Navigation: a gold pill glides to the current place (--glide-x / --glide-y from LiveApp). */
+.live-sidebar nav { position: relative; } /* the bottom nav is already fixed */
+:is(.live-sidebar nav, .live-bottom-nav)::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  width: var(--glide-w, 0);
+  height: var(--glide-h, 0);
+  border-radius: 14px;
+  background: var(--gold);
+  transform: translate(var(--glide-x, 0), var(--glide-y, 0));
+  z-index: 0;
+}
+/* Placed instantly on first paint, then glides. */
+:is(.live-sidebar nav, .live-bottom-nav)[data-glide="on"]::before {
+  transition: transform 420ms var(--ease-out), width 420ms var(--ease-out), height 420ms var(--ease-out);
+}
+:is(.live-sidebar nav, .live-bottom-nav) > button { position: relative; z-index: 1; color: var(--on-chrome); transition: color 200ms var(--ease-out), transform 150ms var(--ease-out); }
+:is(.live-sidebar nav, .live-bottom-nav) > button:hover:not(.active) { background: rgb(247 237 228 / 8%); }
+:is(.live-sidebar nav, .live-bottom-nav) > button.active { color: var(--chrome); background: transparent; transition: color 260ms var(--ease-out) 140ms; }
+:is(.live-sidebar nav, .live-bottom-nav) > button svg { transition: transform 300ms var(--ease-out); }
+:is(.live-sidebar nav, .live-bottom-nav) > button.active svg { transform: scale(1.08); }
+:is(.sidebar, .live-sidebar) nav :is(button, a),
+:is(.bottom-tabs, .live-bottom-nav) > :is(button, a),
+:is(.tabs, .live-segments) > button { border-radius: 14px; }
+.live-segments button { transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out); }
+.live-segments button[aria-pressed="true"] { background: var(--chrome); color: var(--on-chrome); }
+.live-segments button[aria-pressed="true"] svg { color: var(--gold); }
+:root[data-theme="dark"] .live-segments button[aria-pressed="true"] { background: var(--gold-soft); color: var(--gold); }
+
+/* Press and lift: controls answer the finger. */
+:is(button, a.button):not(:disabled) { transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, transform 150ms var(--ease-out), box-shadow 200ms var(--ease-out); }
+:is(button, a.button):active:not(:disabled) { transform: scale(0.97); filter: none; }
+.button.primary:hover:not(:disabled) { box-shadow: 0 4px 8px rgb(180 68 27 / 24%); transform: translateY(-1px); }
+.live-summary > button { transition: transform 250ms var(--ease-out), box-shadow 250ms var(--ease-out), border-color 200ms ease; }
+.live-summary > button:hover { transform: translateY(-2px); box-shadow: 0 6px 8px rgb(43 27 19 / 8%); border-color: var(--gold); }
+.live-summary strong { color: var(--text); }
+
+/* Moving between pages: the new page settles in, items in a quick cascade. */
+.live-content > * { animation: page-settle 380ms var(--ease-out) backwards; }
+.live-content > :nth-child(2) { animation-delay: 40ms; }
+.live-content > :nth-child(3) { animation-delay: 80ms; }
+.live-content > :nth-child(4) { animation-delay: 120ms; }
+.live-content > :nth-child(n + 5) { animation-delay: 160ms; }
+/* Movement only: content is fully readable from the first frame (a fade made text briefly
+   fail contrast, and content must never depend on an animation finishing to be visible). */
+@keyframes page-settle {
+  from { transform: translateY(10px); }
+}
+.live-summary > button { animation: page-settle 420ms var(--ease-out) backwards; }
+.live-summary > button:nth-child(2) { animation-delay: 60ms; }
+.live-summary > button:nth-child(3) { animation-delay: 120ms; }
+.live-summary > button:nth-child(4) { animation-delay: 180ms; }
+.live-page-heading h1 { letter-spacing: -0.02em; }
+.modal :is(.form-grid, .entry-fields, .order-form, .modal-content),
+.scan-connection-modal form { background: var(--surface); }
+.live-review dl { margin: 24px 0; }
+.live-review dl > div { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr; gap: 16px; padding-block: 12px; border-bottom: 1px solid var(--line); }
+.live-review dt { color: var(--muted); }
+.live-review dd { margin: 0; overflow-wrap: anywhere; }
+.live-field-error { display: flex; align-items: flex-start; gap: 8px; color: var(--danger); font-size: 14px; font-weight: 400; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+@media (max-width: 560px) {
+  .live-review dl > div { grid-template-columns: 1fr; gap: 4px; }
+}
+@media print {
+  :is(.sidebar, .topbar, .bottom-tabs, .live-sidebar, .live-topbar, .live-bottom-nav) { display: none !important; }
+  * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; box-shadow: none !important; }
+}
+
+:root[lang="ur"] { --body-font: "Noto Nastaliq Urdu", "IBM Plex Sans", sans-serif; }
+
+/* Disabled is a readable state, not faded text. Contrast remains at least 4.5:1. */
+button:disabled, .button:disabled, .live-app .button:disabled, .live-welcome .button:disabled,
+.app-shell .button:disabled, .app-shell .button.primary:disabled,
+.scanner-page .button:disabled, .scanner-page .button.disabled {
+  opacity: 1;
+  color: var(--muted);
+  background: var(--sunken);
+  border-color: var(--input-border);
+  cursor: not-allowed;
+}
+/* Give prose links the same comfortable hit area as other factory-floor controls. */
+.live-welcome a, .live-app .live-panel p > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  min-width: 48px;
+}
+.modal-heading > .icon-button { flex-shrink: 0; white-space: nowrap; }
+.modal-heading > h2 { min-width: 0; }
+
+/* Today's shortcut to the fabric scanner: the floating jeans on espresso, with the sheen. */
+.live-fabric-cta {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: 100%;
+  min-height: 112px;
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 24px 8px 12px;
+  margin-block: 8px 24px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--chrome);
+  color: var(--on-chrome);
+  text-align: start;
+  cursor: pointer;
+}
+.live-fabric-cta img {
+  width: 84px;
+  height: 84px;
+  margin-inline: auto;
+  object-fit: contain;
+  transform: rotate(-12deg);
+  animation: cta-float 4.2s ease-in-out infinite;
+  filter: drop-shadow(0 10px 12px rgb(0 0 0 / 35%));
+}
+@keyframes cta-float {
+  0%, 100% { transform: translateY(2px) rotate(-12deg); }
+  50% { transform: translateY(-3px) rotate(-8deg); }
+}
+.live-fabric-cta span { display: grid; gap: 2px; }
+.live-fabric-cta strong { font-size: 20px; font-weight: 600; color: var(--on-chrome); }
+.live-fabric-cta small { font-size: 15px; color: var(--on-chrome-muted); }
+.live-fabric-cta > svg { color: var(--gold); transition: transform 250ms var(--ease-out); }
+.live-fabric-cta:hover > svg { transform: translateX(4px); }
+.live-fabric-cta::after {
+  content: "";
+  position: absolute;
+  inset: -50% auto -50% 0;
+  width: 30%;
+  z-index: -1;
+  background: linear-gradient(100deg, transparent 20%, rgb(255 222 150 / 8%) 40%, rgb(255 232 180 / 20%) 50%, rgb(255 222 150 / 8%) 60%, transparent 80%);
+  transform: translateX(-120%) skewX(-12deg);
+  animation: silk-sheen 7s var(--ease-out) infinite 0.4s;
+  pointer-events: none;
+}

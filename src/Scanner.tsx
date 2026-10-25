@@ -1,5 +1,5 @@
 import { copy } from "./ui-copy";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
   Camera,
   ScanLine,
@@ -22,7 +22,6 @@ import {
   Sun,
   StopCircle,
   PlugZap,
-  CircleHelp,
   CheckCheck,
 } from "lucide-react";
 import {
@@ -37,6 +36,9 @@ import {
   type HeadPrediction,
 } from "./scanner-client";
 import "./scanner.css";
+import FabricHero from "./FabricHero";
+import ScannerArtwork from "./ScannerArtwork";
+import type { ArtworkKind } from "./scanner-artwork";
 type T = (en: string, ur?: string) => string;
 type Photo = {
   file: File;
@@ -46,10 +48,13 @@ export default function Scanner({
   t,
   onInventory,
   onResult,
+  onMeasure,
 }: {
   t: T;
   onInventory: () => void;
   onResult?: (result: ScanResult) => void;
+  /** Opens the Yarn spec scan (printed card + weight), which measures the exact count. */
+  onMeasure?: () => void;
 }) {
   const [endpoint, setEndpoint] = useState(() => {
     try {
@@ -85,6 +90,7 @@ export default function Scanner({
   const connectionRequest = useRef<AbortController | null>(null);
   const scanRequest = useRef<AbortController | null>(null);
   const cameraGeneration = useRef(0);
+  const nativeCamera = useRef<HTMLInputElement>(null);
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const activePhoto = slot === "surface" ? surface : label;
   const msg = (e: unknown) => {
@@ -142,12 +148,16 @@ export default function Scanner({
     }
   }, [camera, t]);
   useEffect(() => {
-    if (endpoint) {
-      void checkConnection(endpoint, false);
-    }
+    if (endpoint) void checkConnection(endpoint, false);
+    // Nothing saved: quietly try this page's own server (the dev proxy serves the model).
+    else void checkConnection(location.origin, true, "");
     return () => connectionRequest.current?.abort();
   }, [endpoint]);
-  async function checkConnection(value: string, save: boolean) {
+  async function checkConnection(
+    value: string,
+    save: boolean,
+    fallbackError?: string, // "" = stay quiet on failure
+  ) {
     connectionRequest.current?.abort();
     const controller = new AbortController();
     connectionRequest.current = controller;
@@ -167,8 +177,14 @@ export default function Scanner({
       setInfo(data);
       setConfigOpen(false);
     } catch (e) {
-      if (mounted.current && !controller.signal.aborted)
-        setConnectionError(msg(e));
+      if (!mounted.current || controller.signal.aborted) return;
+      // A saved address goes stale when the host changes wifi. This page's own server is
+      // the usual model host, so try it before reporting the original failure.
+      if (!save && value !== location.origin) {
+        void checkConnection(location.origin, true, msg(e));
+        return;
+      }
+      if (fallbackError !== "") setConnectionError(fallbackError ?? msg(e));
     } finally {
       if (mounted.current && connectionRequest.current === controller)
         setConnecting(false);
@@ -177,7 +193,8 @@ export default function Scanner({
   async function openCamera() {
     setCameraError("");
     if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError(t(copy.aCameraIsNotAvailableHereUpload, copy.https2));
+      // No live preview here (phones allow it only over HTTPS): open the phone's own camera.
+      nativeCamera.current?.click();
       return;
     }
     const generation = ++cameraGeneration.current;
@@ -339,11 +356,17 @@ export default function Scanner({
     ur: string,
     head: HeadPrediction | null,
     I: typeof Layers3,
+    near?: [string, number][],
+    artworkKind?: ArtworkKind,
   ) => (
     <div className="scan-prediction">
-      <span className="scan-prediction-icon">
-        <I size={19} />
-      </span>
+      {artworkKind ? (
+        <ScannerArtwork kind={artworkKind} label={head?.label} />
+      ) : (
+        <span className="scan-prediction-icon">
+          <I size={19} />
+        </span>
+      )}
       <div>
         <span>{t(en, ur)}</span>
         <strong>
@@ -351,6 +374,16 @@ export default function Scanner({
             ? labelFor(head.label)
             : t(copy.notEnoughEvidence, copy.urdu431)}
         </strong>
+        {!head && near && near.length > 0 && (
+          <small className="scan-candidates">
+            {t(copy.closestNotConfident, copy.closestNotConfidentUr)}{" "}
+            <bdi>
+              {near
+                .map(([label, p]) => `${labelFor(label)} ${Math.round(p * 100)}%`)
+                .join(" · ")}
+            </bdi>
+          </small>
+        )}
       </div>
       {head ? (
         <div className="scan-confidence">
@@ -367,11 +400,26 @@ export default function Scanner({
       )}
     </div>
   );
+  const pct = (p: number) => `${Math.round(p * 100)}%`;
+  const fibreName = (label: string) =>
+    ({
+      cellulosic: t("Plant fibre (cellulosic)", "پودوں کا ریشہ"),
+      synthetic: t("Synthetic fibre", "مصنوعی ریشہ"),
+      protein: t("Animal fibre (protein)", "جانوروں کا ریشہ"),
+    })[label] ?? labelFor(label);
   return (
     <div className="scanner-page">
+      <FabricHero
+        t={t}
+        busy={openingCamera || scanning}
+        onScan={() => {
+          document.querySelector(".scan-capture-panel")?.scrollIntoView({ behavior: "smooth" });
+          void openCamera();
+        }}
+      />
       <div className="scan-topline">
         <span className="scan-model-badge">
-          <span className={info ? "live-dot" : "offline-dot"} />
+          {info ? <CheckCheck size={20} aria-hidden="true" /> : <WifiOff size={20} aria-hidden="true" />}
           {connecting
             ? t(copy.checkingModel, copy.urdu434)
             : info
@@ -390,7 +438,7 @@ export default function Scanner({
         </button>
       </div>
       {configOpen && (
-        <section className="scan-connect panel glass">
+        <section className="scan-connect panel">
           <div className="scan-connect-heading">
             <span className="feature-icon">
               <PlugZap size={23} />
@@ -466,7 +514,7 @@ export default function Scanner({
         </div>
       )}
       <div className="scanner-grid">
-        <section className="scan-capture-panel panel glass">
+        <section className="scan-capture-panel panel">
           <div className="panel-heading">
             <div>
               <h2>{t(copy.aCloserLookAtYourMaterial, copy.urdu444)}</h2>
@@ -547,7 +595,7 @@ export default function Scanner({
             ) : (
               <div className="scan-camera-empty">
                 <span>
-                  <Camera size={37} strokeWidth={1.3} />
+                  <Camera size={37} strokeWidth={1.75} />
                 </span>
                 <h3>
                   {slot === "surface"
@@ -556,7 +604,7 @@ export default function Scanner({
                 </h3>
                 <p>
                   {slot === "surface"
-                    ? t(copy.layTheGarmentFlatKeepTheWhole, copy.urdu456)
+                    ? t(copy.getCloseFillTheFrameWithFabric, copy.getCloseFillTheFrameWithFabricUr)
                     : t(copy.fillTheFrameWithTheCompositionLabel, copy.urdu457)}
                 </p>
                 <span className="scan-viewfinder-tip">
@@ -579,7 +627,10 @@ export default function Scanner({
             )}
             {scanning && (
               <div className="scan-progress-overlay" role="status">
-                <LoaderCircle className="spin" size={30} />
+                {/* A loom at work: warp threads lift in turn while the weft shuttles across. */}
+                <span className="weave-loader" aria-hidden="true">
+                  <i /><i /><i /><i /><i /><i /><b />
+                </span>
                 <strong>
                   {t(copy.texpilotIsTakingACloserLook, copy.urdu461)}
                 </strong>
@@ -622,6 +673,18 @@ export default function Scanner({
                       ? t(copy.retakePhoto, copy.urdu466)
                       : t(copy.openCamera, copy.urdu467)}
                 </button>
+                <input
+                  ref={nativeCamera}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,image/bmp"
+                  capture="environment"
+                  hidden
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) choosePhoto(file);
+                    e.target.value = "";
+                  }}
+                />
                 <label
                   className={`button scan-upload-button ${scanning ? "disabled" : ""}`}
                 >
@@ -752,7 +815,7 @@ export default function Scanner({
         </section>
         <aside className="scan-results-column">
           <section
-            className={`scan-results panel glass ${result ? "has-result" : ""}`}
+            className={`scan-results panel ${result ? "has-result" : ""}`}
           >
             <div className="panel-heading">
               <div>
@@ -761,37 +824,130 @@ export default function Scanner({
                 </h2>
                 <p>{t(copy.evidenceFirstAConfidentNextStep, copy.urdu480)}</p>
               </div>
-              <span className="scan-result-icon">
-                <Layers3 size={20} />
-              </span>
             </div>
             {result ? (
               <>
-                <div className={`scan-verdict ${result.verdict.toLowerCase()}`}>
-                  <span>
-                    {result.verdict === copy.pass ? (
-                      <ShieldCheck size={24} />
-                    ) : result.verdict === copy.flag ? (
-                      <AlertTriangle size={24} />
-                    ) : (
-                      <CircleHelp size={24} />
+                {surface && (
+                  <figure className="scan-seen">
+                    <img src={surface.url} alt={t("The photo that was analysed", "جس تصویر کا تجزیہ ہوا")} />
+                    {result.garment && (
+                      <span
+                        className="scan-seen-box"
+                        style={{
+                          left: `${result.garment.box[0] * 100}%`,
+                          top: `${result.garment.box[1] * 100}%`,
+                          width: `${(result.garment.box[2] - result.garment.box[0]) * 100}%`,
+                          height: `${(result.garment.box[3] - result.garment.box[1]) * 100}%`,
+                        }}
+                      >
+                        <b>
+                          {labelFor(result.garment.label)}
+                          {result.garment.confidence !== null && ` ${pct(result.garment.confidence)}`}
+                        </b>
+                      </span>
                     )}
-                  </span>
+                  </figure>
+                )}
+                <figure className="scan-fabric-illustration" key={result.scan_id}>
+                  <ScannerArtwork kind="structure" label={result.structure?.label} />
+                  <figcaption>{t("Fabric illustration", "کپڑے کی مثالی تصویر")}</figcaption>
+                </figure>
+                <div className="scan-answer">
+                  <span>{t("Fabric", "کپڑا")}</span>
+                  <h3 className={result.structure ? "is-label" : ""}>
+                    {result.structure
+                      ? labelFor(result.structure.label)
+                      : t("Not sure which fabric yet", "ابھی پکا نہیں کہ کون سا کپڑا ہے")}
+                  </h3>
+                  <span>{t("Made of", "کس چیز سے بنا")}</span>
+                  <strong>
+                    {result.stated_composition.fibers.length
+                      ? result.stated_composition.fibers
+                          .map((f) => `${f.pct}% ${labelFor(f.name)}`)
+                          .join(" / ") + t(" (from the label)", " (لیبل سے)")
+                      : result.custom.fibre
+                        ? `${labelFor(result.custom.fibre.label)} · ${pct(result.custom.fibre.confidence)}`
+                        : result.fibre_family
+                          ? `${fibreName(result.fibre_family.label)} · ${pct(result.fibre_family.confidence)}`
+                          : t("Not sure from the photo", "تصویر سے پکا نہیں")}
+                  </strong>
+                  {!result.stated_composition.fibers.length && !result.custom.fibre && (result.candidates.fibre ?? result.candidates.fibre_family)?.length ? (
+                    <small className="scan-closest">
+                      {t("Closest, not confident: ", "قریب ترین، پکا نہیں: ")}
+                      {(result.candidates.fibre ?? result.candidates.fibre_family ?? [])
+                        .map(([l, p]) => `${result.candidates.fibre ? labelFor(l) : fibreName(l)} ${pct(p)}`)
+                        .join(" · ")}
+                    </small>
+                  ) : null}
+                  <span>{t("Yarn to buy", "کون سا یارن خریدیں")}</span>
+                  {result.yarn_advice?.length ? (
+                    <ul>
+                      {result.yarn_advice.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>
+                      {t(
+                        "Measured, not guessed: one photo with the printed card and the fabric's weight gives the warp and weft yarn count.",
+                        "اندازہ نہیں، پیمائش: پرنٹ شدہ کارڈ کے ساتھ ایک تصویر اور کپڑے کا وزن وارپ اور ویفٹ یارن کاؤنٹ بتاتے ہیں۔",
+                      )}
+                    </p>
+                  )}
+                  <div className="scan-next">
+                    {!result.stated_composition.fibers.length && (
+                      <button
+                        className="button"
+                        onClick={() => {
+                          setSlot("label");
+                          document.querySelector(".scan-capture-panel")?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                      >
+                        <Tag size={17} />
+                        {t("Exact mix: add the care-label photo", "اصل مکس: کیئر لیبل کی تصویر لگائیں")}
+                      </button>
+                    )}
+                    {onMeasure && (
+                      <button className="button primary" onClick={onMeasure}>
+                        <ArrowRight size={17} />
+                        {t("Exact count: measure with the card", "اصل کاؤنٹ: کارڈ سے ناپیں")}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {result.timings_ms?.total !== undefined && (
+                  <p className="scan-work">
+                    {t("Analysed in ", "تجزیہ ")}
+                    <bdi>{(result.timings_ms.total / 1000).toFixed(2)} s</bdi>
+                    {": "}
+                    {[
+                      ["garment_detector", t("garment detector (OWLv2)", "گارمنٹ ڈیٹیکٹر")],
+                      ["fabric_model", t("fabric model (SigLIP 2)", "فیبرک ماڈل")],
+                      ["fibre_model", t("fibre model (DINOv2)", "فائبر ماڈل")],
+                      ["label_reader", t("label reader", "لیبل ریڈر")],
+                    ]
+                      .filter(([k]) => result.timings_ms?.[k] !== undefined)
+                      .map(([k, name]) => `${name} ${Math.round(result.timings_ms![k])} ms`)
+                      .join(" · ")}
+                  </p>
+                )}
+                <div className={`scan-verdict ${result.verdict.toLowerCase()}`}>
+                  <ScannerArtwork kind="verdict" label={result.verdict} />
                   <div>
                     <strong>
-                      {result.verdict === copy.pass
+                      {result.verdict === "PASS"
                         ? t(copy.consistentWithTheLabel, copy.urdu481)
-                        : result.verdict === copy.flag
+                        : result.verdict === "FLAG"
                           ? t(copy.needsACloserLook, copy.urdu482)
                           : t(copy.moreEvidenceNeeded, copy.urdu483)}
                     </strong>
                     <p>
-                      {result.verdict === copy.pass
+                      {result.verdict === "PASS"
                         ? t(
                             copy.noInconsistencyWasFlaggedByTheModel,
                             copy.urdu484,
                           )
-                        : result.verdict === copy.flag
+                        : result.verdict === "FLAG"
                           ? t(
                               copy.reviewTheFlaggedEvidenceBeforeAcceptingThis,
                               copy.urdu485,
@@ -806,22 +962,37 @@ export default function Scanner({
                     copy.urdu487,
                     result.structure,
                     Layers3,
+                    result.candidates.structure,
+                    "structure",
                   )}
                   {headRow(
                     copy.surfaceTreatment,
                     copy.urdu488,
                     result.treatment,
                     Sun,
+                    result.candidates.treatment,
+                    "treatment",
                   )}
                   {headRow(
                     copy.fibreFamily,
                     copy.urdu489,
                     result.fibre_family,
                     Tag,
+                    result.candidates.fibre_family,
+                    "fibre_family",
                   )}
+                  {Object.entries(result.custom).map(([name, head]) => {
+                    const title = name.charAt(0).toUpperCase() + name.slice(1).replaceAll("_", " ");
+                    return (
+                      <Fragment key={name}>
+                        {headRow(title, title, head, Tag, result.candidates[name])}
+                      </Fragment>
+                    );
+                  })}
                 </div>
                 {result.garment && (
                   <div className="scan-garment">
+                    <ScannerArtwork kind="garment" label={result.garment.label} />
                     <span>{t(copy.garmentDetected, copy.urdu490)}</span>
                     <strong>{labelFor(result.garment.label)}</strong>
                     {result.garment.confidence !== null && (
@@ -833,9 +1004,9 @@ export default function Scanner({
                   </div>
                 )}
                 <div className="scan-composition">
-                  <span className="eyebrow">
+                  <h3>
                     {t(copy.compositionFromTheLabel, copy.urdu491)}
-                  </span>
+                  </h3>
                   {result.stated_composition.fibers.length ? (
                     <div>
                       {result.stated_composition.fibers.map((fiber, i) => (
@@ -928,11 +1099,6 @@ export default function Scanner({
               </>
             ) : (
               <div className="scan-empty-results">
-                <div className="scan-empty-orbit">
-                  <Layers3 size={35} strokeWidth={1.25} />
-                  <span />
-                  <span />
-                </div>
                 <h3>
                   {scanning
                     ? t(copy.findingTheFinerDetails, copy.urdu502)
@@ -963,13 +1129,13 @@ export default function Scanner({
               </div>
             )}
           </section>
-          <section className="scan-tip-card glass">
+          <section className="scan-tip-card">
             <span>
               <Focus size={19} />
             </span>
             <div>
               <h3>{t(copy.goodLightMakesTheDifference, copy.urdu505)}</h3>
-              <p>{t(copy.useSoftEvenLightingAvoidFlashDeep, copy.urdu506)}</p>
+              <p>{t(copy.brightEvenLightFabricFillsPhoto, copy.brightEvenLightFabricFillsPhotoUr)}</p>
             </div>
           </section>
           <p className="scan-evidence-note">

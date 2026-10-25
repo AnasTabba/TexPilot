@@ -3,6 +3,7 @@ import {
   useState,
   useEffect,
   useRef,
+  useId,
   createContext,
   useContext,
   type ReactNode,
@@ -24,7 +25,6 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowUpRight,
-  ArrowDownRight,
   Plus,
   Download,
   CalendarDays,
@@ -36,6 +36,7 @@ import {
   X,
   MoreHorizontal,
   ArrowLeft,
+  ArrowLeftRight,
   RefreshCw,
   Globe2,
   LogOut,
@@ -83,6 +84,12 @@ import Scanner from "./Scanner";
 const pendingWrites = new Map<string, unknown>();
 const Language = createContext(false);
 const LedgerContext = createContext<Entry[]>([]);
+function displayDate(value: string, ur = document.documentElement.lang === "ur") {
+  const date = new Date(value + "T12:00:00+05:00");
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(ur ? "ur-PK" : "en-GB", {
+    weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Karachi",
+  }).format(date);
+}
 function useT() {
   const ur = useContext(Language);
   return (en: string, urdu?: string) => (ur ? urdu || en : en);
@@ -171,11 +178,11 @@ function Status({
   return (
     <span className={`status ${tone}`}>
       {tone === "amber" || tone === "red" || tone === "danger" ? (
-        <AlertTriangle size={18} />
+        <AlertTriangle size={18} aria-hidden="true" />
       ) : tone === "green" ? (
-        <CircleCheck size={18} />
+        <CircleCheck size={18} aria-hidden="true" />
       ) : (
-        <Clock3 size={18} />
+        <Clock3 size={18} aria-hidden="true" />
       )}
       {children}
     </span>
@@ -258,7 +265,7 @@ function Modal({
       }}
     >
       <div
-        className={`modal glass ${wide ? "wide" : ""}`}
+        className={`modal ${wide ? "wide" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -298,6 +305,37 @@ const kindNames: Record<Kind, [string, string]> = {
   cops: [copy.copsProduced, copy.urdu12],
   reversal: [copy.reversal, copy.urdu13],
 };
+function ScrollTable({ children }: { children: ReactNode }) {
+  const t = useT();
+  const hintId = useId();
+  const region = useRef<HTMLDivElement>(null);
+  const [scrollable, setScrollable] = useState(false);
+  useEffect(() => {
+    const element = region.current;
+    if (!element) return;
+    const update = () => setScrollable(element.scrollWidth > element.clientWidth + 1);
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    element.querySelectorAll("table").forEach((table) => observer.observe(table));
+    update();
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div className="register-table-wrap">
+      {scrollable && (
+        <p className="table-scroll-hint" id={hintId}>
+          <ArrowLeftRight size={18} aria-hidden="true" />
+          <span>{t(copy.scrollToSeeColumns, copy.scrollToSeeColumnsUr)}</span>
+        </p>
+      )}
+      <div className="table-scroll" ref={region} tabIndex={0} role="region"
+        aria-label={t(copy.scrollableTable, copy.urdu14)}
+        aria-describedby={scrollable ? hintId : undefined}>
+        {children}
+      </div>
+    </div>
+  );
+}
 function EntryTable({
   entries,
   onDetail,
@@ -312,12 +350,7 @@ function EntryTable({
   const isReversed = (e: Entry) =>
     e.kind === "reversal" || ledger.some((r) => r.reverses === e.id);
   return entries.length ? (
-    <div
-      className="table-scroll"
-      tabIndex={0}
-      role="region"
-      aria-label={t(copy.scrollableTable, copy.urdu14)}
-    >
+    <ScrollTable>
       <table>
         <thead>
           <tr>
@@ -337,7 +370,7 @@ function EntryTable({
               <td>
                 <button className="table-link" onClick={() => onDetail(e)}>
                   <span
-                    className={`row-icon ${e.kind === "dispatch" ? "mint" : "lavender"}`}
+                    className={`row-icon ${e.kind === "dispatch" ? "mint" : "neutral-icon"}`}
                   >
                     <Icon
                       icon={
@@ -353,7 +386,7 @@ function EntryTable({
                     />
                   </span>
                   <span>
-                    <strong>{lots.find((l) => l.id === e.lot)?.spec}</strong>
+                    <strong><bdi dir="ltr">{lots.find((l) => l.id === e.lot)?.spec}</bdi></strong>
                     <small>
                       <bdi>{e.serial}</bdi>
                       {copy.urdu21}
@@ -420,7 +453,7 @@ function EntryTable({
           ))}
         </tbody>
       </table>
-    </div>
+    </ScrollTable>
   ) : (
     <Empty
       title={t(copy.noEntriesYet, copy.urdu28)}
@@ -500,7 +533,7 @@ function ProductionChart({ entries }: { entries: Entry[] }) {
           <tbody>
             {days.map((d) => (
               <tr key={d.key}>
-                <td>{d.key}</td>
+                <td>{displayDate(d.key)}</td>
                 <td>
                   {d.value > 0
                     ? fmt(d.value, 0)
@@ -525,7 +558,7 @@ function Choices({
   value: string;
   options: {
     value: string;
-    label: string;
+    label: ReactNode;
   }[];
   onChange: (value: string) => void;
 }) {
@@ -734,7 +767,7 @@ function EntryForm({
             value={d.lot}
             options={lots.map((l) => ({
               value: l.id,
-              label: `${t(copy.lot, copy.urdu22)} ${l.id} · ${l.spec}${l.status === "hold" ? ` · ${t(copy.qcHold, copy.urdu48)}` : ""}`,
+              label: <>{t(copy.lot, copy.urdu22)} <bdi dir="ltr">{l.id}</bdi> · <bdi dir="ltr">{l.spec}</bdi>{l.status === "hold" ? ` · ${t(copy.qcHold, copy.urdu48)}` : ""}</>,
             }))}
             onChange={(v) => set("lot", v)}
           />
@@ -849,7 +882,7 @@ function EntryForm({
           <p className="register-line">
             {t(
               copy.registerSummary(
-                d.date,
+                displayDate(d.date),
                 d.shift,
                 locationLabel,
                 d.machine,
@@ -859,7 +892,7 @@ function EntryForm({
                 fmt(Number(d.weight), 3),
               ),
               copy.registerSummaryUr(
-                d.date,
+                displayDate(d.date, true),
                 d.shift,
                 locationLabel,
                 d.machine,
@@ -873,7 +906,7 @@ function EntryForm({
           <dl>
             <div>
               <dt>{t(copy.yarn, copy.urdu57)}</dt>
-              <dd>{lot.spec}</dd>
+              <dd><bdi dir="ltr">{lot.spec}</bdi></dd>
             </div>
             <div>
               <dt>{t(copy.recordedBy, copy.urdu18)}</dt>
@@ -957,7 +990,7 @@ function Login({
           {ur ? copy.english : copy.urdu65}
           <ChevronDown size={14} />
         </button>
-        <form className="login-card glass" onSubmit={enter}>
+        <form className="login-card" onSubmit={enter}>
           <Logo />
           <h1>{t(copy.signIn, copy.urdu66)}</h1>
           <p>{t(copy.pickYourProfileAndEnterYourPin, copy.urdu67)}</p>
@@ -980,7 +1013,7 @@ function Login({
               <strong>{profile}</strong>
               <small>{t(copy.practiceProfile, copy.urdu69)}</small>
             </div>
-            <Status tone="purple">{t(copy.demo, copy.urdu70)}</Status>
+            <Status tone="neutral">{t(copy.demo, copy.urdu70)}</Status>
           </div>
           <label>
             {t(copy.your4DigitPin, copy.urdu71)}
@@ -1258,9 +1291,9 @@ function Workspace({
   }
   const dateLabel = new Intl.DateTimeFormat(ur ? "ur-PK" : "en-GB", {
     timeZone: copy.asiaKarachi,
+    weekday: "short",
     day: "numeric",
     month: "short",
-    year: "numeric",
   }).format(new Date());
   const titles: Record<string, [string, string, string, string]> = {
     scanner: [copy.materialScanner, copy.urdu85, "", ""],
@@ -1489,7 +1522,7 @@ function Workspace({
                 </span>
                 <div>
                   <p>{t(copy.lot0IsOnQcHoldDo(l.id), copy.label08(l.id))}</p>
-                  <span>{l.spec}</span>
+                  <span><bdi dir="ltr">{l.spec}</bdi></span>
                 </div>
                 <Button onClick={() => setModal({ type: "lot", lot: l.id })}>
                   {t(copy.reviewLot, copy.urdu110)}
@@ -1550,9 +1583,7 @@ function Workspace({
               <div key={stat.label} className="total-card">
                 <div className="total-heading">
                   <p>{stat.label}</p>
-                  <span className={`total-icon ${stat.tone}`}>
-                    <Icon icon={stat.icon} size={22} />
-                  </span>
+
                 </div>
                 <strong>
                   <bdi>{fmt(stat.value, 0)}</bdi>
@@ -1565,7 +1596,7 @@ function Workspace({
                     stat.icon === ShoppingBag ? (
                       <Clock3 size={16} />
                     ) : (
-                      <ArrowDownRight size={16} />
+                      <AlertTriangle size={16} aria-hidden="true" />
                     )
                   ) : null}
                   {stat.note}
@@ -1609,6 +1640,7 @@ function Workspace({
                   <span
                     className={`machine-gap ${m.value >= 500 ? "success" : "warning"}`}
                   >
+                    {m.value >= 500 ? <CircleCheck size={16} aria-hidden="true" /> : <AlertTriangle size={16} aria-hidden="true" />}
                     {m.value >= 500
                       ? t(copy.targetMet, copy.urdu115)
                       : t(
@@ -1666,7 +1698,7 @@ function Workspace({
     return (
       <>
         {route === "production" && (
-          <div className="summary-strip glass">
+          <div className="summary-strip">
             <div>
               <span className="feature-icon">
                 <Factory size={22} />
@@ -1723,7 +1755,7 @@ function Workspace({
             {t(copy.dispatchOnlyFromReleasedLotsStockIs, copy.urdu124)}
           </div>
         )}
-        <section className="panel glass">
+        <section className="panel">
           <div className="list-toolbar">
             <div className="tabs">
               {["all", "A", "B", "C"].map((f) => (
@@ -1802,7 +1834,7 @@ function Workspace({
     return (
       <>
         <div className="inventory-summary">
-          <div className="panel glass">
+          <div className="panel">
             <span>{t(copy.totalFinishedStock, copy.urdu132)}</span>
             <h2>
               <bdi>{fmt(finished.grams / 1000, 0)}</bdi>
@@ -1812,7 +1844,7 @@ function Workspace({
               {finished.cartons} {t(copy.cartonsAcross4Lots, copy.urdu133)}
             </p>
           </div>
-          <div className="panel glass">
+          <div className="panel">
             <span>{t(copy.rawYarnAvailable, copy.urdu134)}</span>
             <h2>
               <bdi>{fmt(raw.grams / 1000, 0)}</bdi>
@@ -1820,7 +1852,7 @@ function Workspace({
             </h2>
             <p>{t(copy.readyForTheNextProductionRun, copy.urdu135)}</p>
           </div>
-          <div className="panel glass">
+          <div className="panel">
             <span>{t(copy.qualityHold, copy.urdu136)}</span>
             <h2>
               {copy.label1}
@@ -1829,7 +1861,7 @@ function Workspace({
             <p>{t(copy.lot1216AwaitingLabRelease, copy.label1216)}</p>
           </div>
         </div>
-        <section className="panel glass">
+        <section className="panel">
           <div className="list-toolbar">
             <div className="tabs">
               {(["finished", "raw", "wip", "cops"] as Stage[]).map((s, i) => (
@@ -1945,11 +1977,11 @@ function Workspace({
                 >
                   <span
                     className="material-swatch"
-                    style={{ background: l.color }}
+
                   >
                     <Layers3 size={25} />
                   </span>
-                  <strong>{l.spec}</strong>
+                  <strong><bdi dir="ltr">{l.spec}</bdi></strong>
                   <span>
                     {t(copy.lot, copy.urdu22)} {l.id}
                   </span>
@@ -1968,12 +2000,7 @@ function Workspace({
               ))}
             </div>
           ) : (
-            <div
-              className="table-scroll"
-              tabIndex={0}
-              role="region"
-              aria-label={t(copy.scrollableTable, copy.urdu14)}
-            >
+            <ScrollTable>
               <table>
                 <thead>
                   <tr>
@@ -1997,12 +2024,12 @@ function Workspace({
                           >
                             <span
                               className="material-swatch"
-                              style={{ background: l.color }}
+
                             >
                               <Layers3 size={20} />
                             </span>
                             <span>
-                              <strong>{l.spec}</strong>
+                              <strong><bdi dir="ltr">{l.spec}</bdi></strong>
                               <small>{l.material}</small>
                             </span>
                           </button>
@@ -2055,7 +2082,7 @@ function Workspace({
                   })}
                 </tbody>
               </table>
-            </div>
+            </ScrollTable>
           )}
           <div className="table-footer">
             {t(copy.stockIsCalculatedFromSavedEntries, copy.urdu155)}
@@ -2075,7 +2102,7 @@ function Workspace({
     );
     return (
       <>
-        <div className="order-insight glass">
+        <div className="order-insight">
           <div className="feature-icon">
             <ShoppingBag size={26} />
           </div>
@@ -2093,7 +2120,7 @@ function Workspace({
             {t(copy.checkAvailableStock, copy.urdu159)}
           </Button>
         </div>
-        <section className="panel glass">
+        <section className="panel">
           <div className="list-toolbar">
             <div className="tabs">
               {["all", "active", "completed"].map((v, i) => (
@@ -2148,12 +2175,7 @@ function Workspace({
               </span>
             </button>
           </div>
-          <div
-            className="table-scroll"
-            tabIndex={0}
-            role="region"
-            aria-label={t(copy.scrollableTable, copy.urdu14)}
-          >
+          <ScrollTable>
             <table>
               <thead>
                 <tr>
@@ -2175,7 +2197,7 @@ function Workspace({
                       </small>
                     </td>
                     <td>
-                      <strong>{o.spec}</strong>
+                      <strong><bdi dir="ltr">{o.spec}</bdi></strong>
                       <small>{o.fabric}</small>
                     </td>
                     <td>
@@ -2194,7 +2216,7 @@ function Workspace({
                       </div>
                     </td>
                     <td>
-                      <bdi>{o.due.split("-").reverse().join("/")}</bdi>
+                      <bdi>{displayDate(o.due, ur)}</bdi>
                     </td>
                     <td>
                       <Status
@@ -2202,7 +2224,7 @@ function Workspace({
                           o.status === "completed"
                             ? "green"
                             : o.status === "ready"
-                              ? "purple"
+                              ? "neutral"
                               : "amber"
                         }
                       >
@@ -2231,7 +2253,7 @@ function Workspace({
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollTable>
           {!list.length && (
             <Empty title={t(copy.noOrdersHereYet, copy.urdu169)} />
           )}
@@ -2241,7 +2263,7 @@ function Workspace({
   }
   function register() {
     return (
-      <section className="panel glass register-panel">
+      <section className="panel register-panel">
         <div className="list-toolbar">
           <div className="tabs">
             {["lot", "production", "daily"].map((tab, i) => (
@@ -2271,12 +2293,7 @@ function Workspace({
           {t(copy.sameColumnsAsYourPaperRegisterEvery, copy.urdu173)}
           <span>{dateLabel}</span>
         </div>
-        <div
-          className="table-scroll"
-          tabIndex={0}
-          role="region"
-          aria-label={t(copy.scrollableTable, copy.urdu14)}
-        >
+        <ScrollTable>
           <table className="paper-table">
             <thead>
               <tr>
@@ -2348,7 +2365,7 @@ function Workspace({
                   .map((e) => (
                     <tr key={e.id}>
                       <td>
-                        <bdi>{e.date.split("-").reverse().join("/")}</bdi>
+                        <bdi>{displayDate(e.date, ur)}</bdi>
                       </td>
                       <td>
                         <button
@@ -2360,7 +2377,7 @@ function Workspace({
                           {t(copy.viewEntry, copy.urdu27)}
                         </button>
                       </td>
-                      <td>{lots.find((l) => l.id === e.lot)?.spec}</td>
+                      <td><bdi dir="ltr">{lots.find((l) => l.id === e.lot)?.spec}</bdi></td>
                       <td>{e.lot}</td>
                       <td>{e.cartons}</td>
                       <td>{e.cones}</td>
@@ -2429,7 +2446,7 @@ function Workspace({
               </tr>
             </tfoot>
           </table>
-        </div>
+        </ScrollTable>
         <div className="register-add">
           <Button
             icon={Plus}
@@ -2496,15 +2513,11 @@ function Workspace({
   function reports() {
     return (
       <>
-        <div className="section-label">
-          {t(copy.yourEverydayReports, copy.urdu198)}
-          <span>{t(copy.label6ReportsReadyWhenYouAre, copy.urdu199)}</span>
-        </div>
         <div className="report-grid">
           {reportNames.map(([name, urdu, description, urDesc, I], i) => (
             <button
               key={name}
-              className="report-card panel glass"
+              className="report-card panel"
               onClick={() => setModal({ type: "report", report: name })}
             >
               <div className={`report-icon report-${i}`}>
@@ -2532,7 +2545,7 @@ function Workspace({
   function sync() {
     return (
       <>
-        <div className="sync-hero panel glass">
+        <div className="sync-hero panel">
           <span className="sync-illustration">
             <ShieldCheck size={40} />
           </span>
@@ -2547,18 +2560,18 @@ function Workspace({
           </div>
         </div>
         <div className="inventory-summary">
-          <div className="panel glass">
+          <div className="panel">
             <span>{t(copy.savedOnThisDevice, copy.urdu206)}</span>
             <h2>
               {savedLocal}
               <small> {t(copy.entries2, copy.urdu183)}</small>
             </h2>
           </div>
-          <div className="panel glass">
+          <div className="panel">
             <span>{t(copy.sampleRecords, copy.urdu207)}</span>
             <h2>{visible.length - savedLocal}</h2>
           </div>
-          <div className="panel glass">
+          <div className="panel">
             <span>{t(copy.factoryConnection, copy.urdu208)}</span>
             <h2 className="text-value">{t(copy.notConnected, copy.urdu209)}</h2>
           </div>
@@ -2586,7 +2599,7 @@ function Workspace({
             {t(copy.exportBackup, copy.urdu212)}
           </Button>
         </div>
-        <section className="panel glass">
+        <section className="panel">
           <div className="panel-heading">
             <h3>{t(copy.savedOnThisDevice, copy.urdu206)}</h3>
             <Button
@@ -2629,7 +2642,7 @@ function Workspace({
             </button>
           ))}
         </nav>
-        <section className="panel glass settings-panel">
+        <section className="panel settings-panel">
           {settingsTab === "general" ? (
             <>
               <h3>{t(copy.factorySettings, copy.urdu218)}</h3>
@@ -2666,7 +2679,7 @@ function Workspace({
                     {t(copy.tryRealWorkflowsWithSampleDataSafely, copy.urdu224)}
                   </p>
                 </div>
-                <Status tone="purple">
+                <Status tone="neutral">
                   {t(copy.alwaysOnInThisPreview, copy.urdu225)}
                 </Status>
               </div>
@@ -2765,7 +2778,7 @@ function Workspace({
   function help() {
     return (
       <>
-        <div className="help-hero glass">
+        <div className="help-hero">
           <span className="feature-icon">
             <CircleHelp size={30} />
           </span>
@@ -2806,7 +2819,7 @@ function Workspace({
               copy.urdu250,
             ],
           ].map(([en, urdu, answer, urAnswer]) => (
-            <details className="help-question glass" key={en}>
+            <details className="help-question" key={en}>
               <summary>
                 {t(en, urdu)}
                 <ChevronDown size={18} />
@@ -2833,7 +2846,7 @@ function Workspace({
   function dayClose() {
     const isClosed = closed === today();
     return (
-      <div className="day-close panel glass">
+      <div className="day-close panel">
         <div className="day-close-head">
           <span className="feature-icon">
             <CalendarDays size={28} />
@@ -2952,7 +2965,7 @@ function Workspace({
           .includes(query.toLowerCase()),
     );
     return (
-      <section className="panel glass">
+      <section className="panel">
         <label className="large-search">
           <Search size={23} />
           <input
@@ -2986,7 +2999,7 @@ function Workspace({
                 <strong>
                   {t(copy.lot, copy.urdu22)} {l.id}
                 </strong>
-                <span>{l.spec}</span>
+                <span><bdi dir="ltr">{l.spec}</bdi></span>
                 <ArrowUpRight size={17} />
               </button>
             ))}
@@ -3040,19 +3053,14 @@ function Workspace({
           <Database size={19} />
           {t(copy.sampleMasterDataIsReadOnlyProduction, copy.urdu273)}
         </div>
-        <section className="panel glass">
+        <section className="panel">
           <div className="panel-heading">
             <h3>{t(copy.yarnSpecificationsLots, copy.urdu274)}</h3>
-            <Status tone="purple">
+            <Status tone="neutral">
               {t(copy.label4SampleLots, copy.urdu275)}
             </Status>
           </div>
-          <div
-            className="table-scroll"
-            tabIndex={0}
-            role="region"
-            aria-label={t(copy.scrollableTable, copy.urdu14)}
-          >
+          <ScrollTable>
             <table>
               <thead>
                 <tr>
@@ -3082,7 +3090,7 @@ function Workspace({
                 {lots.map((l) => (
                   <tr key={l.id}>
                     <td>
-                      <strong>{l.spec}</strong>
+                      <strong><bdi dir="ltr">{l.spec}</bdi></strong>
                     </td>
                     <td>{l.id}</td>
                     <td>{l.supplier}</td>
@@ -3101,7 +3109,7 @@ function Workspace({
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollTable>
         </section>
         <div className="inventory-summary">
           {[
@@ -3109,7 +3117,7 @@ function Workspace({
             ["3", copy.shifts, copy.urdu280, "A 07–15 · B 15–23 · C 23–07"],
             ["3", copy.suppliers, copy.urdu41, copy.crescentNishatIbrahim],
           ].map(([n, en, urdu, desc]) => (
-            <div className="panel glass" key={en}>
+            <div className="panel" key={en}>
               <span>{t(en, urdu)}</span>
               <h2>{n}</h2>
               <p>{desc}</p>
@@ -3126,7 +3134,7 @@ function Workspace({
           <ShieldCheck size={20} />
           {t(copy.theseArePracticeProfilesLivePinResets, copy.urdu281)}
         </div>
-        <section className="panel glass">
+        <section className="panel">
           <div className="panel-heading">
             <h3>{t(copy.yourPeople, copy.urdu282)}</h3>
             <Button icon={LogOut} onClick={() => navigate("login")}>
@@ -3148,7 +3156,7 @@ function Workspace({
             </div>
           ))}
         </section>
-        <section className="panel glass">
+        <section className="panel">
           <div className="panel-heading">
             <h3>{t(copy.thisDevice, copy.urdu288)}</h3>
             <Monitor size={20} />
@@ -3181,7 +3189,7 @@ function Workspace({
           ["dispatch", copy.dispatchYarn, copy.urdu292, Truck],
         ].map(([kind, en, urdu, I]) => (
           <button
-            className="quick-action glass"
+            className="quick-action"
             key={String(kind)}
             onClick={() => setModal({ type: "entry", kind: kind as Kind })}
           >
@@ -3193,7 +3201,7 @@ function Workspace({
           </button>
         ))}
         <button
-          className="quick-action glass"
+          className="quick-action"
           onClick={() => navigate("register")}
         >
           <span className="feature-icon">
@@ -3203,7 +3211,7 @@ function Workspace({
           <ArrowUpRight size={20} />
         </button>
         <button
-          className="quick-action glass"
+          className="quick-action"
           onClick={() => navigate("close")}
         >
           <span className="feature-icon">
@@ -3218,7 +3226,7 @@ function Workspace({
   function gallery() {
     return (
       <div className="gallery">
-        <section className="panel glass">
+        <section className="panel">
           <h3>{t(copy.buttonsControls, copy.urdu294)}</h3>
           <div className="gallery-row">
             <Button
@@ -3240,7 +3248,7 @@ function Workspace({
           <div className="gallery-row">
             <Status>{t(copy.savedLocally, copy.urdu300)}</Status>
             <Status tone="amber">{t(copy.qcHold, copy.urdu48)}</Status>
-            <Status tone="purple">{t(copy.practice, copy.urdu301)}</Status>
+            <Status tone="neutral">{t(copy.practice, copy.urdu301)}</Status>
             <Status tone="gray">{t(copy.archived, copy.urdu302)}</Status>
           </div>
           <Choices
@@ -3270,7 +3278,7 @@ function Workspace({
             onChange={setPreviewState}
           />
         </section>
-        <section className="panel glass">
+        <section className="panel">
           <h3>{t(copy.themeLanguage, copy.urdu309)}</h3>
           <div className="gallery-row">
             <Button onClick={() => setUr(!ur)} icon={Globe2}>
@@ -3292,7 +3300,7 @@ function Workspace({
   function content() {
     if (previewState === "loading")
       return (
-        <div className="panel glass loading-state" role="status">
+        <div className="panel loading-state" role="status">
           <RefreshCw className="spin" size={30} />
           <p>{t(copy.loadingYourWorkspace, copy.urdu310)}</p>
           <Button onClick={() => setPreviewState("ready")}>
@@ -3302,7 +3310,7 @@ function Workspace({
       );
     if (previewState === "error" || previewState === "denied")
       return (
-        <div className="panel glass">
+        <div className="panel">
           <Empty
             title={
               previewState === "denied"
@@ -3445,7 +3453,7 @@ function Workspace({
                 {t(copy.practiceModeNothingHereAffectsRealStock, copy.urdu321)}
               </strong>
             </div>
-            <Button onClick={() => setModal({ type: "workspace" })}>
+            <Button onClick={() => location.assign("/")}>
               {t(copy.switchToRealWorkspace, copy.urdu322)}
             </Button>
           </div>
@@ -3737,7 +3745,7 @@ function Workspace({
                     navigate("orders");
                   }}
                 >
-                  <span className="row-icon lavender">
+                  <span className="row-icon neutral-icon">
                     <ShoppingBag size={20} />
                   </span>
                   <div>
@@ -3763,7 +3771,7 @@ function Workspace({
                     <Factory size={27} />
                   </span>
                   <div>
-                    <span className="eyebrow">
+                    <span className="entry-kind">
                       {t(...kindNames[currentEntry.kind])}
                     </span>
                     <h3>
@@ -3803,7 +3811,7 @@ function Workspace({
                     ],
                     [
                       t(copy.dateShift, copy.urdu357),
-                      `${currentEntry.date} · ${currentEntry.shift}`,
+                      `${displayDate(currentEntry.date, ur)} · ${currentEntry.shift}`,
                     ],
                     [t(copy.recordedBy, copy.urdu18), currentEntry.by],
                     [t(copy.notes, copy.urdu58), currentEntry.notes || "—"],
@@ -3811,7 +3819,7 @@ function Workspace({
                     <div key={label}>
                       <dt>{label}</dt>
                       <dd>
-                        <bdi>{value}</bdi>
+                        <bdi dir={label === t(copy.yarn, copy.urdu57) ? "ltr" : "auto"}>{value}</bdi>
                       </dd>
                     </div>
                   ))}
@@ -3904,17 +3912,17 @@ function Workspace({
                 <div className="lot-detail-header">
                   <span
                     className="material-swatch"
-                    style={{ background: currentLot.color }}
+
                   >
                     <Layers3 size={30} />
                   </span>
                   <div>
-                    <h3>{currentLot.spec}</h3>
+                    <h3><bdi dir="ltr">{currentLot.spec}</bdi></h3>
                     <p>
                       {currentLot.supplier}
                       {copy.urdu21}
                       {t(copy.received, copy.urdu369)}{" "}
-                      <bdi>{currentLot.received}</bdi>
+                      <bdi>{displayDate(currentLot.received)}</bdi>
                     </p>
                   </div>
                   <Status
@@ -3993,7 +4001,7 @@ function Workspace({
                             <bdi>{e.serial}</bdi>
                             {copy.urdu21}{" "}
                             <bdi>
-                              {e.date} {e.time}
+                              {displayDate(e.date, ur)} {e.time}
                             </bdi>
                           </small>
                         </div>
@@ -4015,7 +4023,7 @@ function Workspace({
                 <div className="order-detail">
                   <Status
                     tone={
-                      currentOrder.status === "completed" ? "green" : "purple"
+                      currentOrder.status === "completed" ? "green" : "neutral"
                     }
                   >
                     {currentOrder.status === "completed"
@@ -4045,9 +4053,9 @@ function Workspace({
                     />
                   </div>
                   <p>
-                    {currentOrder.spec}
+                    <bdi dir="ltr">{currentOrder.spec}</bdi>
                     {copy.urdu21}
-                    {t(copy.due, copy.urdu33)} <bdi>{currentOrder.due}</bdi>
+                    {t(copy.due, copy.urdu33)} <bdi>{displayDate(currentOrder.due, ur)}</bdi>
                   </p>
                 </div>
                 <div className="info-banner">
@@ -4100,11 +4108,11 @@ function Workspace({
                   <p className="muted">
                     {t(copy.businessDate, copy.urdu380)}
                     {copy.urdu49}
-                    <bdi>{today()}</bdi> {copy.asiaKarachi2}
+                    <bdi>{displayDate(today())}</bdi> {copy.asiaKarachi2}
                   </p>
                   {modal.report === copy.stockReport ||
                   modal.report === copy.lotLedger ? (
-                    <table>
+                    <ScrollTable><table>
                       <thead>
                         <tr>
                           <th>{t(copy.lot, copy.urdu22)}</th>
@@ -4117,7 +4125,7 @@ function Workspace({
                         {lots.map((l) => (
                           <tr key={l.id}>
                             <td>{l.id}</td>
-                            <td>{l.spec}</td>
+                            <td><bdi dir="ltr">{l.spec}</bdi></td>
                             <td>
                               {fmt(
                                 balance(entries, l.id, "finished").grams / 1000,
@@ -4130,9 +4138,9 @@ function Workspace({
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </table></ScrollTable>
                   ) : modal.report === copy.orderStatus ? (
-                    <table>
+                    <ScrollTable><table>
                       <thead>
                         <tr>
                           <th>{t(copy.customer, copy.urdu40)}</th>
@@ -4149,7 +4157,7 @@ function Workspace({
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </table></ScrollTable>
                   ) : (
                     <>
                       <div className="close-totals">
@@ -4244,7 +4252,7 @@ function Workspace({
           </Modal>
         )}
         {toast && !modal && (
-          <div className="toast glass" role="status">
+          <div className="toast" role="status">
             <span className="toast-check">
               <Check size={18} />
             </span>
@@ -4346,7 +4354,7 @@ function OrderForm({ onSave }: { onSave: (order: Order) => void }) {
           {copy.urdu21}
           {fmt(Number(d.weight), 3)}
           {copy.kg2}
-          {d.due}
+          {displayDate(d.due)}
         </p>
         <div className="modal-actions">
           <Button
@@ -4436,7 +4444,7 @@ function OrderForm({ onSave }: { onSave: (order: Order) => void }) {
           <Choices
             label={t(copy.yarnSpecification, copy.urdu148)}
             value={d.spec}
-            options={lots.map((l) => ({ value: l.spec, label: l.spec }))}
+            options={lots.map((l) => ({ value: l.spec, label: <bdi dir="ltr">{l.spec}</bdi> }))}
             onChange={(v) => set("spec", v)}
           />
           <label>
@@ -4487,14 +4495,14 @@ function OrderForm({ onSave }: { onSave: (order: Order) => void }) {
                 d.fabric,
                 d.spec,
                 fmt(Number(d.weight), 3),
-                d.due,
+                displayDate(d.due),
               ),
               copy.orderSummaryUr(
                 d.customer,
                 d.fabric,
                 d.spec,
                 fmt(Number(d.weight), 3),
-                d.due,
+                displayDate(d.due, true),
               ),
             )}
           </p>
@@ -4565,7 +4573,7 @@ function ImportPage({ onNotify }: { onNotify: (text: string) => void }) {
         <ShieldCheck size={20} />
         {t(copy.previewAndValidateACsvFileHere, copy.csv5)}
       </div>
-      <section className="panel glass import-panel">
+      <section className="panel import-panel">
         <div className="step-indicator">
           <span className="current">{copy.label1}</span>
           <b>{t(copy.chooseAFile, copy.urdu397)}</b>
@@ -4635,12 +4643,7 @@ function ImportPage({ onNotify }: { onNotify: (text: string) => void }) {
         )}
         {rows.length > 0 && (
           <>
-            <div
-              className="table-scroll"
-              tabIndex={0}
-              role="region"
-              aria-label={t(copy.scrollableTable, copy.urdu14)}
-            >
+            <ScrollTable>
               <table>
                 <thead>
                   <tr>
@@ -4676,7 +4679,7 @@ function ImportPage({ onNotify }: { onNotify: (text: string) => void }) {
                   })}
                 </tbody>
               </table>
-            </div>
+            </ScrollTable>
             <div className="modal-actions">
               <span className="muted">
                 {rows.length - 1} {t(copy.rowsFoundFirst100Shown, copy.urdu405)}

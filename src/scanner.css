@@ -16,7 +16,7 @@
   font-size: 16px;
 }
 .scan-connection-button {
-  min-height: 44px;
+  min-height: 48px;
   font-size: 16px;
 }
 .scanner-grid {
@@ -24,6 +24,9 @@
   grid-template-columns: minmax(0, 1.45fr) minmax(310px, 1fr);
   gap: 24px;
   align-items: start;
+}
+.scanner-grid > * {
+  min-width: 0;
 }
 .scan-capture-panel {
   padding: 0 22px 20px;
@@ -48,8 +51,8 @@
   white-space: nowrap;
 }
 .scan-step-count bdi {
-  font-size: 17px;
-  color: var(--purple);
+  font-size: 16px;
+  color: var(--brand);
   padding-inline-end: 4px;
 }
 .scan-photo-tabs {
@@ -73,9 +76,9 @@
   background: var(--surface-solid);
 }
 .scan-photo-tabs button.active {
-  border-color: #f3f3f3;
-  background: var(--purple-light);
-  color: var(--purple);
+  border-color: var(--line);
+  background: var(--brand-light);
+  color: var(--brand);
 }
 .scan-tab-number {
   border: 1px solid var(--line-strong);
@@ -89,9 +92,9 @@
   font-size: 16px;
 }
 .scan-photo-tabs button.active .scan-tab-number {
-  background: var(--purple);
+  background: var(--brand);
   color: white;
-  border-color: var(--purple);
+  border-color: var(--brand);
 }
 .scan-photo-attached {
   font-size: 16px;
@@ -135,13 +138,13 @@
   height: 73px;
   border-radius: 22px;
   background: var(--surface-solid);
-  border: 1px solid #ffffff21;
+  border: 1px solid var(--line);
   color: var(--muted);
   box-shadow: none;
   margin-block-end: 22px;
 }
 .scan-camera-empty h3 {
-  font-size: 21px;
+  font-size: 20px;
   font-weight: 400;
   color: var(--muted);
   line-height: 1.5;
@@ -165,7 +168,7 @@
   position: absolute;
   width: 23px;
   height: 23px;
-  border-color: #767676;
+  border-color: var(--brand);
   border-style: solid;
   border-width: 0;
   opacity: 0.65;
@@ -219,7 +222,7 @@
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  background: #202020;
+  background: var(--surface);
   backdrop-filter: none;
   padding: 5px 8px;
   border-radius: 4px;
@@ -230,7 +233,7 @@
 .scan-live-label > span {
   width: 4px;
   height: 4px;
-  background: #767676;
+  background: var(--brand);
   border-radius: 50%;
 }
 .scan-camera-controls {
@@ -371,7 +374,7 @@
   justify-content: center;
   align-items: center;
   border-radius: 10px;
-  background: var(--purple-light);
+  background: var(--brand-light);
 }
 .scan-empty-results {
   display: flex;
@@ -395,7 +398,7 @@
   position: absolute;
   width: 80px;
   height: 80px;
-  border: 1px solid #f3f3f3;
+  border: 1px solid var(--line);
   border-radius: 50%;
   transform: rotate(-30deg) scaleY(0.65);
 }
@@ -407,7 +410,7 @@
   opacity: 0.6;
 }
 .scan-empty-results h3 {
-  font-size: 19px;
+  font-size: 18px;
   line-height: 1.5;
   font-weight: 400;
   letter-spacing: normal;
@@ -455,8 +458,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--purple-light);
-  color: var(--purple);
+  background: var(--brand-light);
+  color: var(--brand);
   border-radius: 8px;
   width: 32px;
   height: 32px;
@@ -502,7 +505,7 @@
   height: 42px;
 }
 .scan-connect-heading h2 {
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 500;
   line-height: 1.6;
 }
@@ -554,7 +557,7 @@
   gap: 15px;
   padding: 25px;
   text-align: center;
-  background: #202020;
+  background: var(--surface);
   backdrop-filter: none;
   color: var(--muted);
 }
@@ -573,8 +576,8 @@
   gap: 11px;
   padding: 19px 20px;
   margin: 20px 20px 6px;
-  border: 1px solid #f3f3f3;
-  background: #ffffff;
+  border: 1px solid var(--line);
+  background: var(--surface);
   border-radius: 10px;
   color: var(--muted);
 }
@@ -592,13 +595,13 @@
   margin-block-start: 5px;
 }
 .scan-verdict.flag {
-  background: #ffffff;
-  border-color: #f3f3f3;
+  background: var(--surface);
+  border-color: var(--line);
   color: var(--muted);
 }
 .scan-verdict.insufficient_evidence {
-  background: var(--purple-light);
-  border-color: #f3f3f3;
+  background: var(--brand-light);
+  border-color: var(--line);
   color: var(--muted);
 }
 .scan-predictions {
@@ -615,7 +618,7 @@
   width: 32px;
   height: 32px;
   background: var(--sunken);
-  color: var(--purple);
+  color: var(--brand);
   border-radius: 9px;
   display: flex;
   align-items: center;
@@ -640,17 +643,27 @@
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
+.scan-candidates {
+  display: block;
+  margin-block-start: 2px;
+  font-size: 14px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.scan-candidates bdi {
+  text-transform: capitalize;
+}
 .scan-confidence {
   display: flex;
   align-items: flex-end;
   flex-direction: column;
   gap: 8px;
   min-width: 45px;
-  font-family: Inter, sans-serif;
+  font-family: var(--body-font);
 }
 .scan-confidence bdi {
   font-size: 16px;
-  color: var(--purple);
+  color: var(--brand);
   font-weight: 500;
 }
 .scan-confidence > span {
@@ -665,7 +678,7 @@
 .scan-confidence i {
   display: block;
   height: 100%;
-  background: #767676;
+  background: var(--brand);
   border-radius: 4px;
 }
 .scan-abstain {
@@ -688,7 +701,7 @@
 }
 .scan-garment > bdi {
   font-size: 16px;
-  color: var(--purple);
+  color: var(--brand);
 }
 .scan-composition {
   padding: 20px 21px;
@@ -717,7 +730,7 @@
   background: var(--surface-solid);
 }
 .scan-composition bdi {
-  font-family: Inter, sans-serif;
+  font-family: var(--body-font);
   color: var(--text);
   font-weight: 500;
 }
@@ -772,7 +785,7 @@
   flex-wrap: wrap;
 }
 .scan-result-meta bdi {
-  font-family: Inter, sans-serif;
+  font-family: var(--body-font);
 }
 .scan-result-actions {
   display: flex;
@@ -782,7 +795,7 @@
   padding: 16px 20px;
 }
 .scan-result-actions > .button {
-  min-height: 44px;
+  min-height: 48px;
   font-size: 16px;
 }
 .scan-result-actions > .text-button {
@@ -1016,7 +1029,7 @@
     margin-block-end: 21px;
   }
   .scan-camera-empty h3 {
-    font-size: 21px;
+    font-size: 20px;
     max-width: 250px;
   }
   .scan-camera-empty > p {
@@ -1062,7 +1075,7 @@
   }
   .scan-camera-controls > .icon-button {
     width: 100%;
-    min-height: 40px;
+    min-height: 48px;
     background: var(--sunken);
     font-size: 16px;
   }
@@ -1078,7 +1091,7 @@
   }
   .scan-photo-meta > .text-button {
     font-size: 16px;
-    min-height: 44px;
+    min-height: 48px;
   }
   .scan-manual-label summary {
     font-size: 16px;
@@ -1134,7 +1147,7 @@
     padding: 28px 23px 22px;
   }
   .scan-empty-results h3 {
-    font-size: 23px;
+    font-size: 24px;
   }
   .scan-empty-results > p {
     max-width: 280px;
@@ -1255,7 +1268,7 @@
   font-size: 16px;
 }
 :root[lang="ur"] .scan-connect-heading h2 {
-  font-size: 21px;
+  font-size: 20px;
   line-height: 2;
 }
 :root[lang="ur"] .scan-connect-note,
@@ -1264,7 +1277,7 @@
   font-size: 16px;
 }
 :root[lang="ur"] .scan-camera-empty h3 {
-  font-size: 23px;
+  font-size: 24px;
   line-height: 2;
 }
 :root[lang="ur"] .scan-camera-empty > p {
@@ -1279,7 +1292,7 @@
   font-size: 16px;
 }
 :root[lang="ur"] .scan-empty-results h3 {
-  font-size: 23px;
+  font-size: 24px;
   line-height: 2;
 }
 :root[lang="ur"] .scan-empty-results > p {
@@ -1294,7 +1307,7 @@
   letter-spacing: normal;
 }
 :root[lang="ur"] .scan-url-row input {
-  font-family: Inter, sans-serif;
+  font-family: var(--body-font);
 }
 :root[lang="ur"] .scan-camera-empty .scan-viewfinder-tip {
   font-size: 16px;
@@ -1338,7 +1351,7 @@
     break-inside: avoid;
   }
   .scan-confidence i {
-    background: #595959;
+    background: var(--muted);
   }
 }
 .scan-quality {
@@ -1371,6 +1384,36 @@
   overflow-wrap: anywhere;
 }
 .scan-photo-tabs button.active .scan-tab-number {
-  background: #767676;
-  border-color: #767676;
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+/* Scanner content is always solid; the camera image is evidence, never decoration. */
+.scanner-page .panel, .scan-tip-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.scanner-page .button, .scanner-page .text-button, .scan-photo-tabs button { font-size: 18px; min-height: 48px; }
+.scan-viewfinder { background: var(--sunken); }
+.scan-camera-empty { max-width: 360px; padding: 24px; }
+.scan-camera-empty > span:first-child { width: auto; height: auto; border: 0; border-radius: 0; background: transparent; margin-bottom: 16px; }
+.scan-camera-empty h3 { color: var(--text); font-size: 20px; font-weight: 500; }
+.scan-camera-empty > p { max-width: 30ch; line-height: 1.5; margin-block: 8px 16px; }
+.scan-prediction-icon, .scan-result-icon, .scan-tip-card > span, .scan-connect .feature-icon { background: transparent; color: var(--muted); border: 0; box-shadow: none; border-radius: 0; }
+.scan-live-label { background: var(--surface-solid); color: var(--text); }
+.scan-progress-overlay { background: var(--surface-solid); color: var(--text); }
+.scan-progress-overlay > span { color: var(--muted); }
+.scan-verdict { background: var(--green-bg); color: var(--green); border: 0; }
+.scan-verdict.flag, .scan-verdict.insufficient_evidence { background: var(--amber-bg); color: var(--amber); border: 0; }
+.scan-composition h3 { font-size: 18px; font-weight: 500; margin-bottom: 12px; }
+.scan-photo-tabs { gap: 8px; }
+.scan-photo-tabs button { border-radius: 8px; }
+.scan-tab-number { border-radius: 4px; }
+.scan-tip-card { padding: 24px; }
+.scan-url-row input { font-family: var(--body-font); }
+@media (max-width: 560px) {
+  .scanner-grid { grid-template-columns: minmax(0,1fr); }
+  .scan-topline { align-items: flex-start; flex-direction: column; }
+  .scan-connection-button { width: 100%; }
+  .scan-photo-tabs button { flex-wrap: wrap; }
+  .scan-photo-tabs .scan-photo-attached { font-size: 14px; }
+  .scan-analyze-row > .button { font-size: 18px; }
+  .scan-capture-panel { padding-inline: 16px; }
 }

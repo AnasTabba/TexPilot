@@ -1,0 +1,64 @@
+.mvp-login{min-height:100dvh;display:grid;grid-template-columns:1fr 1fr;margin:0;padding:0;max-width:none;font-family:Manrope,system-ui,sans-serif;background:#fff;color:#252629}
+.mvp-login-story{background:#222326;color:#f7f7f7;padding:clamp(32px,5vw,72px);display:flex;flex-direction:column;justify-content:space-between;gap:48px}.mvp-wordmark{display:flex;align-items:center;gap:12px;font-size:29px;font-weight:800;letter-spacing:-.05em}.mvp-login-story h1{font-size:clamp(38px,4vw,64px);line-height:1.12;letter-spacing:-.05em;color:#fff;margin:16px 0 23px}.mvp-login-story p{font-size:18px;line-height:1.6;color:#d8d9d9;max-width:42ch}.mvp-eyebrow{font-size:14px;color:#ddfa4f;letter-spacing:.13em;font-weight:800}.mvp-login-steps{display:grid;gap:0;max-width:470px;margin-top:38px}.mvp-login-steps span{display:flex;align-items:center;gap:15px;padding:17px 0;border-top:1px solid #4a4b4d;font-size:17px;font-weight:600}.mvp-login-steps svg:first-child{color:#d9f53d}.mvp-login-steps svg:last-child{margin-inline-start:auto;color:#d9f53d}.mvp-login-form{padding:32px;display:grid;place-items:center}.mvp-login-form form{width:min(100%,430px);display:flex;flex-direction:column}.mvp-login-lock{width:58px;height:58px;border-radius:15px;display:grid;place-items:center;background:#eff7cb;color:#4f661b;margin-bottom:25px}.mvp-login-form h2{font-size:36px;line-height:1.2;margin:0 0 12px}.mvp-login-form p{font-size:17px;line-height:1.55;color:#55595a;margin:0 0 25px}.mvp-login-form label{font-size:16px;font-weight:700;margin:0 0 8px}.mvp-login-form input{font-size:24px;letter-spacing:.32em;min-height:58px;border:1px solid #a8aaad;border-radius:10px;padding:12px 18px;margin-bottom:20px;background:#fff;color:#252629}.mvp-login-form input:focus-visible{outline:3px solid #8bab25;outline-offset:2px}.mvp-login-form .mvp-login-error{color:#a22d3d;background:#fff0f1;padding:12px;border-radius:8px;font-size:16px;margin:0 0 18px}.mvp-login-submit{min-height:58px;border:0;border-radius:10px;background:#d9f53d;color:#222326;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center;gap:12px;margin-top:4px}.mvp-login-submit:hover{background:#c8e72e}.mvp-login-submit:disabled{opacity:.6}.mvp-login-note{display:flex;gap:11px;align-items:flex-start;font-size:15px;line-height:1.5;color:#5e6263;margin-top:28px}.mvp-login-note svg{flex:none;margin-top:2px}
+@media(max-width:760px){.mvp-login{display:flex;flex-direction:column}.mvp-login-story{padding:28px;gap:24px}.mvp-login-story h1{font-size:35px;margin:5px 0}.mvp-login-story p{font-size:16px;margin:0}.mvp-login-story .mvp-eyebrow,.mvp-login-steps,.mvp-login-story>p{display:none}.mvp-login-form{display:block;padding:32px 25px 55px}.mvp-login-form form{margin:auto}.mvp-login-form h2{font-size:30px}}
+/* Readable type across the dense reference dashboard. */
+.live-app .ref-dashboard{font-size:16px}
+.live-app .ref-dashboard h2{font-size:20px}
+.live-app .ref-dashboard p,.live-app .ref-dashboard .ref-card-head p{font-size:15px;line-height:1.4;color:#5d6062}
+.ref-dashboard .ref-metric-label,.ref-dashboard .ref-metric-note{font-size:15px;line-height:1.35}
+.ref-dashboard .ref-metric strong{font-size:27px}
+.ref-dashboard .ref-metric{min-height:174px;gap:9px;padding:15px}
+.ref-dashboard .ref-metric-icon{width:38px;height:38px}
+.ref-dashboard .ref-card{padding:17px}
+.ref-dashboard .ref-chart,.ref-dashboard .ref-stage-card,.ref-dashboard .ref-quality-card{min-height:315px}
+.ref-dashboard .ref-chart-summary strong{font-size:24px}
+.ref-dashboard .ref-chart-summary span,.ref-dashboard .ref-small-action,.ref-dashboard .ref-dark-button,.ref-dashboard .ref-text-link,.ref-dashboard .ref-feature-footer button{font-size:15px}
+.ref-dashboard .ref-stage-graphic strong,.ref-dashboard .ref-emphasis{font-size:23px}
+.ref-dashboard .ref-stage-graphic small,.ref-dashboard .ref-stage-list>div,.ref-dashboard .ref-quality-key,.ref-dashboard .ref-overline,.ref-dashboard .ref-table-head,.ref-dashboard .ref-table-row,.ref-dashboard .ref-status,.ref-dashboard .ref-product strong,.ref-dashboard .ref-product small,.ref-dashboard .ref-feature-footer strong,.ref-dashboard .ref-feature-footer small,.ref-dashboard .ref-activity-row,.ref-dashboard .ref-activity-row>strong,.ref-dashboard .ref-scanner-target span{font-size:14px}
+.ref-dashboard .ref-stage-list{gap:10px}
+.ref-dashboard .ref-stage-graphic{min-height:86px}
+.ref-dashboard .ref-quality-key{gap:9px}
+.ref-dashboard .ref-donut{width:82px;height:82px}
+.ref-dashboard .ref-orders,.ref-dashboard .ref-feature-card,.ref-dashboard .ref-arrivals{min-height:330px}
+.ref-dashboard .ref-table-head,.ref-dashboard .ref-table-row{grid-template-columns:minmax(0,1fr) 90px 80px}
+.ref-dashboard .ref-table-row,.ref-dashboard .ref-activity-row{min-height:55px}
+.ref-dashboard .ref-product-thumb{width:38px;height:38px}
+.ref-dashboard .ref-feature-footer button{white-space:normal;text-align:center}
+.ref-dashboard .ref-icon-action{font-size:14px!important}
+.ref-dashboard .ref-empty{font-size:16px!important}
+.ref-dashboard .ref-quality-body{flex-wrap:wrap}
+.live-sidebar nav .ref-nav-item>button{font-size:16px;min-height:46px}
+.live-sidebar .ref-nav-label{font-size:14px}
+.live-sidebar .live-factory strong,.live-sidebar .live-factory small,.live-sidebar .yf-sidebar-prompt strong,.live-sidebar .yf-sidebar-prompt span,.live-sidebar .yf-sidebar-prompt button,.live-sidebar-footer,.live-sidebar-footer small{font-size:15px}
+.live-sidebar .yf-sidebar-prompt{margin-top:18px}
+.live-topbar .yf-header-search,.live-topbar .ref-add-product{font-size:15px}
+.live-app .live-sync,.live-app .yf-local-note,.live-app .live-muted,.live-app small,.live-app .live-panel-heading p{font-size:15px}
+.live-app .live-panel p{font-size:16px}
+.ref-sample-banner{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:#fff9dd;border:1px solid #e0c56d;border-radius:10px;padding:12px 16px;margin:0 0 12px;font-size:16px;color:#3c382a}
+.ref-sample-banner strong{font-size:16px}
+.ref-import-button{display:inline-flex!important;align-items:center;justify-content:center;min-height:48px;padding:12px 16px;border:1px solid #9ba791;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;background:#fff;color:#292a2e}
+.ref-import-button input{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+.ref-import-button:focus-within{outline:3px solid #7aa129;outline-offset:2px}
+@media(max-width:1300px){.ref-grid{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}.ref-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:600px){.ref-dashboard .ref-metric{min-height:168px}.ref-dashboard .ref-metric strong{font-size:24px}.ref-dashboard .ref-table-head,.ref-dashboard .ref-table-row{grid-template-columns:minmax(0,1fr) 80px 70px}.ref-dashboard .ref-card{padding:15px}.ref-dashboard .ref-feature-footer button{font-size:15px}}
+.ref-dashboard .ref-line-chart text{font-size:14px}
+.ref-dashboard .ref-arrivals .ref-icon-action{min-width:74px;white-space:nowrap;flex-shrink:0}
+.ref-dashboard .ref-arrivals .ref-card-head h2{font-size:18px}
+.ref-dashboard .ref-arrivals .ref-table-head{grid-template-columns:minmax(0,1fr) 78px;gap:12px}
+.ref-dashboard .ref-activity-row{grid-template-columns:minmax(0,1fr) 78px;gap:12px}
+@media(min-width:901px) and (max-height:1000px){.live-sidebar .yf-sidebar-prompt{display:none}}
+
+.ref-dashboard .ref-donut{width:100px;height:100px}.ref-dashboard .ref-donut>div{width:75px;height:75px}.ref-dashboard .ref-donut span{font-size:14px}
+@media(max-width:600px){.live-topbar .live-icon-button[aria-label="Lock workspace"]{display:none}}
+@media(max-width:600px){
+  .ref-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ref-metric:last-child{grid-column:1/-1}
+  .ref-grid{grid-template-columns:minmax(0,1fr)}
+  .ref-grid>.ref-card{grid-column:auto;width:100%}
+  .live-topbar .ref-add-product{font-size:0;width:44px;min-width:44px;padding:8px}
+  .live-topbar .ref-add-product svg{width:21px;height:21px}
+  .ref-dashboard .ref-table-head,.ref-dashboard .ref-table-row{grid-template-columns:minmax(0,1fr) 83px 73px;gap:6px}
+  .ref-dashboard .ref-card-head .ref-icon-action{min-width:74px}
+  .ref-dashboard .ref-stage-card,.ref-dashboard .ref-quality-card{min-height:290px}
+}
+@media(max-width:600px){.live-topbar .ref-add-product{overflow:hidden}.live-topbar .ref-add-label{display:none}}

@@ -1,7 +1,7 @@
 import { readFile, readdir, mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { build } from 'esbuild';
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.json': 'application/json' };
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.webp': 'image/webp', '.json': 'application/json' };
 const assets = {};
 async function collect(dir, prefix = '') {
   for (const entry of await readdir(dir, { withFileTypes: true })) {

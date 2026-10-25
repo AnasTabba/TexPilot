@@ -50,7 +50,7 @@ const server = createServer(async (incoming, outgoing) => {
     const target = resolve(dist, '.' + decodeURIComponent(url.pathname));
     const file = target.startsWith(dist + '/') && existsSync(target) && extname(target) ? target : resolve(dist, 'index.html');
     if (!existsSync(file)) { outgoing.writeHead(503, { 'Content-Type': 'text/plain' }); outgoing.end('Run npm run build first, or use the Vite dev server on port 5174.'); return; }
-    const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json' };
+    const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json' };
     outgoing.writeHead(200, { 'Content-Type': types[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); outgoing.end(readFileSync(file));
   } catch (error) { console.error('Local preview request failed:', error.message); outgoing.writeHead(500); outgoing.end('Local preview error'); }
 });

@@ -1,3 +1,4 @@
+import { localInventoryRequest } from './local-inventory';
 export type StockStage = 'raw' | 'wip' | 'finished' | 'cops';
 export type Quality = 'uninspected' | 'approved' | 'hold';
 export interface Product { id: string; sku: string; name: string; barcode: string | null }
@@ -28,27 +29,8 @@ export class InventoryError extends Error {
   constructor(message: string, status = 0) { super(message); this.status = status; }
 }
 export async function inventoryRequest<T>(path: string, data?: unknown, signal?: AbortSignal): Promise<T> {
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  if (signal?.aborted) controller.abort();
-  signal?.addEventListener('abort', abort, { once: true });
-  const timer = setTimeout(abort, 20000);
-  try {
-    const response = await fetch('/api' + path, {
-      method: data === undefined ? 'GET' : 'POST',
-      ...(data === undefined ? {} : { body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } }),
-      credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal,
-    });
-    const result = await response.json().catch(() => null);
-    if (!response.ok) throw new InventoryError(result?.error || 'The request was not saved. Refresh and try again.', response.status);
-    if (result === null) throw new InventoryError('The server returned an unreadable response.');
-    return result as T;
-  } catch (error) {
-    if (error instanceof InventoryError) throw error;
-    throw new InventoryError('Could not confirm a save. Check the connection and retry with the same values; duplicate requests are safe.');
-  } finally {
-    clearTimeout(timer); signal?.removeEventListener('abort', abort);
-  }
+  if (signal?.aborted) throw new InventoryError('Request cancelled.');
+  return localInventoryRequest<T>(path, data);
 }
 export const stockStages: StockStage[] = ['raw', 'wip', 'finished', 'cops'];
 export const stageName: Record<StockStage, string> = { raw: 'Raw material', wip: 'Work in progress', finished: 'Finished stock', cops: 'Cops' };
