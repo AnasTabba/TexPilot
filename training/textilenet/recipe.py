@@ -124,6 +124,20 @@ def merge_lora(model: torch.nn.Module) -> torch.nn.Module:
     return model
 
 
+def apply_lora(weights: dict, lora: dict, scale: float) -> dict:
+    """``weights`` (a plain timm state dict, e.g. the pretrained encoder file) with saved
+    adapters folded in, as merge_lora does: W += scale * B A. The adapters are a few MB, so
+    a run can ship them instead of the merged encoder (1.7 GB for SigLIP 2 so400m)."""
+    out = dict(weights)
+    for k, a in lora.items():
+        if k.endswith(".lora_a"):
+            m = k.removesuffix(".lora_a")
+            w = out[f"{m}.weight"]
+            delta = lora[f"{m}.lora_b"].float() @ a.float()
+            out[f"{m}.weight"] = (w.float() + scale * delta).to(w.dtype)
+    return out
+
+
 def split_head(groups: list[dict], head_params, head_lr_mult: float) -> list[dict]:
     """Split optimizer groups so the freshly initialised head trains at ``head_lr_mult`` x.
 

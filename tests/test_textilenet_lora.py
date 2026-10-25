@@ -5,7 +5,7 @@ import pytest
 torch = pytest.importorskip("torch")
 timm = pytest.importorskip("timm")
 
-from training.textilenet.recipe import add_lora, merge_lora  # noqa: E402
+from training.textilenet.recipe import add_lora, apply_lora, merge_lora  # noqa: E402
 
 
 def _vit():
@@ -45,3 +45,18 @@ def test_lora_can_be_limited_to_the_last_blocks():
     assert add_lora(model, rank=4, alpha=4, last_blocks=1) == 1
     assert isinstance(model.blocks[0].attn.qkv, torch.nn.Linear)
     assert not any(p.requires_grad for p in model.blocks[0].parameters())
+
+
+def test_saved_adapters_rebuild_the_merged_weights_from_the_pretrained_ones():
+    model = _vit()
+    pretrained = {k: v.clone() for k, v in model.state_dict().items()}
+    add_lora(model, rank=4, alpha=8)
+    with torch.no_grad():
+        for n, p in model.named_parameters():
+            if "lora_b" in n:
+                p.normal_()
+    lora = {k: v for k, v in model.state_dict().items() if ".lora_" in k}  # as train.py saves
+    merged = merge_lora(model).state_dict()
+    rebuilt = apply_lora(pretrained, lora, scale=2.0)
+    assert set(rebuilt) == set(merged)
+    assert all(torch.allclose(rebuilt[k], merged[k], atol=1e-6) for k in merged)

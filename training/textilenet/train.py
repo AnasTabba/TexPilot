@@ -464,6 +464,8 @@ def main(argv: list[str] | None = None) -> int:
             torch.save(
                 {
                     "model": (merge_lora(net) if args.lora_rank else net).state_dict(),
+                    "lora": {k: v for k, v in net.state_dict().items() if ".lora_" in k},
+                    "lora_scale": (args.lora_alpha or args.lora_rank) / max(args.lora_rank, 1),
                     "timm_name": args.timm_name,
                     "classes": classes,
                     "img_size": args.img_size,
