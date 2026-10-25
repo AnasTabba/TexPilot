@@ -89,6 +89,17 @@ class FineTunedHead:
         head_dir = Path(head_dir)
         self.meta = json.loads((head_dir / "head.json").read_text())
         self.classes = tuple(self.meta["classes"])
+        # A product scope (head.json "scope"): dropped classes can't be answered, merged ones add
+        # into their target. ``self._scope`` maps the model's classes onto the answerable ones.
+        self._scope = None
+        if scope := self.meta.get("scope"):
+            merge, drop = scope.get("merge", {}), set(scope.get("drop", []))
+            kept = tuple(c for c in self.classes if c not in drop and c not in merge)
+            self._scope = np.zeros((len(self.classes), len(kept)), np.float32)
+            for i, c in enumerate(self.classes):
+                if c not in drop:
+                    self._scope[i, kept.index(merge.get(c, c))] = 1.0
+            self.classes = kept
         self.device, self._torch = device, torch
         self.half = device.type in ("mps", "cuda")
         m, self.probe = self.meta, None
@@ -130,7 +141,8 @@ class FineTunedHead:
     def probs(self, views: list[np.ndarray]) -> np.ndarray:
         if self.probe is not None:
             return self.probs_from_features(self.features(views))
-        return softmax(self._run(lambda t: self.model(t), views), self.meta["temperature"]).mean(0)
+        p = softmax(self._run(lambda t: self.model(t), views), self.meta["temperature"])
+        return self._scoped(p).mean(0)
 
     def features(self, views: list[np.ndarray]) -> np.ndarray:
         """A probe head's pooled encoder features (V, D): shared with the heads a factory
@@ -142,7 +154,14 @@ class FineTunedHead:
     def probs_from_features(self, features: np.ndarray) -> np.ndarray:
         with self._torch.no_grad():
             logits = self.probe(self._torch.from_numpy(features).to(self.device)).cpu().numpy()
-        return softmax(logits, self.meta["temperature"]).mean(0)
+        return self._scoped(softmax(logits, self.meta["temperature"])).mean(0)
+
+    def _scoped(self, p: np.ndarray) -> np.ndarray:
+        """Per-view probabilities over the answerable classes, renormalised after a drop."""
+        if self._scope is None:
+            return p
+        q = p @ self._scope
+        return q / q.sum(-1, keepdims=True)
 
     def _run(self, fn, views: list[np.ndarray]) -> np.ndarray:
         """``fn`` on the preprocessed views: fp16 on a GPU, and for good in fp32 once fp16

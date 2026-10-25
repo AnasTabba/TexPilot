@@ -197,3 +197,27 @@ def test_a_probe_head_on_a_tuned_encoder_refuses_to_start_without_that_encoders_
         FineTunedHead(d, CPU)
     (d / "encoder.safetensors").write_bytes(b"")  # presence is what counts (encoder is stubbed)
     assert FineTunedHead(d, CPU).encoder_id == "resnet10t+lora-1234abcd"
+
+
+def test_a_head_with_a_product_scope_drops_and_merges_classes(tmp_path, monkeypatch):
+    """scope in head.json: dropped classes can't be answered (their probability leaves and the
+    rest renormalise); merged ones add into their target (jersey counts as knit)."""
+    from safetensors.numpy import save_file
+
+    from services.vision import heads
+
+    encoder = timm_classifier("resnet10t", 0, 64)
+    monkeypatch.setattr(heads, "timm_classifier", lambda *a, **k: encoder)
+    d = tmp_path / "head_a"
+    d.mkdir()
+    w = np.zeros((4, encoder.num_features), np.float32)
+    b = np.log(np.array([0.1, 0.2, 0.3, 0.4], np.float32))  # canvas, jersey, knit, lace
+    save_file({"probe.weight": w, "probe.bias": b}, str(d / "probe.safetensors"))
+    meta = dict(classes=["canvas", "jersey", "knit", "lace"], timm_name="resnet10t", img_size=64)
+    meta |= dict(crop_pct=0.875, mean=[0.5] * 3, std=[0.5] * 3, temperature=1.0, threshold=0.0)
+    meta |= dict(pool="probe", scope={"drop": ["canvas"], "merge": {"jersey": "knit"}})
+    (d / "head.json").write_text(json.dumps(meta))
+    head = FineTunedHead(d, CPU)
+    assert head.classes == ("knit", "lace")
+    p = head.probs([np.zeros((64, 64, 3), np.uint8)])
+    assert np.allclose(p, [0.5 / 0.9, 0.4 / 0.9], atol=1e-5)
