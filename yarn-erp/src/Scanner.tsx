@@ -855,14 +855,18 @@ export default function Scanner({
                       ? result.stated_composition.fibers
                           .map((f) => `${f.pct}% ${labelFor(f.name)}`)
                           .join(" / ") + t(" (from the label)", " (لیبل سے)")
-                      : result.fibre_family
-                        ? `${fibreName(result.fibre_family.label)} · ${pct(result.fibre_family.confidence)}`
-                        : t("Not sure from the photo", "تصویر سے پکا نہیں")}
+                      : result.custom.fibre
+                        ? `${labelFor(result.custom.fibre.label)} · ${pct(result.custom.fibre.confidence)}`
+                        : result.fibre_family
+                          ? `${fibreName(result.fibre_family.label)} · ${pct(result.fibre_family.confidence)}`
+                          : t("Not sure from the photo", "تصویر سے پکا نہیں")}
                   </strong>
-                  {!result.stated_composition.fibers.length && !result.fibre_family && result.candidates.fibre_family?.length ? (
+                  {!result.stated_composition.fibers.length && !result.custom.fibre && (result.candidates.fibre ?? result.candidates.fibre_family)?.length ? (
                     <small className="scan-closest">
                       {t("Closest, not confident: ", "قریب ترین، پکا نہیں: ")}
-                      {result.candidates.fibre_family.map(([l, p]) => `${fibreName(l)} ${pct(p)}`).join(" · ")}
+                      {(result.candidates.fibre ?? result.candidates.fibre_family ?? [])
+                        .map(([l, p]) => `${result.candidates.fibre ? labelFor(l) : fibreName(l)} ${pct(p)}`)
+                        .join(" · ")}
                     </small>
                   ) : null}
                   <span>{t("Yarn to buy", "کون سا یارن خریدیں")}</span>
