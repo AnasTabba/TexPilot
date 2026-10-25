@@ -84,8 +84,8 @@
   --brand-light: #3d2416;
   --brand-mid: #6e3d22;
   --on-brand: #2a1206;
-  --chrome: #120c08;
-  --chrome-raised: #24170f;
+  --chrome: #31211a;
+  --chrome-raised: #45301f;
   --gold: #e6b85c;
   --gold-strong: #e6b85c;
   --gold-soft: #3a2b12;
@@ -190,6 +190,7 @@ svg.lucide { stroke-width: 1.75; }
 .live-segments button { transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out); }
 .live-segments button[aria-pressed="true"] { background: var(--chrome); color: var(--on-chrome); }
 .live-segments button[aria-pressed="true"] svg { color: var(--gold); }
+:root[data-theme="dark"] .live-segments button[aria-pressed="true"] { background: var(--gold-soft); color: var(--gold); }
 
 /* Press and lift: controls answer the finger. */
 :is(button, a.button):not(:disabled) { transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, transform 150ms var(--ease-out), box-shadow 200ms var(--ease-out); }
