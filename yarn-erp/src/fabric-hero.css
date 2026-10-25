@@ -1,7 +1,7 @@
-/* feat/app-scaffold's fabric explorer, for the web: one colour per garment, a floating
+/* feat/app-scaffold's fabric explorer in Yarnflow's burnt orange, espresso and ochre: one colour per garment, a floating
    illustration on a soft circle and ring, white type, a white call to action. */
 .fabric-hero {
-  --hero: #2860d5;
+  --hero: #b4441b;
   --hero-soft: rgb(255 255 255 / 74%);
   position: relative;
   display: grid;
@@ -17,13 +17,13 @@
   margin-bottom: 18px;
 }
 .fabric-hero-denim {
-  --hero: #2860d5;
+  --hero: #b4441b;
 }
 .fabric-hero-cotton {
-  --hero: #4b5a72;
+  --hero: #3a261b;
 }
 .fabric-hero-polyester {
-  --hero: #c8322f;
+  --hero: #8a5a12;
 }
 .fabric-hero-brand {
   display: flex;
@@ -181,7 +181,7 @@
 
 /* The result's garment art: the same circle and floating illustration, smaller. */
 .scan-guide-art {
-  --hero: #2860d5;
+  --hero: #b4441b;
   position: relative;
   height: 190px;
   display: grid;
@@ -192,10 +192,10 @@
   margin-bottom: 14px;
 }
 .scan-guide-art.fabric-hero-cotton {
-  --hero: #4b5a72;
+  --hero: #3a261b;
 }
 .scan-guide-art.fabric-hero-polyester {
-  --hero: #c8322f;
+  --hero: #8a5a12;
 }
 .scan-guide-art .fabric-hero-circle {
   width: 150px;
@@ -290,4 +290,27 @@
 
 .scan-results .scan-answer h3.is-label {
   text-transform: capitalize;
+}
+
+/* Warm light: a slow gold sheen crosses the panel, and a glow breathes behind the garment. */
+.fabric-hero::after {
+  content: "";
+  position: absolute;
+  inset: -40% auto -40% 0;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgb(255 214 140 / 16%) 50%, transparent);
+  transform: translateX(-130%) skewX(-12deg);
+  animation: silk-sheen 7s var(--ease-out, ease-out) infinite 0.8s;
+  pointer-events: none;
+}
+.fabric-hero-circle {
+  background: radial-gradient(circle, rgb(255 222 160 / 34%), rgb(255 255 255 / 10%) 70%);
+  animation: warm-breathe 4.2s ease-in-out infinite;
+}
+@keyframes warm-breathe {
+  50% { transform: scale(1.06); opacity: 0.85; }
+}
+.fabric-hero-art img.is-active { will-change: transform; }
+@media (prefers-reduced-motion: reduce) {
+  .fabric-hero::after, .fabric-hero-circle { animation: none; }
 }

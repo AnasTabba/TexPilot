@@ -82,9 +82,6 @@ export default function FabricHero({
           texpilot<i>.</i>
         </span>
       </div>
-      <p className="fabric-hero-eyebrow">
-        {t("FABRIC SCANNER", "فیبرک اسکینر")}
-      </p>
       <div className="fabric-hero-art" aria-hidden="true">
         <span className="fabric-hero-ring" />
         <span className="fabric-hero-circle" />

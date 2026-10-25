@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useId, Children, cloneElement, isValidElement, type ReactElement, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useId, Children, cloneElement, isValidElement, type ReactElement, type FormEvent, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUpRight, Boxes, Camera, CheckCheck, ClipboardList, Download, Factory, LayoutDashboard, LoaderCircle, Plus, Printer, RefreshCw, Ruler, ScanLine, Settings2, Share2, ShieldCheck, Users, WifiOff, X, CheckCircle2, TriangleAlert } from 'lucide-react';
 import QRCode from 'qrcode';
 import BarcodeScanner from './BarcodeScanner';
@@ -210,6 +210,17 @@ export default function LiveApp() {
   useEffect(() => { const update = () => { setRoute(routeFromHash()); setSelectedId(lotFromHash()); setAction(null); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
   useEffect(() => { const network = () => { setOnline(navigator.onLine); if (navigator.onLine) void refresh(true); }; window.addEventListener('online', network); window.addEventListener('offline', network); return () => { window.removeEventListener('online', network); window.removeEventListener('offline', network); }; }, [refresh]);
   useEffect(() => { document.documentElement.dir = 'ltr'; document.documentElement.lang = 'en'; document.documentElement.dataset.theme = theme; try { localStorage.setItem('yf-theme', theme); } catch { /* The theme can remain in memory. */ } }, [theme]);
+  // The gold pill in both navs glides to the current tab (theme.css reads --glide-*).
+  const shellReady = !loading && !!state?.member;
+  useLayoutEffect(() => {
+    const place = () => document.querySelectorAll<HTMLElement>('.live-sidebar nav, .live-bottom-nav').forEach(nav => {
+      const tab = nav.querySelector<HTMLElement>('button.active');
+      nav.style.setProperty('--glide-w', (tab?.offsetWidth || 0) + 'px'); nav.style.setProperty('--glide-h', (tab?.offsetHeight || 0) + 'px');
+      if (tab) { nav.style.setProperty('--glide-x', tab.offsetLeft + 'px'); nav.style.setProperty('--glide-y', tab.offsetTop + 'px'); }
+      requestAnimationFrame(() => { nav.dataset.glide = 'on'; });
+    });
+    place(); window.addEventListener('resize', place); return () => window.removeEventListener('resize', place);
+  }, [route, shellReady]);
   function navigate(to: string, lotId = '') { location.hash = '/' + to + (lotId ? '/' + lotId : ''); setRoute(to); setSelectedId(lotId); setAction(null); setMatches([]); setQuery(''); setNotice(''); window.scrollTo(0, 0); }
   async function saved(message: string, lotId?: string, movementId?: string) { setAction(null); if (lotId) navigate('inventory', lotId); setNotice(message); setUndoId(movementId || ''); await refresh(); }
   if (loading) return <main className="live-loading" aria-busy="true"><img src="/icon.svg" width="48" height="48" alt="" /><h1>Opening your workspace…</h1><p>Connecting to the shared inventory database.</p></main>;
@@ -256,7 +267,7 @@ export default function LiveApp() {
   return <div className="live-app"><a className="skip-link" href="#live-main" onClick={event => { event.preventDefault(); document.getElementById('live-main')?.focus(); }}>Skip to content</a>
     <aside className="live-sidebar"><a className="live-brand" href="#/overview"><img src="/icon.svg" alt="" width="34" height="34" /><span>Yarnflow</span></a><div className="live-factory"><Factory size={22} /><div><strong>{workspace.workspace.name}</strong><small>Shared factory workspace</small></div></div><nav aria-label="Main navigation">{tabs.map(([id, label, Icon]) => <button key={id} aria-current={route === id ? 'page' : undefined} className={route === id ? 'active' : ''} onClick={() => navigate(id)}><Icon size={20} />{label}</button>)}</nav><div className="live-sidebar-footer"><ShieldCheck size={18} /><span>{owner ? 'Workspace owner' : 'Stock operator'}</span></div></aside>
     <div className="live-main-shell"><header className="live-topbar"><span className={online && !error ? '' : 'is-offline'}>{online && !error ? <CheckCircle2 size={20} aria-hidden="true" /> : <WifiOff size={20} aria-hidden="true" />}{!online ? 'Offline · changes paused' : error ? 'Connection needs attention' : 'Shared workspace'}</span><div><button className="live-icon-button" aria-label="Refresh inventory" disabled={refreshing || !online} onClick={() => void refresh()}><RefreshCw size={19} className={refreshing ? 'live-spinning' : ''} /></button><span className="live-account" title={workspace.member.name}><Users size={18} />{owner ? 'Owner' : 'Operator'}</span></div></header>
-    <main id="live-main" className="live-content" tabIndex={-1}>
+    <main id="live-main" key={route || 'overview'} className="live-content" tabIndex={-1}>
       <div className="live-page-heading"><div><h1>{action ? 'Stock workspace' : selected ? 'Batch details' : ({ overview: 'Today', inventory: 'Stock', scanner: 'Material scanner', activity: 'Stock activity', settings: 'Workspace' } as Record<string, string>)[route || 'overview']}</h1><p>{route === 'overview' ? 'Review stock and batches that need attention.' : route === 'inventory' ? 'Trace every batch, from receipt to dispatch.' : route === 'scanner' ? 'Find stock by its label, or inspect a material.' : route === 'activity' ? 'Every movement, with the original record preserved.' : 'Manage your team, appearance and workspace records.'}</p></div>{!action && !selected && ['inventory', 'overview'].includes(route || '') && <div className="live-actions"><button className="button" onClick={() => navigate('scanner')}><ScanLine size={18} />Scan a label</button><button className="button primary" onClick={() => setAction({ type: workspace.products.length ? 'lot' : 'product' })} disabled={!online || (!owner && !workspace.products.length)}><Plus size={18} />{workspace.products.length ? 'Create batch' : 'Add a material'}</button></div>}</div>
       {error && <div className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{error}<button className="live-text-button" onClick={() => void refresh()}>Retry connection</button></div>}
       {!online && <div className="live-warning" role="status"><WifiOff size={18} />You are offline. Existing stock stays visible; reconnect before saving changes.</div>}

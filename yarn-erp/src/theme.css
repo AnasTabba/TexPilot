@@ -1,25 +1,34 @@
-/* Shared product tokens. Content is opaque; floating chrome is the only glass layer. */
+/* Shared product tokens: espresso chrome, burnt-orange actions, gold for place and highlight.
+   Content is opaque and solid; nothing blurs (backdrop blur made phones lag while scrolling). */
 :root, :root[data-theme="light"], :root[data-theme="factory"] {
-  --page: #f7f6f3;
+  --page: #faf8f6;
   --card: #fff;
   --bg: var(--page);
   --surface: var(--card);
   --surface-solid: var(--card);
-  --sunken: #f1efea;
-  --border: #e4e1da;
+  --sunken: #f3eee9;
+  --border: #e6ddd4;
   --line: var(--border);
-  --input-border: #858780;
+  --input-border: #8a7b6e;
   --line-strong: var(--input-border);
-  --text-primary: #1b1d1f;
-  --text-secondary: #5a5e63;
+  --text-primary: #2a1d16;
+  --text-secondary: #66574c;
   --text: var(--text-primary);
   --muted: var(--text-secondary);
   --subtle: var(--text-secondary);
-  --brand: #0f5f6b;
-  --brand-hover: #0b4c56;
-  --brand-light: #e6f0f1;
-  --brand-mid: #b9d3d6;
+  --brand: #b4441b;
+  --brand-hover: #923614;
+  --brand-light: #fbeae1;
+  --brand-mid: #f0c2a8;
   --on-brand: #fff;
+  --chrome: #2b1b13;
+  --chrome-raised: #3a261b;
+  --on-chrome: #f7ede4;
+  --on-chrome-muted: #cdb6a5;
+  --gold: #d6a23c;
+  --gold-strong: #8f6412;
+  --gold-soft: #f6e7c6;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --success: #1f7a45;
   --success-surface: #e8f4ec;
   --warning: #9a5600;
@@ -37,12 +46,7 @@
   --control-radius: 8px;
   --radius: var(--card-radius);
   --card-shadow: none;
-  --shadow: 0 4px 16px rgb(27 29 31 / 7%);
-  --glass-fill: rgb(255 254 250 / 92%);
-  --glass-solid: #fffefa;
-  --glass-edge: rgb(255 255 255 / 80%);
-  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 85%);
-  --glass-shadow: 0 8px 24px rgb(27 29 31 / 8%);
+  --shadow: 0 4px 8px rgb(43 27 19 / 8%);
   --body-font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --space-1: 4px;
   --space-2: 8px;
@@ -60,42 +64,42 @@
   line-height: 1.5;
 }
 :root[data-theme="dark"] {
-  --page: #171c1c;
-  --card: #222929;
+  --page: #17100c;
+  --card: #22170f;
   --bg: var(--page);
   --surface: var(--card);
   --surface-solid: var(--card);
-  --sunken: #2c3433;
-  --border: #46514e;
+  --sunken: #2d1f16;
+  --border: #4b3729;
   --line: var(--border);
-  --input-border: #8d9994;
+  --input-border: #9a8576;
   --line-strong: var(--input-border);
-  --text-primary: #f5f4ef;
-  --text-secondary: #c1c7c3;
+  --text-primary: #f7ede4;
+  --text-secondary: #cfbcad;
   --text: var(--text-primary);
   --muted: var(--text-secondary);
   --subtle: var(--text-secondary);
-  --brand: #95d2d7;
-  --brand-hover: #b5e1e4;
-  --brand-light: #253f41;
-  --brand-mid: #42676a;
-  --on-brand: #132527;
+  --brand: #f2915a;
+  --brand-hover: #f6ab7e;
+  --brand-light: #3d2416;
+  --brand-mid: #6e3d22;
+  --on-brand: #2a1206;
+  --chrome: #120c08;
+  --chrome-raised: #24170f;
+  --gold: #e6b85c;
+  --gold-strong: #e6b85c;
+  --gold-soft: #3a2b12;
   --success: #a1dbb8;
   --success-surface: #233d2c;
   --warning: #f4cf8c;
   --warning-surface: #44351e;
   --error: #ffb3aa;
   --error-surface: #482d2b;
-  --glass-fill: rgb(34 41 41 / 94%);
-  --glass-solid: #222929;
-  --glass-edge: rgb(220 230 222 / 18%);
-  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 10%);
-  --glass-shadow: 0 8px 24px rgb(0 0 0 / 18%);
   color-scheme: dark;
 }
 html { scroll-padding-block: 112px 160px; }
 body { font-family: var(--body-font); background: var(--bg); color: var(--text); }
-::selection { color: var(--text); background: var(--brand-mid); }
+::selection { color: var(--text); background: var(--gold-soft); }
 input, textarea { caret-color: var(--brand); }
 button, input, select, textarea { font-family: inherit; }
 button, input:not([type="radio"]):not([type="checkbox"]), select, textarea { font-size: 18px; }
@@ -116,41 +120,99 @@ svg.lucide { stroke-width: 1.75; }
 .button.primary:hover:not(:disabled), .live-app .button.primary:hover:not(:disabled), .live-welcome .button.primary:hover:not(:disabled) {
   background: var(--brand-hover); border-color: var(--brand-hover);
 }
-/* Start solid. Unsupported browsers never inherit a translucent background. */
-:is(.sidebar, .topbar, .bottom-tabs, .modal, .popover, .tabs,
-    .live-sidebar, .live-topbar, .live-bottom-nav, .live-segments,
-    .scan-connection-modal) {
-  background: var(--glass-solid);
+/* Chrome is solid espresso: no backdrop blur, which made phones redraw on every scroll. */
+:is(.sidebar, .topbar, .bottom-tabs, .live-sidebar, .live-topbar, .live-bottom-nav) {
+  background: var(--chrome);
+  color: var(--on-chrome);
+  border: 0;
+  box-shadow: 0 6px 8px rgb(23 14 9 / 18%);
+  border-radius: 16px;
+  overflow: hidden;
+  isolation: isolate;
+}
+:is(.modal, .popover, .tabs, .live-segments, .scan-connection-modal) {
+  background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: var(--glass-highlight), var(--glass-shadow);
-  border-radius: 24px;
+  border-radius: 16px;
 }
-@supports ((backdrop-filter: blur(24px)) or (-webkit-backdrop-filter: blur(24px))) {
-  :is(.sidebar, .topbar, .bottom-tabs, .modal, .popover, .tabs,
-      .live-sidebar, .live-topbar, .live-bottom-nav, .live-segments,
-      .scan-connection-modal) {
-    background: var(--glass-fill);
-    border-color: var(--glass-edge);
-    -webkit-backdrop-filter: blur(24px) saturate(170%);
-    backdrop-filter: blur(24px) saturate(170%);
-  }
+:is(.live-sidebar, .live-topbar, .live-bottom-nav) :is(strong, span, small, a, button:not(.button)) { color: inherit; }
+.live-sidebar :is(small, .live-sidebar-footer), .live-topbar .live-account { color: var(--on-chrome-muted); }
+.live-sidebar .live-factory { border-color: rgb(247 237 228 / 14%); }
+:is(.live-sidebar, .live-topbar) .live-icon-button { color: var(--on-chrome); background: var(--chrome-raised); border-color: transparent; }
+.live-topbar > span:not(.is-offline) svg { color: var(--gold); }
+.live-topbar > span.is-offline svg { color: #f4cf8c; }
+
+/* The silk sheen: a slow band of gold light crossing the brown chrome, like light on cloth. */
+:is(.live-sidebar, .live-topbar, .live-bottom-nav)::after {
+  content: "";
+  position: absolute;
+  inset: -50% auto -50% 0;
+  width: 28%;
+  z-index: -1;
+  background: linear-gradient(100deg, transparent 20%, rgb(255 222 150 / 7%) 40%, rgb(255 232 180 / 20%) 50%, rgb(255 222 150 / 7%) 60%, transparent 80%);
+  transform: translateX(-120%) skewX(-12deg);
+  animation: silk-sheen 9s var(--ease-out) infinite;
+  pointer-events: none;
 }
-/* Nested switches and chrome must be opaque: never glass above glass. */
-:is(.sidebar, .topbar, .bottom-tabs, .modal, .popover, .live-sidebar, .live-topbar, .scan-connection-modal)
-  :is(.tabs, .live-segments, .scan-photo-tabs, .scan-mode-toggle) {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  background: var(--sunken);
-  box-shadow: none;
+.live-topbar::after { animation-delay: 1.2s; }
+.live-bottom-nav::after { animation-delay: 2.4s; }
+@keyframes silk-sheen {
+  0% { transform: translateX(-120%) skewX(-12deg); }
+  38%, 100% { transform: translateX(480%) skewX(-12deg); }
 }
+
+/* Navigation: a gold pill glides to the current place (--glide-x / --glide-y from LiveApp). */
+.live-sidebar nav { position: relative; } /* the bottom nav is already fixed */
+:is(.live-sidebar nav, .live-bottom-nav)::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  width: var(--glide-w, 0);
+  height: var(--glide-h, 0);
+  border-radius: 14px;
+  background: var(--gold);
+  transform: translate(var(--glide-x, 0), var(--glide-y, 0));
+  z-index: 0;
+}
+/* Placed instantly on first paint, then glides. */
+:is(.live-sidebar nav, .live-bottom-nav)[data-glide="on"]::before {
+  transition: transform 420ms var(--ease-out), width 420ms var(--ease-out), height 420ms var(--ease-out);
+}
+:is(.live-sidebar nav, .live-bottom-nav) > button { position: relative; z-index: 1; color: var(--on-chrome); transition: color 200ms var(--ease-out), transform 150ms var(--ease-out); }
+:is(.live-sidebar nav, .live-bottom-nav) > button:hover:not(.active) { background: rgb(247 237 228 / 8%); }
+:is(.live-sidebar nav, .live-bottom-nav) > button.active { color: var(--chrome); background: transparent; transition: color 260ms var(--ease-out) 140ms; }
+:is(.live-sidebar nav, .live-bottom-nav) > button svg { transition: transform 300ms var(--ease-out); }
+:is(.live-sidebar nav, .live-bottom-nav) > button.active svg { transform: scale(1.08); }
 :is(.sidebar, .live-sidebar) nav :is(button, a),
 :is(.bottom-tabs, .live-bottom-nav) > :is(button, a),
-:is(.tabs, .live-segments) > button { border-radius: 16px; }
-:is(.sidebar, .live-sidebar) nav :is(button, a).active,
-:is(.bottom-tabs, .live-bottom-nav) > :is(button, a).active,
-.live-segments button[aria-pressed="true"] {
-  background: var(--brand-light); color: var(--brand);
+:is(.tabs, .live-segments) > button { border-radius: 14px; }
+.live-segments button { transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out); }
+.live-segments button[aria-pressed="true"] { background: var(--chrome); color: var(--on-chrome); }
+.live-segments button[aria-pressed="true"] svg { color: var(--gold); }
+
+/* Press and lift: controls answer the finger. */
+:is(button, a.button):not(:disabled) { transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, transform 150ms var(--ease-out), box-shadow 200ms var(--ease-out); }
+:is(button, a.button):active:not(:disabled) { transform: scale(0.97); filter: none; }
+.button.primary:hover:not(:disabled) { box-shadow: 0 4px 8px rgb(180 68 27 / 24%); transform: translateY(-1px); }
+.live-summary > button { transition: transform 250ms var(--ease-out), box-shadow 250ms var(--ease-out), border-color 200ms ease; }
+.live-summary > button:hover { transform: translateY(-2px); box-shadow: 0 6px 8px rgb(43 27 19 / 8%); border-color: var(--gold); }
+.live-summary strong { color: var(--text); }
+
+/* Moving between pages: the new page settles in, items in a quick cascade. */
+.live-content > * { animation: page-settle 380ms var(--ease-out) backwards; }
+.live-content > :nth-child(2) { animation-delay: 40ms; }
+.live-content > :nth-child(3) { animation-delay: 80ms; }
+.live-content > :nth-child(4) { animation-delay: 120ms; }
+.live-content > :nth-child(n + 5) { animation-delay: 160ms; }
+@keyframes page-settle {
+  from { opacity: 0; transform: translateY(10px); }
 }
+.live-summary > button { animation: page-settle 420ms var(--ease-out) backwards; }
+.live-summary > button:nth-child(2) { animation-delay: 60ms; }
+.live-summary > button:nth-child(3) { animation-delay: 120ms; }
+.live-summary > button:nth-child(4) { animation-delay: 180ms; }
+.live-page-heading h1 { letter-spacing: -0.02em; }
 .modal :is(.form-grid, .entry-fields, .order-form, .modal-content),
 .scan-connection-modal form { background: var(--surface); }
 .live-review dl { margin: 24px 0; }
@@ -158,16 +220,6 @@ svg.lucide { stroke-width: 1.75; }
 .live-review dt { color: var(--muted); }
 .live-review dd { margin: 0; overflow-wrap: anywhere; }
 .live-field-error { display: flex; align-items: flex-start; gap: 8px; color: var(--danger); font-size: 14px; font-weight: 400; }
-@media (prefers-reduced-transparency: reduce) {
-  :is(.sidebar, .topbar, .bottom-tabs, .modal, .popover, .tabs,
-      .live-sidebar, .live-topbar, .live-bottom-nav, .live-segments,
-      .scan-connection-modal) {
-    background: var(--glass-solid) !important;
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-    border-color: var(--line);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
