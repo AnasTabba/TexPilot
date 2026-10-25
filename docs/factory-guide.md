@@ -79,5 +79,5 @@ To improve it, add photos and teach again. Each scan records which teaching answ
 model version ends in `+wash=<code>`).
 
 As a guide to how many photos you need: taught from 20 photos per category, among 4-5 similar
-catalog fabrics, it was right 71-81% of the time (balanced accuracy); from 50 photos, 75-84%.
+catalog fabrics, it was right 71-81% of the time (balanced accuracy); from 50 photos, 74-83%.
 Wash differences may be easier or harder: the report from your own photos is the real measure.
