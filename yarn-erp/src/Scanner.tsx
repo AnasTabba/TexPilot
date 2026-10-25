@@ -621,7 +621,10 @@ export default function Scanner({
             )}
             {scanning && (
               <div className="scan-progress-overlay" role="status">
-                <LoaderCircle className="spin" size={30} />
+                {/* A loom at work: warp threads lift in turn while the weft shuttles across. */}
+                <span className="weave-loader" aria-hidden="true">
+                  <i /><i /><i /><i /><i /><i /><b />
+                </span>
                 <strong>
                   {t(copy.texpilotIsTakingACloserLook, copy.urdu461)}
                 </strong>

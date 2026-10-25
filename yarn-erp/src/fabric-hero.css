@@ -298,19 +298,153 @@
   position: absolute;
   inset: -40% auto -40% 0;
   width: 40%;
-  background: linear-gradient(100deg, transparent, rgb(255 214 140 / 16%) 50%, transparent);
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgb(255 214 140 / 16%) 50%,
+    transparent
+  );
   transform: translateX(-130%) skewX(-12deg);
   animation: silk-sheen 7s var(--ease-out, ease-out) infinite 0.8s;
   pointer-events: none;
 }
 .fabric-hero-circle {
-  background: radial-gradient(circle, rgb(255 222 160 / 34%), rgb(255 255 255 / 10%) 70%);
+  background: radial-gradient(
+    circle,
+    rgb(255 222 160 / 34%),
+    rgb(255 255 255 / 10%) 70%
+  );
   animation: warm-breathe 4.2s ease-in-out infinite;
 }
 @keyframes warm-breathe {
-  50% { transform: scale(1.06); opacity: 0.85; }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
+  }
 }
-.fabric-hero-art img.is-active { will-change: transform; }
+.fabric-hero-art img.is-active {
+  will-change: transform;
+}
 @media (prefers-reduced-motion: reduce) {
-  .fabric-hero::after, .fabric-hero-circle { animation: none; }
+  .fabric-hero::after,
+  .fabric-hero-circle {
+    animation: none;
+  }
+}
+
+/* Analysing: a small loom. Warp threads lift alternately (the shed opens) while the weft
+   shuttle crosses, passing over and under; it reads as weaving, not as waiting. */
+.weave-loader {
+  position: relative;
+  width: 84px;
+  height: 56px;
+  display: flex;
+  justify-content: space-between;
+  padding-inline: 6px;
+}
+.weave-loader i {
+  width: 5px;
+  border-radius: 3px;
+  background: var(--chrome, #2b1b13);
+  position: relative;
+  z-index: 1;
+  animation: warp-lift 1.6s var(--ease-out) infinite;
+}
+.weave-loader i:nth-child(even) {
+  z-index: 3;
+  background: var(--gold, #d6a23c);
+  animation-delay: 0.8s;
+}
+.weave-loader b {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 100%;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 3px;
+  z-index: 2;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--brand, #b4441b) 30%,
+    var(--brand, #b4441b) 70%,
+    transparent
+  );
+  animation: weft-shuttle 1.6s var(--ease-out) infinite alternate;
+}
+@keyframes warp-lift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes weft-shuttle {
+  from {
+    transform: translateX(-40%) scaleX(0.6);
+  }
+  to {
+    transform: translateX(40%) scaleX(0.6);
+  }
+}
+
+/* The answer arrives: garment settles in, then fabric, fibre and yarn lines in a quick cascade. */
+.scan-guide-art img {
+  animation:
+    art-arrive 600ms var(--ease-out) backwards,
+    fabric-float 4.2s ease-in-out 600ms infinite;
+}
+@keyframes art-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.86) rotate(-6deg);
+  }
+}
+.scan-answer > * {
+  animation: answer-in 420ms var(--ease-out) backwards;
+}
+.scan-answer > :nth-child(2) {
+  animation-delay: 60ms;
+}
+.scan-answer > :nth-child(3) {
+  animation-delay: 120ms;
+}
+.scan-answer > :nth-child(4) {
+  animation-delay: 180ms;
+}
+.scan-answer > :nth-child(5) {
+  animation-delay: 240ms;
+}
+.scan-answer > :nth-child(n + 6) {
+  animation-delay: 300ms;
+}
+.scan-answer li {
+  animation: answer-in 420ms var(--ease-out) backwards;
+}
+.scan-answer li:nth-child(1) {
+  animation-delay: 320ms;
+}
+.scan-answer li:nth-child(2) {
+  animation-delay: 380ms;
+}
+.scan-answer li:nth-child(n + 3) {
+  animation-delay: 440ms;
+}
+@keyframes answer-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .weave-loader i,
+  .weave-loader b,
+  .scan-guide-art img,
+  .scan-answer > *,
+  .scan-answer li {
+    animation: none;
+  }
 }
