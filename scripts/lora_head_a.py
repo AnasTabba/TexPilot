@@ -19,6 +19,8 @@ from pathlib import Path
 import torch
 from safetensors.torch import save_file
 
+from training.textilenet.splits import base_partition
+
 
 def run(*argv: str) -> None:
     print("+", " ".join(argv), flush=True)
@@ -33,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--work", type=Path, help="merged encoder + features (default: <out>/work)")
     ap.add_argument("--seeds", nargs="+", default=["0", "1", "2"])
+    ap.add_argument("--partition", default="fabric", help="or a scope such as fabric24")
     ap.add_argument("--batch-size", default="64")
     ap.add_argument("--workers", default="4")
     ap.add_argument("--device", default="cuda")
@@ -57,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     run(
         "training.textilenet.probe",
         "--partition",
-        "fabric",
+        args.partition,
         "--model",
         meta["timm_name"],
         "--img-size",
@@ -89,12 +92,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     run(
         "training.textilenet.head_search",
+        "--partition",
+        args.partition,
         "--split-csv",
         csv,
         "--features",
         name,
         "--feature-dir",
-        str(feats / "fabric"),
+        str(feats / base_partition(args.partition)),
         "--kinds",
         "mlp",
         "--epochs",
@@ -112,6 +117,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     run(
         "training.scanner.export_probe_head",
+        "--partition",
+        args.partition,
         "--run",
         str(args.out / "heads" / "mlp_vit"),
         "--split-csv",
