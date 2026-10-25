@@ -8,8 +8,12 @@
 # and that is correct behaviour, not a gap.
 #
 # `expected_treatment` is checked only when present.
+#
+# `yarn` is the typical yarn to order for each fabric (scan results' yarn_advice), shown only
+# when the scanner names the fabric. A starting point: the Yarn spec scan (printed card +
+# weight) measures the actual count.
 
-version: 3
+version: 4
 tolerance:
   # Minimum visual confidence before a flag may be raised. Tuned for PRECISION:
   # a scanner that cries wolf gets switched off at the QC desk.
@@ -27,30 +31,140 @@ tolerance:
 family_check_exempt: [faux_fur, faux_leather]
 
 fabrics:
-  canvas:       {families: [cellulosic, synthetic]}
-  chambray:     {families: [cellulosic], expected_treatment: yarn_dyed}
-  chenille:     {families: [cellulosic, synthetic]}
-  chiffon:      {families: [protein, synthetic]}
-  corduroy:     {families: [cellulosic]}
-  crepe:        {families: [protein, synthetic, cellulosic]}
-  denim:        {families: [cellulosic], expected_treatment: yarn_dyed}
-  faux_fur:     {families: [synthetic]}
-  faux_leather: {families: [synthetic]}
-  flannel:      {families: [protein, cellulosic]}
-  fleece:       {families: [synthetic]}
-  gingham:      {families: [cellulosic], expected_treatment: yarn_dyed}
-  jersey:       {families: [cellulosic, protein, synthetic, blend]}
-  knit:         {families: [cellulosic, protein, synthetic, blend]}
-  lace:         {families: [synthetic, cellulosic]}
-  lawn:         {families: [cellulosic]}
-  neoprene:     {families: [synthetic]}
-  organza:      {families: [protein, synthetic]}
-  plush:        {families: [synthetic]}
-  satin:        {families: [protein, synthetic, cellulosic]}
-  serge:        {families: [protein, cellulosic, synthetic]}
-  taffeta:      {families: [protein, synthetic]}
-  tulle:        {families: [synthetic, cellulosic]}
-  tweed:        {families: [protein]}
-  twill:        {families: [cellulosic, protein, synthetic, blend]}
-  velvet:       {families: [protein, synthetic, cellulosic]}
-  vinyl:        {families: [synthetic]}
+  canvas:
+    families: [cellulosic, synthetic]
+    yarn:
+      - "Warp and weft: cotton (or poly-cotton) ply yarn, Ne 10/2–20/2"
+      - "Plain weave, heavy (300–500 g/m²)"
+  chambray:
+    families: [cellulosic]
+    expected_treatment: yarn_dyed
+    yarn:
+      - "Warp: dyed cotton, Ne 30–40"
+      - "Weft: undyed (white) cotton, Ne 30–40; plain weave"
+  chenille:
+    families: [cellulosic, synthetic]
+    yarn:
+      - "Chenille yarn (cotton, acrylic or polyester pile), Nm 1.5–4"
+      - "Base yarn: cotton or polyester, Ne 20–30"
+  chiffon:
+    families: [protein, synthetic]
+    yarn:
+      - "Warp and weft: polyester filament 50–75D, high (crepe) twist"
+      - "Silk for luxury chiffon; plain weave, very light (30–60 g/m²)"
+  corduroy:
+    families: [cellulosic]
+    yarn:
+      - "Warp: cotton Ne 16–24"
+      - "Weft: cotton Ne 16–24, with an extra pile weft cut into wales"
+  crepe:
+    families: [protein, synthetic, cellulosic]
+    yarn:
+      - "Polyester or viscose crepe-twist yarn, 75–150D (the high twist gives the pebbly surface)"
+  denim:
+    families: [cellulosic]
+    expected_treatment: yarn_dyed
+    yarn:
+      - "Warp: indigo-dyed cotton, Ne 7–12 (open-end or ring slub)"
+      - "Weft: undyed cotton, Ne 10–16"
+      - "Stretch denim: weft core-spun cotton/spandex (40D lycra core)"
+  faux_fur:
+    families: [synthetic]
+    yarn:
+      - "Pile: acrylic or modacrylic"
+      - "Backing: polyester knit, 75–150D"
+  faux_leather:
+    families: [synthetic]
+    yarn:
+      - "Not a yarn fabric: PU or PVC coating on a base cloth"
+      - "Base cloth: polyester knit or woven, 75–150D"
+  flannel:
+    families: [protein, cellulosic]
+    yarn:
+      - "Cotton Ne 10–20, soft (low) twist so it brushes well, or woollen-spun wool"
+      - "Brushed after weaving (plain or twill)"
+  fleece:
+    families: [synthetic]
+    yarn:
+      - "Polyester multifilament: 150D/144F (microfleece) or 75D/72F"
+      - "Knitted, then brushed on one or both sides"
+  gingham:
+    families: [cellulosic]
+    expected_treatment: yarn_dyed
+    yarn:
+      - "Yarn-dyed cotton (or CVC/PC), Ne 30–40, two colours in warp and weft"
+      - "Plain weave check"
+  jersey:
+    families: [cellulosic, protein, synthetic, blend]
+    yarn:
+      - "Combed cotton Ne 24–40 (30s most common for T-shirts, 140–180 g/m²)"
+      - "Or CVC 60/40 or PC 65/35; add 20–40D spandex for stretch"
+  knit:
+    families: [cellulosic, protein, synthetic, blend]
+    yarn:
+      - "Cotton Ne 20–40 or polyester 75–150D, by weight"
+      - "Add 20–40D spandex for stretch"
+  lace:
+    families: [synthetic, cellulosic]
+    yarn:
+      - "Nylon or polyester filament 20–70D, often with 20–40D spandex (stretch lace)"
+  lawn:
+    families: [cellulosic]
+    yarn:
+      - "Fine combed cotton, Ne 60–100, warp and weft"
+      - "Plain weave, high thread count, light (60–100 g/m²)"
+  neoprene:
+    families: [synthetic]
+    yarn:
+      - "Not a yarn fabric: chloroprene (or SBR) foam"
+      - "Faced with nylon or polyester jersey, 40–75D"
+  organza:
+    families: [protein, synthetic]
+    yarn:
+      - "Polyester or silk filament 20–30D, hard twist, warp and weft"
+      - "Plain weave, stiff and sheer"
+  plush:
+    families: [synthetic]
+    yarn:
+      - "Pile: polyester microfibre 150–300D, high filament count"
+      - "Backing: polyester knit, 75–100D"
+  satin:
+    families: [protein, synthetic, cellulosic]
+    yarn:
+      - "Polyester filament 75–150D (or silk), bright, low twist"
+      - "Satin weave: long warp floats give the shine"
+  serge:
+    families: [protein, cellulosic, synthetic]
+    yarn:
+      - "Worsted wool Nm 2/48–2/60, or a polyester/viscose blend"
+      - "2/2 twill"
+  taffeta:
+    families: [protein, synthetic]
+    yarn:
+      - "Polyester or nylon filament 70–150D, warp and weft"
+      - "Plain weave, crisp; often a thicker weft for the rib"
+  tulle:
+    families: [synthetic, cellulosic]
+    yarn:
+      - "Nylon (or polyester) filament 15–40D"
+      - "Knitted or bobbinet hexagonal net"
+  tweed:
+    families: [protein]
+    yarn:
+      - "Woollen-spun wool, coarse, Nm 3–9, often mixed colours"
+      - "Twill or plain weave"
+  twill:
+    families: [cellulosic, protein, synthetic, blend]
+    yarn:
+      - "Cotton or poly-cotton, Ne 16–20 or 20/2 (drill, chino)"
+      - "2/1 or 3/1 twill"
+  velvet:
+    families: [protein, synthetic, cellulosic]
+    yarn:
+      - "Pile: polyester, viscose or silk filament, 75–150D"
+      - "Ground: polyester 75D or cotton Ne 30–40"
+  vinyl:
+    families: [synthetic]
+    yarn:
+      - "Not a yarn fabric: PVC coating"
+      - "Base cloth: polyester or cotton knit or woven"

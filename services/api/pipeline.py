@@ -16,7 +16,7 @@ from services.api.schemas import (
     ScanResult,
     StatedComposition,
 )
-from services.consistency.engine import evaluate
+from services.consistency.engine import evaluate, yarn_advice
 from services.ocr.parser import parse_composition
 from services.vision.predictor import HeadOutput, Predictor
 
@@ -105,6 +105,7 @@ def run_scan(
         capture_quality=CaptureQuality(**vision.quality) if vision.quality else CaptureQuality(),
         candidates=vision.candidates,
         custom={name: _head(out) for name, out in vision.custom.items()},
+        yarn_advice=yarn_advice(vision.structure and vision.structure.label, composition),
         flags=[
             FlagModel(code=f.code, message=f.message, severity=f.severity) for f in verdict.flags
         ]

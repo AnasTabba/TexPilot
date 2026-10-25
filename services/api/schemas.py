@@ -74,6 +74,9 @@ class ScanResult(BaseModel):
     candidates: dict[str, list[tuple[str, float]]] = {}
     # Heads the factory taught itself (e.g. "wash"): null when that head abstained.
     custom: dict[str, HeadPrediction | None] = {}
+    # What to order to make this fabric (services.consistency.engine.yarn_advice): the label's
+    # blend, then the typical yarn for the named fabric. Empty when the fabric is unknown.
+    yarn_advice: list[str] = []
     model_version: str
     kb_version: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
