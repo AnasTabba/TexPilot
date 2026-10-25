@@ -52,3 +52,31 @@ def test_an_mlp_export_is_refused_because_taught_heads_are_linear(tmp_path):
     _export(tmp_path / "export", mlp=True)
     with pytest.raises(ValueError, match="linear"):
         convert(tmp_path / "export", "fibre", "enc")
+
+
+def test_the_cli_installs_a_head_only_on_the_encoder_it_was_trained_on(tmp_path):
+    from training.scanner.probe_to_custom import main
+
+    _export(tmp_path / "export")
+    meta = json.loads((tmp_path / "export" / "head.json").read_text())
+    (tmp_path / "export" / "head.json").write_text(
+        json.dumps(meta | {"encoder_id": "enc+lora-1234abcd"})
+    )
+    for tag, head_a in [("tuned", {"timm_name": "enc", "encoder_id": "enc+lora-1234abcd"}),
+                        ("public", {"timm_name": "enc"})]:  # fmt: skip
+        (tmp_path / tag / "head_a").mkdir(parents=True)
+        (tmp_path / tag / "head_a" / "head.json").write_text(json.dumps(head_a))
+    args = [
+        "--head",
+        str(tmp_path / "export"),
+        "--name",
+        "fibre",
+        "--out",
+        str(tmp_path / "custom"),
+    ]
+    assert main([*args, "--bundle", str(tmp_path / "tuned")]) == 0
+    assert [h.name for h in load_custom_heads(tmp_path / "custom", "enc+lora-1234abcd")] == [
+        "fibre"
+    ]
+    with pytest.raises(SystemExit):
+        main([*args, "--bundle", str(tmp_path / "public")])

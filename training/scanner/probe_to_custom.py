@@ -6,7 +6,8 @@ answers from the same encoder pass as the fabric, at no extra cost per scan.
         --head runs/kaggle/fibre_head/result/out/siglip2_linear
 
 The head's temperature is folded into its weights, and its threshold (calibrated on val for
-90% accuracy among answers) is kept. Only valid for the encoder the probe's features came from.
+90% accuracy among answers) is kept. It installs only on a bundle whose Head A runs the encoder
+the probe's features came from (head.json encoder_id: timm name, plus LoRA digest when tuned).
 """
 
 from __future__ import annotations
@@ -41,10 +42,12 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     head_a = json.loads((args.bundle / "head_a" / "head.json").read_text())
     probe = json.loads((args.head / "head.json").read_text())
-    if probe["timm_name"] != head_a["timm_name"] or "encoder_id" in head_a:
-        sys.exit(f"{args.head} was trained on public {probe['timm_name']} features; "
-                 f"{args.bundle} runs {head_a.get('encoder_id', head_a['timm_name'])}")  # fmt: skip
-    head = convert(args.head, args.name, head_a["timm_name"])
+    # Both name their encoder: the timm name, plus the LoRA digest when it was tuned.
+    trained_on = probe.get("encoder_id", probe["timm_name"])
+    runs_on = head_a.get("encoder_id", head_a["timm_name"])
+    if trained_on != runs_on:
+        sys.exit(f"{args.head} was trained on {trained_on} features; {args.bundle} runs {runs_on}")
+    head = convert(args.head, args.name, runs_on)
     print(f"wrote {head.save(args.out)}; restart the scanner to use it")
     return 0
 
