@@ -35,6 +35,39 @@ def best_run(runs_root: Path) -> Path:
     return max(finished, key=lambda pair: pair[0])[1]
 
 
+def macro_f1(logits: np.ndarray, y: np.ndarray, n_classes: int) -> float:
+    """Macro F1 over the classes present in ``y`` (as training.textilenet.metrics does)."""
+    pred = logits.argmax(1)
+    f1s = []
+    for c in np.unique(y):
+        tp = np.sum((pred == c) & (y == c))
+        prec, rec = tp / max(np.sum(pred == c), 1), tp / max(np.sum(y == c), 1)
+        f1s.append(0.0 if tp == 0 else 2 * prec * rec / (prec + rec))
+    return float(np.mean(f1s))
+
+
+def tune_class_bias(
+    logits: np.ndarray, y: np.ndarray, n_classes: int, passes: int = 3
+) -> np.ndarray:
+    """Per-class additive logit bias that maximises macro F1 on ``logits`` (val only):
+    coordinate ascent over a coarse grid, centred so only differences matter."""
+    bias = np.zeros(n_classes)
+    grid = np.arange(-2.0, 2.01, 0.25)
+    best = macro_f1(logits, y, n_classes)
+    for _ in range(passes):
+        improved = False
+        for c in range(n_classes):
+            for v in grid:
+                trial = bias.copy()
+                trial[c] = v
+                f = macro_f1(logits + trial, y, n_classes)
+                if f > best + 1e-6:
+                    best, bias, improved = f, trial, True
+        if not improved:
+            break
+    return bias - bias.mean()
+
+
 def calibrate(val: tuple, test: tuple, target: float = 0.90) -> dict:
     """val, test: (logits, labels). Temperature and abstain threshold come from val only."""
     (lv, yv), (lt, yt) = val, test

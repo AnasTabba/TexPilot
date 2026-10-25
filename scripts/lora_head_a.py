@@ -119,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         "training.scanner.export_probe_head",
         "--partition",
         args.partition,
+        "--tune-bias",
         "--run",
         str(args.out / "heads" / "mlp_vit"),
         "--split-csv",

@@ -35,6 +35,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--partition", default="fabric")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--target", type=float, default=0.90, help="val accuracy among kept answers")
+    ap.add_argument(
+        "--tune-bias", action="store_true", help="per-class logit bias for val macro F1"
+    )
     ap.add_argument("--crop-pct", type=float, default=0.875, help="as probe.py extracted with")
     args = ap.parse_args(argv)
 
@@ -42,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     import torch
     from safetensors.numpy import save_file
 
-    from training.scanner.export_head_a import calibrate
+    from training.scanner.export_head_a import calibrate, tune_class_bias
     from training.textilenet.feature_cache import FeatureCache
     from training.textilenet.head_search import make_head
     from training.textilenet.metrics import summarize
@@ -82,6 +85,11 @@ def main(argv: list[str] | None = None) -> int:
         with torch.no_grad():
             logits = head(torch.from_numpy(f)).numpy()
         scores[split] = (logits, np.array([classes.index(r.label) for r in rs]))
+    no_bias = summarize(*scores["test"], classes)["macro_f1"]
+    bias = np.zeros(len(classes))
+    if args.tune_bias:  # per-class logit bias for macro F1, from val only; serving adds it too
+        bias = tune_class_bias(*scores["val"], len(classes))
+        scores = {k: (lg + bias, y) for k, (lg, y) in scores.items()}
     cal = calibrate(scores["val"], scores["test"], args.target)
     test = summarize(*scores["test"], classes)
 
@@ -103,11 +111,18 @@ def main(argv: list[str] | None = None) -> int:
         "domain": f"catalog (TextileNet {args.partition})",
         **cal,
         "test_macro_f1": test["macro_f1"],
+        "val_macro_f1": summarize(*scores["val"], classes)["macro_f1"],
+        **(
+            {"class_bias": bias.tolist(), "test_macro_f1_no_bias": no_bias}
+            if args.tune_bias
+            else {}
+        ),
     }
     (args.out / "head.json").write_text(json.dumps(meta, indent=1))
     t = cal["test"]
     print(
-        f"{name}: test n={t['n']} top-1 {t['top1']:.4f} macro F1 {test['macro_f1']:.4f}; answers "
+        f"{name}: test n={t['n']} top-1 {t['top1']:.4f} macro F1 {test['macro_f1']:.4f} "
+        f"(without class bias {no_bias:.4f}); answers "
         f"{t['coverage']:.1%} at {t['accuracy_kept'] or 0:.4f} accuracy. Wrote {args.out}"
     )
     return 0
