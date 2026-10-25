@@ -168,3 +168,9 @@ def test_a_fabric_without_a_clear_repeat_has_no_weave_name():
     img = (rng.random((1600, 1600)) * 255).astype(np.uint8)
     d = thread_density(render("plain", 80, 60, 600, size=1600), 600)  # counts from another fabric
     assert weave_pattern(img, 600, d) is None
+
+
+def test_a_swatch_too_small_for_its_skew_is_refused_with_a_reason_not_a_crash():
+    strip = render("plain", 80, 60, 600, size=1600, angle=7)[:, :300]  # a thin, tilted strip
+    d = thread_density(strip, 600)
+    assert d.ends_per_inch is None and "small" in d.note
