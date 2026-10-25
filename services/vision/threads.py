@@ -120,6 +120,10 @@ def thread_density(
     margin = int(np.ceil(np.sin(np.radians(abs(skew))) * max(h, w)))  # rotation fill
     img = img[margin : h - margin, margin : w - margin]
     h, w = img.shape
+    if min(h, w) < 4 * ppi / min_tpi:  # four of the coarsest threads, after the tilt's margin
+        return Density(None, None, skew_deg=skew, note=(
+            f"swatch too small: {w}x{h} px left after straightening a {skew:.1f} deg tilt; "
+            f"scan at least {4 / min_tpi:.2f} inch of fabric, square to the glass"))  # fmt: skip
     size = min(tile, h, w)
     step = max(size // 2, 1)  # half-overlapping tiles: more votes from a small swatch
     tiles = [
@@ -223,7 +227,7 @@ def weave_pattern(
     b = (m < t).astype(int)
 
     def period(axis: int) -> int | None:
-        for s in range(1, 9):
+        for s in range(1, min(8, b.shape[axis] // 2) + 1):  # a repeat seen at least twice
             a, z = (b[:, :-s], b[:, s:]) if axis == 1 else (b[:-s], b[s:])
             if (a == z).mean() >= min_agreement:
                 return s
