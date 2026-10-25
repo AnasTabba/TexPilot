@@ -394,7 +394,7 @@ export default function Scanner({
     <div className="scanner-page">
       <div className="scan-topline">
         <span className="scan-model-badge">
-          <span className={info ? "live-dot" : "offline-dot"} />
+          {info ? <CheckCheck size={20} aria-hidden="true" /> : <WifiOff size={20} aria-hidden="true" />}
           {connecting
             ? t(copy.checkingModel, copy.urdu434)
             : info
@@ -413,7 +413,7 @@ export default function Scanner({
         </button>
       </div>
       {configOpen && (
-        <section className="scan-connect panel glass">
+        <section className="scan-connect panel">
           <div className="scan-connect-heading">
             <span className="feature-icon">
               <PlugZap size={23} />
@@ -489,7 +489,7 @@ export default function Scanner({
         </div>
       )}
       <div className="scanner-grid">
-        <section className="scan-capture-panel panel glass">
+        <section className="scan-capture-panel panel">
           <div className="panel-heading">
             <div>
               <h2>{t(copy.aCloserLookAtYourMaterial, copy.urdu444)}</h2>
@@ -570,7 +570,7 @@ export default function Scanner({
             ) : (
               <div className="scan-camera-empty">
                 <span>
-                  <Camera size={37} strokeWidth={1.3} />
+                  <Camera size={37} strokeWidth={1.75} />
                 </span>
                 <h3>
                   {slot === "surface"
@@ -787,7 +787,7 @@ export default function Scanner({
         </section>
         <aside className="scan-results-column">
           <section
-            className={`scan-results panel glass ${result ? "has-result" : ""}`}
+            className={`scan-results panel ${result ? "has-result" : ""}`}
           >
             <div className="panel-heading">
               <div>
@@ -796,17 +796,14 @@ export default function Scanner({
                 </h2>
                 <p>{t(copy.evidenceFirstAConfidentNextStep, copy.urdu480)}</p>
               </div>
-              <span className="scan-result-icon">
-                <Layers3 size={20} />
-              </span>
             </div>
             {result ? (
               <>
                 <div className={`scan-verdict ${result.verdict.toLowerCase()}`}>
                   <span>
-                    {result.verdict === copy.pass ? (
+                    {result.verdict === "PASS" ? (
                       <ShieldCheck size={24} />
-                    ) : result.verdict === copy.flag ? (
+                    ) : result.verdict === "FLAG" ? (
                       <AlertTriangle size={24} />
                     ) : (
                       <CircleHelp size={24} />
@@ -814,19 +811,19 @@ export default function Scanner({
                   </span>
                   <div>
                     <strong>
-                      {result.verdict === copy.pass
+                      {result.verdict === "PASS"
                         ? t(copy.consistentWithTheLabel, copy.urdu481)
-                        : result.verdict === copy.flag
+                        : result.verdict === "FLAG"
                           ? t(copy.needsACloserLook, copy.urdu482)
                           : t(copy.moreEvidenceNeeded, copy.urdu483)}
                     </strong>
                     <p>
-                      {result.verdict === copy.pass
+                      {result.verdict === "PASS"
                         ? t(
                             copy.noInconsistencyWasFlaggedByTheModel,
                             copy.urdu484,
                           )
-                        : result.verdict === copy.flag
+                        : result.verdict === "FLAG"
                           ? t(
                               copy.reviewTheFlaggedEvidenceBeforeAcceptingThis,
                               copy.urdu485,
@@ -879,9 +876,9 @@ export default function Scanner({
                   </div>
                 )}
                 <div className="scan-composition">
-                  <span className="eyebrow">
+                  <h3>
                     {t(copy.compositionFromTheLabel, copy.urdu491)}
-                  </span>
+                  </h3>
                   {result.stated_composition.fibers.length ? (
                     <div>
                       {result.stated_composition.fibers.map((fiber, i) => (
@@ -974,11 +971,6 @@ export default function Scanner({
               </>
             ) : (
               <div className="scan-empty-results">
-                <div className="scan-empty-orbit">
-                  <Layers3 size={35} strokeWidth={1.25} />
-                  <span />
-                  <span />
-                </div>
                 <h3>
                   {scanning
                     ? t(copy.findingTheFinerDetails, copy.urdu502)
@@ -1009,7 +1001,7 @@ export default function Scanner({
               </div>
             )}
           </section>
-          <section className="scan-tip-card glass">
+          <section className="scan-tip-card">
             <span>
               <Focus size={19} />
             </span>

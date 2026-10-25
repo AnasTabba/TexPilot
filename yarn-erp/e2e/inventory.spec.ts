@@ -13,7 +13,7 @@ async function createWorkspace(page: Page, user: string) {
   await page.goto('/');
   await page.getByLabel('Workspace name').fill('Yarnflow phone testing');
   await page.getByRole('form', { name: 'Start your shared workspace' }).getByRole('button', { name: 'Create workspace', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Inventory.', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Stock', exact: true })).toBeVisible();
 }
 async function createStock(page: Page) {
   const product = await post(page, '/products', { name: 'Cotton combed 30/1', sku: 'COT-30', barcode: '8901234567890' });
@@ -25,32 +25,46 @@ async function createStock(page: Page) {
 test.describe('Shared inventory', () => {
   test('material, batch, receipt, QC approval and dispatch work through the UI', async ({ page }) => {
     await createWorkspace(page, 'workflow-' + crypto.randomUUID());
-    await page.getByRole('button', { name: 'Add material', exact: true }).click();
+    await page.getByRole('button', { name: 'Add a material', exact: true }).click();
     await page.getByLabel('Material name', { exact: true }).fill('Cotton combed 30/1');
     await page.getByLabel('SKU', { exact: true }).fill('COT-30');
+    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save to workspace', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Saved to your shared workspace.' })).toBeVisible();
-    await page.getByRole('button', { name: 'New batch', exact: true }).click();
+    await page.getByRole('button', { name: 'Create batch', exact: true }).click();
     await page.getByLabel('Batch / dye lot', { exact: true }).fill('DYE-001');
+    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save to workspace', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Batch details', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Receive stock', exact: true }).click();
     await page.getByLabel('Weight (kg)', { exact: true }).fill('10.250');
     await page.getByLabel('Cartons', { exact: true }).fill('2');
     await page.getByLabel('Cones', { exact: true }).fill('48');
+    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save to workspace', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Dispatch', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: 'Review quality', exact: true }).click();
     await page.getByLabel('Inspection reason', { exact: true }).fill('Physical inspection matches care label');
+    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save QC decision', exact: true }).click();
     await page.getByRole('button', { name: 'Dispatch', exact: true }).click();
     await page.getByLabel('Weight (kg)', { exact: true }).fill('1.250');
     await page.getByLabel('Cartons', { exact: true }).fill('0');
     await page.getByLabel('Cones', { exact: true }).fill('0');
+    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save to workspace', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Undo entry', exact: true })).toBeVisible();
     const state = await (await page.request.get('/api/workspace')).json();
     expect(state.balances[0].grams).toBe(9000);
     expect(state.movements).toHaveLength(2);
+    await page.getByRole('button', { name: 'Undo entry', exact: true }).click();
+    await expect(page.getByLabel('Reason', { exact: true })).toHaveValue('Correction after saving');
+    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
+    await page.getByRole('button', { name: 'Save reversal', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Reversal saved.' })).toBeVisible();
+    const corrected = await (await page.request.get('/api/workspace')).json();
+    expect(corrected.balances[0].grams).toBe(10250);
+    expect(corrected.movements).toHaveLength(3);
   });
 
   test('another phone joins the same workspace and barcode lookup opens its batch', async ({ browser, page }) => {
@@ -89,9 +103,12 @@ test.describe('Shared inventory', () => {
     await page.getByRole('button', { name: /Cotton combed 30\/1/ }).click();
     await page.getByRole('button', { name: 'Move stock', exact: true }).click();
     await page.getByLabel('Weight (kg)', { exact: true }).fill('999');
+    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save to workspace', exact: true }).click();
     await expect(page.getByRole('alert').filter({ hasText: 'Stock changed' })).toBeVisible();
+    await page.getByRole('button', { name: 'Edit entry', exact: true }).click();
     await expect(page.getByLabel('Weight (kg)', { exact: true })).toHaveValue('999');
+    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await context.setOffline(true);
     await expect(page.getByRole('button', { name: 'Save to workspace', exact: true })).toBeDisabled();
     await expect(page.getByRole('status').filter({ hasText: 'Offline · writes paused' })).toBeVisible();
@@ -109,6 +126,7 @@ test.describe('Shared inventory', () => {
     await page.getByLabel('Notes', { exact: true }).fill('Label photographed at goods-in. Physical QC pending.');
     const image = await QRCode.toBuffer('Inspection photo fixture', { width: 240 });
     await page.getByLabel('Inspection photo (optional)', { exact: true }).setInputFiles({ name: 'inspection.png', mimeType: 'image/png', buffer: image });
+    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save inspection', exact: true }).click();
     const evidence = page.getByRole('img', { name: 'Inspection evidence for batch DYE-001' });
     await evidence.scrollIntoViewIfNeeded();
@@ -136,8 +154,8 @@ test.describe('Shared inventory', () => {
     await page.goto('/#/inventory');
     const phoneNavigation = page.getByRole('navigation', { name: 'Phone navigation' });
     if (await phoneNavigation.isVisible()) {
-      const button = phoneNavigation.getByRole('button', { name: 'Inventory', exact: true });
-      await expect(button.getByText('Inventory', { exact: true })).toHaveCSS('font-size', '12px');
+      const button = phoneNavigation.getByRole('button', { name: 'Stock', exact: true });
+      await expect(button.getByText('Stock', { exact: true })).toHaveCSS('font-size', '14px');
     }
     await page.screenshot({ path: `docs/progress/live/inventory-${testInfo.project.name}.png`, fullPage: true });
   });

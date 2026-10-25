@@ -1,0 +1,33 @@
+{
+  "kind": "headless Chromium lab smoke; no field p75 or physical GPU claim",
+  "results": [
+    {
+      "width": 1440,
+      "cpuSlowdown": 4,
+      "network": "local unthrottled",
+      "route": "register/overview",
+      "lcp": 272,
+      "cls": 0.00018401131754222394,
+      "longTasks": [
+        61
+      ],
+      "scrollFrameP95": 17.5,
+      "scrollFramesOver50": 0,
+      "frameSamples": 60
+    },
+    {
+      "width": 390,
+      "cpuSlowdown": 4,
+      "network": "local unthrottled",
+      "route": "register/overview",
+      "lcp": 252,
+      "cls": 0.019298157644824312,
+      "longTasks": [
+        59
+      ],
+      "scrollFrameP95": 17.300000071525574,
+      "scrollFramesOver50": 0,
+      "frameSamples": 60
+    }
+  ]
+}

@@ -1,0 +1,381 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-25T06:37:44.957075+00:00",
+  "title": "Design System: Yarnflow",
+  "extensions": {
+    "colorMeta": {
+      "page": {
+        "role": "neutral",
+        "displayName": "Warm Cotton"
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Clean Paper"
+      },
+      "sunken": {
+        "role": "neutral",
+        "displayName": "Pressed Cotton"
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Paper Edge"
+      },
+      "input-border": {
+        "role": "neutral",
+        "displayName": "Register Stroke"
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "Factory Ink"
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Secondary Ink"
+      },
+      "brand": {
+        "role": "primary",
+        "displayName": "Deep Teal"
+      },
+      "brand-hover": {
+        "role": "primary",
+        "displayName": "Deep Teal Hover"
+      },
+      "brand-light": {
+        "role": "primary",
+        "displayName": "Teal Selection"
+      },
+      "brand-mid": {
+        "role": "primary",
+        "displayName": "Teal Data Tint"
+      },
+      "on-brand": {
+        "role": "primary",
+        "displayName": "On Teal"
+      },
+      "success": {
+        "role": "status",
+        "displayName": "Inspection Green"
+      },
+      "success-surface": {
+        "role": "status",
+        "displayName": "Inspection Green Surface"
+      },
+      "warning": {
+        "role": "status",
+        "displayName": "Attention Amber"
+      },
+      "warning-surface": {
+        "role": "status",
+        "displayName": "Attention Amber Surface"
+      },
+      "error": {
+        "role": "status",
+        "displayName": "Hold Red"
+      },
+      "error-surface": {
+        "role": "status",
+        "displayName": "Hold Red Surface"
+      },
+      "glass-fill": {
+        "role": "neutral",
+        "displayName": "Warm Glass Fill"
+      },
+      "glass-solid": {
+        "role": "neutral",
+        "displayName": "Solid Glass Fallback"
+      },
+      "glass-edge": {
+        "role": "neutral",
+        "displayName": "Glass Edge"
+      },
+      "dark-page": {
+        "role": "neutral",
+        "displayName": "Dark Warm Cotton"
+      },
+      "dark-card": {
+        "role": "neutral",
+        "displayName": "Dark Clean Paper"
+      },
+      "dark-sunken": {
+        "role": "neutral",
+        "displayName": "Dark Pressed Cotton"
+      },
+      "dark-border": {
+        "role": "neutral",
+        "displayName": "Dark Paper Edge"
+      },
+      "dark-input-border": {
+        "role": "neutral",
+        "displayName": "Dark Register Stroke"
+      },
+      "dark-text-primary": {
+        "role": "neutral",
+        "displayName": "Dark Factory Ink"
+      },
+      "dark-text-secondary": {
+        "role": "neutral",
+        "displayName": "Dark Secondary Ink"
+      },
+      "dark-brand": {
+        "role": "primary",
+        "displayName": "Dark Deep Teal"
+      },
+      "dark-brand-hover": {
+        "role": "primary",
+        "displayName": "Dark Deep Teal Hover"
+      },
+      "dark-brand-light": {
+        "role": "primary",
+        "displayName": "Dark Teal Selection"
+      },
+      "dark-brand-mid": {
+        "role": "primary",
+        "displayName": "Dark Teal Data Tint"
+      },
+      "dark-on-brand": {
+        "role": "primary",
+        "displayName": "Dark On Teal"
+      },
+      "dark-success": {
+        "role": "status",
+        "displayName": "Dark Inspection Green"
+      },
+      "dark-success-surface": {
+        "role": "status",
+        "displayName": "Dark Inspection Green Surface"
+      },
+      "dark-warning": {
+        "role": "status",
+        "displayName": "Dark Attention Amber"
+      },
+      "dark-warning-surface": {
+        "role": "status",
+        "displayName": "Dark Attention Amber Surface"
+      },
+      "dark-error": {
+        "role": "status",
+        "displayName": "Dark Hold Red"
+      },
+      "dark-error-surface": {
+        "role": "status",
+        "displayName": "Dark Hold Red Surface"
+      },
+      "dark-glass-fill": {
+        "role": "neutral",
+        "displayName": "Dark Warm Glass Fill"
+      },
+      "dark-glass-solid": {
+        "role": "neutral",
+        "displayName": "Dark Solid Glass Fallback"
+      },
+      "dark-glass-edge": {
+        "role": "neutral",
+        "displayName": "Dark Glass Edge"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page titles and large figures."
+      },
+      "title": {
+        "displayName": "Shared Section Title",
+        "purpose": "Shared workspace section headings."
+      },
+      "register-title": {
+        "displayName": "Register Section Title",
+        "purpose": "Register sections and compact summary figures."
+      },
+      "control": {
+        "displayName": "Control",
+        "purpose": "Actions and navigation; field text uses normal weight at this size."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Descriptions, records and table text."
+      },
+      "label": {
+        "displayName": "Field Label",
+        "purpose": "Visible field names."
+      },
+      "supporting": {
+        "displayName": "Supporting",
+        "purpose": "Helper text, timestamps and status labels."
+      },
+      "urdu": {
+        "displayName": "Urdu",
+        "purpose": "Root font override under lang=ur."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card",
+        "value": "none",
+        "purpose": "Opaque working panels remain flat."
+      },
+      {
+        "name": "glass-highlight",
+        "value": "inset 0 1px 0 rgb(255 255 255 / 85%)",
+        "purpose": "Light glass top edge."
+      },
+      {
+        "name": "glass-shadow",
+        "value": "0 8px 24px rgb(27 29 31 / 8%)",
+        "purpose": "Light floating chrome."
+      },
+      {
+        "name": "dark-glass-highlight",
+        "value": "inset 0 1px 0 rgb(255 255 255 / 10%)",
+        "purpose": "Dark glass top edge."
+      },
+      {
+        "name": "dark-glass-shadow",
+        "value": "0 8px 24px rgb(0 0 0 / 18%)",
+        "purpose": "Dark floating chrome."
+      },
+      {
+        "name": "register-toast",
+        "value": "0 4px 16px rgb(0 0 0 / .08)",
+        "purpose": "Transient register notice."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-transition",
+        "value": "background-color 150ms ease, color 150ms ease, border-color 150ms ease",
+        "purpose": "Quiet semantic state feedback; removed under reduced motion."
+      },
+      {
+        "name": "pressed-feedback",
+        "value": "brightness(.96)",
+        "purpose": "Subtle press feedback on enabled buttons."
+      },
+      {
+        "name": "loading-rotation",
+        "value": "1s linear infinite",
+        "purpose": "Functional loading indicator only; removed under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "shared-review-stack",
+        "value": "560px"
+      },
+      {
+        "name": "register-phone-detail",
+        "value": "600px"
+      },
+      {
+        "name": "shared-phone-navigation",
+        "value": "760px"
+      },
+      {
+        "name": "register-bottom-navigation",
+        "value": "900px"
+      },
+      {
+        "name": "shared-compact-content",
+        "value": "1100px"
+      },
+      {
+        "name": "register-summary-compact",
+        "value": "1279px"
+      },
+      {
+        "name": "register-wide-gutters",
+        "value": "1440px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "One verb-led primary action in a task state; inherits the active semantic theme.",
+      "html": "<button class=\"ds-primary\" type=\"button\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg>Receive stock</button>",
+      "css": ".ds-primary{font-family:var(--body-font,\"IBM Plex Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif);display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:12px 16px;border:1px solid var(--brand,#0f5f6b);border-radius:var(--control-radius,8px);background:var(--brand,#0f5f6b);color:var(--on-brand,#fff);font-size:18px;font-weight:500;font-variant-numeric:tabular-nums;cursor:pointer;transition:background-color 150ms ease,color 150ms ease,border-color 150ms ease}.ds-primary:hover:not(:disabled){background:var(--brand-hover,#0b4c56);border-color:var(--brand-hover,#0b4c56)}.ds-primary:focus-visible{outline:3px solid var(--focus,#0f5f6b);outline-offset:4px;}.ds-primary:active:not(:disabled){filter:brightness(.96)}.ds-primary:disabled{opacity:1;cursor:not-allowed;background:var(--sunken,#f1efea);border-color:var(--input-border,#858780);color:var(--muted,#5a5e63)}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}"
+    },
+    {
+      "name": "Labelled register field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Solid, visibly labelled field with supporting text and an explicit invalid state.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-weight\">Weight (kg)</label><input class=\"ds-input\" id=\"ds-weight\" inputmode=\"decimal\" placeholder=\"0.000\" aria-describedby=\"ds-weight-help\" required><span class=\"ds-field-help\" id=\"ds-weight-help\">Enter the weight shown on the scale.</span></div>",
+      "css": ".ds-field{font-family:var(--body-font,\"IBM Plex Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif);display:grid;gap:8px;max-width:400px;min-width:0;color:var(--text,#1b1d1f)}.ds-field-label{font-size:16px;font-weight:500}.ds-input{box-sizing:border-box;font-family:var(--body-font,\"IBM Plex Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif);width:100%;min-width:0;min-height:52px;padding:12px;border:1px solid var(--input-border,#858780);border-radius:var(--control-radius,8px);background:var(--surface,#fff);color:var(--text,#1b1d1f);font-size:18px;font-weight:400;line-height:1.5;font-variant-numeric:tabular-nums;caret-color:var(--brand,#0f5f6b);transition:background-color 150ms ease,color 150ms ease,border-color 150ms ease}.ds-input::placeholder{color:var(--muted,#5a5e63);opacity:1}.ds-input:focus-visible{outline:3px solid var(--focus,#0f5f6b);outline-offset:4px;}.ds-input[aria-invalid=\"true\"]{border-color:var(--error,#b42b24)}.ds-field-help{font-size:14px;line-height:1.5;color:var(--muted,#5a5e63)}@media(prefers-reduced-motion:reduce){.ds-input{transition:none}}"
+    },
+    {
+      "name": "Floating navigation",
+      "kind": "nav",
+      "refersTo": "nav-active",
+      "description": "A single glass navigation layer, with an obvious active destination and solid fallbacks.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Main navigation\"><button class=\"ds-nav-item\" type=\"button\" aria-current=\"page\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/></svg>Today</button><button class=\"ds-nav-item\" type=\"button\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m21 8-9 5-9-5M12 13v9M3 7l9-5 9 5v10l-9 5-9-5Z\"/></svg>Stock</button></nav>",
+      "css": ".ds-nav{font-family:var(--body-font,\"IBM Plex Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif);display:grid;gap:8px;max-width:280px;padding:8px;background:var(--glass-solid,#fffefa);border:1px solid var(--line,#e4e1da);border-radius:24px;box-shadow:var(--glass-highlight,inset 0 1px 0 rgb(255 255 255 / 85%)),var(--glass-shadow,0 8px 24px rgb(27 29 31 / 8%))}.ds-nav-item{font-family:var(--body-font,\"IBM Plex Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif);display:flex;align-items:center;gap:12px;min-height:52px;padding:12px 16px;border:0;border-radius:16px;text-align:start;background:transparent;color:var(--text,#1b1d1f);font-size:18px;font-weight:500;cursor:pointer;transition:background-color 150ms ease,color 150ms ease}.ds-nav-item:hover{background:var(--sunken,#f1efea)}.ds-nav-item[aria-current=\"page\"]{background:var(--brand-light,#e6f0f1);color:var(--brand,#0f5f6b)}.ds-nav-item:focus-visible{outline:3px solid var(--focus,#0f5f6b);outline-offset:4px;}.ds-nav-item:active{filter:brightness(.96)}@supports((backdrop-filter:blur(24px)) or (-webkit-backdrop-filter:blur(24px))){.ds-nav{background:var(--glass-fill,rgb(255 254 250 / 92%));border-color:var(--glass-edge,rgb(255 255 255 / 80%));backdrop-filter:blur(24px) saturate(170%);-webkit-backdrop-filter:blur(24px) saturate(170%)}}@media(prefers-reduced-transparency:reduce){.ds-nav{background:var(--glass-solid,#fffefa);border-color:var(--line,#e4e1da);backdrop-filter:none;-webkit-backdrop-filter:none}}@media(prefers-reduced-motion:reduce){.ds-nav-item{transition:none}}"
+    },
+    {
+      "name": "Meaningful quality status",
+      "kind": "chip",
+      "refersTo": "status-approved",
+      "description": "A static quality readout that combines words, an icon and semantic color.",
+      "html": "<span class=\"ds-quality\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"m8 12 3 3 5-6\"/></svg>Approved</span>",
+      "css": ".ds-quality{font-family:var(--body-font,\"IBM Plex Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif);display:inline-flex;align-items:center;gap:8px;width:fit-content;padding:4px 8px;border-radius:4px;background:var(--success-surface,#e8f4ec);color:var(--success,#1f7a45);font-size:14px;font-weight:500;line-height:1.5}.ds-quality svg{flex-shrink:0;width:18px;height:18px}"
+    },
+    {
+      "name": "Solid working panel",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Opaque content with a quiet edge; hierarchy comes from text and spacing.",
+      "html": "<section class=\"ds-panel\" aria-labelledby=\"ds-panel-heading\"><h2 class=\"ds-panel-heading\" id=\"ds-panel-heading\">Batch stock</h2><dl class=\"ds-panel-facts\"><div><dt>Available weight</dt><dd>\u2014 <span>kg</span></dd></div></dl></section>",
+      "css": ".ds-panel{font-family:var(--body-font,\"IBM Plex Sans\",-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif);min-width:0;max-width:480px;padding:24px;border:1px solid var(--line,#e4e1da);border-radius:var(--card-radius,10px);background:var(--surface,#fff);color:var(--text,#1b1d1f);box-shadow:none}.ds-panel-heading{margin:0 0 24px;font-size:20px;font-weight:600;letter-spacing:-.01em}.ds-panel-facts{margin:0;display:grid;gap:24px}.ds-panel-facts dt{margin:0 0 8px;font-size:16px;line-height:1.5;color:var(--muted,#5a5e63)}.ds-panel-facts dd{margin:0;font-size:32px;line-height:1.25;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums}.ds-panel-facts dd span{font-size:16px;font-weight:400;color:var(--muted,#5a5e63)}@media(max-width:760px){.ds-panel{padding:16px}.ds-panel-facts dd{font-size:24px}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calm Factory Register",
+    "overview": "Yarnflow brings the confidence of a familiar paper register to a shared factory workspace. Warm cotton neutrals carry the work; deep teal identifies the next action, the current place and the data. Premium means calm, clear and confident for mill staff moving between office desktops and factory phones.\n\nSolid working surfaces sit beneath one restrained layer of floating glass. Large readable text, steady alignment and quiet state changes make each task predictable. Use plain factory wording, meaningful icons and recoverable forms; decoration must never compete with quantities, batch names or decisions.",
+    "keyCharacteristics": [
+      "Warm cotton surfaces and a single deep teal brand accent.",
+      "Large text, tabular figures and clearly labelled controls.",
+      "Opaque content beneath restrained floating glass.",
+      "Spacious alignment with quiet row dividers.",
+      "Word, icon and color together for status."
+    ],
+    "rules": [
+      {
+        "name": "The Meaningful Color Rule",
+        "body": "Use teal for action, selection, links, focus and data; use green, amber and red for status. Let neutral surfaces occupy most of the screen.",
+        "section": "colors"
+      },
+      {
+        "name": "The Readable Register Rule",
+        "body": "Body text starts at (16px), controls at (18px), and supporting text never falls below (14px). Build hierarchy with type, weight and space before adding containers.",
+        "section": "typography"
+      },
+      {
+        "name": "The Same Grid Rule",
+        "body": "Align headings, content and primary actions. Separate sections with whitespace and quiet dividers rather than wrapping every item in a box.",
+        "section": "layout"
+      },
+      {
+        "name": "The One Glass Layer Rule",
+        "body": "Glass floats above opaque work. Never place glass inside glass, blur content, or add decorative backgrounds to display the effect.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** use warm cotton neutrals for the canvas, solid paper for work and teal for meaningful actions.",
+      "**Do** keep body text at least 16px, controls 18px, supporting text at least 14px and interactive targets at least 48px.",
+      "**Do** pair each status with words, a meaningful icon and its semantic color.",
+      "**Do** preserve visible focus, readable disabled states, reduced motion and solid glass fallbacks.",
+      "**Do** align sections, use tabular numbers and show human-readable dates and quantities.",
+      "**Do** keep form labels, inline recovery and review-before-save patterns clear and consistent."
+    ],
+    "donts": [
+      "**Don't** introduce violet, default blue, glows, heavy colored shadows or gradients outside the permitted glass edge highlight.",
+      "**Don't** put glass on tables, charts, forms, inputs or reading surfaces, or stack glass layers.",
+      "**Don't** add decorative illustrations, emoji, tinted icon tiles or badges without information.",
+      "**Don't** turn every item into a pill or nest framed cards to create hierarchy.",
+      "**Don't** use tiny uppercase eyebrow labels, colored headings, monospace record IDs or raw ISO dates in normal interface text.",
+      "**Don't** treat a documented token or component example as proof that every route and state has passed final visual review."
+    ]
+  }
+}
