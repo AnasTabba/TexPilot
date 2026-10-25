@@ -831,7 +831,7 @@ export default function Scanner({
                 )}
                 <div className="scan-answer">
                   <span>{t("Fabric", "کپڑا")}</span>
-                  <h3>
+                  <h3 className={result.structure ? "is-label" : ""}>
                     {result.structure
                       ? labelFor(result.structure.label)
                       : t("Not sure which fabric yet", "ابھی پکا نہیں کہ کون سا کپڑا ہے")}

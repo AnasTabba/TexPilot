@@ -259,7 +259,6 @@
   font-size: 1.75rem;
   line-height: 1.15;
   letter-spacing: -0.02em;
-  text-transform: capitalize;
 }
 .scan-answer strong {
   font-size: 1.05rem;
@@ -287,4 +286,8 @@
   text-align: center;
   height: auto;
   padding-block: 10px;
+}
+
+.scan-results .scan-answer h3.is-label {
+  text-transform: capitalize;
 }
