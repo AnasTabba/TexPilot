@@ -1,5 +1,5 @@
 import { copy } from "./ui-copy";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
   Camera,
   ScanLine,
@@ -857,6 +857,14 @@ export default function Scanner({
                     Tag,
                     result.candidates.fibre_family,
                   )}
+                  {Object.entries(result.custom).map(([name, head]) => {
+                    const title = name.charAt(0).toUpperCase() + name.slice(1).replaceAll("_", " ");
+                    return (
+                      <Fragment key={name}>
+                        {headRow(title, title, head, Tag, result.candidates[name])}
+                      </Fragment>
+                    );
+                  })}
                 </div>
                 {result.garment && (
                   <div className="scan-garment">

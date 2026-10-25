@@ -24,7 +24,9 @@ export interface ScanResult {
   };
   flags: { code: string; message: string; severity: string }[];
   /** For heads that abstained: what they were weighing. Never a verdict. */
-  candidates: Partial<Record<HeadName, [string, number][]>>;
+  candidates: Partial<Record<HeadName | string, [string, number][]>>;
+  /** Heads the factory taught the scanner (e.g. "wash"); null where that head abstained. */
+  custom: Record<string, HeadPrediction | null>;
   capture_quality: {
     blur: number | null;
     exposure: string | null;
@@ -200,7 +202,13 @@ export function parseScanResult(value: unknown): ScanResult {
     )
   )
     throw new ScanError("response");
-  return { ...(value as unknown as ScanResult), candidates };
+  const custom = value.custom ?? {}; // absent from APIs before taught heads existed
+  if (!record(custom) || !Object.values(custom).every(head)) throw new ScanError("response");
+  return {
+    ...(value as unknown as ScanResult),
+    candidates: candidates as ScanResult["candidates"],
+    custom: custom as ScanResult["custom"],
+  };
 }
 async function request(
   url: string,

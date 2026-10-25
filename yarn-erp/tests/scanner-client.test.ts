@@ -28,6 +28,7 @@ const fixture: ScanResult = {
   },
   flags: [],
   candidates: {},
+  custom: {},
   capture_quality: { blur: null, exposure: null, framing: null },
   model_version: "scanner-v2+det=gdino+ocr=apple",
   kb_version: "1",
@@ -280,4 +281,15 @@ test("The weave read from the scan is passed through; a malformed one is refused
   assert.equal(parseSpecResult({ ...spec, weave: "3/1 twill, right-hand" }).weave, "3/1 twill, right-hand");
   assert.equal(parseSpecResult({ ...spec, weave: null }).weave, null);
   assert.throws(() => parseSpecResult({ ...spec, weave: 31 }), ScanError);
+});
+test("Scanner shows heads the factory taught (e.g. wash), and older APIs without them still parse", () => {
+  const custom = {
+    wash: { label: "stone_wash", confidence: 0.93, topk: [["stone_wash", 0.93]] },
+    finish: null,
+  };
+  assert.deepEqual(parseScanResult({ ...fixture, custom }).custom, custom);
+  const { custom: _, ...older } = fixture;
+  assert.deepEqual(parseScanResult(older).custom, {});
+  for (const bad of [{ wash: { label: "x", confidence: 2, topk: [] } }, { wash: "stone" }, []])
+    assert.throws(() => parseScanResult({ ...fixture, custom: bad }), ScanError);
 });

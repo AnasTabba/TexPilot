@@ -72,6 +72,8 @@ class ScanResult(BaseModel):
     # For heads that abstained (null above): what they were weighing, most likely first.
     # Low-confidence by definition; the verdict never uses them.
     candidates: dict[str, list[tuple[str, float]]] = {}
+    # Heads the factory taught itself (e.g. "wash"): null when that head abstained.
+    custom: dict[str, HeadPrediction | None] = {}
     model_version: str
     kb_version: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

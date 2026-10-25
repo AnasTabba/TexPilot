@@ -7,6 +7,7 @@ Below its threshold a head returns None: the scan abstains rather than guess.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -119,6 +120,25 @@ class FineTunedHead:
         return decide(self.probs(views), self.classes, self.meta["threshold"])
 
     def probs(self, views: list[np.ndarray]) -> np.ndarray:
+        if self.probe is not None:
+            return self.probs_from_features(self.features(views))
+        return softmax(self._run(lambda t: self.model(t), views), self.meta["temperature"]).mean(0)
+
+    def features(self, views: list[np.ndarray]) -> np.ndarray:
+        """A probe head's pooled encoder features (V, D): shared with the heads a factory
+        teaches on the same encoder (services/vision/custom.py)."""
+        from services.vision.backbone import pool_features
+
+        return self._run(lambda t: pool_features(self.model, t), views)
+
+    def probs_from_features(self, features: np.ndarray) -> np.ndarray:
+        with self._torch.no_grad():
+            logits = self.probe(self._torch.from_numpy(features).to(self.device)).cpu().numpy()
+        return softmax(logits, self.meta["temperature"]).mean(0)
+
+    def _run(self, fn, views: list[np.ndarray]) -> np.ndarray:
+        """``fn`` on the preprocessed views: fp16 on a GPU, and for good in fp32 once fp16
+        overflows (DINOv3 does)."""
         from services.vision.backbone import preprocess
 
         m = self.meta
@@ -126,20 +146,12 @@ class FineTunedHead:
             [preprocess(v, m["mean"], m["std"], m["img_size"], m["crop_pct"]) for v in views]
         )
         t = self._torch.from_numpy(x).to(self.device)
-        logits = self._logits(t)
-        if self.half and not np.isfinite(logits).all():  # fp16 overflow (DINOv3): fp32 for good
+        while True:
+            with self._torch.no_grad():
+                out = fn(t.half() if self.half else t.float()).float().cpu().numpy()
+            if np.isfinite(out).all() or not self.half:
+                return out
             self.model, self.half = self.model.float(), False
-            logits = self._logits(t)
-        return softmax(logits, m["temperature"]).mean(0)
-
-    def _logits(self, t) -> np.ndarray:
-        with self._torch.no_grad():
-            t = t.half() if self.half else t.float()
-            if self.probe is None:
-                return self.model(t).float().cpu().numpy()
-            from services.vision.backbone import pool_features
-
-            return self.probe(pool_features(self.model, t).float()).cpu().numpy()
 
 
 def load_structure_model(bundle_dir: Path, meta: dict, device) -> FineTunedHead | None:
@@ -210,6 +222,12 @@ class LinearHeads:
         )
         self.model = model.half() if self.half else model
         self.structure_model = load_structure_model(bundle_dir, self.meta, device)
+        self.custom = []  # heads the factory taught on Head A's encoder (services/vision/custom.py)
+        if self.structure_model is not None and self.structure_model.probe is not None:
+            from services.vision.custom import load_custom_heads
+
+            root = Path(os.environ.get("TEXPILOT_CUSTOM_HEADS", "models/custom"))
+            self.custom = load_custom_heads(root, self.structure_model.meta["timm_name"])
 
     def predict(self, views: list[np.ndarray]) -> VisionOutput:
         from services.vision.backbone import pool_features, preprocess
@@ -222,8 +240,13 @@ class LinearHeads:
             f = pool_features(self.model, t.half() if self.half else t).float().cpu().numpy()
         probs = {n: head_probs(f, self.specs[n]) for n in HEAD_NAMES if n in self.specs}
         classes = {n: self.specs[n].classes for n in probs}
+        features = None
         if self.structure_model is not None:  # the fine-tuned Head A replaces the linear one
-            probs["structure"] = self.structure_model.probs(views)
+            if self.structure_model.probe is not None:  # one encoder pass, shared with custom
+                features = self.structure_model.features(views)
+                probs["structure"] = self.structure_model.probs_from_features(features)
+            else:
+                probs["structure"] = self.structure_model.probs(views)
             classes["structure"] = self.structure_model.classes
         out = {n: None for n in HEAD_NAMES}
         candidates = {}
@@ -236,4 +259,10 @@ class LinearHeads:
             out[n] = decide(p, classes[n], threshold)
             if out[n] is None:
                 candidates[n] = closest(p, classes[n])
-        return VisionOutput(**out, candidates=candidates)
+        custom = {}
+        for head in self.custom if features is not None else []:
+            p = head.probs(features)
+            custom[head.name] = decide(p, head.classes, head.threshold)
+            if custom[head.name] is None:
+                candidates[head.name] = closest(p, head.classes)
+        return VisionOutput(**out, candidates=candidates, custom=custom)

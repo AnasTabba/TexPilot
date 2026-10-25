@@ -42,6 +42,8 @@ class VisionOutput:
     quality: dict | None = None  # blur / exposure / framing (services.vision.quality)
     # head -> its closest matches, only for heads that abstained. Shown, never a verdict.
     candidates: dict[str, list[tuple[str, float]]] = field(default_factory=dict)
+    # Heads the factory taught (services/vision/custom.py): name -> answer, None if it abstained.
+    custom: dict[str, HeadOutput | None] = field(default_factory=dict)
 
 
 @runtime_checkable

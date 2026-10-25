@@ -104,6 +104,7 @@ def run_scan(
         stated_composition=stated,
         capture_quality=CaptureQuality(**vision.quality) if vision.quality else CaptureQuality(),
         candidates=vision.candidates,
+        custom={name: _head(out) for name, out in vision.custom.items()},
         flags=[
             FlagModel(code=f.code, message=f.message, severity=f.severity) for f in verdict.flags
         ]

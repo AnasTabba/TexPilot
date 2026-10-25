@@ -65,7 +65,8 @@ def build_predictor(s: Settings) -> tuple[Predictor, str]:
     from services.vision.scanner import build_scanner
 
     predictor = build_scanner(s.bundle, s.detector, pick_device(s.device))
-    return predictor, f"scanner-v{predictor.heads.version}+det={s.detector}+ocr={s.ocr}"
+    taught = "".join(f"+{h.name}={h.digest}" for h in predictor.heads.custom)
+    return predictor, f"scanner-v{predictor.heads.version}+det={s.detector}+ocr={s.ocr}{taught}"
 
 
 def build_ocr(s: Settings):
