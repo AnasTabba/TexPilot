@@ -417,7 +417,7 @@ export default function Scanner({
           PC: t("PC (polyester-rich polyester/cotton)", "پی سی"),
           stretch: t("Stretch (with spandex/lycra)", "اسٹریچ"),
         })[label] ?? label
-      : labelFor(label);
+      : labelFor(label).replace(/^./, (c) => c.toUpperCase());
   const fibreName = (label: string) =>
     ({
       cellulosic: t("Plant fibre (cellulosic)", "پودوں کا ریشہ"),
