@@ -21,6 +21,7 @@ import re
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 import urllib.robotparser
 from pathlib import Path
@@ -93,7 +94,9 @@ class Polite:
     def __init__(self, gap: float = 1.0):
         self.gap, self.robots, self.last, self.lock = gap, {}, {}, threading.Lock()
 
-    def get(self, url: str, key: str | None = None, timeout: int = 30) -> bytes | None:
+    def get(
+        self, url: str, key: str | None = None, accept: str = "application/json", timeout: int = 30
+    ) -> bytes | None:
         host = url.split("/")[2]
         key = key or host
         with self.lock:
@@ -111,12 +114,19 @@ class Polite:
         if wait > 0:
             time.sleep(wait)
         self.last[key] = time.monotonic()
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA})
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                return r.read()
-        except Exception:  # noqa: BLE001 -- a refused or failed fetch is skipped, not retried hard
-            return None
+        # Say what we want: Shopify turns away requests without a proper Accept (429).
+        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": accept})
+        for backoff in (10, 30, 90, None):
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as r:
+                    return r.read()
+            except urllib.error.HTTPError as e:  # slowed down: wait as asked, then try again
+                if e.code not in (429, 503) or backoff is None:
+                    return None
+                time.sleep(float(e.headers.get("Retry-After") or backoff))
+            except Exception:  # noqa: BLE001 -- a refused or failed fetch is skipped, not forced
+                return None
+        return None
 
 
 def scrape_store(
@@ -144,7 +154,7 @@ def scrape_store(
                 path = d / "img" / f"{p['id']}_{k}.jpg"
                 if not path.exists():
                     src = im["src"] + ("&" if "?" in im["src"] else "?") + "width=640"
-                    data = http.get(src, key=store)
+                    data = http.get(src, key=store, accept="image/jpeg,image/*;q=0.8")
                     if not data:
                         continue
                     try:
