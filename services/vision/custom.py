@@ -27,7 +27,7 @@ class CustomHead:
     weight: np.ndarray  # (C, D) on the raw pooled features: the standardisation is folded in
     bias: np.ndarray
     threshold: float
-    encoder: str  # timm name of the Head A encoder it was taught on
+    encoder: str  # encoder_id of the Head A it was taught on (FineTunedHead.encoder_id)
     report: dict = field(default_factory=dict)  # photos per class, cross-validated accuracy
 
     @property

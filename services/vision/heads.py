@@ -93,6 +93,8 @@ class FineTunedHead:
         m, self.probe = self.meta, None
         if m.get("pool") == "probe":
             local = head_dir / "encoder.safetensors"  # shipped when the Hub is slow to reach
+            if "encoder_id" in m and not local.exists():  # a tuned encoder: the public one is wrong
+                raise FileNotFoundError(f"{m['encoder_id']} needs its weights in {local}")
             model = timm_classifier(
                 m["timm_name"], 0, m["img_size"], True, local if local.exists() else None
             )
@@ -115,6 +117,11 @@ class FineTunedHead:
         # Halve before moving: a 400M-parameter encoder must not sit on the GPU in fp32 first.
         model = model.eval().half() if self.half else model.eval()
         self.model = model.to(device)
+
+    @property
+    def encoder_id(self) -> str:
+        """Names the encoder weights: the timm name, plus a LoRA digest when tuned."""
+        return self.meta.get("encoder_id", self.meta["timm_name"])
 
     def predict(self, views: list[np.ndarray]) -> HeadOutput | None:
         return decide(self.probs(views), self.classes, self.meta["threshold"])
@@ -227,7 +234,7 @@ class LinearHeads:
             from services.vision.custom import load_custom_heads
 
             root = Path(os.environ.get("TEXPILOT_CUSTOM_HEADS", "models/custom"))
-            self.custom = load_custom_heads(root, self.structure_model.meta["timm_name"])
+            self.custom = load_custom_heads(root, self.structure_model.encoder_id)
 
     def predict(self, views: list[np.ndarray]) -> VisionOutput:
         from services.vision.backbone import pool_features, preprocess

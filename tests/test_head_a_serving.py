@@ -168,3 +168,32 @@ def test_a_probe_head_can_be_a_small_mlp_on_the_pooled_features(tmp_path, monkey
     with torch.no_grad():
         want = torch.softmax(mlp(pool_features(encoder.eval(), x)), 1).numpy()[0]
     assert np.allclose(head.probs([view]), want, atol=1e-4)
+
+
+def test_a_probe_head_on_a_tuned_encoder_refuses_to_start_without_that_encoders_file(
+    tmp_path, monkeypatch
+):
+    """encoder_id marks a LoRA-tuned encoder: without its local weights the head would
+    silently read the public encoder's features, so it must not load at all."""
+    from safetensors.numpy import save_file
+
+    from services.vision import heads
+
+    encoder = timm_classifier("resnet10t", 0, 64)
+    monkeypatch.setattr(heads, "timm_classifier", lambda *a, **k: encoder)
+    d = tmp_path / "head_a"
+    d.mkdir()
+    w = np.zeros((3, encoder.num_features), np.float32)
+    save_file(
+        {"probe.weight": w, "probe.bias": np.zeros(3, np.float32)}, str(d / "probe.safetensors")
+    )
+    meta = dict(classes=list(CLASSES), timm_name="resnet10t", img_size=64, crop_pct=0.875)
+    meta |= dict(mean=[0.5] * 3, std=[0.5] * 3, temperature=1.0, threshold=0.0, pool="probe")
+    (d / "head.json").write_text(json.dumps(meta))
+    assert FineTunedHead(d, CPU).encoder_id == "resnet10t"  # public encoder: its timm name
+
+    (d / "head.json").write_text(json.dumps(meta | {"encoder_id": "resnet10t+lora-1234abcd"}))
+    with pytest.raises(FileNotFoundError, match="encoder.safetensors"):
+        FineTunedHead(d, CPU)
+    (d / "encoder.safetensors").write_bytes(b"")  # presence is what counts (encoder is stubbed)
+    assert FineTunedHead(d, CPU).encoder_id == "resnet10t+lora-1234abcd"

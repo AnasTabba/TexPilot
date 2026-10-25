@@ -84,6 +84,15 @@ def test_saved_heads_load_only_for_the_encoder_they_were_taught_on(tmp_path, hea
     assert load_custom_heads(tmp_path / "nothing-here", "resnet10t") == []
 
 
+def test_heads_taught_on_a_tuned_encoder_do_not_load_on_its_public_base(tmp_path, head_a):
+    head_a.meta["encoder_id"] = "resnet10t+lora-1234abcd"
+    custom, _ = teach(folders(tmp_path / "wash"), head_a, "wash")
+    custom.save(tmp_path / "custom")
+    assert custom.encoder == "resnet10t+lora-1234abcd"
+    assert load_custom_heads(tmp_path / "custom", "resnet10t") == []
+    assert [h.name for h in load_custom_heads(tmp_path / "custom", head_a.encoder_id)] == ["wash"]
+
+
 def test_head_a_features_give_the_same_answer_as_its_own_probs(head_a):
     views = [photo(True, 1), photo(False, 2)]
     assert np.allclose(head_a.probs_from_features(head_a.features(views)), head_a.probs(views))

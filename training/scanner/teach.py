@@ -83,7 +83,7 @@ def teach(photos: Path, head_a, name: str, target: float = 0.9, batch: int = 16)
         "target_accuracy": target,
         "answers_at_target": float(coverage),
     }
-    encoder = head_a.meta["timm_name"]
+    encoder = head_a.encoder_id
     return CustomHead(name, tuple(classes), w, b, float(threshold), encoder, report), report
 
 
