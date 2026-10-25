@@ -39,4 +39,4 @@ def test_the_default_bundle_is_scanner_v2():
     # head: test top-1, coverage at the 90% target, macro-F1 and calibration (docs/results.md).
     from pathlib import Path
 
-    assert Settings.from_env({"TEXPILOT_VISION": "scanner"}).bundle == Path("models/scanner-v5")
+    assert Settings.from_env({"TEXPILOT_VISION": "scanner"}).bundle == Path("models/scanner-v6")
