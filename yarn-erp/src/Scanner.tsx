@@ -401,6 +401,23 @@ export default function Scanner({
     </div>
   );
   const pct = (p: number) => `${Math.round(p * 100)}%`;
+  // Heads taught from labelled photos (models/custom): their titles and the blend names yarn is bought by.
+  const taughtTitle = (name: string) =>
+    ({
+      local_fabric: t("Fabric name", "کپڑے کا نام"),
+      blend: t("Blend", "مکس"),
+      finish: t("Finish", "فنش"),
+      garment_type: t("Garment", "لباس"),
+    })[name] ?? name.charAt(0).toUpperCase() + name.slice(1).replaceAll("_", " ");
+  const taughtLabel = (name: string, label: string) =>
+    name === "blend"
+      ? ({
+          pure: t("Single fibre", "ایک ریشہ"),
+          CVC: t("CVC (cotton-rich cotton/polyester)", "سی وی سی"),
+          PC: t("PC (polyester-rich polyester/cotton)", "پی سی"),
+          stretch: t("Stretch (with spandex/lycra)", "اسٹریچ"),
+        })[label] ?? label
+      : labelFor(label);
   const fibreName = (label: string) =>
     ({
       cellulosic: t("Plant fibre (cellulosic)", "پودوں کا ریشہ"),
@@ -879,6 +896,24 @@ export default function Scanner({
                         .join(" · ")}
                     </small>
                   ) : null}
+                  {Object.entries(result.custom)
+                    .filter(([name]) => name !== "fibre")
+                    .map(([name, head]) => (
+                      <Fragment key={name}>
+                        <span>{taughtTitle(name)}</span>
+                        <strong>
+                          {head
+                            ? `${taughtLabel(name, head.label)} · ${pct(head.confidence)}`
+                            : t("Not sure from the photo", "تصویر سے پکا نہیں")}
+                        </strong>
+                        {!head && result.candidates[name]?.length ? (
+                          <small className="scan-closest">
+                            {t("Closest, not confident: ", "قریب ترین، پکا نہیں: ")}
+                            {result.candidates[name]!.map(([l, p]) => `${taughtLabel(name, l)} ${pct(p)}`).join(" · ")}
+                          </small>
+                        ) : null}
+                      </Fragment>
+                    ))}
                   <span>{t("Yarn to buy", "کون سا یارن خریدیں")}</span>
                   {result.yarn_advice?.length ? (
                     <ul>
