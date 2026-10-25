@@ -1,7 +1,7 @@
 """Teach the scanner a category of your own, e.g. the wash a denim went through, from
 labelled photos (services/vision/custom.py serves it).
 
-    .venv/bin/python -m training.scanner.teach --bundle models/scanner-v4 --photos data/custom/wash
+    .venv/bin/python -m training.scanner.teach --bundle models/scanner-v5 --photos data/custom/wash
 
 ``--photos`` holds one folder per class (stone_wash/, enzyme_wash/, rinse/, ...), at least
 10 photos each, taken the way scans will be taken. The report is cross-validated on those

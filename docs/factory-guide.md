@@ -9,7 +9,7 @@ Photograph the garment or fabric in daylight, the whole piece in frame. The resu
 fabric type (27 types, e.g. denim, chambray, corduroy, jersey, satin) with a confidence.
 
 When the scanner is not sure it says **Not enough evidence** and shows its closest matches.
-That is deliberate: on 24,628 held-out catalog photos scanner-v4 answers about 69% of them, and
+That is deliberate: on 24,628 held-out catalog photos scanner-v5 answers about 73% of them, and
 about 90% of those answers are right. Accuracy on phone photos from the factory floor has not
 been measured yet (docs/phone-test-set.md describes how to collect that test).
 
@@ -66,7 +66,7 @@ wash, rinse, or your in-house fabric codes.
 2. Teach it, on the computer that runs the scanner:
 
    ```
-   .venv/bin/python -m training.scanner.teach --bundle models/scanner-v4 --photos data/custom/wash
+   .venv/bin/python -m training.scanner.teach --bundle models/scanner-v5 --photos data/custom/wash
    ```
 
    It reports how often it was right on your photos (cross-validated, so each photo is judged by a
