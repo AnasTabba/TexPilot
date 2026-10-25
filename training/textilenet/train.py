@@ -280,10 +280,13 @@ def main(argv: list[str] | None = None) -> int:
     # Short runs (smoke tests, --epochs 2) must still reach the cosine phase.
     warmup_steps = min(int(steps_per_epoch * args.warmup_epochs), total_steps // 2)
 
-    start_epoch, best, stale = 0, {"val_top1": -1.0}, 0
+    metric = args.selection_metric
+    start_epoch, best, stale = 0, {f"val_{metric}": -1.0}, 0
     last_ckpt = run_dir / "last.pt"
     if args.resume and last_ckpt.exists():
         ck = torch.load(last_ckpt, map_location="cpu", weights_only=False)
+        if ck["best"].get("selection_metric", "top1") != metric:
+            raise ValueError("resume checkpoint uses a different selection metric")
         model.load_state_dict(ck["model"])
         ema.module.load_state_dict(ck["ema"])
         optimizer.load_state_dict(ck["optimizer"])
@@ -374,13 +377,19 @@ def main(argv: list[str] | None = None) -> int:
             s = summarize(logits, ys, classes)
             rec[f"val_{which}"] = {k: s[k] for k in ("top1", "top5", "macro_f1")}
         rec["epoch_s"] = time.time() - t0
-        winner = max(("raw", "ema"), key=lambda w: rec[f"val_{w}"]["top1"])
+        winner = max(("raw", "ema"), key=lambda w: rec[f"val_{w}"][metric])
         print(json.dumps(rec), flush=True)
         with open(run_dir / "log.jsonl", "a") as f:
             f.write(json.dumps(rec) + "\n")
 
-        if rec[f"val_{winner}"]["top1"] > best["val_top1"]:
-            best = {"val_top1": rec[f"val_{winner}"]["top1"], "epoch": epoch, "weights": winner}
+        if rec[f"val_{winner}"][metric] > best[f"val_{metric}"]:
+            best = {
+                "val_top1": rec[f"val_{winner}"]["top1"],
+                "val_macro_f1": rec[f"val_{winner}"]["macro_f1"],
+                "selection_metric": metric,
+                "epoch": epoch,
+                "weights": winner,
+            }
             net = model if winner == "raw" else ema.module
             torch.save(
                 {
@@ -424,7 +433,7 @@ def main(argv: list[str] | None = None) -> int:
     val_tta = summarize(
         *predict(model, eval_loaders["val"], device, amp_ctx, True, channels_last), classes
     )
-    use_tta = val_tta["top1"] > val_plain["top1"]
+    use_tta = val_tta[metric] > val_plain[metric]
     test = summarize(
         *predict(model, eval_loaders["test"], device, amp_ctx, use_tta, channels_last), classes
     )
@@ -433,6 +442,7 @@ def main(argv: list[str] | None = None) -> int:
         "tag": args.tag,
         "timm_name": args.timm_name,
         "seed": args.seed,
+        "selection_metric": metric,
         "best": ck["best"],
         "tta": use_tta,
         "val": {"plain": _headline(val_plain), "tta": _headline(val_tta)},
@@ -576,7 +586,10 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=0,
         help="two-stage: train only the head for this many epochs first",
     )
-    g.add_argument("--patience", type=int, default=8, help="early stop on val top-1; 0 = off")
+    g.add_argument("--selection-metric", choices=["top1", "macro_f1"], default="top1")
+    g.add_argument(
+        "--patience", type=int, default=8, help="early stop on selected val metric; 0 = off"
+    )
 
     g = ap.add_argument_group("regularisation / imbalance")
     g.add_argument("--smoothing", type=float, default=0.1)
@@ -597,6 +610,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     g.add_argument("--max-train-steps", type=int, default=0, help="per epoch; smoke tests only")
 
     args = ap.parse_args(argv)
+    if args.selection_metric != "top1" and not args.tag:
+        ap.error("set --tag for a non-baseline selection metric to keep runs separate")
     preset = PRESETS.get(
         args.model, {"timm_name": args.model, "layer_decay": None, "drop_path": 0.1}
     )

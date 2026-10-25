@@ -19,6 +19,7 @@ carve-out only.
 | `train.py` | fine-tune one model on one partition with one seed |
 | `probe.py` | frozen-backbone linear probe; cheap enough for a laptop |
 | `aggregate.py` | seeds → mean ± std vs baselines → `results.md`, best checkpoints |
+| `audit.py` | class-frequency, missing-file, and exact cross-split hash audit of a frozen split |
 | `run_all.sh` | the whole benchmark on a CUDA box, stage by stage |
 
 ## The data, and why the split is a file
@@ -81,6 +82,12 @@ python -m training.textilenet.train --partition fabric --model convnextv2_base_3
     --batch-size 32                                                  # 384 px
 python -m training.textilenet.train --partition fabric --model convnextv2_base \
     --probe-epochs 3 --tag convnextv2_base_2stage                    # LP then FT
+python -m training.textilenet.audit --partition fabric \
+    --split-csv data/splits/fabric.csv --data-root data --out runs/audit/fabric.json
+python -m training.textilenet.train --partition fabric --model convnextv2_base \
+    --selection-metric macro_f1 --tag convnextv2_base_macro_f1
+python -m training.textilenet.aggregate --rank-by macro_f1 \
+    --out training/textilenet/results_macro_f1.md
 # smoke test (seconds, any device):
 python -m training.textilenet.train --partition fabric --model vit_tiny \
     --limit-per-class 8 --epochs 1 --max-train-steps 2 --workers 0 --out /tmp/smoke
@@ -88,3 +95,8 @@ python -m training.textilenet.train --partition fabric --model vit_tiny \
 
 Presets: `convnextv2_base`, `convnextv2_base_384`, `dinov2_vitb14`, `eva02_base`,
 `vit_tiny`; any other timm model name also works.
+
+The default model-selection metric remains validation top-1 for historical comparisons.
+Use an explicit tag with `--selection-metric macro_f1` so macro-F1 experiments do not
+overwrite baseline runs. `--rank-by macro_f1` ranks completed runs on validation
+macro-F1 without using their held-out test metrics to choose a model.

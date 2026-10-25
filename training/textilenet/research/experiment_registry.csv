@@ -1,0 +1,1 @@
+experiment_id,hypothesis,git_commit,dataset_version,split_sha256,architecture,loss,sampling,augmentation,learning_rate,batch_size,epochs,seed,val_macro_f1,val_weighted_f1,val_balanced_accuracy,minority_recall,gpu_hours,outcome,artifact_path

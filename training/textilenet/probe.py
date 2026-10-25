@@ -122,8 +122,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--epochs", type=int, default=30)
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
+    ap.add_argument("--selection-metric", choices=["top1", "macro_f1"], default="top1")
     ap.add_argument("--device", default="auto")
     args = ap.parse_args(argv)
+    if args.selection_metric != "top1" and not args.tag:
+        ap.error("set --tag for a non-baseline selection metric to keep runs separate")
 
     device = pick_device(args.device)
     labels = class_index(args.partition)
@@ -150,8 +153,13 @@ def main(argv: list[str] | None = None) -> int:
     scores = {}
     for lr, wd in GRID:
         head = fit_linear(xtr, ytr, len(classes), lr, wd, args.epochs, 0, device)
-        scores[(lr, wd)] = summarize(logits(head, xva), yva.cpu().numpy(), classes)["top1"]
-        print(f"lr {lr:g} wd {wd:g}: val top-1 {scores[(lr, wd)]:.4f}", flush=True)
+        scores[(lr, wd)] = summarize(logits(head, xva), yva.cpu().numpy(), classes)[
+            args.selection_metric
+        ]
+        print(
+            f"lr {lr:g} wd {wd:g}: val {args.selection_metric} {scores[(lr, wd)]:.4f}",
+            flush=True,
+        )
     lr, wd = max(scores, key=scores.get)
     print(f"selected on val: lr {lr:g} wd {wd:g}")
 
@@ -167,9 +175,17 @@ def main(argv: list[str] | None = None) -> int:
             "partition": args.partition,
             "tag": tag,
             "seed": seed,
+            "selection_metric": args.selection_metric,
             "tta": False,
             "timm_name": PRESETS.get(args.model, {"timm_name": args.model})["timm_name"],
-            "best": {"val_top1": val["top1"], "weights": "frozen+linear", "lr": lr, "wd": wd},
+            "best": {
+                "val_top1": val["top1"],
+                "val_macro_f1": val["macro_f1"],
+                "selection_metric": args.selection_metric,
+                "weights": "frozen+linear",
+                "lr": lr,
+                "wd": wd,
+            },
             "val": {"plain": headline},
             "test": test,
             "grid": {f"lr={a:g},wd={b:g}": v for (a, b), v in scores.items()},
