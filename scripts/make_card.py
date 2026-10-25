@@ -49,8 +49,8 @@ def sheet() -> str:
     lines = [
         f"Each black square must measure {MARKER_MM:g} mm: check the ruler below (100 mm).",
         "Cut out one card along the dashed line and lay it flat on the fabric.",
-        "Hold the phone straight above, about 15 cm away, selvedge running up the screen,",
-        "and take a sharp photo with the fabric filling the rest of the frame.",
+        "Use the normal (1x) camera, straight above, about 15 cm away, selvedge running up",
+        "the screen. Keep the card off the photo's edges; fill the rest with fabric.",
     ]
     words = [
         '<text x="20" y="20" font-size="4.6" font-weight="bold">TexPilot card: print at 100% '
