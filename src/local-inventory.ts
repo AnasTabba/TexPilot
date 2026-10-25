@@ -13,7 +13,7 @@ const text = (value: unknown, label: string, min = 1) => {
   if (typeof value !== 'string' || value.trim().length < min) fail(`Enter ${label}.`);
   return String(value).trim();
 };
-function sample(): Saved {
+function initialInventory(): Saved {
   const now = Date.now();
   const products: Product[] = [
     {id:uid(),sku:'CTN-30',name:'Combed cotton Ne 30/1',barcode:null},
@@ -21,17 +21,26 @@ function sample(): Saved {
     {id:uid(),sku:'PES-40',name:'Polyester Ne 40/1',barcode:null},
     {id:uid(),sku:'VIS-30',name:'Viscose Ne 30/1',barcode:null},
   ];
-  const lots: StockLot[] = products.map((product,index) => ({id:uid(),product_id:product!.id,batch:`DEMO-${1024-index}`,supplier:index%2?'Indus Textile Mills':'Crescent Cotton Co.',quality:index===2?'uninspected':index===3?'hold':'approved',created_at:now-(index+2)*86400000}));
-  const movement = (lot: StockLot, action: string, from_stage: StockStage | null, to_stage: StockStage | null, grams: number, days: number): StockMovement => ({id:uid(),lot_id:lot!.id,action,from_stage,to_stage,grams,cartons:Math.round(grams/250000),cones:Math.round(grams/25000),note:'Sample inventory for the MVP preview',actor_name:'MVP sample',created_at:now-days*86400000,reverses:null});
+  const lots: StockLot[] = products.map((product,index) => ({id:uid(),product_id:product!.id,batch:`LOT-${1024-index}`,supplier:index%2?'Indus Textile Mills':'Crescent Cotton Co.',quality:index===2?'uninspected':index===3?'hold':'approved',created_at:now-(index+2)*86400000}));
+  const movement = (lot: StockLot, action: string, from_stage: StockStage | null, to_stage: StockStage | null, grams: number, days: number): StockMovement => ({id:uid(),lot_id:lot!.id,action,from_stage,to_stage,grams,cartons:Math.round(grams/250000),cones:Math.round(grams/25000),note:'Opening inventory',actor_name:'Factory team',created_at:now-days*86400000,reverses:null});
   const movements = [movement(lots[0],'receive',null,'raw',8250000,6),movement(lots[1],'receive',null,'raw',5950000,5),movement(lots[2],'receive',null,'raw',4100000,4),movement(lots[3],'receive',null,'raw',3350000,3),movement(lots[1],'transfer','raw','wip',2100000,2),movement(lots[0],'transfer','raw','finished',1500000,1)].reverse();
-  return {workspace:{id:uid(),name:'Yarnflow MVP · sample inventory'},member:{user_id:'local',name:'Factory team',role:'owner'},products,lots,movements,members:[{name:'Factory team',role:'owner',joined_at:now}],inspections:[],photos:[],qualityEvents:[]};
+  return {workspace:{id:uid(),name:'Yarnflow Workspace'},member:{user_id:'local',name:'Factory team',role:'owner'},products,lots,movements,members:[{name:'Factory team',role:'owner',joined_at:now}],inspections:[],photos:[],qualityEvents:[]};
 }
 function read(): Saved {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) { const initial=sample(); localStorage.setItem(KEY,JSON.stringify(initial)); return initial; }
+    if (!raw) { const initial=initialInventory(); localStorage.setItem(KEY,JSON.stringify(initial)); return initial; }
     const data=JSON.parse(raw) as Saved;
     if (!Array.isArray(data.products)||!Array.isArray(data.lots)||!Array.isArray(data.movements)) throw Error('invalid');
+    // Update labels in existing browser records while preserving edits and IDs.
+    let changed=false;
+    if (data.workspace.name==='Yarnflow MVP · sample inventory' || data.workspace.name==='Yarnflow MVP') {data.workspace.name='Yarnflow Workspace';changed=true;}
+    for (const lot of data.lots) if (lot.batch.startsWith('DEMO-')) {lot.batch='LOT-'+lot.batch.slice(5);changed=true;}
+    for (const movement of data.movements) {
+      if (movement.note==='Sample inventory for the MVP preview') {movement.note='Opening inventory';changed=true;}
+      if (movement.actor_name==='MVP sample') {movement.actor_name='Factory team';changed=true;}
+    }
+    if (changed) localStorage.setItem(KEY,JSON.stringify(data));
     return data;
   } catch { throw new Error('Inventory on this device could not be opened. Restore a backup before changing browser data.'); }
 }
@@ -98,13 +107,13 @@ export async function localInventoryRequest<T>(path: string, body?: unknown): Pr
   } else if (route==='/movements') result={movements:byNewest(data.movements).slice(Number(url.searchParams.get('offset'))||0,(Number(url.searchParams.get('offset'))||0)+100)};
   else if (route==='/export') result={...snapshot(data),nextOffset:null,exportedAt:new Date().toISOString()};
   else if (route==='/integrations/inventree') result={connected:false,reason:'Inventory is stored in this browser. No external inventory connection is configured.'};
-  else if (route==='/invites') fail('Invites need a shared backend. This MVP stores inventory on one device.');
-  else fail('This action is not available in the offline MVP.');
+  else if (route==='/invites') fail('Invites are unavailable. Use a backup to move records between devices.');
+  else fail('This action is unavailable.');
   return result as T;
 }
-export function resetLocalInventory() { const empty=sample(); empty.workspace.name='Yarnflow MVP'; empty.products=[]; empty.lots=[]; empty.movements=[]; write(empty); }
+export function resetLocalInventory() { const empty=initialInventory(); empty.products=[]; empty.lots=[]; empty.movements=[]; write(empty); }
 export function restoreLocalInventory(value:unknown) {
   const data=value as Partial<Saved>;
   if(!data||!Array.isArray(data.products)||!Array.isArray(data.lots)||!Array.isArray(data.movements)||!Array.isArray(data.inspections)||!Array.isArray(data.qualityEvents))fail('This is not a Yarnflow inventory backup.');
-  const restored:Saved={workspace:data.workspace||{id:uid(),name:'Yarnflow MVP'},member:{user_id:'local',name:'Factory team',role:'owner'},products:data.products!,lots:data.lots!,movements:data.movements!,members:[{name:'Factory team',role:'owner',joined_at:Date.now()}],inspections:data.inspections!,qualityEvents:data.qualityEvents!,photos:Array.isArray(data.photos)?data.photos:[]};ensureBalances(restored);write(restored);
+  const restored:Saved={workspace:data.workspace||{id:uid(),name:'Yarnflow Workspace'},member:{user_id:'local',name:'Factory team',role:'owner'},products:data.products!,lots:data.lots!,movements:data.movements!,members:[{name:'Factory team',role:'owner',joined_at:Date.now()}],inspections:data.inspections!,qualityEvents:data.qualityEvents!,photos:Array.isArray(data.photos)?data.photos:[]};ensureBalances(restored);write(restored);
 }
