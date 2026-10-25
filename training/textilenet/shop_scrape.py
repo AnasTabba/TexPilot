@@ -119,12 +119,14 @@ class Polite:
             return None
 
 
-def scrape_store(store: str, out: Path, http: Polite, per_product: int, max_pages: int) -> dict:
+def scrape_store(
+    store: str, out: Path, http: Polite, per_product: int, max_pages: int, max_images: int
+) -> dict:
     from PIL import Image
 
     d = out / store
     (d / "img").mkdir(parents=True, exist_ok=True)
-    rows, n_products, n_images = [], 0, 0
+    rows, n_products, n_images, labelled = [], 0, 0, []
     for page in range(1, max_pages + 1):
         raw = http.get(f"https://{store}/products.json?limit=250&page={page}")
         products = json.loads(raw).get("products", []) if raw else []
@@ -134,6 +136,9 @@ def scrape_store(store: str, out: Path, http: Polite, per_product: int, max_page
             n_products += 1
             lab = label(p)
             if lab is None:
+                continue
+            labelled.append(lab)
+            if n_images >= max_images:  # the catalogue is still read in full for the stats
                 continue
             for k, im in enumerate(p.get("images", [])[:per_product]):
                 path = d / "img" / f"{p['id']}_{k}.jpg"
@@ -152,14 +157,17 @@ def scrape_store(store: str, out: Path, http: Polite, per_product: int, max_page
                 rows.append({"path": path.relative_to(out).as_posix(), "store": store,
                              "product_id": p["id"], "title": p.get("title", ""),
                              "url": f"https://{store}/products/{p.get('handle', '')}",
-                             "fibres": json.dumps(lab["fibres"]), **{k: lab[k] for k in
+                             "fibres": json.dumps(lab["fibres"]), **{f: lab[f] for f in
                              ("main_fibre", "blend", "fabric")}, "image_index": k})  # fmt: skip
     with open(d / "manifest.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]) if rows else ["path"])
         w.writeheader()
         w.writerows(rows)
-    stats = {"store": store, "products": n_products, "images": n_images,
-             "labelled_products": len({r["product_id"] for r in rows})}  # fmt: skip
+    from collections import Counter
+
+    stats = {"store": store, "products": n_products, "labelled": len(labelled), "images": n_images,
+             **{f: Counter(x[f] for x in labelled if x[f]).most_common(8)
+                for f in ("main_fibre", "blend", "fabric")}}  # fmt: skip
     print(json.dumps(stats), flush=True)
     return stats
 
@@ -170,9 +178,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=Path("data/shops"))
     ap.add_argument("--per-product", type=int, default=4, help="photos kept per labelled product")
     ap.add_argument("--max-pages", type=int, default=200, help="catalogue pages of 250 products")
+    ap.add_argument("--max-images", type=int, default=9000, help="per store (~2.5 h at 1/s)")
     args = ap.parse_args(argv)
     http = Polite()
-    jobs = [(s, args.out, http, args.per_product, args.max_pages) for s in args.stores]
+    jobs = [
+        (s, args.out, http, args.per_product, args.max_pages, args.max_images) for s in args.stores
+    ]
     threads = [threading.Thread(target=scrape_store, args=job) for job in jobs]
     for t in threads:
         t.start()
