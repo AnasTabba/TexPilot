@@ -92,7 +92,8 @@ export default function SpecScan() {
               <a href="/texpilot-card.svg" target="_blank" rel="noreferrer">
                 printed TexPilot card
               </a>{" "}
-              on the fabric and photograph both from about 15 cm. Then weigh a 10 x 10 cm piece.
+              on the fabric and photograph both with the normal 1x camera from about 15 cm, card
+              away from the photo's edges. Then weigh a 10 x 10 cm piece.
             </p>
           </div>
           <Ruler size={22} aria-hidden="true" />
