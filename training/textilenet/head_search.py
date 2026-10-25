@@ -78,6 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--split-csv", type=Path, required=True)
     ap.add_argument("--features", nargs="+", required=True, help="feature-cache dir names")
     ap.add_argument("--feature-dir", type=Path, default=Path("data/features/fabric"))
+    ap.add_argument("--partition", choices=["fabric", "fibre"], default="fabric")
     ap.add_argument("--kinds", nargs="+", default=["linear", "mlp"])
     ap.add_argument("--epochs", type=int, default=30)
     ap.add_argument("--hidden", type=int, default=1024, help="MLP hidden width")
@@ -87,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--device", default="mps" if torch.backends.mps.is_available() else "cpu")
     args = ap.parse_args(argv)
 
-    labels = class_index("fabric")
+    labels = class_index(args.partition)
     classes = sorted(labels, key=labels.get)
     rows = [r for r in read_csv(args.split_csv) if r.split != "test" or r.source == "archive"]
     caches = {name: FeatureCache(args.feature_dir / name) for name in args.features}

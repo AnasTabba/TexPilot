@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         "std": list(cfg["std"]),
         "pool": "probe",  # frozen public encoder + this head on its pooled features
         "source_run": str(args.run),
-        "domain": "catalog (TextileNet fabric)",
+        "domain": f"catalog (TextileNet {args.partition})",
         **cal,
         "test_macro_f1": test["macro_f1"],
     }
