@@ -25,7 +25,35 @@ from pathlib import Path
 
 from services.vision.taxonomy import FABRIC_CLASSES, FIBRE_CLASSES
 
+# Product scopes: the same photos and split, with classes dropped (None) or merged. fabric24
+# leaves out canvas and plush (not fabrics the garment factories make) and counts jersey as
+# knit (it is one).
+SCOPES: dict[str, tuple[str, dict[str, str | None]]] = {
+    "fabric24": ("fabric", {"canvas": None, "plush": None, "jersey": "knit"}),
+}
 PARTITIONS: dict[str, tuple[str, ...]] = {"fabric": FABRIC_CLASSES, "fibre": FIBRE_CLASSES}
+PARTITIONS |= {
+    name: tuple(c for c in PARTITIONS[base] if c not in mapping)
+    for name, (base, mapping) in SCOPES.items()
+}
+
+
+def base_partition(partition: str) -> str:
+    """Where a scope's photos and feature caches live: its base partition."""
+    return SCOPES[partition][0] if partition in SCOPES else partition
+
+
+def rescope(records: list[Record], partition: str) -> list[Record]:
+    """The records as ``partition`` sees them: out-of-scope classes dropped, merged ones
+    relabelled."""
+    if partition not in SCOPES:
+        return records
+    mapping = SCOPES[partition][1]
+    return [
+        replace(r, label=mapping.get(r.label, r.label))
+        for r in records
+        if mapping.get(r.label, r.label)
+    ]
 
 
 @dataclass(frozen=True, order=True)

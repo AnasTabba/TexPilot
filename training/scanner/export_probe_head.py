@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     from training.textilenet.feature_cache import FeatureCache
     from training.textilenet.head_search import make_head
     from training.textilenet.metrics import summarize
-    from training.textilenet.splits import read_csv
+    from training.textilenet.splits import base_partition, read_csv, rescope
 
     ck = torch.load(args.run / "head.pt", map_location="cpu", weights_only=False)
     classes, state = list(ck["classes"]), dict(ck["state_dict"])
@@ -71,8 +71,8 @@ def main(argv: list[str] | None = None) -> int:
                      hidden=w2.shape[0]).eval()  # fmt: skip
     head.load_state_dict({k: v.float() for k, v in state.items()})
 
-    cache = FeatureCache(args.feature_dir / args.partition / f"{name}_{size}")
-    rows = read_csv(args.split_csv)
+    cache = FeatureCache(args.feature_dir / base_partition(args.partition) / f"{name}_{size}")
+    rows = rescope(read_csv(args.split_csv), args.partition)
     scores = {}
     for split in ("val", "test"):
         rs = [r for r in rows if r.split == split and (split == "val" or r.source == "archive")]

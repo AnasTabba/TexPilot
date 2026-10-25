@@ -41,7 +41,7 @@ from training.textilenet.feature_cache import FeatureCache
 from training.textilenet.governor import Governor
 from training.textilenet.metrics import HEADLINE, minority_recall, summarize
 from training.textilenet.recipe import epoch_order, irus_epoch_size, irus_order, lr_at
-from training.textilenet.splits import class_index, read_csv
+from training.textilenet.splits import PARTITIONS, base_partition, class_index, read_csv, rescope
 from training.textilenet.train import (
     PRESETS,
     augment_4to5,
@@ -177,7 +177,7 @@ def fit_linear(
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument("--partition", choices=["fabric", "fibre"], required=True)
+    ap.add_argument("--partition", choices=sorted(PARTITIONS), required=True)
     ap.add_argument("--model", default="dinov2_vitb14")
     ap.add_argument("--img-size", type=int, default=224)
     ap.add_argument("--crop-pct", type=float, default=0.875)
@@ -217,9 +217,10 @@ def main(argv: list[str] | None = None) -> int:
     device = pick_device(args.device)
     labels = class_index(args.partition)
     classes = sorted(labels, key=labels.get)
-    split_csv = args.split_csv or args.data_root / "splits" / f"{args.partition}.csv"
-    cache = FeatureCache(args.feature_dir / args.partition / f"{args.model}_{args.img_size}")
-    all_rows = read_csv(split_csv)
+    base = base_partition(args.partition)  # a scope (fabric24) reads its base partition's photos
+    split_csv = args.split_csv or args.data_root / "splits" / f"{base}.csv"
+    cache = FeatureCache(args.feature_dir / base / f"{args.model}_{args.img_size}")
+    all_rows = rescope(read_csv(split_csv), args.partition)
     uncached = set(cache.missing([r.path for r in all_rows]))
     rows = [r for r in all_rows if r.path not in uncached or (args.data_root / r.path).exists()]
     feats = extract(args, rows, device, cache)
@@ -242,7 +243,7 @@ def main(argv: list[str] | None = None) -> int:
     irus_cap = args.irus_cap if args.sampler == "irus" else 0
     if args.aug_views:  # stack augmented views under the standard ones: rows i, i + N, ...
         train_rows = [r for r in rows if r.split == "train"]
-        root = args.feature_dir / args.partition / f"{args.model}_{args.img_size}_aug4to5"
+        root = args.feature_dir / base / f"{args.model}_{args.img_size}_aug4to5"
         views = [
             extract(args, train_rows, device, FeatureCache(Path(f"{root}_{v}")), augment_seed=v)
             for v in range(args.aug_views)

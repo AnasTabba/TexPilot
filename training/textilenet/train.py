@@ -56,7 +56,7 @@ from training.textilenet.recipe import (
     soft_cross_entropy,
     split_head,
 )
-from training.textilenet.splits import class_index
+from training.textilenet.splits import PARTITIONS, base_partition, class_index, rescope
 
 cv2.setNumThreads(0)  # DataLoader workers already parallelise; avoid oversubscription
 
@@ -233,6 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     labels = class_index(args.partition)
     classes = sorted(labels, key=labels.get)
     rows = load_rows(args.split_csv, args.data_root, args.limit_per_class)
+    rows = {s: rescope(rs, args.partition) for s, rs in rows.items()}
     print({s: len(r) for s, r in rows.items()})
 
     model = create_model(args, len(classes))
@@ -639,7 +640,7 @@ def plot_confusion(summary: dict, classes: list[str], path: Path) -> None:
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument("--partition", choices=["fabric", "fibre"], required=True)
+    ap.add_argument("--partition", choices=sorted(PARTITIONS), required=True)
     ap.add_argument(
         "--model",
         default="convnextv2_base",
@@ -721,7 +722,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     args.img_size = args.img_size or preset.get("img_size", 224)
     args.drop_path = preset["drop_path"] if args.drop_path is None else args.drop_path
     args.layer_decay = preset["layer_decay"] if args.layer_decay is None else args.layer_decay
-    args.split_csv = args.split_csv or args.data_root / "splits" / f"{args.partition}.csv"
+    base = base_partition(args.partition)
+    args.split_csv = args.split_csv or args.data_root / "splits" / f"{base}.csv"
     if args.batch_size % 2 and (args.mixup or args.cutmix):
         ap.error("mixup/cutmix need an even batch size")
     if args.lora_rank and args.probe_epochs:
