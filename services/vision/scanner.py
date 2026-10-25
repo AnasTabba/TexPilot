@@ -7,6 +7,7 @@ never guesses.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -45,7 +46,10 @@ class ScannerPredictor:
         image = decode_image(image_bytes)  # UnsupportedImage propagates -> HTTP 422
         h, w = image.shape[:2]
         notes: list[Note] = []
+        timings: dict[str, float] = {}
+        t = time.perf_counter()
         dets = self._try(notes, "garment detector", lambda: self.detector.detect(image)) or []
+        timings["garment_detector"] = round(1000 * (time.perf_counter() - t), 1)
         primary = choose_primary(dets, w, h, self.min_det_score)
         garment = None
         if primary is None:
@@ -73,7 +77,10 @@ class ScannerPredictor:
             log.exception("capture quality failed")
             quality = None
         out = heads or VisionOutput(None, None, None)
-        return replace(out, garment=garment, notes=tuple(notes), quality=quality)
+        timings |= out.timings_ms
+        return replace(
+            out, garment=garment, notes=tuple(notes), quality=quality, timings_ms=timings
+        )
 
     @staticmethod
     def _try(notes: list[Note], component: str, fn):

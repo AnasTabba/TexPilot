@@ -150,12 +150,7 @@ def _blend(composition: list[FiberPct]) -> str:
     return line
 
 
-def yarn_advice(
-    structure: str | None, composition: list[FiberPct] | None, kb_path: Path = DEFAULT_KB_PATH
-) -> list[str]:
-    """What to order to make this fabric: the label's blend (if read), then the typical yarn
-    for the fabric the scanner named (kb.yaml ``yarn``). Nothing for an abstention."""
-    lines = [_blend(composition)] if composition else []
-    if structure:
-        lines += load_kb(kb_path)["fabrics"].get(structure, {}).get("yarn", [])
-    return lines
+def yarn_advice(composition: list[FiberPct] | None) -> list[str]:
+    """What to order, from what was read: the label's blend. Counts come from the Yarn spec
+    measurement (services/api/spec.py); nothing is looked up from the fabric name."""
+    return [_blend(composition)] if composition else []

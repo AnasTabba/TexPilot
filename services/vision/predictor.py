@@ -44,6 +44,8 @@ class VisionOutput:
     candidates: dict[str, list[tuple[str, float]]] = field(default_factory=dict)
     # Heads the factory taught (services/vision/custom.py): name -> answer, None if it abstained.
     custom: dict[str, HeadOutput | None] = field(default_factory=dict)
+    # model -> milliseconds it took on this scan (shown with the result as evidence of the work)
+    timings_ms: dict[str, float] = field(default_factory=dict)
 
 
 @runtime_checkable

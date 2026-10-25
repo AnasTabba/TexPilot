@@ -37,7 +37,7 @@ import {
   type HeadPrediction,
 } from "./scanner-client";
 import "./scanner.css";
-import FabricHero, { artwork, type Art } from "./FabricHero";
+import FabricHero from "./FabricHero";
 type T = (en: string, ur?: string) => string;
 type Photo = {
   file: File;
@@ -394,13 +394,13 @@ export default function Scanner({
       )}
     </div>
   );
-  const art: Art | null = !result
-    ? null
-    : ["denim", "chambray"].includes(result.structure?.label ?? "")
-      ? "denim"
-      : (result.fibre_family?.label ?? result.candidates.fibre_family?.[0]?.[0]) === "synthetic"
-        ? "polyester"
-        : "cotton";
+  const pct = (p: number) => `${Math.round(p * 100)}%`;
+  const fibreName = (label: string) =>
+    ({
+      cellulosic: t("Plant fibre (cellulosic)", "پودوں کا ریشہ"),
+      synthetic: t("Synthetic fibre", "مصنوعی ریشہ"),
+      protein: t("Animal fibre (protein)", "جانوروں کا ریشہ"),
+    })[label] ?? labelFor(label);
   return (
     <div className="scanner-page">
       <FabricHero
@@ -821,16 +821,26 @@ export default function Scanner({
             </div>
             {result ? (
               <>
-                {art && (
-                  <div className={`scan-guide-art fabric-hero-${art}`}>
-                    <span className="fabric-hero-circle" aria-hidden="true" />
-                    <img src={artwork[art]} alt="" />
-                    {result.structure && (
-                      <span className="scan-guide-pill">
-                        {labelFor(result.structure.label).toUpperCase()}
+                {surface && (
+                  <figure className="scan-seen">
+                    <img src={surface.url} alt={t("The photo that was analysed", "جس تصویر کا تجزیہ ہوا")} />
+                    {result.garment && (
+                      <span
+                        className="scan-seen-box"
+                        style={{
+                          left: `${result.garment.box[0] * 100}%`,
+                          top: `${result.garment.box[1] * 100}%`,
+                          width: `${(result.garment.box[2] - result.garment.box[0]) * 100}%`,
+                          height: `${(result.garment.box[3] - result.garment.box[1]) * 100}%`,
+                        }}
+                      >
+                        <b>
+                          {labelFor(result.garment.label)}
+                          {result.garment.confidence !== null && ` ${pct(result.garment.confidence)}`}
+                        </b>
                       </span>
                     )}
-                  </div>
+                  </figure>
                 )}
                 <div className="scan-answer">
                   <span>{t("Fabric", "کپڑا")}</span>
@@ -846,13 +856,15 @@ export default function Scanner({
                           .map((f) => `${f.pct}% ${labelFor(f.name)}`)
                           .join(" / ") + t(" (from the label)", " (لیبل سے)")
                       : result.fibre_family
-                        ? {
-                            cellulosic: t("Plant fibre: cotton, linen or viscose", "پودوں کا ریشہ: کاٹن، لینن یا وسکوز"),
-                            synthetic: t("Synthetic: polyester, nylon or acrylic", "مصنوعی: پولیسٹر، نائلون یا ایکریلک"),
-                            protein: t("Animal fibre: wool or silk", "جانوروں کا ریشہ: اون یا ریشم"),
-                          }[result.fibre_family.label] ?? labelFor(result.fibre_family.label)
+                        ? `${fibreName(result.fibre_family.label)} · ${pct(result.fibre_family.confidence)}`
                         : t("Not sure from the photo", "تصویر سے پکا نہیں")}
                   </strong>
+                  {!result.stated_composition.fibers.length && !result.fibre_family && result.candidates.fibre_family?.length ? (
+                    <small className="scan-closest">
+                      {t("Closest, not confident: ", "قریب ترین، پکا نہیں: ")}
+                      {result.candidates.fibre_family.map(([l, p]) => `${fibreName(l)} ${pct(p)}`).join(" · ")}
+                    </small>
+                  ) : null}
                   <span>{t("Yarn to buy", "کون سا یارن خریدیں")}</span>
                   {result.yarn_advice?.length ? (
                     <ul>
@@ -863,8 +875,8 @@ export default function Scanner({
                   ) : (
                     <p>
                       {t(
-                        "Get closer so the weave fills the frame, then scan again.",
-                        "قریب سے تصویر لیں تاکہ بُنائی پوری نظر آئے، پھر دوبارہ اسکین کریں۔",
+                        "Measured, not guessed: one photo with the printed card and the fabric's weight gives the warp and weft yarn count.",
+                        "اندازہ نہیں، پیمائش: پرنٹ شدہ کارڈ کے ساتھ ایک تصویر اور کپڑے کا وزن وارپ اور ویفٹ یارن کاؤنٹ بتاتے ہیں۔",
                       )}
                     </p>
                   )}
@@ -889,6 +901,22 @@ export default function Scanner({
                     )}
                   </div>
                 </div>
+                {result.timings_ms?.total !== undefined && (
+                  <p className="scan-work">
+                    {t("Analysed in ", "تجزیہ ")}
+                    <bdi>{(result.timings_ms.total / 1000).toFixed(2)} s</bdi>
+                    {": "}
+                    {[
+                      ["garment_detector", t("garment detector (OWLv2)", "گارمنٹ ڈیٹیکٹر")],
+                      ["fabric_model", t("fabric model (SigLIP 2)", "فیبرک ماڈل")],
+                      ["fibre_model", t("fibre model (DINOv2)", "فائبر ماڈل")],
+                      ["label_reader", t("label reader", "لیبل ریڈر")],
+                    ]
+                      .filter(([k]) => result.timings_ms?.[k] !== undefined)
+                      .map(([k, name]) => `${name} ${Math.round(result.timings_ms![k])} ms`)
+                      .join(" · ")}
+                  </p>
+                )}
                 {result.verdict !== "INSUFFICIENT_EVIDENCE" && (
                 <div className={`scan-verdict ${result.verdict.toLowerCase()}`}>
                   <span>

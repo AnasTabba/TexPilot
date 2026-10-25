@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -242,10 +243,13 @@ class LinearHeads:
         x = np.stack(
             [preprocess(v, self.mean, self.std, self.img_size, self.crop_pct) for v in views]
         )
+        clock = time.perf_counter()
         t = self._torch.from_numpy(x).to(self.device)
         with self._torch.no_grad():
             f = pool_features(self.model, t.half() if self.half else t).float().cpu().numpy()
         probs = {n: head_probs(f, self.specs[n]) for n in HEAD_NAMES if n in self.specs}
+        timings = {"fibre_model": round(1000 * (time.perf_counter() - clock), 1)}
+        clock = time.perf_counter()
         classes = {n: self.specs[n].classes for n in probs}
         features = None
         if self.structure_model is not None:  # the fine-tuned Head A replaces the linear one
@@ -255,6 +259,7 @@ class LinearHeads:
             else:
                 probs["structure"] = self.structure_model.probs(views)
             classes["structure"] = self.structure_model.classes
+            timings["fabric_model"] = round(1000 * (time.perf_counter() - clock), 1)
         out = {n: None for n in HEAD_NAMES}
         candidates = {}
         for n, p in probs.items():
@@ -272,4 +277,4 @@ class LinearHeads:
             custom[head.name] = decide(p, head.classes, head.threshold)
             if custom[head.name] is None:
                 candidates[head.name] = closest(p, head.classes)
-        return VisionOutput(**out, candidates=candidates, custom=custom)
+        return VisionOutput(**out, candidates=candidates, custom=custom, timings_ms=timings)

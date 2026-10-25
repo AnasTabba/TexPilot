@@ -29,6 +29,8 @@ export interface ScanResult {
   custom: Record<string, HeadPrediction | null>;
   /** What to order to make this fabric: the label's blend, then the typical yarn. Older servers omit it. */
   yarn_advice?: string[];
+  /** How long each model took on this scan, in ms (total, garment_detector, fabric_model, ...). */
+  timings_ms?: Record<string, number>;
   capture_quality: {
     blur: number | null;
     exposure: string | null;
@@ -142,6 +144,11 @@ export function parseScanResult(value: unknown): ScanResult {
   if (
     value.yarn_advice !== undefined &&
     !(Array.isArray(value.yarn_advice) && value.yarn_advice.every((x) => typeof x === "string"))
+  )
+    throw new ScanError("response");
+  if (
+    value.timings_ms !== undefined &&
+    !(record(value.timings_ms) && Object.values(value.timings_ms).every((x) => typeof x === "number" && Number.isFinite(x)))
   )
     throw new ScanError("response");
   const composition = value.stated_composition;

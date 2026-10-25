@@ -448,3 +448,68 @@
     animation: none;
   }
 }
+
+/* The photo that was analysed, with the garment the detector found boxed: evidence, not art. */
+.scan-seen {
+  position: relative;
+  margin: 0 0 14px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--sunken);
+  animation: answer-in 420ms var(--ease-out) backwards;
+}
+.scan-seen img {
+  display: block;
+  width: 100%;
+  max-height: 340px;
+  object-fit: contain;
+}
+.scan-seen-box {
+  position: absolute;
+  border: 2px solid var(--gold);
+  border-radius: 6px;
+  box-shadow: 0 0 0 9999px rgb(23 14 9 / 28%);
+  animation: box-find 500ms var(--ease-out) 150ms backwards;
+}
+.scan-seen-box b {
+  position: absolute;
+  left: -2px;
+  top: -2px;
+  padding: 3px 8px;
+  border-radius: 6px 0 6px 0;
+  background: var(--gold);
+  color: var(--chrome);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+@keyframes box-find {
+  from {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+.scan-closest {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.scan-work {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.scan-work bdi {
+  color: var(--text);
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scan-seen,
+  .scan-seen-box {
+    animation: none;
+  }
+}

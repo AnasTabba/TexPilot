@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 
 from services.api.schemas import (
@@ -86,9 +87,15 @@ def run_scan(
     ocr=None,
     model_version: str = "stub-0",
 ) -> ScanResult:
+    start = time.perf_counter()
     vision = predictor.predict(surface_image)
     notes = [_info(n.code, n.message) for n in vision.notes]
+    t = time.perf_counter()
     composition, stated = stated_composition(label_text, label_image, ocr, notes)
+    timings = dict(vision.timings_ms)
+    if label_image is not None and not label_text:
+        timings["label_reader"] = round(1000 * (time.perf_counter() - t), 1)
+    timings["total"] = round(1000 * (time.perf_counter() - start), 1)
 
     verdict = evaluate(vision, composition)
     g = vision.garment
@@ -105,7 +112,8 @@ def run_scan(
         capture_quality=CaptureQuality(**vision.quality) if vision.quality else CaptureQuality(),
         candidates=vision.candidates,
         custom={name: _head(out) for name, out in vision.custom.items()},
-        yarn_advice=yarn_advice(vision.structure and vision.structure.label, composition),
+        yarn_advice=yarn_advice(composition),
+        timings_ms=timings,
         flags=[
             FlagModel(code=f.code, message=f.message, severity=f.severity) for f in verdict.flags
         ]
