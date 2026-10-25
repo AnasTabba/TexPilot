@@ -26,3 +26,37 @@ def test_a_product_is_labelled_by_its_composition_and_fabric_name_or_dropped():
     got = label(p)
     assert got["fabric"] == "lawn" and got["main_fibre"] == "cotton" and got["blend"] == "pure"
     assert label({"title": "Gift card", "product_type": "", "tags": [], "body_html": ""}) is None
+
+
+def test_requests_sharing_a_pace_are_spaced_even_from_parallel_threads(monkeypatch):
+    import threading
+    import time
+
+    from training.textilenet import shop_scrape
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"{}"
+
+    times = []
+    monkeypatch.setattr(
+        shop_scrape.urllib.request,
+        "urlopen",
+        lambda *a, **k: times.append(time.monotonic()) or Resp(),
+    )
+    http = shop_scrape.Polite(gap=0.2)
+    http.robots = {"a.example": None, "b.example": None}  # no robots.txt fetch in tests
+    threads = [threading.Thread(target=http.get, args=(f"https://{h}/products.json", "catalogue"))
+               for h in ("a.example", "b.example", "a.example")]  # fmt: skip
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    gaps = [b - a for a, b in zip(sorted(times), sorted(times)[1:], strict=False)]
+    assert len(times) == 3 and min(gaps) >= 0.19

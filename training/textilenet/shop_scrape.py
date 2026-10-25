@@ -4,7 +4,8 @@ catalogue at /products.json; for each product we keep the composition its descri
 yarn buyer uses (CVC, PC, stretch, pure) and any fabric name in its title, then a few of its photos
 at 640 px from the shop's image CDN.
 
-Polite by design: an honest User-Agent, robots.txt obeyed, about one request per second per store.
+Polite by design: an honest User-Agent, robots.txt obeyed, catalogue pages paced together across
+stores, photos about one per second per store, and long back-offs when a shop says slow down.
 Sites that refuse automated access are skipped, never worked around.
 
     python -m training.textilenet.shop_scrape --stores outfitters.com.pk rastah.co --out data/shops
@@ -88,8 +89,8 @@ def label(product: dict) -> dict | None:
 
 class Polite:
     """GET with an honest User-Agent, robots.txt checked per host, at most one request per
-    ``gap`` seconds per pacing key: the store, so its photos on Shopify's shared CDN count against
-    that store's own budget instead of throttling every store together."""
+    ``gap`` seconds per pacing key, safe across threads: "catalogue" for every store's catalogue
+    pages (Shopify limits a client across its shops), the store for its photos on the CDN."""
 
     def __init__(self, gap: float = 1.0):
         self.gap, self.robots, self.last, self.lock = gap, {}, {}, threading.Lock()
@@ -110,13 +111,14 @@ class Polite:
             rp = self.robots[host]
         if rp is not None and not rp.can_fetch(UA, url):
             return None
-        wait = self.last.get(key, 0) + self.gap - time.monotonic()  # one thread per key
-        if wait > 0:
-            time.sleep(wait)
-        self.last[key] = time.monotonic()
+        with self.lock:  # reserve the next slot for this key, then wait for it outside the lock
+            now = time.monotonic()
+            slot = max(now, self.last.get(key, 0.0) + self.gap)
+            self.last[key] = slot
+        time.sleep(max(0.0, slot - now))
         # Say what we want: Shopify turns away requests without a proper Accept (429).
         req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": accept})
-        for backoff in (10, 30, 90, None):
+        for backoff in (30, 120, 300, None):
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as r:
                     return r.read()
@@ -138,7 +140,8 @@ def scrape_store(
     (d / "img").mkdir(parents=True, exist_ok=True)
     rows, n_products, n_images, labelled = [], 0, 0, []
     for page in range(1, max_pages + 1):
-        raw = http.get(f"https://{store}/products.json?limit=250&page={page}")
+        # One pace for every store's catalogue: Shopify rate-limits a client across all its shops.
+        raw = http.get(f"https://{store}/products.json?limit=250&page={page}", key="catalogue")
         products = json.loads(raw).get("products", []) if raw else []
         if not products:
             break
@@ -188,9 +191,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=Path("data/shops"))
     ap.add_argument("--per-product", type=int, default=4, help="photos kept per labelled product")
     ap.add_argument("--max-pages", type=int, default=200, help="catalogue pages of 250 products")
-    ap.add_argument("--max-images", type=int, default=9000, help="per store (~2.5 h at 1/s)")
+    ap.add_argument("--max-images", type=int, default=9000, help="per store (~5 h at one per 2 s)")
     args = ap.parse_args(argv)
-    http = Polite()
+    http = Polite(gap=2.0)  # 2 s between catalogue pages overall, and between a store's photos
     jobs = [
         (s, args.out, http, args.per_product, args.max_pages, args.max_images) for s in args.stores
     ]
