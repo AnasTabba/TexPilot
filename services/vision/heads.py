@@ -91,6 +91,8 @@ class FineTunedHead:
         self.classes = tuple(self.meta["classes"])
         # A product scope (head.json "scope"): dropped classes can't be answered, merged ones add
         # into their target. ``self._scope`` maps the model's classes onto the answerable ones.
+        # Per-class logit bias tuned on val for macro F1 at export (head.json "class_bias").
+        self._bias = np.asarray(self.meta.get("class_bias", 0.0), np.float32)
         self._scope = None
         if scope := self.meta.get("scope"):
             merge, drop = scope.get("merge", {}), set(scope.get("drop", []))
@@ -141,7 +143,9 @@ class FineTunedHead:
     def probs(self, views: list[np.ndarray]) -> np.ndarray:
         if self.probe is not None:
             return self.probs_from_features(self.features(views))
-        p = softmax(self._run(lambda t: self.model(t), views), self.meta["temperature"])
+        p = softmax(
+            self._run(lambda t: self.model(t), views) + self._bias, self.meta["temperature"]
+        )
         return self._scoped(p).mean(0)
 
     def features(self, views: list[np.ndarray]) -> np.ndarray:
@@ -154,7 +158,7 @@ class FineTunedHead:
     def probs_from_features(self, features: np.ndarray) -> np.ndarray:
         with self._torch.no_grad():
             logits = self.probe(self._torch.from_numpy(features).to(self.device)).cpu().numpy()
-        return self._scoped(softmax(logits, self.meta["temperature"])).mean(0)
+        return self._scoped(softmax(logits + self._bias, self.meta["temperature"])).mean(0)
 
     def _scoped(self, p: np.ndarray) -> np.ndarray:
         """Per-view probabilities over the answerable classes, renormalised after a drop."""

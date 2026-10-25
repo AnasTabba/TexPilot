@@ -221,3 +221,24 @@ def test_a_head_with_a_product_scope_drops_and_merges_classes(tmp_path, monkeypa
     assert head.classes == ("knit", "lace")
     p = head.probs([np.zeros((64, 64, 3), np.uint8)])
     assert np.allclose(p, [0.5 / 0.9, 0.4 / 0.9], atol=1e-5)
+
+
+def test_a_head_adds_its_class_bias_before_the_softmax(tmp_path, monkeypatch):
+    """class_bias (tuned on val for macro F1 at export) shifts logits the same way when served."""
+    from safetensors.numpy import save_file
+
+    from services.vision import heads
+
+    encoder = timm_classifier("resnet10t", 0, 64)
+    monkeypatch.setattr(heads, "timm_classifier", lambda *a, **k: encoder)
+    d = tmp_path / "head_a"
+    d.mkdir()
+    w = np.zeros((2, encoder.num_features), np.float32)
+    save_file(
+        {"probe.weight": w, "probe.bias": np.zeros(2, np.float32)}, str(d / "probe.safetensors")
+    )
+    meta = dict(classes=["denim", "twill"], timm_name="resnet10t", img_size=64, crop_pct=0.875)
+    meta |= dict(mean=[0.5] * 3, std=[0.5] * 3, temperature=1.0, threshold=0.0, pool="probe")
+    (d / "head.json").write_text(json.dumps(meta | {"class_bias": [-0.5, 0.5]}))
+    p = FineTunedHead(d, CPU).probs([np.zeros((64, 64, 3), np.uint8)])
+    assert np.allclose(p, [1 / (1 + np.e), np.e / (1 + np.e)], atol=1e-5)
