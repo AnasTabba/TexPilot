@@ -82,3 +82,12 @@ def title_pattern(title: str) -> str | None:
     labels = {c for c, rule in TITLE_RULES.items() if re.search(rule, title.lower())}
     motifs = labels - {'solid'}
     return next(iter(motifs)) if len(motifs) == 1 else ('solid' if labels == {'solid'} else None)
+
+
+def pattern_input(data: bytes, meta: dict):
+    """Exact serving decode (upright, max1600px) plus whole-photo encoder preprocessing."""
+    from services.vision.backbone import preprocess
+    from services.vision.imageio import decode_image
+
+    return preprocess(decode_image(data), meta['mean'], meta['std'],
+                      meta['img_size'], meta['crop_pct'])

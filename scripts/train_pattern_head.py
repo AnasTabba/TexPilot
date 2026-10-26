@@ -18,21 +18,21 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from training.scanner.pattern_data import product_split, title_pattern  # noqa: E402
+from training.scanner.pattern_data import pattern_input, product_split, title_pattern  # noqa: E402
 from training.scanner.pattern_head import select_head  # noqa: E402
 
 
 def main():
     import timm
     import torch
-    from PIL import Image, ImageFile
+    from PIL import ImageFile
     from safetensors import safe_open
     from safetensors.numpy import save_file
     from safetensors.torch import load_file
     from sklearn.metrics import f1_score
     from torch.utils.data import DataLoader, Dataset
 
-    from services.vision.backbone import pool_features, preprocess
+    from services.vision.backbone import pool_features
     from services.vision.heads import softmax
     from training.scanner.calibration import abstain_threshold, fit_temperature
     from training.textilenet.recipe import apply_lora
@@ -110,10 +110,7 @@ def main():
             return len(rows)
 
         def __getitem__(self, i):
-            with Image.open(root / rows[i]['path']) as im:
-                rgb = np.asarray(im.convert('RGB'))
-            return torch.from_numpy(preprocess(rgb, head['mean'], head['std'],
-                                                head['img_size'], head['crop_pct']))
+            return torch.from_numpy(pattern_input((root / rows[i]['path']).read_bytes(), head))
 
     features, started, half = [], time.time(), True
     with torch.no_grad():

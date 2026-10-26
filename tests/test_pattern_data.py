@@ -42,3 +42,28 @@ def test_shop_titles_require_an_explicit_unambiguous_pattern_and_product_split()
     assert title_pattern('Floral and striped suit') is None
     assert title_pattern('Leopard print shirt') == 'animal'
     assert product_split('store', 'product1') == product_split('store', 'product1')
+
+
+def test_pattern_pixels_match_serving_for_large_exif_rotated_photo():
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    from services.vision.backbone import preprocess
+    from services.vision.imageio import decode_image
+    from training.scanner.pattern_data import pattern_input
+
+    pixels = np.zeros((1800, 2400, 3), np.uint8)
+    pixels[:, :1200] = [250, 20, 30]
+    pixels[:, 1200:] = [10, 220, 80]
+    image = Image.fromarray(pixels)
+    exif = Image.Exif()
+    exif[274] = 6
+    data = io.BytesIO()
+    image.save(data, format='JPEG', exif=exif)
+    meta = dict(mean=[.5] * 3, std=[.5] * 3, img_size=64, crop_pct=.875)
+    upright = decode_image(data.getvalue())
+    assert upright.shape == (1600, 1200, 3)
+    expected = preprocess(upright, **meta)
+    np.testing.assert_array_equal(pattern_input(data.getvalue(), meta), expected)
