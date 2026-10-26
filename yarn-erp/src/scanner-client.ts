@@ -40,15 +40,13 @@ export interface ScanResult {
   kb_version: string;
   timestamp: string;
 }
-/** What the answer card leads with: the head's accepted prediction (sure); else its top guess when that beats all the
- * others combined (likely: under the head's calibrated bar); else nothing (not sure). `rest` is shown small beneath. */
-export function leadingAnswer(
+/** What the answer card shows for a head: its accepted prediction, else its best guess (the user wants an answer
+ * with its confidence, never "not sure"). */
+export function topGuess(
   head: Pick<HeadPrediction, "label" | "confidence"> | null | undefined,
   near: [string, number][] | undefined,
-): { lead: [string, number] | null; sure: boolean; rest: [string, number][] } {
-  if (head) return { lead: [head.label, head.confidence], sure: true, rest: [] };
-  const lead = near?.[0] && near[0][1] > 0.5 ? near[0] : null;
-  return { lead, sure: false, rest: (near ?? []).slice(lead ? 1 : 0) };
+): [string, number] | null {
+  return head ? [head.label, head.confidence] : near?.[0] ?? null;
 }
 export interface ModelInfo {
   ready: boolean;

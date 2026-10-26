@@ -10,7 +10,7 @@ import {
   parseSpecResult,
   validateScan,
   ScanError,
-  leadingAnswer,
+  topGuess,
   type ScanResult,
   type SpecResult,
 } from "../src/scanner-client.ts";
@@ -302,16 +302,10 @@ test("Scanner shows heads the factory taught (e.g. wash), and older APIs without
     assert.throws(() => parseScanResult({ ...fixture, custom: bad }), ScanError);
 });
 
-test("answer card leads with the accepted answer, else a guess that beats the rest combined, else not sure", () => {
-  assert.deepEqual(leadingAnswer({ label: "knit", confidence: 0.91 }, [["knit", 0.91]]), {
-    lead: ["knit", 0.91], sure: true, rest: [],
-  });
-  assert.deepEqual(leadingAnswer(null, [["polyester", 0.84], ["elastane", 0.1]]), {
-    lead: ["polyester", 0.84], sure: false, rest: [["elastane", 0.1]],
-  });
-  assert.deepEqual(leadingAnswer(null, [["yak", 0.29], ["acrylic", 0.21]]), {
-    lead: null, sure: false, rest: [["yak", 0.29], ["acrylic", 0.21]],
-  });
-  assert.equal(leadingAnswer(null, [["a", 0.5], ["b", 0.5]]).lead, null);
-  assert.deepEqual(leadingAnswer(null, undefined), { lead: null, sure: false, rest: [] });
+test("answer card always shows the top answer: the accepted one, else the head's best guess", () => {
+  assert.deepEqual(topGuess({ label: "knit", confidence: 0.91 }, [["knit", 0.91]]), ["knit", 0.91]);
+  assert.deepEqual(topGuess(null, [["polyester", 0.58], ["elastane", 0.3]]), ["polyester", 0.58]);
+  assert.deepEqual(topGuess(null, [["yak", 0.29], ["acrylic", 0.21]]), ["yak", 0.29]);
+  assert.equal(topGuess(null, undefined), null);
+  assert.equal(topGuess(undefined, []), null);
 });

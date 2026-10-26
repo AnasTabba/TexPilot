@@ -23,6 +23,9 @@ import {
   StopCircle,
   PlugZap,
   CheckCheck,
+  Blend,
+  Paintbrush,
+  Ruler,
 } from "lucide-react";
 import {
   analyzeMaterial,
@@ -30,7 +33,7 @@ import {
   normalizeEndpoint,
   validateImage,
   resultFilename,
-  leadingAnswer,
+  topGuess,
   ScanError,
   type ScanResult,
   type ModelInfo,
@@ -352,64 +355,8 @@ export default function Scanner({
       dyed: t(copy.dyed, copy.urdu429),
       untreated: t(copy.untreated, copy.urdu430),
     })[value] || value.replaceAll("_", " ");
-  const headRow = (
-    en: string,
-    ur: string,
-    head: HeadPrediction | null,
-    I: typeof Layers3,
-    near?: [string, number][],
-    artworkKind?: ArtworkKind,
-  ) => (
-    <div className="scan-prediction">
-      {artworkKind ? (
-        <ScannerArtwork kind={artworkKind} label={head?.label} />
-      ) : (
-        <span className="scan-prediction-icon">
-          <I size={19} />
-        </span>
-      )}
-      <div>
-        <span>{t(en, ur)}</span>
-        <strong>
-          {head
-            ? labelFor(head.label)
-            : t(copy.notEnoughEvidence, copy.urdu431)}
-        </strong>
-        {!head && near && near.length > 0 && (
-          <small className="scan-candidates">
-            {t(copy.closestNotConfident, copy.closestNotConfidentUr)}{" "}
-            <bdi>
-              {near
-                .map(([label, p]) => `${labelFor(label)} ${Math.round(p * 100)}%`)
-                .join(" · ")}
-            </bdi>
-          </small>
-        )}
-      </div>
-      {head ? (
-        <div className="scan-confidence">
-          <bdi>
-            {Math.round(head.confidence * 100)}
-            {copy.urdu432}
-          </bdi>
-          <span>
-            <i style={{ width: head.confidence * 100 + "%" }} />
-          </span>
-        </div>
-      ) : (
-        <span className="scan-abstain">{copy.urdu433}</span>
-      )}
-    </div>
-  );
   const pct = (p: number) => `${Math.round(p * 100)}%`;
-  // Heads taught from labelled photos (models/custom): their titles and the blend names yarn is bought by.
-  const taughtTitle = (name: string) =>
-    ({
-      local_fabric: t("Fabric name", "کپڑے کا نام"),
-      blend: t("Blend", "مکس"),
-      finish: t("Finish", "فنش"),
-      garment_type: t("Garment", "لباس"),
-    })[name] ?? name.charAt(0).toUpperCase() + name.slice(1).replaceAll("_", " ");
+  // Taught heads (models/custom) report their raw class names; blends are named the way yarn is bought.
   const taughtLabel = (name: string, label: string) =>
     name === "blend"
       ? ({
@@ -421,43 +368,10 @@ export default function Scanner({
       : labelFor(label).replace(/^./, (c) => c.toUpperCase());
   const fibreName = (label: string) =>
     ({
-      cellulosic: t("Plant fibre (cellulosic)", "پودوں کا ریشہ"),
-      synthetic: t("Synthetic fibre", "مصنوعی ریشہ"),
-      protein: t("Animal fibre (protein)", "جانوروں کا ریشہ"),
+      cellulosic: t("Plant fibre (cotton, linen, viscose)", "پودوں کا ریشہ (کاٹن، لینن، ویسکوز)"),
+      synthetic: t("Synthetic (polyester, nylon)", "مصنوعی (پولیسٹر، نائلون)"),
+      protein: t("Animal fibre (wool, silk)", "جانوروں کا ریشہ (اون، ریشم)"),
     })[label] ?? labelFor(label);
-  // One answer: the lead big (tagged "likely" when it is under the head's calibrated bar), the other guesses small.
-  const answerRow = (
-    a: ReturnType<typeof leadingAnswer>,
-    name: (label: string) => string,
-    unsure: string,
-    big = false,
-  ) => {
-    const Tag = big ? "h3" : "strong";
-    return (
-      <>
-        <Tag className={big && a.lead ? "is-label" : undefined}>
-          {a.lead ? `${name(a.lead[0])} · ${pct(a.lead[1])}` : unsure}
-          {a.lead && !a.sure && <em className="scan-likely">{t("likely", "غالباً")}</em>}
-        </Tag>
-        {a.rest.length > 0 && (
-          <small className="scan-closest">
-            {a.lead ? t("Next: ", "اس کے بعد: ") : t("Closest, not confident: ", "قریب ترین، پکا نہیں: ")}
-            {a.rest.map(([l, p]) => `${name(l)} ${pct(p)}`).join(" · ")}
-          </small>
-        )}
-      </>
-    );
-  };
-  // Fibre from the photo: a sure answer from either head first (33 fibres, then plant/animal/synthetic), then a likely one.
-  const fibreRow = (r: ScanResult) => {
-    const options = [
-      [leadingAnswer(r.custom.fibre, r.candidates.fibre), labelFor],
-      [leadingAnswer(r.fibre_family, r.candidates.fibre_family), fibreName],
-    ] as const;
-    const [a, name] =
-      options.find(([o]) => o.sure) ?? options.find(([o]) => o.lead) ?? options[r.candidates.fibre ? 0 : 1];
-    return answerRow(a, name, t("Not sure from the photo", "تصویر سے پکا نہیں"));
-  };
   return (
     <div className="scanner-page">
       <FabricHero
@@ -876,282 +790,167 @@ export default function Scanner({
                 <p>{t(copy.evidenceFirstAConfidentNextStep, copy.urdu480)}</p>
               </div>
             </div>
-            {result ? (
+            {result ? (() => {
+              // Every row shows the model's top answer with its confidence (colour-coded), never "not sure".
+              const garment =
+                topGuess(result.custom.garment_type, result.candidates.garment_type) ??
+                (result.garment ? ([result.garment.label, result.garment.confidence ?? 0] as [string, number]) : null);
+              const stated = result.stated_composition.fibers;
+              const fibre = topGuess(result.fibre_family, result.candidates.fibre_family);
+              const rows = [
+                { key: "fabric", title: t("Fabric", "کپڑا"), art: "structure" as const, guess: topGuess(result.structure, result.candidates.structure), name: (l: string) => taughtLabel("structure", l) },
+                stated.length
+                  ? { key: "made_of", title: t("Made of (from the label)", "کس چیز سے بنا (لیبل سے)"), icon: Tag, guess: null,
+                      text: stated.map((f) => `${f.pct}% ${labelFor(f.name)}`).join(" · ") }
+                  : { key: "made_of", title: t("Made of", "کس چیز سے بنا"), art: "fibre_family" as const, guess: fibre, name: fibreName },
+                { key: "blend", title: t("Blend", "مکس"), icon: Blend, guess: topGuess(result.custom.blend, result.candidates.blend), name: (l: string) => taughtLabel("blend", l) },
+                { key: "finish", title: t("Finish", "فنش"), icon: Paintbrush, guess: topGuess(result.custom.finish, result.candidates.finish), name: (l: string) => taughtLabel("finish", l) },
+              ];
+              const level = (p: number) => (p >= 0.8 ? "high" : p >= 0.5 ? "mid" : "low");
+              return (
               <>
-                {surface && (
-                  <figure className="scan-seen">
-                    <img src={surface.url} alt={t("The photo that was analysed", "جس تصویر کا تجزیہ ہوا")} />
-                    {result.garment && (
-                      <span
-                        className="scan-seen-box"
-                        style={{
-                          left: `${result.garment.box[0] * 100}%`,
-                          top: `${result.garment.box[1] * 100}%`,
-                          width: `${(result.garment.box[2] - result.garment.box[0]) * 100}%`,
-                          height: `${(result.garment.box[3] - result.garment.box[1]) * 100}%`,
-                        }}
-                      >
-                        <b>
-                          {labelFor(result.garment.label)}
-                          {result.garment.confidence !== null && ` ${pct(result.garment.confidence)}`}
-                        </b>
-                      </span>
-                    )}
-                  </figure>
-                )}
-                <figure className="scan-fabric-illustration" key={result.scan_id}>
-                  <ScannerArtwork kind="structure" label={result.structure?.label} />
-                  <figcaption>{t("Fabric illustration", "کپڑے کی مثالی تصویر")}</figcaption>
-                </figure>
-                <div className="scan-answer">
-                  <span>{t("Fabric", "کپڑا")}</span>
-                  {answerRow(
-                    leadingAnswer(result.structure, result.candidates.structure),
-                    labelFor,
-                    t("Not sure which fabric yet", "ابھی پکا نہیں کہ کون سا کپڑا ہے"),
-                    true,
-                  )}
-                  <span>{t("Made of", "کس چیز سے بنا")}</span>
-                  {result.stated_composition.fibers.length ? (
-                    <strong>
-                      {result.stated_composition.fibers.map((f) => `${f.pct}% ${labelFor(f.name)}`).join(" / ") +
-                        t(" (from the label)", " (لیبل سے)")}
-                    </strong>
-                  ) : (
-                    fibreRow(result)
-                  )}
-                  {Object.entries(result.custom)
-                    .filter(([name]) => name !== "fibre")
-                    .map(([name, head]) => (
-                      <Fragment key={name}>
-                        <span>{taughtTitle(name)}</span>
-                        {answerRow(
-                          leadingAnswer(head, result.candidates[name]),
-                          (l) => taughtLabel(name, l),
-                          t("Not sure from the photo", "تصویر سے پکا نہیں"),
-                        )}
-                      </Fragment>
-                    ))}
-                  <span>{t("Yarn to buy", "کون سا یارن خریدیں")}</span>
-                  {result.yarn_advice?.length ? (
-                    <ul>
-                      {result.yarn_advice.map((line) => (
-                        <li key={line}>{line}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>
-                      {t(
-                        "Measured, not guessed: one photo with the printed card and the fabric's weight gives the warp and weft yarn count.",
-                        "اندازہ نہیں، پیمائش: پرنٹ شدہ کارڈ کے ساتھ ایک تصویر اور کپڑے کا وزن وارپ اور ویفٹ یارن کاؤنٹ بتاتے ہیں۔",
-                      )}
-                    </p>
-                  )}
-                  <div className="scan-next">
-                    {!result.stated_composition.fibers.length && (
-                      <button
-                        className="button"
-                        onClick={() => {
-                          setSlot("label");
-                          document.querySelector(".scan-capture-panel")?.scrollIntoView({ behavior: "smooth" });
-                        }}
-                      >
-                        <Tag size={17} />
-                        {t("Exact mix: add the care-label photo", "اصل مکس: کیئر لیبل کی تصویر لگائیں")}
-                      </button>
-                    )}
-                    {onMeasure && (
-                      <button className="button primary" onClick={onMeasure}>
-                        <ArrowRight size={17} />
-                        {t("Exact count: measure with the card", "اصل کاؤنٹ: کارڈ سے ناپیں")}
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {result.timings_ms?.total !== undefined && (
-                  <p className="scan-work">
-                    {t("Analysed in ", "تجزیہ ")}
-                    <bdi>{(result.timings_ms.total / 1000).toFixed(2)} s</bdi>
-                    {": "}
-                    {[
-                      ["garment_detector", t("garment detector (OWLv2)", "گارمنٹ ڈیٹیکٹر")],
-                      ["fabric_model", t("fabric model (SigLIP 2)", "فیبرک ماڈل")],
-                      ["fibre_model", t("fibre model (DINOv2)", "فائبر ماڈل")],
-                      ["taught_model", t("taught answers model", "سکھائے گئے جوابات کا ماڈل")],
-                      ["label_reader", t("label reader", "لیبل ریڈر")],
-                    ]
-                      .filter(([k]) => result.timings_ms?.[k] !== undefined)
-                      .map(([k, name]) => `${name} ${Math.round(result.timings_ms![k])} ms`)
-                      .join(" · ")}
-                  </p>
-                )}
-                <div className={`scan-verdict ${result.verdict.toLowerCase()}`}>
-                  <ScannerArtwork kind="verdict" label={result.verdict} />
+                <div className="scan-garment-hero">
+                  <ScannerArtwork kind="garment" label={garment?.[0]} />
                   <div>
-                    <strong>
-                      {result.verdict === "PASS"
-                        ? t(copy.consistentWithTheLabel, copy.urdu481)
-                        : result.verdict === "FLAG"
-                          ? t(copy.needsACloserLook, copy.urdu482)
-                          : t(copy.moreEvidenceNeeded, copy.urdu483)}
-                    </strong>
-                    <p>
-                      {result.verdict === "PASS"
-                        ? t(
-                            copy.noInconsistencyWasFlaggedByTheModel,
-                            copy.urdu484,
-                          )
-                        : result.verdict === "FLAG"
-                          ? t(
-                              copy.reviewTheFlaggedEvidenceBeforeAcceptingThis,
-                              copy.urdu485,
-                            )
-                          : t(copy.tryAClearerPhotoAndAddThe, copy.urdu486)}
-                    </p>
+                    <span>{t("Garment", "لباس")}</span>
+                    <h3>{garment ? taughtLabel("garment_type", garment[0]) : t("No garment found", "کوئی لباس نہیں ملا")}</h3>
                   </div>
+                  {garment && <b className={`scan-pct ${level(garment[1])}`}>{pct(garment[1])}</b>}
                 </div>
-                <div className="scan-predictions">
-                  {headRow(
-                    copy.fabricStructure,
-                    copy.urdu487,
-                    result.structure,
-                    Layers3,
-                    result.candidates.structure,
-                    "structure",
+                <h4 className="scan-section-title">{t("Composition", "بناوٹ")}</h4>
+                <ul className="scan-rows">
+                  {rows.map((r) =>
+                    r.guess || r.text ? (
+                      <li key={r.key}>
+                        {r.art && r.guess ? (
+                          <ScannerArtwork kind={r.art} label={r.guess[0]} />
+                        ) : (
+                          <span className="scan-row-icon">{r.icon && <r.icon size={24} aria-hidden="true" />}</span>
+                        )}
+                        <div>
+                          <span>{r.title}</span>
+                          <strong>{r.guess && r.name ? r.name(r.guess[0]) : r.text}</strong>
+                        </div>
+                        {r.guess && <b className={`scan-pct ${level(r.guess[1])}`}>{pct(r.guess[1])}</b>}
+                      </li>
+                    ) : null,
                   )}
-                  {headRow(
-                    copy.surfaceTreatment,
-                    copy.urdu488,
-                    result.treatment,
-                    Sun,
-                    result.candidates.treatment,
-                    "treatment",
-                  )}
-                  {headRow(
-                    copy.fibreFamily,
-                    copy.urdu489,
-                    result.fibre_family,
-                    Tag,
-                    result.candidates.fibre_family,
-                    "fibre_family",
-                  )}
-                  {Object.entries(result.custom).map(([name, head]) => {
-                    const title = name.charAt(0).toUpperCase() + name.slice(1).replaceAll("_", " ");
-                    return (
-                      <Fragment key={name}>
-                        {headRow(title, title, head, Tag, result.candidates[name])}
-                      </Fragment>
-                    );
-                  })}
-                </div>
-                {result.garment && (
-                  <div className="scan-garment">
-                    <ScannerArtwork kind="garment" label={result.garment.label} />
-                    <span>{t(copy.garmentDetected, copy.urdu490)}</span>
-                    <strong>{labelFor(result.garment.label)}</strong>
-                    {result.garment.confidence !== null && (
-                      <bdi>
-                        {Math.round(result.garment.confidence * 100)}
-                        {copy.urdu432}
-                      </bdi>
-                    )}
-                  </div>
-                )}
-                <div className="scan-composition">
-                  <h3>
-                    {t(copy.compositionFromTheLabel, copy.urdu491)}
-                  </h3>
-                  {result.stated_composition.fibers.length ? (
+                </ul>
+                {result.verdict !== "INSUFFICIENT_EVIDENCE" && (
+                  <div className={`scan-verdict ${result.verdict.toLowerCase()}`}>
+                    <ScannerArtwork kind="verdict" label={result.verdict} />
                     <div>
-                      {result.stated_composition.fibers.map((fiber, i) => (
-                        <span key={fiber.name + i}>
-                          <bdi>
-                            {fiber.pct}
-                            {copy.urdu432}
-                          </bdi>{" "}
-                          {labelFor(fiber.name)}
-                        </span>
+                      <strong>
+                        {result.verdict === "PASS"
+                          ? t(copy.consistentWithTheLabel, copy.urdu481)
+                          : t(copy.needsACloserLook, copy.urdu482)}
+                      </strong>
+                      {result.flags.map((flag, i) => (
+                        <p key={flag.code + i}>{flag.message}</p>
                       ))}
                     </div>
-                  ) : (
-                    <p>{t(copy.noCompositionWasReadAddALabel, copy.urdu492)}</p>
-                  )}
-                </div>
-                {result.flags.length > 0 && (
-                  <div className="scan-flags">
-                    <h3>{t(copy.thingsToReview, copy.urdu493)}</h3>
-                    {result.flags.map((flag, i) => (
-                      <div key={flag.code + i}>
-                        <AlertTriangle size={15} />
-                        <p>
-                          {flag.message}
-                          <small>
-                            <bdi>{flag.code}</bdi>
-                          </small>
-                        </p>
-                      </div>
-                    ))}
                   </div>
                 )}
-                <div className="scan-quality">
-                  <h3>{t(copy.captureQuality, copy.urdu494)}</h3>
-                  <div>
-                    <span>
-                      {t(copy.exposure, copy.urdu495)}
-                      <strong>{result.capture_quality.exposure || "—"}</strong>
-                    </span>
-                    <span>
-                      {t(copy.framing, copy.urdu496)}
-                      <strong>{result.capture_quality.framing || "—"}</strong>
-                    </span>
-                    <span>
-                      {t(copy.sharpnessScore, copy.urdu497)}
-                      <strong>
-                        <bdi>
-                          {result.capture_quality.blur === null
-                            ? "—"
-                            : result.capture_quality.blur.toFixed(1)}
-                        </bdi>
-                      </strong>
-                    </span>
-                  </div>
-                </div>
-                <div className="scan-result-meta">
-                  <span>
-                    <CheckCheck size={14} />
-                    {t(copy.model, copy.urdu498)}
-                    {copy.urdu49}
-                    <bdi>{result.model_version}</bdi>
-                  </span>
-                  <span>
-                    {t(copy.scan, copy.urdu499)}
-                    {copy.urdu49}
-                    <bdi>{result.scan_id}</bdi>
-                  </span>
-                  <span>
-                    {t(copy.scanned, copy.urdu500)}
-                    {copy.urdu49}{" "}
-                    <bdi>
-                      {new Intl.DateTimeFormat("en-GB", {
-                        timeZone: copy.asiaKarachi,
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      }).format(new Date(result.timestamp))}
-                    </bdi>
-                  </span>
-                </div>
-                <div className="scan-result-actions">
+                <div className="scan-actions">
+                  {!stated.length && (
+                    <button
+                      className="button"
+                      onClick={() => {
+                        setSlot("label");
+                        document.querySelector(".scan-capture-panel")?.scrollIntoView({ behavior: "smooth" });
+                      }}
+                    >
+                      <Tag size={20} aria-hidden="true" />
+                      {t("Add care label", "کیئر لیبل لگائیں")}
+                    </button>
+                  )}
+                  {onMeasure && (
+                    <button className="button" onClick={onMeasure}>
+                      <Ruler size={20} aria-hidden="true" />
+                      {t("Measure yarn count", "یارن کاؤنٹ ناپیں")}
+                    </button>
+                  )}
                   <button className="button" onClick={download}>
-                    <Download size={16} />
-                    {t(copy.saveResult, copy.urdu501)}
-                  </button>
-                  <button className="text-button" onClick={onInventory}>
-                    {t(copy.openInventory, copy.urdu99)}
-                    <ArrowUpRight size={15} />
+                    <Download size={20} aria-hidden="true" />
+                    {t("Save result", "نتیجہ محفوظ کریں")}
                   </button>
                 </div>
+                <details className="scan-details">
+                  <summary>{t("Details", "تفصیل")}</summary>
+                  {surface && (
+                    <figure className="scan-seen">
+                      <img src={surface.url} alt={t("The photo that was analysed", "جس تصویر کا تجزیہ ہوا")} />
+                      {result.garment && (
+                        <span
+                          className="scan-seen-box"
+                          style={{
+                            left: `${result.garment.box[0] * 100}%`,
+                            top: `${result.garment.box[1] * 100}%`,
+                            width: `${(result.garment.box[2] - result.garment.box[0]) * 100}%`,
+                            height: `${(result.garment.box[3] - result.garment.box[1]) * 100}%`,
+                          }}
+                        >
+                          <b>
+                            {labelFor(result.garment.label)}
+                            {result.garment.confidence !== null && ` ${pct(result.garment.confidence)}`}
+                          </b>
+                        </span>
+                      )}
+                    </figure>
+                  )}
+                  <dl>
+                    {[
+                      ["structure", t("Fabric", "کپڑا"), result.structure, labelFor],
+                      ["fibre_family", t("Fibre", "ریشہ"), result.fibre_family, fibreName],
+                      ...Object.entries(result.custom).map(([name, head]) => [name, taughtLabel("x", name), head, (l: string) => taughtLabel(name, l)] as const),
+                    ].map(([name, title, head, nameOf]) => {
+                      const options = (head as HeadPrediction | null)?.topk ?? result.candidates[name as string] ?? [];
+                      return options.length ? (
+                        <div key={name as string}>
+                          <dt>{title as string}</dt>
+                          <dd>{options.slice(0, 3).map(([l, p]) => `${(nameOf as (l: string) => string)(l)} ${pct(p)}`).join(" · ")}</dd>
+                        </div>
+                      ) : null;
+                    })}
+                    {result.timings_ms?.total !== undefined && (
+                      <div>
+                        <dt>{t("Time", "وقت")}</dt>
+                        <dd>
+                          {(result.timings_ms.total / 1000).toFixed(2)} s:{" "}
+                          {[
+                            ["garment_detector", "garment detector (OWLv2)"],
+                            ["fabric_model", "fabric model (SigLIP 2)"],
+                            ["fibre_model", "fibre model (DINOv2)"],
+                            ["taught_model", "taught answers model"],
+                            ["label_reader", "label reader"],
+                          ]
+                            .filter(([k]) => result.timings_ms?.[k] !== undefined)
+                            .map(([k, name]) => `${name} ${Math.round(result.timings_ms![k])} ms`)
+                            .join(" · ")}
+                        </dd>
+                      </div>
+                    )}
+                    <div>
+                      <dt>{t(copy.captureQuality, copy.urdu494)}</dt>
+                      <dd>
+                        {t(copy.exposure, copy.urdu495)} {result.capture_quality.exposure || "—"} · {t(copy.framing, copy.urdu496)}{" "}
+                        {result.capture_quality.framing || "—"} · {t(copy.sharpnessScore, copy.urdu497)}{" "}
+                        {result.capture_quality.blur === null ? "—" : result.capture_quality.blur.toFixed(1)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{t(copy.model, copy.urdu498)}</dt>
+                      <dd><bdi>{result.model_version}</bdi></dd>
+                    </div>
+                    <div>
+                      <dt>{t(copy.scan, copy.urdu499)}</dt>
+                      <dd><bdi>{result.scan_id}</bdi></dd>
+                    </div>
+                  </dl>
+                </details>
               </>
-            ) : (
+              );
+            })() : (
               <div className="scan-empty-results">
                 <h3>
                   {scanning

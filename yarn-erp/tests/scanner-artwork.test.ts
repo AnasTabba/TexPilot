@@ -28,5 +28,8 @@ test("abstentions and unknown or mismatched labels never borrow a confident illu
   assert.equal(scannerArtworkId("structure", "polyester"), "uncertain");
   assert.equal(scannerArtworkId("structure", "PASS"), "uncertain");
   assert.equal(scannerArtworkId("garment", "pants"), "denim");
+  // Taught garment types draw the nearest detector garment.
+  for (const [label, art] of [["jeans", "denim"], ["kurta", "shirt_blouse"], ["t_shirt", "cotton"], ["dupatta_shawl", "scarf"], ["jacket", "polyester"]])
+    assert.equal(scannerArtworkId("garment", label), art);
   assert.equal(scannerArtworkId("verdict", "INSUFFICIENT_EVIDENCE"), "insufficient_evidence");
 });

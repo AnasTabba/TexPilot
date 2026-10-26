@@ -18,29 +18,26 @@ test("model responses choose illustrations; abstentions ignore candidates and la
   await page.route("**/api/v1/model", route => route.fulfill({ json: { ready: true, model_version: "scanner-v6", mode: "scanner" } }));
   await page.route("**/api/v1/scan", route => route.fulfill({ json: result }));
   await page.context().setExtraHTTPHeaders({ "x-yarnflow-test-user": "artwork-" + crypto.randomUUID() });
-  await page.goto("/");
-  await page.getByLabel("Workspace name").fill("Scanner artwork test");
-  await page.getByRole("form", { name: "Start your shared workspace" }).getByRole("button", { name: "Create workspace", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Stock", exact: true })).toBeVisible();
+  // The app opens the FAZ workspace directly (browser-stored inventory, ed23ecf).
   await page.goto("/#/scanner");
   await page.getByRole("button", { name: "Fabric inspection", exact: true }).click();
   await page.locator("input[type=file]").first().setInputFiles("src/assets/fabrics/denim.webp");
   const analyze = page.getByRole("button", { name: "Analyze material", exact: true });
   await expect(analyze).toBeEnabled();
   await analyze.click();
-  const mainArt = page.locator(".scan-fabric-illustration .scanner-artwork");
-  await expect(mainArt).toHaveAttribute("data-artwork-id", "velvet");
-  for (const [kind, id] of [["treatment", "printed"], ["fibre_family", "protein"], ["garment", "dress"], ["verdict", "pass"]]) {
-    await expect(page.locator(`[data-artwork-kind="${kind}"]`)).toHaveAttribute("data-artwork-id", id);
-  }
-  await expect(page.locator(".scan-seen img")).toBeVisible();
-  await expect(page.locator(".scan-seen-box")).toContainText("dress");
-  await expect(page.locator(".scan-confidence").first()).toContainText("93");
-  await mainArt.scrollIntoViewIfNeeded();
-  await expect.poll(() => mainArt.locator("img").evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
-  await expect(mainArt.locator("img")).toHaveCSS("animation-name", "scanner-art-float");
+  // Garment first, with its picture; then one row per composition answer.
+  await expect(page.locator('.scan-garment-hero [data-artwork-kind="garment"]')).toHaveAttribute("data-artwork-id", "dress");
+  await expect(page.locator(".scan-garment-hero h3")).toHaveText("Dress");
+  const fabricArt = page.locator('.scan-rows [data-artwork-kind="structure"]');
+  await expect(fabricArt).toHaveAttribute("data-artwork-id", "velvet");
+  await expect(page.locator('.scan-rows [data-artwork-kind="fibre_family"]')).toHaveAttribute("data-artwork-id", "protein");
+  await expect(page.locator(".scan-pct").first()).toHaveText("91%");
+  await expect(page.locator('[data-artwork-kind="verdict"]')).toHaveAttribute("data-artwork-id", "pass");
+  await fabricArt.scrollIntoViewIfNeeded();
+  await expect.poll(() => fabricArt.locator("img").evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+  await expect(fabricArt.locator("img")).toHaveCSS("animation-name", "scanner-art-float");
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect(mainArt.locator("img")).toHaveCSS("animation-name", "none");
+  await expect(fabricArt.locator("img")).toHaveCSS("animation-name", "none");
   await page.screenshot({ path: testInfo.outputPath("scanner-artwork.png"), fullPage: true });
   const layout = await page.evaluate(() => ({
     width: document.documentElement.scrollWidth, viewport: innerWidth,
@@ -51,20 +48,21 @@ test("model responses choose illustrations; abstentions ignore candidates and la
   result = { ...result, scan_id: "artwork-fixture-2", verdict: "FLAG", structure: head("corduroy"),
     garment: { label: "pants", confidence: 0.95, box: [0, 0, 1, 1] } };
   await analyze.click();
-  await expect(mainArt).toHaveAttribute("data-artwork-id", "corduroy");
+  await expect(fabricArt).toHaveAttribute("data-artwork-id", "corduroy");
   await expect(page.locator('[data-artwork-kind="garment"]')).toHaveAttribute("data-artwork-id", "denim");
   await expect(page.locator('[data-artwork-kind="verdict"]')).toHaveAttribute("data-artwork-id", "flag");
 
+  // Heads that abstained still show their top guess with its confidence, never "not sure"; the label's mix wins.
   result = { ...result, scan_id: "artwork-fixture-3", verdict: "INSUFFICIENT_EVIDENCE",
     structure: null, treatment: null, fibre_family: null, garment: null,
-    candidates: { structure: [["denim", 0.49]], fibre_family: [["synthetic", 0.45]] },
+    candidates: { structure: [["denim", 0.49]], fibre_family: [["synthetic", 0.45]], garment_type: [["kurta", 0.6]] },
     stated_composition: { source: "care_label", fibers: [{ name: "cotton", pct: 100 }], ocr_confidence: 0.99, section: null },
-    custom: { wash: head("velvet") } };
+    custom: { garment_type: null } };
   await analyze.click();
-  await expect(mainArt).toHaveAttribute("data-artwork-id", "uncertain");
-  await expect(page.locator('.scan-predictions [data-artwork-id="uncertain"]')).toHaveCount(3);
-  await expect(page.locator('[data-artwork-kind="verdict"]')).toHaveAttribute("data-artwork-id", "insufficient_evidence");
-  await expect(page.locator('[data-artwork-kind="garment"]')).toHaveCount(0);
-  await expect(page.locator('.scan-predictions [data-artwork-id="velvet"]')).toHaveCount(0);
-  await expect(page.locator(".scan-answer")).toContainText("100% Cotton");
+  await expect(page.locator(".scan-garment-hero h3")).toHaveText("Kurta");
+  await expect(fabricArt).toHaveAttribute("data-artwork-id", "denim");
+  await expect(page.locator(".scan-rows")).toContainText("49%");
+  await expect(page.locator(".scan-rows")).toContainText("100% Cotton");
+  await expect(page.locator(".scan-results")).not.toContainText(/not sure/i);
+  await expect(page.locator('[data-artwork-kind="verdict"]')).toHaveCount(0);
 });
