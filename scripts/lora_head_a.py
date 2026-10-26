@@ -43,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     work = args.work or args.out / "work"
     work.mkdir(parents=True, exist_ok=True)
+    args.out.mkdir(parents=True, exist_ok=True)  # --work may live outside --out
 
     ck = torch.load(args.run / "best.pt", map_location="cpu", weights_only=False)
     if not ck.get("lora"):
