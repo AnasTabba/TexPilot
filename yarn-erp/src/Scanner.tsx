@@ -353,6 +353,8 @@ export default function Scanner({
       elastane_spandex: t("elastane (spandex)", "الاسٹین (اسپینڈیکس)"),
       viscose_rayon: t("viscose", "ویسکوز"),
       flax_linen: t("linen", "لینن"),
+      t_shirt: t("T-shirt", "ٹی شرٹ"),
+      dupatta_shawl: t("dupatta / shawl", "دوپٹہ / شال"),
     })[value] || value.replaceAll("_", " ");
   const pct = (p: number) => `${Math.round(p * 100)}%`;
   // Taught heads (models/custom) report their raw class names; blends are named the way yarn is bought.

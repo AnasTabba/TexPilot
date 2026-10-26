@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Check, ClipboardCopy, LoaderCircle, Ruler, TriangleAlert } from "lucide-react";
+import { Camera, Check, ClipboardCopy, LoaderCircle, Ruler, Scale, Shirt, TriangleAlert } from "lucide-react";
 import { analyzeSpec, ScanError, type SpecResult } from "./scanner-client";
 import "./spec.css";
 
@@ -85,22 +85,19 @@ export default function SpecScan() {
       <section className="live-panel">
         <div className="live-panel-heading">
           <div>
-            <h2>Yarn spec</h2>
-            <p>
-              Find the yarn to order for a fabric. Scan it flat on a flatbed scanner at 1200 dpi,
-              selvedge running up the glass. No scanner? Lay the{" "}
-              <a href="/texpilot-card.svg" target="_blank" rel="noreferrer">
-                printed TexPilot card
-              </a>{" "}
-              on the fabric and photograph both with the normal 1x camera from about 15 cm, card
-              away from the photo's edges. Then weigh a 10 x 10 cm piece.
-            </p>
+            <h2>Yarn count</h2>
+            <p>Find the yarn to buy to make this fabric: the thread count and yarn count (Ne), measured from one photo.</p>
           </div>
           <Ruler size={22} aria-hidden="true" />
         </div>
+        <ol className="spec-steps">
+          <li><Camera size={22} aria-hidden="true" /><span><strong>Photo</strong> Lay the <a href="/texpilot-card.svg" target="_blank" rel="noreferrer">printed TexPilot card</a> on the fabric and take a photo from about 15 cm.</span></li>
+          <li><Scale size={22} aria-hidden="true" /><span><strong>Weight</strong> Weigh a 10 × 10 cm piece. Optional, but needed for the yarn count.</span></li>
+          <li><Shirt size={22} aria-hidden="true" /><span><strong>Woven or knit</strong> Pick one, then tap Work out the yarn.</span></li>
+        </ol>
         <form className="spec-form" onSubmit={run}>
           <label>
-            Fabric scan, or photo with the card (PNG, JPEG or TIFF)
+            1. Photo of the fabric with the card
             <input
               type="file"
               accept="image/png,image/jpeg,image/tiff,.tif,.tiff"
@@ -109,32 +106,19 @@ export default function SpecScan() {
             />
           </label>
           <label>
-            Scan resolution (dpi)
-            <input
-              type="number"
-              inputMode="numeric"
-              min={300}
-              max={4800}
-              placeholder="Read from the scan or the card"
-              value={dpi}
-              onChange={(e) => setDpi(e.target.value)}
-            />
-          </label>
-          <label>
-            Card's black square measures (mm, optional)
+            2. Weight ({unit === "gsm" ? "g/m²: grams of a 10 × 10 cm piece × 100" : "oz/yd²"}, optional)
             <input
               type="number"
               inputMode="decimal"
-              min={10}
-              max={100}
+              min={0}
               step="any"
-              placeholder="30"
-              value={cardMm}
-              onChange={(e) => setCardMm(e.target.value)}
+              placeholder={unit === "gsm" ? "e.g. 180" : "e.g. 11.5"}
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
             />
           </label>
           <fieldset className="spec-choice">
-            <legend>Fabric</legend>
+            <legend>3. Woven or knit</legend>
             {(["woven", "knit"] as const).map((c) => (
               <label key={c}>
                 <input
@@ -147,45 +131,58 @@ export default function SpecScan() {
               </label>
             ))}
           </fieldset>
-          <div className="spec-weight">
+          <details className="spec-more">
+            <summary>More options</summary>
             <label>
-              Fabric weight
-              <input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="any"
-                placeholder={unit === "gsm" ? "e.g. 180" : "e.g. 11.5"}
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-              />
-            </label>
-            <label>
-              Unit
+              Weight unit
               <select value={unit} onChange={(e) => setUnit(e.target.value as "gsm" | "oz")}>
                 <option value="gsm">g/m²</option>
                 <option value="oz">oz/yd²</option>
               </select>
             </label>
-            <p>10 x 10 cm swatch: grams x 100 = g/m². Without it you get the thread count only.</p>
-          </div>
-          <label>
-            Care label text (optional)
-            <input
-              type="text"
-              placeholder="e.g. 98% cotton, 2% elastane"
-              value={labelText}
-              onChange={(e) => setLabelText(e.target.value)}
-            />
-          </label>
-          <label>
-            Or a photo of the care label (optional)
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={(e) => setLabel(e.target.files?.[0] ?? null)}
-            />
-          </label>
+            <label>
+              Flatbed scan resolution (dpi), if you scanned instead of using the card
+              <input
+                type="number"
+                inputMode="numeric"
+                min={300}
+                max={4800}
+                placeholder="Read from the scan or the card"
+                value={dpi}
+                onChange={(e) => setDpi(e.target.value)}
+              />
+            </label>
+            <label>
+              Card's black square, if your print is not 30 mm
+              <input
+                type="number"
+                inputMode="decimal"
+                min={10}
+                max={100}
+                step="any"
+                placeholder="30"
+                value={cardMm}
+                onChange={(e) => setCardMm(e.target.value)}
+              />
+            </label>
+            <label>
+              Care label text
+              <input
+                type="text"
+                placeholder="e.g. 98% cotton, 2% elastane"
+                value={labelText}
+                onChange={(e) => setLabelText(e.target.value)}
+              />
+            </label>
+            <label>
+              Or a photo of the care label
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => setLabel(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          </details>
           <button className="button primary" type="submit" disabled={!scan || busy}>
             {busy ? <LoaderCircle className="spin" size={18} /> : <Ruler size={18} />}
             {busy ? "Measuring the threads…" : "Work out the yarn"}

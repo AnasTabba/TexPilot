@@ -31,3 +31,11 @@
 .spec-measures dt, .spec-basis, .spec-flags li { font-size: 14px; }
 .spec-order li { font-size: 18px; background: transparent; padding-inline: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
 .spec-choice label { padding-block: 12px; }
+/* Three numbered steps with icons, so the page says what to do before any field. */
+.spec-steps { display: grid; gap: 10px; margin: 0 0 18px; padding: 0; list-style: none; }
+.spec-steps li { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; background: var(--sunken); }
+.spec-steps li > svg { flex: none; margin-top: 2px; }
+.spec-steps strong { display: block; }
+.spec-more { border-top: 1px solid var(--line); padding-top: 8px; }
+.spec-more summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+.spec-more[open] { display: grid; gap: 12px; }
