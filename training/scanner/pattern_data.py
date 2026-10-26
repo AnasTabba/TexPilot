@@ -91,3 +91,19 @@ def pattern_input(data: bytes, meta: dict):
 
     return preprocess(decode_image(data), meta['mean'], meta['std'],
                       meta['img_size'], meta['crop_pct'])
+
+
+def shop_rows(manifest, classes, min_products: int = 20):
+    """Only classes with enough distinct TRAIN products enter the shop-domain experiment."""
+    from collections import Counter
+
+    rows = []
+    for r in manifest:
+        label = title_pattern(r['title'])
+        if label in classes:
+            rows.append(dict(path='shops/' + r['path'], label=label,
+                             split=product_split(r['store'], r['product_id']), domain='shop',
+                             group='shop:' + r['store'] + ':' + r['product_id']))
+    products = {(r['label'], r['group']) for r in rows if r['split'] == 'train'}
+    counts = Counter(c for c, _ in products)
+    return [r for r in rows if counts[r['label']] >= min_products], dict(counts)

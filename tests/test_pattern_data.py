@@ -67,3 +67,18 @@ def test_pattern_pixels_match_serving_for_large_exif_rotated_photo():
     assert upright.shape == (1600, 1200, 3)
     expected = preprocess(upright, **meta)
     np.testing.assert_array_equal(pattern_input(data.getvalue(), meta), expected)
+
+
+def test_shop_support_uses_unique_training_products_and_never_test_support():
+    from training.scanner.pattern_data import shop_rows
+
+    ids = [str(i) for i in range(100) if product_split('s', str(i)) == 'train']
+    test_id = next(str(i) for i in range(100) if product_split('s', str(i)) == 'test')
+    raw = [dict(store='s', product_id=pid, title='Graphic shirt', path=f'{pid}/{j}.jpg')
+           for pid in ids[:2] for j in range(3)]
+    raw += [dict(store='s', product_id=ids[2], title='Polka dot dress', path=f'dot/{j}.jpg')
+            for j in range(20)]
+    raw += [dict(store='s', product_id=test_id, title='Floral dress', path='test.jpg')]
+    rows, counts = shop_rows(raw, ['graphic', 'dot', 'floral'], min_products=2)
+    assert counts == {'graphic': 2, 'dot': 1}
+    assert len(rows) == 6 and {r['label'] for r in rows} == {'graphic'}

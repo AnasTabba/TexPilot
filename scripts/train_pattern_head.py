@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from training.scanner.pattern_data import pattern_input, product_split, title_pattern  # noqa: E402
+from training.scanner.pattern_data import pattern_input, shop_rows  # noqa: E402
 from training.scanner.pattern_head import select_head  # noqa: E402
 
 
@@ -52,13 +52,9 @@ def main():
     rows = list(csv.DictReader((args.fashion_dir / 'fashionpedia_patterns.csv').open()))
     classes = sorted({r['label'] for r in rows if r['split'] == 'train'})
     # Read only labelled shop products; a title saying merely 'printed' has no pattern label.
-    shop = []
-    for r in csv.DictReader((args.shops_dir / 'all_manifest.csv').open()):
-        label = title_pattern(r['title'])
-        if label in classes:
-            shop.append(dict(path='shops/' + r['path'], label=label,
-                             split=product_split(r['store'], r['product_id']), domain='shop',
-                             group='shop:' + r['store'] + ':' + r['product_id']))
+    shop, shop_support = shop_rows(
+        csv.DictReader((args.shops_dir / 'all_manifest.csv').open()), classes, min_products=20)
+    print('shop TRAIN product support', shop_support, 'included photos', len(shop), flush=True)
     wanted = {r['path'] for r in rows + shop}
     # Preserve whole original photos and write only the selected files under a safe root.
     sources = [(args.fashion_dir / 'fashionpedia_patterns.tar', '')]
@@ -152,7 +148,8 @@ def main():
                   threshold=threshold, domain_thresholds=thresholds,
                   encoder=enc_id, views='whole photo; standard v8 preprocessing',
                   domain='Fashionpedia attributes + shop title labels; no factory-phone test',
-                  duplicates_excluded=duplicates, evaluations={})
+                  duplicates_excluded=duplicates, shop_train_products=shop_support,
+                  shop_min_train_products=20, evaluations={})
     for domain in sorted(set(domains)):
         supported = np.unique(y[(split == 'train') & (domains == domain)])
         for s in ('val', 'test', 'official_test'):
