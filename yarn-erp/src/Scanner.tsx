@@ -30,6 +30,7 @@ import {
   normalizeEndpoint,
   validateImage,
   resultFilename,
+  leadingAnswer,
   ScanError,
   type ScanResult,
   type ModelInfo,
@@ -424,6 +425,39 @@ export default function Scanner({
       synthetic: t("Synthetic fibre", "مصنوعی ریشہ"),
       protein: t("Animal fibre (protein)", "جانوروں کا ریشہ"),
     })[label] ?? labelFor(label);
+  // One answer: the lead big (tagged "likely" when it is under the head's calibrated bar), the other guesses small.
+  const answerRow = (
+    a: ReturnType<typeof leadingAnswer>,
+    name: (label: string) => string,
+    unsure: string,
+    big = false,
+  ) => {
+    const Tag = big ? "h3" : "strong";
+    return (
+      <>
+        <Tag className={big && a.lead ? "is-label" : undefined}>
+          {a.lead ? `${name(a.lead[0])} · ${pct(a.lead[1])}` : unsure}
+          {a.lead && !a.sure && <em className="scan-likely">{t("likely", "غالباً")}</em>}
+        </Tag>
+        {a.rest.length > 0 && (
+          <small className="scan-closest">
+            {a.lead ? t("Next: ", "اس کے بعد: ") : t("Closest, not confident: ", "قریب ترین، پکا نہیں: ")}
+            {a.rest.map(([l, p]) => `${name(l)} ${pct(p)}`).join(" · ")}
+          </small>
+        )}
+      </>
+    );
+  };
+  // Fibre from the photo: a sure answer from either head first (33 fibres, then plant/animal/synthetic), then a likely one.
+  const fibreRow = (r: ScanResult) => {
+    const options = [
+      [leadingAnswer(r.custom.fibre, r.candidates.fibre), labelFor],
+      [leadingAnswer(r.fibre_family, r.candidates.fibre_family), fibreName],
+    ] as const;
+    const [a, name] =
+      options.find(([o]) => o.sure) ?? options.find(([o]) => o.lead) ?? options[r.candidates.fibre ? 0 : 1];
+    return answerRow(a, name, t("Not sure from the photo", "تصویر سے پکا نہیں"));
+  };
   return (
     <div className="scanner-page">
       <FabricHero
@@ -871,47 +905,31 @@ export default function Scanner({
                 </figure>
                 <div className="scan-answer">
                   <span>{t("Fabric", "کپڑا")}</span>
-                  <h3 className={result.structure ? "is-label" : ""}>
-                    {result.structure
-                      ? labelFor(result.structure.label)
-                      : t("Not sure which fabric yet", "ابھی پکا نہیں کہ کون سا کپڑا ہے")}
-                  </h3>
+                  {answerRow(
+                    leadingAnswer(result.structure, result.candidates.structure),
+                    labelFor,
+                    t("Not sure which fabric yet", "ابھی پکا نہیں کہ کون سا کپڑا ہے"),
+                    true,
+                  )}
                   <span>{t("Made of", "کس چیز سے بنا")}</span>
-                  <strong>
-                    {result.stated_composition.fibers.length
-                      ? result.stated_composition.fibers
-                          .map((f) => `${f.pct}% ${labelFor(f.name)}`)
-                          .join(" / ") + t(" (from the label)", " (لیبل سے)")
-                      : result.custom.fibre
-                        ? `${labelFor(result.custom.fibre.label)} · ${pct(result.custom.fibre.confidence)}`
-                        : result.fibre_family
-                          ? `${fibreName(result.fibre_family.label)} · ${pct(result.fibre_family.confidence)}`
-                          : t("Not sure from the photo", "تصویر سے پکا نہیں")}
-                  </strong>
-                  {!result.stated_composition.fibers.length && !result.custom.fibre && (result.candidates.fibre ?? result.candidates.fibre_family)?.length ? (
-                    <small className="scan-closest">
-                      {t("Closest, not confident: ", "قریب ترین، پکا نہیں: ")}
-                      {(result.candidates.fibre ?? result.candidates.fibre_family ?? [])
-                        .map(([l, p]) => `${result.candidates.fibre ? labelFor(l) : fibreName(l)} ${pct(p)}`)
-                        .join(" · ")}
-                    </small>
-                  ) : null}
+                  {result.stated_composition.fibers.length ? (
+                    <strong>
+                      {result.stated_composition.fibers.map((f) => `${f.pct}% ${labelFor(f.name)}`).join(" / ") +
+                        t(" (from the label)", " (لیبل سے)")}
+                    </strong>
+                  ) : (
+                    fibreRow(result)
+                  )}
                   {Object.entries(result.custom)
                     .filter(([name]) => name !== "fibre")
                     .map(([name, head]) => (
                       <Fragment key={name}>
                         <span>{taughtTitle(name)}</span>
-                        <strong>
-                          {head
-                            ? `${taughtLabel(name, head.label)} · ${pct(head.confidence)}`
-                            : t("Not sure from the photo", "تصویر سے پکا نہیں")}
-                        </strong>
-                        {!head && result.candidates[name]?.length ? (
-                          <small className="scan-closest">
-                            {t("Closest, not confident: ", "قریب ترین، پکا نہیں: ")}
-                            {result.candidates[name]!.map(([l, p]) => `${taughtLabel(name, l)} ${pct(p)}`).join(" · ")}
-                          </small>
-                        ) : null}
+                        {answerRow(
+                          leadingAnswer(head, result.candidates[name]),
+                          (l) => taughtLabel(name, l),
+                          t("Not sure from the photo", "تصویر سے پکا نہیں"),
+                        )}
                       </Fragment>
                     ))}
                   <span>{t("Yarn to buy", "کون سا یارن خریدیں")}</span>
