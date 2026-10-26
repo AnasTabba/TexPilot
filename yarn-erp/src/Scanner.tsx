@@ -22,6 +22,8 @@ import {
   Blend,
   Paintbrush,
   Ruler,
+  Shirt,
+  Layers,
 } from "lucide-react";
 import {
   analyzeMaterial,
@@ -36,7 +38,6 @@ import {
   type ModelInfo,
   type HeadPrediction,
 } from "./scanner-client";
-import "./scanner.css";
 import ScannerArtwork from "./ScannerArtwork";
 import type { ArtworkKind } from "./scanner-artwork";
 type T = (en: string, ur?: string) => string;
@@ -378,7 +379,7 @@ export default function Scanner({
   return (
     <div className="scanner-page">
       <div className="scan-topline">
-        <span className="scan-model-badge">
+        <span className={`scan-model-badge ${info ? "is-on" : ""}`}>
           {info ? <CheckCheck size={20} aria-hidden="true" /> : <WifiOff size={20} aria-hidden="true" />}
           {connecting
             ? t(copy.checkingModel, copy.urdu434)
@@ -474,6 +475,23 @@ export default function Scanner({
           </button>
         </div>
       )}
+      {/* Where the scan is: photo, optional care label, analysis, answer. */}
+      <ol className="yf-steps yf-scansteps" aria-label="Scan steps">
+        {([
+          [t("Photograph", "تصویر"), !!surface],
+          [t("Care label (optional)", "کیئر لیبل (اختیاری)"), !!label || !!labelText.trim()],
+          [t("Analyse", "تجزیہ"), !!result],
+          [t("Answer", "جواب"), !!result],
+        ] as const).map(([name, done], i) => {
+          const current = i === (!surface ? 0 : result ? 3 : 2);
+          return (
+            <li key={name} className={done ? "done" : current ? "current" : ""} aria-current={current ? "step" : undefined}>
+              <span>{done ? <Check size={14} aria-hidden="true" /> : i + 1}</span>
+              {name}
+            </li>
+          );
+        })}
+      </ol>
       <div className="scanner-grid">
         <section className="scan-capture-panel panel">
           <div className="panel-heading">
@@ -659,19 +677,6 @@ export default function Scanner({
                     }}
                   />
                 </label>
-                {activePhoto && (
-                  <button
-                    className="icon-button"
-                    aria-label={t(copy.removeSelectedPhoto, copy.urdu470)}
-                    disabled={scanning}
-                    onClick={removePhoto}
-                  >
-                    <X size={18} />
-                    <span className="control-label">
-                      {t(copy.removeSelectedPhoto, copy.urdu470)}
-                    </span>
-                  </button>
-                )}
               </>
             )}
           </div>
@@ -693,17 +698,15 @@ export default function Scanner({
                 </bdi>
               ) : null}
             </span>}
-            {surface && slot === "surface" && !label && (
+            {activePhoto && !camera && (
               <button
                 className="text-button"
                 disabled={scanning}
-                onClick={() => {
-                  stopCamera();
-                  setSlot("label");
-                }}
+                onClick={removePhoto}
+                aria-label={t(copy.removeSelectedPhoto, copy.urdu470)}
               >
-                {t(copy.addCareLabel, copy.urdu471)}
-                <ArrowRight size={13} />
+                <X size={16} aria-hidden="true" />
+                {t("Remove", "ہٹائیں")}
               </button>
             )}
           </div>
@@ -848,18 +851,6 @@ export default function Scanner({
                   </div>
                 )}
                 <div className="scan-actions">
-                  {!stated.length && (
-                    <button
-                      className="button"
-                      onClick={() => {
-                        setSlot("label");
-                        document.querySelector(".scan-capture-panel")?.scrollIntoView({ behavior: "smooth" });
-                      }}
-                    >
-                      <Tag size={20} aria-hidden="true" />
-                      {t("Add care label", "کیئر لیبل لگائیں")}
-                    </button>
-                  )}
                   {onMeasure && (
                     <button className="button" onClick={onMeasure}>
                       <Ruler size={20} aria-hidden="true" />
@@ -868,7 +859,7 @@ export default function Scanner({
                   )}
                   <button className="button" onClick={download}>
                     <Download size={20} aria-hidden="true" />
-                    {t("Save result", "نتیجہ محفوظ کریں")}
+                    {t("Download result", "نتیجہ ڈاؤن لوڈ کریں")}
                   </button>
                 </div>
                 <details className="scan-details">
@@ -954,6 +945,11 @@ export default function Scanner({
                     : t("Your answer appears here", "آپ کا جواب یہاں آئے گا")}
                 </h3>
                 <p>{t("Garment, fabric, composition and finish, each with how sure the model is.", "لباس، کپڑا، بناوٹ اور فنش، ہر ایک کے ساتھ ماڈل کا یقین۔")}</p>
+                <ul className="scan-rows" aria-hidden="true">
+                  {([["Garment", Shirt], ["Fabric", Layers], ["Composition", Blend], ["Finish", Paintbrush]] as const).map(([title, Icon]) => (
+                    <li key={title}><span className="scan-row-icon"><Icon size={24} /></span><div><span>{title}</span><strong>—</strong></div></li>
+                  ))}
+                </ul>
               </div>
             )}
           </section>

@@ -1,33 +1,99 @@
-import { ArrowUpRight, Boxes, ClipboardCheck, Factory, Layers3, Package, ScanLine, Truck } from 'lucide-react';
-import { availableForDispatch, stockHistory } from './stock-summary';
-import { stageName, stockStages, timestamp, weight, type WorkspaceState } from './inventory-client';
+import { ArrowRight, CheckCircle2, ChevronRight, CircleCheckBig, ClipboardCheck, ClipboardList, ScanSearch, TriangleAlert } from 'lucide-react';
+import { Cone, materialHue } from './Cone';
+import { moveIcon, stageIcon } from './icons';
+import { qualityName, stageName, stockStages, weight, type Quality, type StockBalance, type WorkspaceState } from './inventory-client';
 
+export function QualityBadge({ value }: { value: Quality }) {
+  const Icon = value === 'approved' ? CheckCircle2 : value === 'hold' ? TriangleAlert : ClipboardList;
+  return <span className={`live-quality ${value}`}><Icon size={18} aria-hidden="true" />{qualityName[value]}</span>;
+}
+
+// Keep a yarn count with its system on narrow screens: "Ne 30/1" never splits.
+export const yarnName = (name: string) => name.replace(/\b(Ne|Nm|Tex) (?=\d)/g, '$1 ');
+export const when = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Karachi' });
+export const movedName: Record<string, string> = { receive: 'Received', dispatch: 'Dispatched', transfer: 'Moved', waste: 'Waste recorded', reverse: 'Reversed' };
+
+/** Stock moving through the mill: one node per stage on a thread that keeps flowing toward dispatch. */
+export function StockFlow({ balances, compact = false }: { balances: StockBalance[]; compact?: boolean }) {
+  return <ol className={`yf-flow${compact ? ' is-compact' : ''}`} aria-label="Stock by stage">
+    <svg className="yf-thread is-h" aria-hidden="true" viewBox="0 0 100 2" preserveAspectRatio="none"><line x1="0" y1="1" x2="100" y2="1" /><line className="yf-run" x1="0" y1="1" x2="100" y2="1" /></svg>
+    <svg className="yf-thread is-v" aria-hidden="true" viewBox="0 0 2 100" preserveAspectRatio="none"><line x1="1" y1="0" x2="1" y2="100" /><line className="yf-run" x1="1" y1="0" x2="1" y2="100" /></svg>
+    {stockStages.map(stage => {
+      const here = balances.filter(b => b.stage === stage);
+      const grams = here.reduce((sum, b) => sum + b.grams, 0);
+      const Icon = stageIcon[stage];
+      return <li key={stage} className={grams > 0 ? 'has-stock' : ''}>
+        <span className="yf-node"><Icon size={compact ? 20 : 24} aria-hidden="true" /></span>
+        <span className="yf-stage">{stageName[stage]}</span>
+        <strong>{weight(grams)} <small>kg</small></strong>
+        <span className="yf-cartons">{here.reduce((sum, b) => sum + b.cartons, 0)} cartons</span>
+      </li>;
+    })}
+  </ol>;
+}
+
+/** Home: the one thing to do next, then stock flowing through its stages, materials, and the latest movements. */
 export default function WorkspaceDashboard({ state, navigate }: { state: WorkspaceState; navigate: (route: string, lotId?: string) => void }) {
-  const total = state.balances.reduce((sum, balance) => sum + balance.grams, 0);
-  const ready = availableForDispatch(state.lots, state.balances);
-  const pending = state.lots.filter(lot => lot.quality === 'uninspected').length;
-  const held = state.lots.filter(lot => lot.quality === 'hold').length;
-  const history = stockHistory(state.movements, total).slice(-14);
-  const ceiling = Math.max(1000, ...history.map(point => point.grams));
-  const chart = history.map((point, index) => `${44 + index * 536 / Math.max(1, history.length - 1)},${195 - point.grams / ceiling * 140}`);
-  const stageAmounts = stockStages.map(stage => state.balances.filter(balance => balance.stage === stage).reduce((sum, balance) => sum + balance.grams, 0));
-  const colors = ['#dcfb46', '#a8d558', '#5f824a', '#f1bc6d'];
-  const metrics = [
-    { title: 'Total stock', value: `${weight(total)} kg`, note: 'Across all stock stages', icon: Boxes, route: 'inventory', featured: true },
-    { title: 'Materials', value: String(state.products.length), note: 'In your catalogue', icon: Package, route: 'materials' },
-    { title: 'QC-approved stock', value: `${weight(ready)} kg`, note: 'Across all stock stages', icon: Truck, route: 'dispatch' },
-    { title: 'Active batches', value: String(state.lots.length), note: 'Traceable stock records', icon: Layers3, route: 'inventory' },
-    { title: 'Needs attention', value: String(pending + held), note: `${held} on hold · ${pending} unchecked`, icon: ClipboardCheck, route: 'quality', warning: true },
-  ];
-  return <div className="ref-dashboard">
-    <section className="ref-metrics" aria-label="Workspace summary">{metrics.map(metric => <button key={metric.title} className={`ref-metric${metric.featured ? ' is-featured' : ''}${metric.warning ? ' is-warning' : ''}`} onClick={() => navigate(metric.route)}><span className="ref-metric-top"><span className="ref-metric-icon"><metric.icon size={20} strokeWidth={1.8} aria-hidden="true" /></span><ArrowUpRight size={17} aria-hidden="true" /></span><span className="ref-metric-label">{metric.title}</span><strong>{metric.value}</strong><span className="ref-metric-note">{metric.note}</span></button>)}</section>
-    <div className="ref-grid">
-      <section className="ref-card ref-chart"><div className="ref-card-head"><div><h2>Stock movement</h2><p>Recorded inventory history</p></div><button className="ref-small-action" onClick={() => navigate('activity')}>View history <ArrowUpRight size={15} aria-hidden="true" /></button></div><div className="ref-chart-summary"><strong>{weight(total)} kg</strong><span><i />Stock on hand</span></div>{history.length > 1 ? <svg className="ref-line-chart" viewBox="0 0 610 225" role="img" aria-label={`Stock history ending at ${weight(total)} kilograms`} preserveAspectRatio="none"><defs><linearGradient id="stock-fill" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#dfff58" stopOpacity=".34" /><stop offset="1" stopColor="#dfff58" stopOpacity="0" /></linearGradient></defs>{[55,102,149,196].map(y => <line key={y} x1="44" x2="580" y1={y} y2={y} stroke="#e9ebe7" strokeDasharray="3 5" />)}<path d={`M ${chart.join(' L ')} L 580,196 L 44,196 Z`} fill="url(#stock-fill)" /><path d={`M ${chart.join(' L ')}`} fill="none" stroke="#a0bd27" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /><text x="44" y="218">Earlier</text><text x="530" y="218">Latest</text></svg> : <div className="ref-chart-empty"><Boxes size={28} aria-hidden="true" /><span>Receive a batch to see stock movement.</span></div>}</section>
-      <section className="ref-card ref-stage-card"><div className="ref-card-head"><div><h2>Stock by stage</h2><p>Where material sits today</p></div></div><div className="ref-stage-graphic" role="img" aria-label={stockStages.map((stage, index) => `${stageName[stage]} ${weight(stageAmounts[index])} kilograms`).join(', ')}><div className="ref-stage-track">{stageAmounts.map((amount,index) => total > 0 && amount > 0 ? <span key={index} style={{ width: `${amount / total * 100}%`, background: colors[index] }} /> : null)}</div><strong>{weight(total)} <small>kg total</small></strong></div><div className="ref-stage-list">{stockStages.map((stage,index) => <div key={stage}><span><i style={{background:colors[index]}} />{stageName[stage]}</span><strong>{weight(stageAmounts[index])} kg</strong></div>)}</div><button className="ref-dark-button" onClick={() => navigate('production')}>View production <ArrowUpRight size={16} aria-hidden="true" /></button></section>
-      <section className="ref-card ref-quality-card"><div className="ref-card-head"><div><h2>Quality guide</h2><p>Batch readiness</p></div></div><div className="ref-quality-body"><div className="ref-donut" style={{background: state.lots.length ? `conic-gradient(#dafa45 0 ${state.lots.length ? (state.lots.length-pending-held)/state.lots.length*100 : 0}%, #f6c26b 0 ${state.lots.length ? (state.lots.length-held)/state.lots.length*100 : 0}%, #f18c91 0)` : "#eceeed"}}><div><strong>{state.lots.length ? Math.round((state.lots.length-pending-held)/state.lots.length*100) : 0}%</strong><span>Approved</span></div></div><div className="ref-quality-key"><span><i className="good" />{state.lots.length-pending-held} approved</span><span><i className="pending" />{pending} awaiting QC</span><span><i className="hold" />{held} on hold</span></div></div><div className="ref-divider" /><span className="ref-overline">Needs review</span><strong className="ref-emphasis">{pending + held} batches</strong><button className="ref-text-link" onClick={() => navigate('quality')}>Open quality checks <ArrowUpRight size={16} aria-hidden="true" /></button></section>
-      <section className="ref-card ref-list-card ref-orders"><div className="ref-card-head"><div><h2>Inventory batches</h2><p>Open a batch for its full history</p></div><button className="ref-icon-action" aria-label="View all inventory" onClick={() => navigate('inventory')}><ArrowUpRight size={18} /></button></div><div className="ref-table-head"><span>Batch / material</span><span>Stock</span><span>Quality</span></div>{state.lots.length ? state.lots.slice(0,4).map(lot => { const product = state.products.find(p => p.id === lot.product_id); const grams = state.balances.filter(b => b.lot_id === lot.id).reduce((sum,b) => sum+b.grams,0); return <button className="ref-table-row" key={lot.id} onClick={() => navigate('inventory',lot.id)}><span className="ref-product"><span className="ref-product-thumb"><Boxes size={20} aria-hidden="true" /></span><span><strong>{product?.name || 'Material'}</strong><small>{lot.batch}</small></span></span><span>{weight(grams)} kg</span><span className={`ref-status ${lot.quality}`}>{lot.quality === 'approved' ? 'Approved' : lot.quality === 'hold' ? 'On hold' : 'Review'}</span></button>; }) : <p className="ref-empty">No batches yet. Add a material to start tracking stock.</p>}</section>
-      <section className="ref-card ref-feature-card"><div className="ref-card-head"><div><h2>Material scanner</h2><p>Check fabric and preserve evidence</p></div><ScanLine size={17} aria-hidden="true" /></div><div className="ref-scanner-art"><div className="ref-scanner-target"><ScanLine size={62} strokeWidth={1.3} aria-hidden="true" /><span>Scan a stock label or inspect fabric</span></div></div><div className="ref-feature-footer"><span><strong>Know your material</strong><small>Results stay linked to a batch</small></span><button onClick={() => navigate('scanner')}>Open scanner <ArrowUpRight size={15} aria-hidden="true" /></button></div></section>
-      <section className="ref-card ref-list-card ref-arrivals"><div className="ref-card-head"><div><h2>Recent movements</h2><p>Latest recorded activity</p></div><button className="ref-icon-action" aria-label="View all movements" onClick={() => navigate('activity')}><ArrowUpRight size={18} /></button></div><div className="ref-table-head"><span>Activity</span><span>Weight</span></div>{state.movements.length ? state.movements.slice(0,4).map(movement => <div className="ref-activity-row" key={movement.id}><span className="ref-product"><span className="ref-product-thumb"><Factory size={18} aria-hidden="true" /></span><span><strong>{movement.action.replaceAll('_',' ')}</strong><small>{timestamp(movement.created_at)}</small></span></span><strong>{weight(movement.grams)} kg</strong></div>) : <p className="ref-empty">Movements appear here after stock is received.</p>}</section>
+  const hue = (productId: string) => materialHue(state.products, productId);
+  const product = (productId: string) => state.products.find(p => p.id === productId);
+  const lotOf = (lotId: string) => state.lots.find(l => l.id === lotId);
+  const lotGrams = (lotId: string) => state.balances.filter(b => b.lot_id === lotId).reduce((sum, b) => sum + b.grams, 0);
+  const total = state.balances.reduce((sum, b) => sum + b.grams, 0);
+  const byMaterial = state.products.map(p => ({ p, grams: state.lots.filter(l => l.product_id === p.id).reduce((sum, l) => sum + lotGrams(l.id), 0) })).filter(m => m.grams > 0);
+  const lots = [...state.lots].sort((a, b) => lotGrams(b.id) - lotGrams(a.id));
+  const waiting = state.lots.filter(l => l.quality !== 'approved').sort((a, b) => (a.quality === 'hold' ? 0 : 1) - (b.quality === 'hold' ? 0 : 1));
+  const next = waiting[0];
+  const nextName = next ? yarnName(product(next.product_id)?.name || 'this batch') : '';
+  const others = waiting.length - 1;
+  const recent = state.movements.slice(0, 5);
+  return <div className="yf-home">
+    <section className={`yf-next ${next ? next.quality : state.products.length ? 'clear' : 'empty'}`} aria-labelledby="yf-next-title">
+      <span className="yf-next-icon">{next ? next.quality === 'hold' ? <TriangleAlert size={26} aria-hidden="true" /> : <ClipboardCheck size={26} aria-hidden="true" /> : <CircleCheckBig size={26} aria-hidden="true" />}</span>
+      <div className="yf-next-text">
+        <h2 id="yf-next-title">{next ? next.quality === 'hold' ? `Review the QC hold on ${nextName}` : `Inspect ${nextName} before dispatch` : state.products.length ? 'Every batch is QC approved' : 'Add your first material'}</h2>
+        <p>{next ? `${next.batch} · ${next.supplier || 'supplier not recorded'} · ${weight(lotGrams(next.id))} kg${others > 0 ? ` · ${others} more ${others === 1 ? 'batch is' : 'batches are'} waiting for QC` : ''}`
+          : state.products.length ? 'Approved stock can be moved into production or dispatched.' : 'Add a material such as Cotton Ne 30/1, then receive its first batch.'}</p>
+      </div>
+      <div className="yf-next-actions">
+        {next ? <button className="button primary" onClick={() => navigate('inventory', next.id)}>{next.quality === 'hold' ? 'Review batch' : 'Inspect batch'}<ArrowRight size={18} aria-hidden="true" /></button>
+          : <button className="button primary" onClick={() => navigate(state.products.length ? 'dispatch' : 'inventory')}>{state.products.length ? 'Stock to dispatch' : 'Open Stock'}<ArrowRight size={18} aria-hidden="true" /></button>}
+        <button className="button" onClick={() => navigate('scanner')}><ScanSearch size={18} aria-hidden="true" />Scan fabric</button>
+      </div>
+    </section>
+
+    <section className="yf-section" aria-labelledby="yf-flow-title">
+      <div className="yf-head"><h2 id="yf-flow-title">Stock flow</h2><span>{weight(total)}{' '}kg on hand</span></div>
+      <StockFlow balances={state.balances} />
+    </section>
+
+    <div className="yf-home-cols">
+      <section className="yf-section" aria-labelledby="yf-materials-title">
+        <div className="yf-head"><h2 id="yf-materials-title">Materials</h2><button className="live-text-button" onClick={() => navigate('inventory')}>Open Stock</button></div>
+        {total > 0 && <div className="yf-mix" role="img" aria-label={byMaterial.map(m => `${m.p.name} ${weight(m.grams)} kg`).join(', ')}>
+          {byMaterial.map(m => <i key={m.p.id} title={`${m.p.name} · ${weight(m.grams)} kg`} style={{ flex: m.grams, background: hue(m.p.id) }} />)}
+        </div>}
+        {lots.slice(0, 6).map(lot => <button className="yf-row" key={lot.id} onClick={() => navigate('inventory', lot.id)}>
+          <Cone hue={hue(lot.product_id)} size={28} />
+          <div><strong>{yarnName(product(lot.product_id)?.name || 'Material')}</strong><span>{lot.batch} · {lot.supplier || 'Supplier not recorded'}</span></div>
+          <QualityBadge value={lot.quality} />
+          <span className="yf-kg">{weight(lotGrams(lot.id))} <small>kg</small></span>
+          <ChevronRight size={18} aria-hidden="true" />
+        </button>)}
+        {!lots.length && <p className="yf-none">No batches yet. Add a material in Stock, then its first batch.</p>}
+        {lots.length > 6 && <button className="live-text-button yf-more" onClick={() => navigate('inventory')}>All {lots.length} batches in Stock</button>}
+      </section>
+
+      <section className="yf-section" aria-labelledby="yf-moves-title">
+        <div className="yf-head"><h2 id="yf-moves-title">Recent movements</h2><button className="live-text-button" onClick={() => navigate('activity')}>History</button></div>
+        <ol className="yf-timeline">
+          {recent.map(m => { const lot = lotOf(m.lot_id); const Icon = moveIcon[m.action] || ArrowRight; return <li key={m.id}>
+            <span className="yf-tnode"><Icon size={18} aria-hidden="true" /></span>
+            <div><strong>{movedName[m.action] || m.action} · {lot?.batch || 'Batch'}</strong><span><Cone hue={hue(lot?.product_id || '')} size={14} />{m.action === 'transfer' && m.from_stage && m.to_stage ? `${stageName[m.from_stage]} → ${stageName[m.to_stage]}` : yarnName(product(lot?.product_id || '')?.name || '')}</span></div>
+            <div className="yf-side"><span className="yf-kg">{weight(m.grams)} <small>kg</small></span><time dateTime={new Date(m.created_at).toISOString()}>{when.format(m.created_at)}</time></div>
+          </li>; })}
+        </ol>
+        {!recent.length && <p className="yf-none">Movements appear here once stock is received.</p>}
+      </section>
     </div>
   </div>;
 }

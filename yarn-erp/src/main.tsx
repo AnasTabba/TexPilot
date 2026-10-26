@@ -1,15 +1,8 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import "@fontsource/ibm-plex-sans/latin-400.css";
-import "@fontsource/ibm-plex-sans/latin-500.css";
-import "@fontsource/ibm-plex-sans/latin-600.css";
-import "@fontsource/noto-nastaliq-urdu/arabic-400.css";
+import "@fontsource-variable/figtree";
 import LiveApp from "./LiveApp";
-import "./styles.css";
-import "./workspace.css";
-import "./live.css";
-import "./theme.css";
-import "./approved.css";
+import "./yarnflow.css";
 // crypto.randomUUID exists only on HTTPS and localhost; phones testing over the LAN use plain
 // HTTP. getRandomValues works everywhere, so build the same random v4 UUID from it.
 if (typeof crypto.randomUUID !== "function")
@@ -26,6 +19,3 @@ if ("serviceWorker" in navigator && import.meta.env.PROD)
   window.addEventListener("load", () =>
     navigator.serviceWorker.register("/sw.js").catch(() => {}),
   );
-
-import "./reference-dashboard.css";
-import "./mvp.css";

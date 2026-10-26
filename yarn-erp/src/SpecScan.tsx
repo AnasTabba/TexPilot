@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Camera, Check, ClipboardCopy, LoaderCircle, Ruler, Scale, Shirt, TriangleAlert } from "lucide-react";
 import { analyzeSpec, ScanError, type SpecResult } from "./scanner-client";
-import "./spec.css";
 
 /** The model server: the one the fabric scanner connected to, else this page's own origin
  * (the dev proxy serves /api/v1 there). */
