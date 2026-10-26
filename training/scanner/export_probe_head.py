@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     import torch
     from safetensors.numpy import save_file
 
-    from training.scanner.export_head_a import calibrate, tune_class_bias
+    from training.scanner.export_head_a import calibrate, macro_f1, tune_class_bias
     from training.textilenet.feature_cache import FeatureCache
     from training.textilenet.head_search import make_head
     from training.textilenet.metrics import summarize
@@ -87,9 +87,22 @@ def main(argv: list[str] | None = None) -> int:
         scores[split] = (logits, np.array([classes.index(r.label) for r in rs]))
     no_bias = summarize(*scores["test"], classes)["macro_f1"]
     bias = np.zeros(len(classes))
+    bias_gain = None
     if args.tune_bias:  # per-class logit bias for macro F1, from val only; serving adds it too
-        bias = tune_class_bias(*scores["val"], len(classes))
-        scores = {k: (lg + bias, y) for k, (lg, y) in scores.items()}
+        # Kept only if it helps held-out val: tune on one half, score on the other, both ways.
+        lv, yv = scores["val"]
+        idx = np.random.default_rng(0).permutation(len(yv))
+        halves = (idx[: len(idx) // 2], idx[len(idx) // 2 :])
+        n = len(classes)
+        bias_gain = 0.0
+        for fit, held in (halves, halves[::-1]):
+            bb = tune_class_bias(lv[fit], yv[fit], n)
+            bias_gain += (
+                macro_f1(lv[held] + bb, yv[held], n) - macro_f1(lv[held], yv[held], n)
+            ) / 2
+        if bias_gain > 0:
+            bias = tune_class_bias(lv, yv, n)
+            scores = {k: (lg + bias, y) for k, (lg, y) in scores.items()}
     cal = calibrate(scores["val"], scores["test"], args.target)
     test = summarize(*scores["test"], classes)
 
@@ -113,7 +126,11 @@ def main(argv: list[str] | None = None) -> int:
         "test_macro_f1": test["macro_f1"],
         "val_macro_f1": summarize(*scores["val"], classes)["macro_f1"],
         **(
-            {"class_bias": bias.tolist(), "test_macro_f1_no_bias": no_bias}
+            {
+                "class_bias": bias.tolist(),
+                "test_macro_f1_no_bias": no_bias,
+                "bias_heldout_gain": bias_gain,
+            }
             if args.tune_bias
             else {}
         ),
@@ -122,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
     t = cal["test"]
     print(
         f"{name}: test n={t['n']} top-1 {t['top1']:.4f} macro F1 {test['macro_f1']:.4f} "
-        f"(without class bias {no_bias:.4f}); answers "
+        f"(without class bias {no_bias:.4f}; bias held-out val gain {bias_gain}); answers "
         f"{t['coverage']:.1%} at {t['accuracy_kept'] or 0:.4f} accuracy. Wrote {args.out}"
     )
     return 0
