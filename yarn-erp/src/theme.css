@@ -115,7 +115,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 h1, h2, h3 { color: var(--text); text-wrap: balance; }
 svg.lucide { stroke-width: 1.75; }
 .button.primary, .live-app .button.primary, .live-welcome .button.primary {
-  background: var(--brand); border-color: var(--brand); color: var(--on-brand);
+  background: var(--brand-fill, var(--brand)); border-color: var(--brand-fill, var(--brand)); color: var(--on-brand);
 }
 .button.primary:hover:not(:disabled), .live-app .button.primary:hover:not(:disabled), .live-welcome .button.primary:hover:not(:disabled) {
   background: var(--brand-hover); border-color: var(--brand-hover);

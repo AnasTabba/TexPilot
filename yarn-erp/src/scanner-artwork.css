@@ -186,3 +186,7 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+/* Phones: the answer panel appears once there is an answer (the viewfinder shows progress meanwhile). */
+@media (max-width: 900px) {
+  .scan-results:not(.has-result) { display: none; }
+}

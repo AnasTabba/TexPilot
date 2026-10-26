@@ -11,7 +11,7 @@ test("model responses choose illustrations; abstentions ignore candidates and la
     treatment: head("printed"), fibre_family: head("protein"),
     garment: { label: "dress", confidence: 0.91, box: [0.1, 0.1, 0.9, 0.9] },
     stated_composition: { source: null, fibers: [], ocr_confidence: null, section: null },
-    flags: [], candidates: {}, custom: {},
+    flags: [], candidates: {}, custom: { mix: head("cotton:98,elastane_spandex:2") },
     capture_quality: { blur: 150, exposure: "normal", framing: "good" },
     model_version: "scanner-v6", kb_version: "v5", timestamp: new Date().toISOString(),
   };
@@ -20,7 +20,6 @@ test("model responses choose illustrations; abstentions ignore candidates and la
   await page.context().setExtraHTTPHeaders({ "x-yarnflow-test-user": "artwork-" + crypto.randomUUID() });
   // The app opens the FAZ workspace directly (browser-stored inventory, ed23ecf).
   await page.goto("/#/scanner");
-  await page.getByRole("button", { name: "Fabric inspection", exact: true }).click();
   await page.locator("input[type=file]").first().setInputFiles("src/assets/fabrics/denim.webp");
   const analyze = page.getByRole("button", { name: "Analyze material", exact: true });
   await expect(analyze).toBeEnabled();
@@ -30,7 +29,8 @@ test("model responses choose illustrations; abstentions ignore candidates and la
   await expect(page.locator(".scan-garment-hero h3")).toHaveText("Dress");
   const fabricArt = page.locator('.scan-rows [data-artwork-kind="structure"]');
   await expect(fabricArt).toHaveAttribute("data-artwork-id", "velvet");
-  await expect(page.locator('.scan-rows [data-artwork-kind="fibre_family"]')).toHaveAttribute("data-artwork-id", "protein");
+  // Composition: the taught mix head's exact mix.
+  await expect(page.locator(".scan-rows")).toContainText("98% Cotton · 2% Elastane (spandex)");
   await expect(page.locator(".scan-pct").first()).toHaveText("91%");
   await expect(page.locator('[data-artwork-kind="verdict"]')).toHaveAttribute("data-artwork-id", "pass");
   await fabricArt.scrollIntoViewIfNeeded();

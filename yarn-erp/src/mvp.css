@@ -71,3 +71,34 @@
   .yf-collapsed .live-main-shell{margin-inline-start:22px;margin-left:22px;border-radius:18px}
 }
 @media (prefers-reduced-motion:reduce){.live-sidebar,.live-main-shell{transition:none}}
+
+/* Stock: filter buttons (icon, name, count), then each material with its batches under it. */
+.yf-views { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 20px; }
+.yf-views button { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.yf-views button span { flex: 1; }
+.yf-views button b { min-width: 28px; padding: 2px 8px; border-radius: 999px; background: var(--sunken); text-align: center; }
+.yf-views button[aria-pressed="true"] { background: var(--chrome); border-color: var(--chrome); color: var(--on-chrome); }
+.yf-views button[aria-pressed="true"] svg { color: var(--gold); }
+.yf-views button[aria-pressed="true"] b { background: var(--gold); color: var(--chrome); }
+.yf-stock-groups { display: grid; gap: 16px; margin-top: 16px; }
+.yf-stock-group { border: 1px solid var(--line); border-radius: 16px; padding: 0 16px; }
+.yf-stock-group > header { display: flex; align-items: center; gap: 12px; padding: 14px 0; }
+.yf-stock-group > header > div { flex: 1; min-width: 0; display: grid; }
+.yf-stock-group > header > div > span { color: var(--muted); font-size: 0.9rem; }
+.yf-stock-group > header .live-icon-button { width: 44px; height: 44px; border-radius: 12px; background: var(--gold); color: var(--chrome); }
+.yf-stock-group .live-lot-row { padding: 16px 0; }
+.yf-stock-empty { margin: 0; padding: 12px 0 16px; border-top: 1px solid var(--line); color: var(--muted); }
+.yf-stock-group .live-row-weight { white-space: nowrap; }
+.yf-stock-group .live-row-weight small { display: inline; }
+.yf-scan-tabs button { flex-direction: column; gap: 4px; font-size: 16px; }
+@media (max-width: 700px) {
+  .yf-views { display: flex; overflow-x: auto; margin-inline: -4px; padding: 0 4px 4px; scrollbar-width: none; }
+  .yf-stock-panel.live-panel { padding: 14px 12px; }
+  .yf-stock-group { padding: 0 12px; }
+  .yf-stock-group > header { gap: 10px; }
+  .yf-stock-group > header .yf-material-symbol { display: none; }
+  .yf-views button { flex: none; min-height: 48px; padding: 8px 12px; font-size: 16px; white-space: nowrap; }
+}
+.yf-scan-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.scanner-page .scan-topline { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: nowrap; }
+.scanner-page .scan-model-badge { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }

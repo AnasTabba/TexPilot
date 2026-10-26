@@ -92,7 +92,7 @@
   font-size: 16px;
 }
 .scan-photo-tabs button.active .scan-tab-number {
-  background: var(--brand);
+  background: var(--brand-fill, var(--brand));
   color: white;
   border-color: var(--brand);
 }
@@ -233,7 +233,7 @@
 .scan-live-label > span {
   width: 4px;
   height: 4px;
-  background: var(--brand);
+  background: var(--brand-fill, var(--brand));
   border-radius: 50%;
 }
 .scan-camera-controls {
@@ -1384,7 +1384,7 @@
   overflow-wrap: anywhere;
 }
 .scan-photo-tabs button.active .scan-tab-number {
-  background: var(--brand);
+  background: var(--brand-fill, var(--brand));
   border-color: var(--brand);
 }
 

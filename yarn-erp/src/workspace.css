@@ -2513,8 +2513,8 @@ tfoot {
   }
 }
 .scan-camera-controls > .button.primary {
-  background: var(--brand);
-  border-color: var(--brand);
+  background: var(--brand-fill, var(--brand));
+  border-color: var(--brand-fill, var(--brand));
   color: #fff;
 }
 [data-theme="dark"] .scan-camera-controls > .button.primary {

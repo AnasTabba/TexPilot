@@ -48,6 +48,34 @@ export function topGuess(
 ): [string, number] | null {
   return head ? [head.label, head.confidence] : near?.[0] ?? null;
 }
+/** Fibre -> family, mirrored from services/vision/taxonomy.py FIBRE_TO_FAMILY (the fibre head's 33 classes). */
+const FIBRE_FAMILY: Readonly<Record<string, string>> = {
+  ...Object.fromEntries("cotton flax_linen hemp jute ramie abaca sisal viscose_rayon modal lyocell cupro triacetate_acetate".split(" ").map((f) => [f, "cellulosic"])),
+  ...Object.fromEntries("wool silk cashmere mohair alpaca angora camel yak llama horse_hair fur leather suede milk_fiber soybean_fiber".split(" ").map((f) => [f, "protein"])),
+  ...Object.fromEntries("polyester nylon acrylic elastane_spandex polyolefin aramid".split(" ").map((f) => [f, "synthetic"])),
+};
+/** What the fabric is made of, from the photo: an accepted fibre answer; else the fibre family's top answer, named by
+ * the fibre head's best guess inside that family (e.g. cotton within plant fibre), with the family's confidence. */
+export function madeOf(
+  r: Pick<ScanResult, "fibre_family" | "custom" | "candidates">,
+): { fibre: string | null; family: string | null; p: number } | null {
+  const sure = r.custom.fibre;
+  if (sure) return { fibre: sure.label, family: FIBRE_FAMILY[sure.label] ?? null, p: sure.confidence };
+  const family = topGuess(r.fibre_family, r.candidates.fibre_family);
+  if (!family) return null;
+  const fibre = (r.candidates.fibre ?? []).find(([f]) => FIBRE_FAMILY[f] === family[0]);
+  return { fibre: fibre?.[0] ?? null, family: family[0], p: family[1] };
+}
+/** Composition in the terms yarn is bought by: the blend head's answer (pure, stretch, CVC, PC) and the fibre it is
+ * made of (madeOf). Without a blend head, the fibre alone. */
+export function composition(
+  r: Pick<ScanResult, "fibre_family" | "custom" | "candidates">,
+): { blend: string | null; fibre: string | null; p: number } | null {
+  const blend = topGuess(r.custom.blend, r.candidates.blend);
+  const made = madeOf(r);
+  if (blend) return { blend: blend[0], fibre: made?.fibre ?? null, p: blend[1] };
+  return made?.fibre ? { blend: null, fibre: made.fibre, p: made.p } : null;
+}
 export interface ModelInfo {
   ready: boolean;
   model_version: string;

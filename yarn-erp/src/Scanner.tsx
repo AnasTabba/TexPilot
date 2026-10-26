@@ -7,19 +7,15 @@ import {
   Settings2,
   Check,
   ArrowRight,
-  ArrowUpRight,
   RefreshCw,
   X,
   ImagePlus,
-  ShieldCheck,
   WifiOff,
   AlertTriangle,
   LoaderCircle,
   Download,
-  Layers3,
   Tag,
   Focus,
-  Sun,
   StopCircle,
   PlugZap,
   CheckCheck,
@@ -34,13 +30,13 @@ import {
   validateImage,
   resultFilename,
   topGuess,
+  composition,
   ScanError,
   type ScanResult,
   type ModelInfo,
   type HeadPrediction,
 } from "./scanner-client";
 import "./scanner.css";
-import FabricHero from "./FabricHero";
 import ScannerArtwork from "./ScannerArtwork";
 import type { ArtworkKind } from "./scanner-artwork";
 type T = (en: string, ur?: string) => string;
@@ -354,9 +350,14 @@ export default function Scanner({
       printed: t(copy.printed, copy.urdu428),
       dyed: t(copy.dyed, copy.urdu429),
       untreated: t(copy.untreated, copy.urdu430),
+      elastane_spandex: t("elastane (spandex)", "الاسٹین (اسپینڈیکس)"),
+      viscose_rayon: t("viscose", "ویسکوز"),
+      flax_linen: t("linen", "لینن"),
     })[value] || value.replaceAll("_", " ");
   const pct = (p: number) => `${Math.round(p * 100)}%`;
   // Taught heads (models/custom) report their raw class names; blends are named the way yarn is bought.
+  const mixText = (key: string) =>
+    key.split(",").map((part) => { const [fibre, pct] = part.split(":"); return `${pct}% ${taughtLabel("fibre", fibre)}`; }).join(" · ");
   const taughtLabel = (name: string, label: string) =>
     name === "blend"
       ? ({
@@ -374,14 +375,6 @@ export default function Scanner({
     })[label] ?? labelFor(label);
   return (
     <div className="scanner-page">
-      <FabricHero
-        t={t}
-        busy={openingCamera || scanning}
-        onScan={() => {
-          document.querySelector(".scan-capture-panel")?.scrollIntoView({ behavior: "smooth" });
-          void openCamera();
-        }}
-      />
       <div className="scan-topline">
         <span className="scan-model-badge">
           {info ? <CheckCheck size={20} aria-hidden="true" /> : <WifiOff size={20} aria-hidden="true" />}
@@ -394,12 +387,13 @@ export default function Scanner({
               : t(copy.modelNotConnected, copy.urdu437)}
         </span>
         <button
-          className="button scan-connection-button"
+          className="live-icon-button"
           disabled={scanning}
+          aria-label={t(copy.modelConnection, copy.urdu438)}
+          title={t(copy.modelConnection, copy.urdu438)}
           onClick={() => setConfigOpen(!configOpen)}
         >
-          <Settings2 size={16} />
-          {t(copy.modelConnection, copy.urdu438)}
+          <Settings2 size={18} aria-hidden="true" />
         </button>
       </div>
       {configOpen && (
@@ -485,10 +479,6 @@ export default function Scanner({
               <h2>{t(copy.aCloserLookAtYourMaterial, copy.urdu444)}</h2>
               <p>{t(copy.captureTheFabricOrGarmentInGood, copy.urdu445)}</p>
             </div>
-            <span className="scan-step-count">
-              <bdi>{slot === "surface" ? "01" : "02"}</bdi>
-              {copy.label022}
-            </span>
           </div>
           <div
             className="scan-photo-tabs"
@@ -690,7 +680,7 @@ export default function Scanner({
             </div>
           )}
           <div className="scan-photo-meta">
-            <span>
+            {activePhoto && <span>
               <ImagePlus size={14} />
               {activePhoto ? (
                 <bdi>
@@ -699,10 +689,8 @@ export default function Scanner({
                   {(activePhoto.file.size / 1024 / 1024).toFixed(1)}
                   {copy.mb}
                 </bdi>
-              ) : (
-                t(copy.jpegPngOrWebpUpTo10, copy.jpegPngWebp)
-              )}
-            </span>
+              ) : null}
+            </span>}
             {surface && slot === "surface" && !label && (
               <button
                 className="text-button"
@@ -748,10 +736,7 @@ export default function Scanner({
             </div>
           )}
           <div className="scan-analyze-row">
-            <span>
-              <ShieldCheck size={16} />
-              {t(copy.realModelResultsNoSimulatedPredictions, copy.urdu475)}
-            </span>
+            <span />
             {scanning ? (
               <button
                 className="button"
@@ -796,14 +781,24 @@ export default function Scanner({
                 topGuess(result.custom.garment_type, result.candidates.garment_type) ??
                 (result.garment ? ([result.garment.label, result.garment.confidence ?? 0] as [string, number]) : null);
               const stated = result.stated_composition.fibers;
-              const fibre = topGuess(result.fibre_family, result.candidates.fibre_family);
+              // Composition the way yarn is bought: 100% cotton, cotton + spandex, CVC, PC (blend head + fibre head).
+              // The taught "mix" head names the exact mix ("cotton:98,elastane_spandex:2"); else the blend head's group.
+              const mix = topGuess(result.custom.mix, result.candidates.mix);
+              const comp = composition(result);
+              const fibreWord = comp?.fibre ? taughtLabel("fibre", comp.fibre) : "";
+              const compText = !comp ? "" : comp.blend === "pure" ? (fibreWord ? `100% ${fibreWord}` : t("Single fibre (100%)", "ایک ریشہ"))
+                : comp.blend === "stretch" ? (fibreWord ? `${fibreWord} + spandex (stretch)` : t("Stretch (with spandex)", "اسٹریچ"))
+                : comp.blend === "CVC" ? t("CVC: cotton-rich cotton/polyester", "سی وی سی: زیادہ کاٹن، کچھ پولیسٹر")
+                : comp.blend === "PC" ? t("PC: polyester-rich polyester/cotton", "پی سی: زیادہ پولیسٹر، کچھ کاٹن")
+                : fibreWord;
               const rows = [
                 { key: "fabric", title: t("Fabric", "کپڑا"), art: "structure" as const, guess: topGuess(result.structure, result.candidates.structure), name: (l: string) => taughtLabel("structure", l) },
                 stated.length
-                  ? { key: "made_of", title: t("Made of (from the label)", "کس چیز سے بنا (لیبل سے)"), icon: Tag, guess: null,
+                  ? { key: "composition", title: t("Composition (from the label)", "بناوٹ (لیبل سے)"), icon: Blend, guess: null,
                       text: stated.map((f) => `${f.pct}% ${labelFor(f.name)}`).join(" · ") }
-                  : { key: "made_of", title: t("Made of", "کس چیز سے بنا"), art: "fibre_family" as const, guess: fibre, name: fibreName },
-                { key: "blend", title: t("Blend", "مکس"), icon: Blend, guess: topGuess(result.custom.blend, result.candidates.blend), name: (l: string) => taughtLabel("blend", l) },
+                  : mix
+                    ? { key: "composition", title: t("Composition", "بناوٹ"), icon: Blend, guess: mix, name: mixText }
+                    : { key: "composition", title: t("Composition", "بناوٹ"), icon: Blend, guess: comp ? ([comp.blend ?? comp.fibre ?? "", comp.p] as [string, number]) : null, name: () => compText },
                 { key: "finish", title: t("Finish", "فنش"), icon: Paintbrush, guess: topGuess(result.custom.finish, result.candidates.finish), name: (l: string) => taughtLabel("finish", l) },
               ];
               const level = (p: number) => (p >= 0.8 ? "high" : p >= 0.5 ? "mid" : "low");
@@ -817,7 +812,6 @@ export default function Scanner({
                   </div>
                   {garment && <b className={`scan-pct ${level(garment[1])}`}>{pct(garment[1])}</b>}
                 </div>
-                <h4 className="scan-section-title">{t("Composition", "بناوٹ")}</h4>
                 <ul className="scan-rows">
                   {rows.map((r) =>
                     r.guess || r.text ? (
@@ -902,7 +896,7 @@ export default function Scanner({
                     {[
                       ["structure", t("Fabric", "کپڑا"), result.structure, labelFor],
                       ["fibre_family", t("Fibre", "ریشہ"), result.fibre_family, fibreName],
-                      ...Object.entries(result.custom).map(([name, head]) => [name, taughtLabel("x", name), head, (l: string) => taughtLabel(name, l)] as const),
+                      ...Object.entries(result.custom).map(([name, head]) => [name, taughtLabel("x", name), head, name === "mix" ? mixText : (l: string) => taughtLabel(name, l)] as const),
                     ].map(([name, title, head, nameOf]) => {
                       const options = (head as HeadPrediction | null)?.topk ?? result.candidates[name as string] ?? [];
                       return options.length ? (
@@ -955,46 +949,12 @@ export default function Scanner({
                 <h3>
                   {scanning
                     ? t(copy.findingTheFinerDetails, copy.urdu502)
-                    : t(copy.aLittleClarityStartsHere, copy.urdu503)}
+                    : t("Your answer appears here", "آپ کا جواب یہاں آئے گا")}
                 </h3>
-                <p>
-                  {t(
-                    copy.yourMaterialSStructureSurfaceTreatmentAnd,
-                    copy.urdu504,
-                  )}
-                </p>
-                <div className="scan-result-placeholders">
-                  {[
-                    [Layers3, copy.fabricStructure, copy.urdu487],
-                    [Sun, copy.surfaceTreatment, copy.urdu488],
-                    [Tag, copy.fibreFamily, copy.urdu489],
-                  ].map(([I, en, ur]) => {
-                    const C = I as typeof Layers3;
-                    return (
-                      <div key={String(en)}>
-                        <C size={16} />
-                        <span>{t(String(en), String(ur))}</span>
-                        <i />
-                      </div>
-                    );
-                  })}
-                </div>
+                <p>{t("Garment, fabric, composition and finish, each with how sure the model is.", "لباس، کپڑا، بناوٹ اور فنش، ہر ایک کے ساتھ ماڈل کا یقین۔")}</p>
               </div>
             )}
           </section>
-          <section className="scan-tip-card">
-            <span>
-              <Focus size={19} />
-            </span>
-            <div>
-              <h3>{t(copy.goodLightMakesTheDifference, copy.urdu505)}</h3>
-              <p>{t(copy.brightEvenLightFabricFillsPhoto, copy.brightEvenLightFabricFillsPhotoUr)}</p>
-            </div>
-          </section>
-          <p className="scan-evidence-note">
-            <ShieldCheck size={15} />
-            {t(copy.visualEvidenceHelpsVerifyMaterialExactFibre, copy.urdu507)}
-          </p>
         </aside>
       </div>
     </div>

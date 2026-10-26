@@ -11,6 +11,8 @@ import {
   validateScan,
   ScanError,
   topGuess,
+  madeOf,
+  composition,
   type ScanResult,
   type SpecResult,
 } from "../src/scanner-client.ts";
@@ -308,4 +310,28 @@ test("answer card always shows the top answer: the accepted one, else the head's
   assert.deepEqual(topGuess(null, [["yak", 0.29], ["acrylic", 0.21]]), ["yak", 0.29]);
   assert.equal(topGuess(null, undefined), null);
   assert.equal(topGuess(undefined, []), null);
+});
+
+test("made of: the 33-fibre model's top fibre inside the winning family, with the family's confidence", () => {
+  const base = { fibre_family: null, custom: {}, candidates: {} } as const;
+  // Jeans scan 26 Oct: family cellulosic 63%, fibre head cotton 19% / nylon 14% / elastane 13%.
+  assert.deepEqual(madeOf({ ...base, candidates: { fibre_family: [["cellulosic", 0.63], ["synthetic", 0.21]], fibre: [["nylon", 0.2], ["cotton", 0.19]] } }),
+    { fibre: "cotton", family: "cellulosic", p: 0.63 });
+  // No fibre of that family among the fibre head's guesses: the family alone.
+  assert.deepEqual(madeOf({ ...base, candidates: { fibre_family: [["protein", 0.7]], fibre: [["cotton", 0.3]] } }),
+    { fibre: null, family: "protein", p: 0.7 });
+  // An accepted fibre answer wins over the family's guess.
+  assert.deepEqual(madeOf({ ...base, custom: { fibre: { label: "polyester", confidence: 0.92, topk: [["polyester", 0.92]] } }, candidates: { fibre_family: [["cellulosic", 0.5]] } }),
+    { fibre: "polyester", family: "synthetic", p: 0.92 });
+  assert.equal(madeOf(base), null);
+});
+
+test("composition in trade terms: the blend head (pure / stretch / CVC / PC) with the fibre it is made of", () => {
+  const jeans = { fibre_family: null, custom: { blend: null }, candidates: { blend: [["stretch", 0.81], ["pure", 0.15]], fibre_family: [["cellulosic", 0.63]], fibre: [["cotton", 0.19], ["nylon", 0.14]] } };
+  assert.deepEqual(composition(jeans), { blend: "stretch", fibre: "cotton", p: 0.81 });
+  assert.deepEqual(composition({ ...jeans, custom: { blend: { label: "pure", confidence: 0.95, topk: [] } } }), { blend: "pure", fibre: "cotton", p: 0.95 });
+  assert.deepEqual(composition({ ...jeans, candidates: { ...jeans.candidates, blend: [["CVC", 0.6]] } }), { blend: "CVC", fibre: "cotton", p: 0.6 });
+  // No blend head (older server): the fibre alone, with its family's confidence.
+  assert.deepEqual(composition({ ...jeans, custom: {}, candidates: { ...jeans.candidates, blend: undefined } }), { blend: null, fibre: "cotton", p: 0.63 });
+  assert.equal(composition({ fibre_family: null, custom: {}, candidates: {} }), null);
 });
