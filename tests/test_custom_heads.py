@@ -117,6 +117,29 @@ def test_a_scan_reports_a_taught_head_next_to_the_fabric_from_one_encoder_pass(
     assert len(passes) == 1  # Head A and the taught head share one pass through the encoder
 
 
+def test_heads_taught_on_an_earlier_head_a_keep_answering_after_an_upgrade(
+    tmp_path, head_a, monkeypatch
+):
+    from services.vision.heads import LinearHeads
+
+    head_a.meta["encoder_id"] = "resnet10t+lora-old"
+    custom, _ = teach(folders(tmp_path / "wash"), head_a, "wash")
+    new_a = FineTunedHead(tmp_path / "head_a", CPU)
+    new_a.meta["encoder_id"] = "resnet10t+lora-new"
+    lh = LinearHeads.__new__(LinearHeads)
+    lh.specs, lh.structure_model, lh.custom, lh.custom_encoder = {}, new_a, [custom], head_a
+    lh.mean, lh.std, lh.img_size, lh.crop_pct = [0.5] * 3, [0.5] * 3, 64, 0.875
+    lh.device, lh._torch, lh.half, lh.model = CPU, torch, False, new_a.model
+    passes = []
+    for h in (head_a, new_a):
+        count = lambda fn, views, run=h._run, who=h: passes.append(who) or run(fn, views)  # noqa: E731
+        monkeypatch.setattr(h, "_run", count)
+    out = lh.predict([photo(True, seed=5)])
+    assert out.custom["wash"].label == "stone_wash"
+    assert passes == [new_a, head_a]  # the old encoder costs one more pass
+    assert "taught_model" in out.timings_ms
+
+
 def test_the_api_returns_taught_heads_answers_and_abstentions():
     from services.api.pipeline import run_scan
     from services.vision.predictor import HeadOutput, VisionOutput

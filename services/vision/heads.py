@@ -233,6 +233,8 @@ def load_bundle(bundle_dir: Path) -> tuple[dict, dict[str, HeadSpec]]:
 class LinearHeads:
     """The FabricHeads unit: views -> VisionOutput. Missing heads (e.g. treatment) are None."""
 
+    custom_encoder: FineTunedHead | None = None  # an earlier Head A, for heads taught on it
+
     def __init__(self, bundle_dir: Path, device):
         import timm
         import torch
@@ -259,6 +261,13 @@ class LinearHeads:
 
             root = Path(os.environ.get("TEXPILOT_CUSTOM_HEADS", "models/custom"))
             self.custom = load_custom_heads(root, self.structure_model.encoder_id)
+            # Heads taught on an earlier Head A keep answering after an upgrade: its encoder runs
+            # as a second pass (TEXPILOT_CUSTOM_ENCODER=models/scanner-v7/head_a) until re-taught.
+            if src := os.environ.get("TEXPILOT_CUSTOM_ENCODER"):
+                enc = FineTunedHead(Path(src), device)
+                if enc.encoder_id != self.structure_model.encoder_id:
+                    self.custom_encoder = enc
+                    self.custom += load_custom_heads(root, enc.encoder_id)
 
     def predict(self, views: list[np.ndarray]) -> VisionOutput:
         from services.vision.backbone import pool_features, preprocess
@@ -294,9 +303,15 @@ class LinearHeads:
             out[n] = decide(p, classes[n], threshold)
             if out[n] is None:
                 candidates[n] = closest(p, classes[n])
-        custom = {}
-        for head in self.custom if features is not None else []:
-            p = head.probs(features)
+        custom, by_encoder = {}, {}
+        if features is not None:
+            by_encoder[self.structure_model.encoder_id] = features
+            if self.custom_encoder is not None:
+                clock = time.perf_counter()
+                by_encoder[self.custom_encoder.encoder_id] = self.custom_encoder.features(views)
+                timings["taught_model"] = round(1000 * (time.perf_counter() - clock), 1)
+        for head in (h for h in self.custom if h.encoder in by_encoder):
+            p = head.probs(by_encoder[head.encoder])
             custom[head.name] = decide(p, head.classes, head.threshold)
             if custom[head.name] is None:
                 candidates[head.name] = closest(p, head.classes)

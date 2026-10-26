@@ -977,6 +977,7 @@ export default function Scanner({
                       ["garment_detector", t("garment detector (OWLv2)", "گارمنٹ ڈیٹیکٹر")],
                       ["fabric_model", t("fabric model (SigLIP 2)", "فیبرک ماڈل")],
                       ["fibre_model", t("fibre model (DINOv2)", "فائبر ماڈل")],
+                      ["taught_model", t("taught answers model", "سکھائے گئے جوابات کا ماڈل")],
                       ["label_reader", t("label reader", "لیبل ریڈر")],
                     ]
                       .filter(([k]) => result.timings_ms?.[k] !== undefined)
