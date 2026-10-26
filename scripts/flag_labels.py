@@ -109,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     audit = json.loads(args.audit.read_text())["audit"]
     pos = {r.path: i for i, r in enumerate(rows)}
     a_idx, bad, half = [], [], []
-    for c, rs in sorted(audit.items()):
+    for _, rs in sorted(audit.items()):
         order = np.random.default_rng(0).permutation(len(rs))
         for j, r in enumerate(rs):
             a_idx.append(pos[r["path"]])
@@ -117,8 +117,8 @@ def main(argv: list[str] | None = None) -> int:
             half.append("A" if order[j] % 2 == 0 else "B")
     a_idx, bad, half = np.array(a_idx), np.array(bad), np.array(half)
     own = p[np.arange(len(y)), y]
-    print(f"audit: {len(a_idx)} photos, {bad.sum()} mislabelled; AUROC of low own-label probability "
-          f"{roc_auc_score(bad, -own[a_idx]):.3f}", flush=True)  # fmt: skip
+    print(f"audit: {len(a_idx)} photos, {bad.sum()} mislabelled; AUROC of low own-label "
+          f"probability {roc_auc_score(bad, -own[a_idx]):.3f}", flush=True)  # fmt: skip
 
     xa = standardised(args.ab_features, root, rows, split == "train")
     evals = {"test (labels as given)": np.flatnonzero(te)}
