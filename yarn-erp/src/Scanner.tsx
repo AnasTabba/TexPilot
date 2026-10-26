@@ -369,7 +369,7 @@ export default function Scanner({
           PC: t("PC (polyester-rich polyester/cotton)", "پی سی"),
           stretch: t("Stretch (with spandex/lycra)", "اسٹریچ"),
         })[label] ?? label
-      : labelFor(label).replace(/^./, (c) => c.toUpperCase());
+      : t(labelFor(label).replace(/^./, (c) => c.toUpperCase()));
   const fibreName = (label: string) =>
     ({
       cellulosic: t("Plant fibre (cotton, linen, viscose)", "پودوں کا ریشہ (کاٹن، لینن، ویسکوز)"),
@@ -805,6 +805,7 @@ export default function Scanner({
                     ? { key: "composition", title: t("Composition", "بناوٹ"), icon: Blend, guess: mix, name: mixText }
                     : { key: "composition", title: t("Composition", "بناوٹ"), icon: Blend, guess: comp ? ([comp.blend ?? comp.fibre ?? "", comp.p] as [string, number]) : null, name: () => compText },
                 { key: "finish", title: t("Finish", "فنش"), icon: Paintbrush, guess: topGuess(result.custom.finish, result.candidates.finish), name: (l: string) => taughtLabel("finish", l) },
+                { key: "pattern", title: t("Pattern", "پیٹرن"), icon: ScanLine, guess: topGuess(result.custom.pattern, result.candidates.pattern), name: (l: string) => taughtLabel("pattern", l) },
               ];
               const level = (p: number) => (p >= 0.8 ? "high" : p >= 0.5 ? "mid" : "low");
               return (

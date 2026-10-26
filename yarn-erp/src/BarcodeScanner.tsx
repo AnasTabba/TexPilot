@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, Upload, ScanLine, Square, Search } from 'lucide-react';
 import type { IScannerControls } from '@zxing/browser';
+import { useLanguage } from './i18n';
 
 export default function BarcodeScanner({ onFound }: { onFound: (code: string) => Promise<void> }) {
+  const { t } = useLanguage();
   const [active, setActive] = useState(false);
   const [opening, setOpening] = useState(false);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<{ english: string; urdu?: string } | null>(null);
   const video = useRef<HTMLVideoElement>(null);
   const controls = useRef<IScannerControls | null>(null);
   const generation = useRef(0);
@@ -29,15 +31,15 @@ export default function BarcodeScanner({ onFound }: { onFound: (code: string) =>
   }, []);
   async function lookup(value: string) {
     if (reading.current) return;
-    reading.current = true; stop(); setCode(value); setBusy(true); setError('');
+    reading.current = true; stop(); setCode(value); setBusy(true); setError(null);
     try { await onFoundRef.current(value.trim()); }
-    catch (error) { setError(error instanceof Error ? error.message : 'Could not find this barcode.'); }
+    catch (error) { setError(error instanceof Error ? { english: error.message } : { english: 'Could not find this barcode.', urdu: 'یہ بارکوڈ نہیں ملا۔' }); }
     finally { reading.current = false; setBusy(false); }
   }
   async function start() {
-    setError('');
+    setError(null);
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-      setError('The camera needs the HTTPS app URL. You can also upload a barcode photo or type its code.'); return;
+      setError({ english: 'The camera needs the HTTPS app URL. You can also upload a barcode photo or type its code.', urdu: 'کیمرے کے لیے ایپ کا HTTPS پتہ درکار ہے۔ بارکوڈ کی تصویر اپ لوڈ کریں یا کوڈ لکھیں۔' }); return;
     }
     stop(); const attempt = ++generation.current; setOpening(true); setActive(true);
     try {
@@ -53,37 +55,37 @@ export default function BarcodeScanner({ onFound }: { onFound: (code: string) =>
     } catch (error) {
       if (attempt !== generation.current) return;
       stop(); setError(error instanceof DOMException && error.name === 'NotAllowedError'
-        ? 'Camera permission was denied. Allow Camera for this site in Safari settings, or upload a photo.'
-        : 'The camera could not start. Close other camera apps, try again, or upload a barcode photo.');
+        ? { english: 'Camera permission was denied. Allow Camera for this site in Safari settings, or upload a photo.', urdu: 'کیمرے کی اجازت نہیں ملی۔ Safari کی سیٹنگز میں اس سائٹ کو کیمرے کی اجازت دیں، یا تصویر اپ لوڈ کریں۔' }
+        : { english: 'The camera could not start. Close other camera apps, try again, or upload a barcode photo.', urdu: 'کیمرہ شروع نہیں ہو سکا۔ دوسری کیمرہ ایپس بند کرکے دوبارہ کوشش کریں، یا بارکوڈ کی تصویر اپ لوڈ کریں۔' });
     }
   }
   async function photo(file: File | undefined) {
     if (!file) return;
-    stop(); setError(''); setBusy(true);
-    if (file.size > 12 * 1024 * 1024) { setBusy(false); setError('Choose a barcode photo smaller than 12 MB.'); return; }
+    stop(); setError(null); setBusy(true);
+    if (file.size > 12 * 1024 * 1024) { setBusy(false); setError({ english: 'Choose a barcode photo smaller than 12 MB.', urdu: 'بارکوڈ کی تصویر 12 MB سے چھوٹی ہونی چاہیے۔' }); return; }
     const url = URL.createObjectURL(file);
     try {
       const { BrowserMultiFormatReader } = await import('@zxing/browser');
       const result = await new BrowserMultiFormatReader().decodeFromImageUrl(url);
       setBusy(false); await lookup(result.getText());
-    } catch { setError('No readable barcode found. Try a sharp JPEG/PNG photo with the entire code visible, or type the code.'); }
+    } catch { setError({ english: 'No readable barcode found. Try a sharp JPEG/PNG photo with the entire code visible, or type the code.', urdu: 'بارکوڈ پڑھا نہیں جا سکا۔ واضح JPEG/PNG تصویر دیں جس میں پورا کوڈ نظر آئے، یا کوڈ لکھیں۔' }); }
     finally { URL.revokeObjectURL(url); setBusy(false); }
   }
-  return <section className="live-panel barcode-panel" aria-label="Barcode scanner">
-    <div className="live-panel-heading"><ScanLine aria-hidden="true" /><div><h2>Find a batch by its label</h2><p>Scan a Yarnflow QR label, a product barcode, or enter a batch number.</p></div></div>
+  return <section className="live-panel barcode-panel" aria-label={t('Barcode scanner', 'بارکوڈ اسکینر')}>
+    <div className="live-panel-heading"><ScanLine aria-hidden="true" /><div><h2>{t('Find a batch by its label', 'لیبل سے بیچ تلاش کریں')}</h2><p>{t('Scan a Yarnflow QR label, a product barcode, or enter a batch number.', 'Yarnflow کا QR لیبل یا پروڈکٹ بارکوڈ اسکین کریں، یا بیچ نمبر درج کریں۔')}</p></div></div>
     <div className={`barcode-view ${active ? 'is-active' : ''}`}>
-      <video ref={video} autoPlay muted playsInline aria-label="Barcode camera preview" hidden={!active} />
-      {!active && <div><ScanLine size={48} aria-hidden="true" /><p>Keep the whole code inside the camera view.</p></div>}
-      {opening && <span className="barcode-opening" role="status">Opening camera…</span>}
+      <video ref={video} autoPlay muted playsInline aria-label={t('Barcode camera preview', 'بارکوڈ کیمرے کا منظر')} hidden={!active} />
+      {!active && <div><ScanLine size={48} aria-hidden="true" /><p>{t('Keep the whole code inside the camera view.', 'پورا کوڈ کیمرے کے اندر رکھیں۔')}</p></div>}
+      {opening && <span className="barcode-opening" role="status">{t('Opening camera…', 'کیمرہ کھل رہا ہے…')}</span>}
     </div>
     <div className="live-actions">
-      {active ? <button className="button" onClick={stop}><Square size={18} />Stop camera</button> : <button className="button primary" onClick={() => void start()} disabled={busy || opening}><Camera size={18} />Open barcode camera</button>}
-      <label className="button live-upload"><Upload size={18} />Read barcode photo<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={event => { void photo(event.target.files?.[0]); event.target.value = ''; }} disabled={busy} /></label>
+      {active ? <button className="button" onClick={stop}><Square size={18} />{t('Stop camera', 'کیمرہ بند کریں')}</button> : <button className="button primary" onClick={() => void start()} disabled={busy || opening}><Camera size={18} />{t('Open barcode camera', 'بارکوڈ کیمرہ کھولیں')}</button>}
+      <label className="button live-upload"><Upload size={18} />{t('Read barcode photo', 'بارکوڈ کی تصویر پڑھیں')}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={event => { void photo(event.target.files?.[0]); event.target.value = ''; }} disabled={busy} /></label>
     </div>
     <form onSubmit={event => { event.preventDefault(); void lookup(code); }} className="barcode-code-form">
-      <label htmlFor="barcode-code">Barcode or batch number</label>
-      <div><input id="barcode-code" value={code} onChange={event => setCode(event.target.value)} autoCapitalize="off" autoCorrect="off" maxLength={200} required /><button className="button" disabled={busy || !code.trim()}><Search size={18} />{busy ? 'Finding…' : 'Find batch'}</button></div>
+      <label htmlFor="barcode-code">{t('Barcode or batch number', 'بارکوڈ یا بیچ نمبر')}</label>
+      <div><input id="barcode-code" dir="ltr" value={code} onChange={event => setCode(event.target.value)} autoCapitalize="off" autoCorrect="off" maxLength={200} required /><button className="button" disabled={busy || !code.trim()}><Search size={18} />{busy ? t('Finding…', 'تلاش ہو رہا ہے…') : t('Find batch', 'بیچ تلاش کریں')}</button></div>
     </form>
-    {error && <p className="live-error" role="alert">{error}</p>}
+    {error && <p className="live-error" role="alert">{t(error.english, error.urdu)}</p>}
   </section>;
 }

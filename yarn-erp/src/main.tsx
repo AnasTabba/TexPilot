@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource-variable/figtree";
 import LiveApp from "./LiveApp";
+import { LanguageProvider } from "./i18n";
 import "./yarnflow.css";
 // crypto.randomUUID exists only on HTTPS and localhost; phones testing over the LAN use plain
 // HTTP. getRandomValues works everywhere, so build the same random v4 UUID from it.
@@ -12,7 +13,7 @@ if (typeof crypto.randomUUID !== "function")
     ) as ReturnType<Crypto["randomUUID"]>;
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <LiveApp />
+    <LanguageProvider><LiveApp /></LanguageProvider>
   </React.StrictMode>,
 );
 if ("serviceWorker" in navigator && import.meta.env.PROD)

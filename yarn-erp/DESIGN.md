@@ -289,6 +289,7 @@ A neutral warm-stone workspace where hue is reserved for materials, state and fo
 
 **Display Font:** Figtree Variable (self-hosted via `@fontsource-variable/figtree`, falling back to -apple-system, Segoe UI, sans-serif)
 **Body Font:** Figtree Variable
+Urdu uses Noto Naskh Arabic when installed, then Geeza Pro, Tahoma and the system sans-serif, at a 1.7 body line-height. Headings use 1.45 line-height and normal tracking so Urdu marks are not clipped. The saved English/اردو selection appears on sign-in and under Settings; Urdu sets the document to `lang="ur"` and `dir="rtl"`. Names and ledger identifiers remain the user's text, numeric controls and the PIN keypad keep left-to-right order, and the Yarnflow wordmark stays left-to-right.
 **Label/Mono Font:** none distinct; figures use `font-variant-numeric: tabular-nums` set on body.
 
 **Character:** One friendly, plain geometric sans doing every job, made firm by weight (700 for headings and figures, 600 for labels and values) rather than by a second family.
@@ -418,3 +419,8 @@ Garment and fabric cut-outs drift on a 4.2s ease-in-out float (rotate -12 to -8d
 - **Don't** build KPI tiles (a figure in a card with an icon in a tinted circle), or bring back lime-on-charcoal or espresso/orange/gold chrome; circles are nodes on a thread or the next-step mark, nothing else.
 - **Don't** introduce a second typeface for display or labels, or set labels uppercase with open tracking.
 - **Don't** signal state with colour alone.
+
+
+### Short screens and compact capture
+
+Sign-in fills the dynamic viewport and sizes its keypad from the sign-in container, keeping keys at least 44px. On shorter screens the decorative avatar and repeated explanatory copy give way before controls shrink. Mobile camera viewfinders respond to available height; the scanner tabs supply the repeated section title, and barcode capture no longer inherits an unrelated 40px panel margin. The Yarn count instructions remain in a collapsed “How to take the photo” disclosure ahead of the photo input. Opening a stock form or reversal returns the page to its top. Real history and multi-field forms remain scrollable; controls are never clipped to force a fixed-height page.

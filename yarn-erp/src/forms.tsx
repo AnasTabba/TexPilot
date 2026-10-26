@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState, useId, Children, cloneElement, isValidElement, type ReactElement, type FormEvent, type ReactNode } from 'react';
 import { Check, CheckCheck, LoaderCircle, TriangleAlert, X } from 'lucide-react';
+import { translate, useLanguage } from './i18n';
 
-export const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'This could not be saved. Try again.';
+export const errorMessage = (error: unknown, language: 'en' | 'ur' = 'en') => {
+  if (error instanceof Error) return translate(language, error.message,
+    error.message === 'The two PINs are different. Type the same 4 digits twice.' ? 'دونوں پن مختلف ہیں۔ ایک ہی چار ہندسے دو بار درج کریں۔' : undefined);
+  return translate(language, 'This could not be saved. Try again.', 'محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔');
+};
 export function Field({ children, className = '' }: { children: ReactNode; className?: string }) {
-  const [error, setError] = useState('');
+  const { t } = useLanguage();
+  const [error, setError] = useState<{ english: string; urdu?: string } | null>(null);
   // A field is checked on blur only after it was edited: an untouched empty field that shouted on blur
   // shifted the form under the pointer, so the first click on Cancel or Close never landed.
   const [edited, setEdited] = useState(false);
@@ -12,33 +18,44 @@ export function Field({ children, className = '' }: { children: ReactNode; class
   const label = nodes.filter(child => typeof child === 'string' || typeof child === 'number');
   function validate(target: EventTarget) {
     if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)) return;
-    setError(target.validity.valid ? '' : target.validationMessage);
+    const validity = target.validity;
+    setError(validity.valid ? null : { english: target.validationMessage, urdu:
+      validity.valueMissing ? 'یہ خانہ پُر کریں۔'
+      : validity.typeMismatch ? 'درست معلومات درج کریں۔'
+      : validity.patternMismatch ? 'بتائے گئے طریقے سے درج کریں۔'
+      : validity.tooShort ? 'مزید حروف یا ہندسے درج کریں۔'
+      : validity.tooLong ? 'حروف یا ہندسے کم کریں۔'
+      : validity.rangeUnderflow ? 'یہ عدد کم از کم حد سے کم ہے۔'
+      : validity.rangeOverflow ? 'یہ عدد زیادہ سے زیادہ حد سے بڑا ہے۔'
+      : validity.stepMismatch ? 'مقررہ وقفے کے مطابق عدد درج کریں۔'
+      : validity.badInput ? 'درست عدد درج کریں۔' : undefined });
   }
   return <div className={`live-field ${className}`} onBlur={e => { if (edited) validate(e.target); }} onInvalid={e => validate(e.target)} onChange={e => { setEdited(true); if (error) validate(e.target); }}>
     <label htmlFor={controlId}>{label}</label>
     {nodes.filter(isValidElement).map(child => cloneElement(child as ReactElement<{ id?: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean }>, { id: controlId, 'aria-describedby': error ? errorId : undefined, 'aria-invalid': !!error }))}
-    {error && <span id={errorId} className="live-field-error"><TriangleAlert size={18} aria-hidden="true" />{error}</span>}
+    {error && <span id={errorId} className="live-field-error"><TriangleAlert size={18} aria-hidden="true" />{t(error.english, error.urdu)}</span>}
   </div>;
 }
 
 export function AsyncForm({ title, detail, children, submit, onSubmit, onCancel, review, note }: { title: string; detail?: string; children: ReactNode; submit: string; onSubmit: () => Promise<void>; onCancel?: () => void; review?: ReactNode; note?: string }) {
-  const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [reviewing, setReviewing] = useState(false);
+  const { language, t } = useLanguage();
+  const [busy, setBusy] = useState(false); const [error, setError] = useState<{ cause: unknown } | null>(null); const [reviewing, setReviewing] = useState(false);
   const form = useRef<HTMLFormElement>(null); const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { if (matchMedia('(pointer: fine)').matches) form.current?.querySelector<HTMLInputElement>('input,select,textarea')?.focus(); }, []);
   useEffect(() => { if (reviewing) heading.current?.focus(); }, [reviewing]);
   async function save(event: FormEvent) {
     event.preventDefault(); if (busy) return;
-    if (review && !reviewing) { setReviewing(true); setError(''); return; }
-    setBusy(true); setError('');
-    try { await onSubmit(); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); }
+    if (review && !reviewing) { setReviewing(true); setError(null); return; }
+    setBusy(true); setError(null);
+    try { await onSubmit(); } catch (error) { setError({ cause: error }); } finally { setBusy(false); }
   }
-  return <form className="live-panel live-form" ref={form} onSubmit={save} aria-label={title}>
-    <div className="live-panel-heading"><div><h2 ref={heading} tabIndex={-1}>{reviewing ? 'Review before saving' : title}</h2>{detail && !reviewing && <p>{detail}</p>}</div>{onCancel && <button className="live-icon-button" type="button" onClick={onCancel} disabled={busy} aria-label="Close form"><X aria-hidden="true" /></button>}</div>
-    {review && <ol className="yf-steps yf-formsteps" aria-label="Entry steps"><li className={reviewing ? 'done' : 'current'} aria-current={reviewing ? undefined : 'step'}><span>{reviewing ? <Check size={14} aria-hidden="true" /> : 1}</span>Details</li><li className={reviewing ? 'current' : ''} aria-current={reviewing ? 'step' : undefined}><span>2</span>Review and save</li></ol>}
+  return <form className="live-panel live-form" ref={form} onSubmit={save} aria-label={t(title)}>
+    <div className="live-panel-heading"><div><h2 ref={heading} tabIndex={-1}>{reviewing ? t('Review before saving', 'محفوظ کرنے سے پہلے جائزہ لیں') : t(title)}</h2>{detail && !reviewing && <p>{t(detail)}</p>}</div>{onCancel && <button className="live-icon-button" type="button" onClick={onCancel} disabled={busy} aria-label={t('Close form', 'فارم بند کریں')}><X aria-hidden="true" /></button>}</div>
+    {review && <ol className="yf-steps yf-formsteps" aria-label={t('Entry steps', 'اندراج کے مراحل')}><li className={reviewing ? 'done' : 'current'} aria-current={reviewing ? undefined : 'step'}><span>{reviewing ? <Check size={14} aria-hidden="true" /> : 1}</span>{t('Details', 'تفصیلات')}</li><li className={reviewing ? 'current' : ''} aria-current={reviewing ? 'step' : undefined}><span>2</span>{t('Review and save', 'جائزہ لیں اور محفوظ کریں')}</li></ol>}
     <fieldset disabled={busy} hidden={reviewing}>{children}</fieldset>
-    {reviewing && <section className="live-review" aria-label="Entry summary"><h3>{title}</h3>{review}<p>Check these register values. Stock changes only after you save.</p></section>}
-    {error && <p className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{error}</p>}
-    <div className="live-actions"><button className="button primary" disabled={busy}>{busy ? <LoaderCircle className="live-spinning" size={20} aria-hidden="true" /> : <CheckCheck size={20} aria-hidden="true" />}{busy ? 'Saving…' : review && !reviewing ? 'Review entry' : submit}</button>{reviewing && <button className="button" type="button" disabled={busy} onClick={() => { setReviewing(false); setError(''); }}>Edit entry</button>}{onCancel && <button className="button" type="button" disabled={busy} onClick={onCancel}>Cancel</button>}</div>
-    <p className="live-form-note">{note ?? (review ? 'Review the entry before saving it.' : 'Saved for the whole team when confirmed.')}</p>
+    {reviewing && <section className="live-review" aria-label={t('Entry summary', 'اندراج کا خلاصہ')}><h3>{t(title)}</h3>{review}<p>{t('Check these register values. Stock changes only after you save.', 'رجسٹر کی یہ تفصیلات جانچ لیں۔ اسٹاک صرف محفوظ کرنے کے بعد بدلے گا۔')}</p></section>}
+    {error && <p className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{errorMessage(error.cause, language)}</p>}
+    <div className="live-actions"><button className="button primary" disabled={busy}>{busy ? <LoaderCircle className="live-spinning" size={20} aria-hidden="true" /> : <CheckCheck size={20} aria-hidden="true" />}{busy ? t('Saving…', 'محفوظ ہو رہا ہے…') : review && !reviewing ? t('Review entry', 'اندراج کا جائزہ لیں') : t(submit)}</button>{reviewing && <button className="button" type="button" disabled={busy} onClick={() => { setReviewing(false); setError(null); }}>{t('Edit entry', 'اندراج بدلیں')}</button>}{onCancel && <button className="button" type="button" disabled={busy} onClick={onCancel}>{t('Cancel', 'منسوخ کریں')}</button>}</div>
+    <p className="live-form-note">{note != null ? t(note) : review ? t('Review the entry before saving it.', 'محفوظ کرنے سے پہلے اندراج کا جائزہ لیں۔') : t('Saved for the whole team when confirmed.', 'تصدیق کے بعد پوری ٹیم کے لیے محفوظ ہوگا۔')}</p>
   </form>;
 }

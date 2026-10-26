@@ -24,7 +24,7 @@ const answer = {
   scan_id: "button-check", verdict: "PASS", structure: head([["jersey", 0.81], ["knit", 0.12]]), treatment: head([["piece_dyed", 0.7]]),
   fibre_family: head([["cellulosic", 0.9]]), garment: { label: "top_tshirt_sweatshirt", confidence: 0.95, box: [0.1, 0.1, 0.9, 0.9] },
   stated_composition: { source: null, fibers: [], ocr_confidence: null, section: null }, flags: [], candidates: {},
-  custom: { garment_type: head([["t_shirt", 0.96]]), mix: head([["cotton:100", 0.7]]), finish: head([["dyed", 0.9]]) },
+  custom: { garment_type: head([["t_shirt", 0.96]]), mix: head([["cotton:100", 0.7]]), finish: head([["dyed", 0.9]]), pattern: head([["stripe", 0.85]]) },
   capture_quality: { blur: 150, exposure: "normal", framing: "good" }, model_version: "scanner-v8", kb_version: "v5",
   timestamp: new Date().toISOString(), timings_ms: { total: 1000 },
 };
@@ -284,6 +284,8 @@ test.describe("desktop", () => {
 
     await page.getByRole("button", { name: "Analyze material" }).click();
     await expect(page.locator(".scan-garment-hero h3")).toHaveText("T-shirt");
+    await expect(page.locator('.scan-rows li').filter({ hasText: 'Pattern' })).toContainText('Stripe');
+    await expect(page.locator('.scan-rows li').filter({ hasText: 'Pattern' })).toContainText('85%');
     await page.locator(".scan-details summary").click();
     await expect(page.locator(".scan-details dl")).toBeVisible();
     const [result] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download result" }).click()]);
