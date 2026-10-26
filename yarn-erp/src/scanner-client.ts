@@ -279,7 +279,8 @@ async function request(
     return await fetch(url, {
       ...init,
       signal: controller.signal,
-      credentials: "omit",
+      // The published site's sign-in cookie goes only to its own /api/v1; never to another server.
+      credentials: "same-origin",
       cache: "no-store",
       redirect: "error",
     });

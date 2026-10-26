@@ -9,7 +9,7 @@ export default defineConfig({
     { name: 'iphone-webkit', use: { ...devices['iPhone 13'] } },
   ],
   webServer: {
-    command: 'YARNFLOW_LOCAL_DEV=1 YARNFLOW_TEST_MODE=1 YARNFLOW_SQLITE_PATH=:memory: PORT=8791 node scripts/dev-server.mjs',
+    command: 'YARNFLOW_LOCAL_DEV=1 YARNFLOW_TEST_MODE=1 YARNFLOW_SEED_PIN=2468 YARNFLOW_SQLITE_PATH=:memory: PORT=8791 node scripts/dev-server.mjs',
     url: 'http://127.0.0.1:8791', reuseExistingServer: !process.env.CI, timeout: 30000,
   },
 });

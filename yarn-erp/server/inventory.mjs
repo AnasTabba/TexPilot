@@ -1,12 +1,13 @@
-/** Shared inventory API. Sites supplies authenticated identity, D1 supplies durable SQL. */
+/** Shared inventory API: PIN sessions (server/auth.mjs) give identity, D1 supplies durable SQL. */
+import { LOCK_AFTER, LOCK_MS, PERMISSIONS, SESSION_MS, nameKey, pinHash, randomHex, sessionCookie, sessionToken, sha256, userRow, validPin } from './auth.mjs';
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
 class Problem extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 const fail = (status, message) => { throw new Problem(status, message); };
-const json = (data, status = 200) => new Response(JSON.stringify(data), {
-  status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
+  status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers },
 });
 function text(value, label, min = 1, max = 200) {
   if (typeof value !== 'string' || value.trim().length < min || value.trim().length > max || /[\u0000-\u0008]/.test(value)) fail(422, `${label} must contain ${min}–${max} characters.`);
@@ -48,29 +49,34 @@ async function hash(value) {
 const rows = async (db, sql, ...args) => (await db.prepare(sql).bind(...args).all()).results;
 const first = (db, sql, ...args) => db.prepare(sql).bind(...args).first();
 const statement = (db, sql, ...args) => db.prepare(sql).bind(...args);
-const owner = member => { if (member.role !== 'owner') fail(403, 'Only the workspace owner can do this.'); };
+// Admins can do everything; everyone else needs the permission an admin gave them. Scanning needs none.
+const allow = (member, permission, what) => { if (!member.admin && !member.permissions.includes(permission)) fail(403, `You don't have permission to ${what}. Ask an admin.`); };
+const adminOnly = member => { if (!member.admin) fail(403, 'Only an admin can do this.'); };
+const movementPermission = { receive: ['receive', 'receive stock'], transfer: ['produce', 'move stock between stages'], dispatch: ['dispatch', 'dispatch stock'], waste: ['waste', 'record waste'] };
 
 async function snapshot(db, member) {
   const w = member.workspace_id;
-  const [workspace, products, lots, balances, movements, members, inspections, qualityEvents, photos] = await Promise.all([
+  const [workspace, products, lots, balances, movements, members, inspections, qualityEvents, photos, pending] = await Promise.all([
     first(db, 'SELECT * FROM workspaces WHERE id=?', w),
     rows(db, 'SELECT * FROM products WHERE workspace_id=? ORDER BY name', w),
     rows(db, 'SELECT * FROM lots WHERE workspace_id=? ORDER BY created_at DESC,id DESC', w),
     rows(db, 'SELECT b.* FROM balances b JOIN lots l ON l.id=b.lot_id WHERE l.workspace_id=?', w),
     rows(db, 'SELECT * FROM movements WHERE workspace_id=? ORDER BY created_at DESC,id DESC LIMIT 100', w),
-    rows(db, 'SELECT name,role,joined_at FROM memberships WHERE workspace_id=? ORDER BY joined_at', w),
+    rows(db, "SELECT name,role,created_at AS joined_at FROM users WHERE workspace_id=? AND status='active' ORDER BY created_at", w),
     rows(db, 'SELECT * FROM inspections WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100', w),
     rows(db, 'SELECT * FROM quality_events WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100', w),
     rows(db, 'SELECT id,lot_id,content_type,size,actor_name,created_at FROM inspection_photos WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100', w),
+    // Admins see how many account requests are waiting for them.
+    member.admin ? first(db, "SELECT COUNT(*) AS n FROM users WHERE workspace_id=? AND status='pending'", w).then(row => row.n) : 0,
   ]);
-  return { workspace, member: { ...member, invite_hash: undefined }, products, lots, balances, movements, members, inspections, qualityEvents, photos, serverTime: Date.now(), backend: 'Yarnflow / Cloudflare D1' };
+  return { workspace, member, products, lots, balances, movements, members, inspections, qualityEvents, photos, pending, serverTime: Date.now(), backend: 'Yarnflow / Cloudflare D1' };
 }
 
 async function saveMovement(db, member, data, reversal = false) {
   let record;
   if (reversal) {
     keys(data, ['id', 'movementId', 'note']);
-    owner(member);
+    allow(member, 'reverse', 'reverse entries');
     const original = await first(db, 'SELECT * FROM movements WHERE id=? AND workspace_id=?', id(data.movementId), member.workspace_id);
     if (!original) fail(404, 'This movement was not found.');
     if (original.action === 'reverse') fail(409, 'A reversal cannot be reversed.');
@@ -80,6 +86,7 @@ async function saveMovement(db, member, data, reversal = false) {
   } else {
     keys(data, ['id', 'lotId', 'action', 'grams', 'cartons', 'cones', 'stage', 'toStage', 'note']);
     if (!['receive', 'dispatch', 'transfer', 'waste'].includes(data.action)) fail(422, 'Choose a valid stock movement.');
+    allow(member, ...movementPermission[data.action]);
     if (!STAGES.includes(data.stage) || (data.action === 'transfer' && (!STAGES.includes(data.toStage) || data.stage === data.toStage))) fail(422, 'Choose different, valid stock stages.');
     record = { id: id(data.id), lotId: id(data.lotId), action: data.action,
       fromStage: data.action === 'receive' ? null : data.stage,
@@ -108,7 +115,7 @@ async function saveMovement(db, member, data, reversal = false) {
     // Another device can commit between our initial read and this atomic batch.
     const raced = await first(db, 'SELECT * FROM movements WHERE id=? AND workspace_id=?', record.id, member.workspace_id);
     if (raced?.request_hash === digest) return json(raced);
-    if (/QC approval|held lot/i.test(String(error))) fail(409, 'This lot needs owner QC approval before dispatch or is on hold.');
+    if (/QC approval|held lot/i.test(String(error))) fail(409, 'This lot needs QC approval before dispatch or is on hold.');
     fail(409, 'Stock changed, the quantities exceed available stock, or this entry was already reversed. Refresh and try again.');
   }
   return json(await first(db, 'SELECT * FROM movements WHERE id=?', record.id), 201);
@@ -118,19 +125,18 @@ async function route(request, env) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/$/, '');
   const db = env.DB;
-  const userId = request.headers.get('oai-authenticated-user-id');
-  if (!userId) fail(401, 'Sign in to access your inventory.');
   if (!db) fail(503, 'The shared database is not connected. No stock was saved.');
   if (!['GET', 'POST'].includes(request.method)) fail(405, 'Method not allowed.');
   if (request.method === 'POST') {
     const origin = request.headers.get('Origin');
     if (origin !== url.origin || request.headers.get('Sec-Fetch-Site') === 'cross-site') fail(403, 'Open Yarnflow directly before saving.');
   }
-  const displayName = (request.headers.get('oai-authenticated-user-email') || 'Signed-in operator').slice(0, 200);
-  const member = await first(db, 'SELECT * FROM memberships WHERE user_id=?', userId);
-  if (request.method === 'GET' && path === '/api/workspace') return json(member ? await snapshot(db, member) : { member: null, user: displayName });
+  if (path.startsWith('/api/auth/')) return authRoute(request, db, path);
+  const member = await currentMember(db, request);
+  if (!member) fail(401, 'Sign in with your name and PIN.');
+  const userId = member.user_id;
+  if (request.method === 'GET' && path === '/api/workspace') return json(await snapshot(db, member));
   if (path.startsWith('/api/photos/')) {
-    if (!member) fail(403, 'Create or join a workspace first.');
     if (request.method !== 'GET') fail(405, 'Method not allowed.');
     const photo = await first(db, 'SELECT * FROM inspection_photos WHERE id=? AND workspace_id=?', id(path.slice('/api/photos/'.length)), member.workspace_id);
     if (!photo) fail(404, 'This photo was not found in your workspace.');
@@ -140,7 +146,7 @@ async function route(request, env) {
     return new Response(object.body, { headers: { 'Content-Type': photo.content_type, 'Cache-Control': 'private,no-store', 'X-Content-Type-Options': 'nosniff' } });
   }
   if (path === '/api/photos' && request.method === 'POST') {
-    if (!member) fail(403, 'Create or join a workspace first.');
+    allow(member, 'inspect', 'record inspections');
     if (!env.BUCKET) fail(503, 'Photo storage is unavailable. The inspection note is saved; retry the photo after reconnecting.');
     // Bound the whole multipart payload before parsing it, including chunked uploads.
     const reader = request.body?.getReader(); const chunks = []; let size = 0;
@@ -180,30 +186,8 @@ async function route(request, env) {
     return json({ id: inspectionId }, 201);
   }
   const data = request.method === 'POST' ? await body(request) : null;
-  if (path === '/api/workspaces' && data) {
-    keys(data, ['name']);
-    if (member) fail(409, 'You already belong to a workspace.');
-    const name = text(data.name, 'Workspace name', 2, 100); const workspaceId = uuid(); const now = Date.now();
-    await db.batch([
-      statement(db, 'INSERT INTO workspaces(id,name,created_at) VALUES(?,?,?)', workspaceId, name, now),
-      statement(db, 'INSERT INTO memberships(user_id,workspace_id,role,name,joined_at) VALUES(?,?,?,?,?)', userId, workspaceId, 'owner', displayName, now),
-    ]);
-    return json({ id: workspaceId, name }, 201);
-  }
-  if (path === '/api/join' && data) {
-    keys(data, ['code']);
-    if (member) fail(409, 'You already belong to a workspace.');
-    const digest = await hash(text(data.code, 'Invite code', 8, 128));
-    const invite = await first(db, 'SELECT * FROM invites WHERE token_hash=? AND expires_at>? AND remaining>0', digest, Date.now());
-    if (!invite) fail(404, 'This invite is invalid, expired or already used. Ask the owner for a new one.');
-    try {
-      await statement(db, 'INSERT INTO memberships(user_id,workspace_id,role,name,invite_hash,joined_at) VALUES(?,?,?,?,?,?)',
-        userId, invite.workspace_id, 'operator', displayName, digest, Date.now()).run();
-    } catch { fail(409, 'The invite is no longer available or you already joined a workspace.'); }
-    return json({ joined: true });
-  }
-  if (!member) fail(403, 'Create or join a workspace first.');
   const w = member.workspace_id;
+  if (path.startsWith('/api/users')) return usersRoute(db, member, path, data);
   if (/^\/api\/lots\/[^/]+\/evidence$/.test(path) && request.method === 'GET') {
     const lotId = id(path.split('/')[3]);
     if (!await first(db, 'SELECT id FROM lots WHERE id=? AND workspace_id=?', lotId, w)) fail(404, 'This batch was not found in your workspace.');
@@ -215,22 +199,15 @@ async function route(request, env) {
     ]);
     return json({ inspections, qualityEvents, photos, nextOffset: [inspections, qualityEvents, photos].some(items => items.length === 100) ? offset + 100 : null });
   }
-  if (path === '/api/invites' && data) {
-    keys(data, []); owner(member);
-    const code = uuid().replaceAll('-', '') + uuid().slice(0, 8);
-    const expiresAt = Date.now() + 72 * 3600_000;
-    await statement(db, 'INSERT INTO invites(token_hash,workspace_id,expires_at,remaining,created_by) VALUES(?,?,?,?,?)', await hash(code), w, expiresAt, 1, userId).run();
-    return json({ code, expiresAt }, 201);
-  }
   if (path === '/api/products' && data) {
-    owner(member); keys(data, ['sku', 'name', 'barcode']);
+    allow(member, 'catalog', 'add materials'); keys(data, ['sku', 'name', 'barcode']);
     const item = { id: uuid(), sku: text(data.sku, 'SKU', 1, 80), name: text(data.name, 'Material name', 2, 160), barcode: data.barcode ? text(data.barcode, 'Barcode', 1, 120) : null };
     try { await statement(db, 'INSERT INTO products(id,workspace_id,sku,name,barcode,created_at) VALUES(?,?,?,?,?,?)', item.id, w, item.sku, item.name, item.barcode, Date.now()).run(); }
     catch { fail(409, 'That SKU or barcode already exists in this workspace.'); }
     return json(item, 201);
   }
   if (path === '/api/lots' && data) {
-    keys(data, ['productId', 'batch', 'supplier']);
+    allow(member, 'catalog', 'add batches'); keys(data, ['productId', 'batch', 'supplier']);
     const productId = id(data.productId);
     if (!await first(db, 'SELECT id FROM products WHERE id=? AND workspace_id=?', productId, w)) fail(404, 'Material not found.');
     const lot = { id: uuid(), batch: text(data.batch, 'Batch / dye lot', 1, 100), supplier: text(data.supplier ?? '', 'Supplier', 0, 160) };
@@ -241,7 +218,7 @@ async function route(request, env) {
   if (path === '/api/movements' && data) return saveMovement(db, member, data);
   if (path === '/api/reversals' && data) return saveMovement(db, member, data, true);
   if (path === '/api/quality' && data) {
-    owner(member); keys(data, ['lotId', 'status', 'note']);
+    allow(member, 'qc', 'record QC decisions'); keys(data, ['lotId', 'status', 'note']);
     const lotId = id(data.lotId); const note = text(data.note, 'Inspection reason', 3, 1000);
     if (!['approved', 'hold', 'uninspected'].includes(data.status)) fail(422, 'Choose a valid QC status.');
     if (!await first(db, 'SELECT id FROM lots WHERE id=? AND workspace_id=?', lotId, w)) fail(404, 'Lot not found.');
@@ -252,7 +229,7 @@ async function route(request, env) {
     return json({ saved: true });
   }
   if (path === '/api/inspections' && data) {
-    keys(data, ['id', 'lotId', 'labelText', 'note', 'result']);
+    allow(member, 'inspect', 'record inspections'); keys(data, ['id', 'lotId', 'labelText', 'note', 'result']);
     const inspectionId = id(data.id); const lotId = id(data.lotId);
     if (!await first(db, 'SELECT id FROM lots WHERE id=? AND workspace_id=?', lotId, w)) fail(404, 'Lot not found.');
     const labelText = text(data.labelText ?? '', 'Care label', 0, 4000);
@@ -280,7 +257,7 @@ async function route(request, env) {
     return json({ movements: await rows(db, 'SELECT * FROM movements WHERE workspace_id=? ORDER BY created_at DESC,id DESC LIMIT 100 OFFSET ?', w, offset) });
   }
   if (path === '/api/export' && request.method === 'GET') {
-    owner(member);
+    adminOnly(member);
     const state = await snapshot(db, member);
     const offset = Math.max(0, Math.min(1000000, Number(url.searchParams.get('offset')) || 0));
     const [history, inspections, qualityEvents, photos] = await Promise.all([
@@ -300,7 +277,7 @@ async function route(request, env) {
     } catch { return json({ ready: false, reason: 'The configured model server could not be reached.' }); }
   }
   if (path === '/api/integrations/inventree' && request.method === 'GET') {
-    owner(member);
+    adminOnly(member);
     if (!env.INVENTREE_URL || !env.INVENTREE_TOKEN) return json({ connected: false, reason: 'InvenTree is not deployed or connected. This workspace currently uses the Yarnflow shared ledger.' });
     try {
       const endpoint = new URL('/api/part/?limit=1', env.INVENTREE_URL);
@@ -310,6 +287,121 @@ async function route(request, env) {
     } catch { return json({ connected: false, reason: 'The configured InvenTree API could not be reached.' }); }
   }
   fail(404, 'API route not found.');
+}
+
+
+async function currentMember(db, request) {
+  const token = sessionToken(request);
+  if (!token) return null;
+  const user = await first(db, "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.status='active'", await sha256(token), Date.now());
+  if (!user) return null;
+  const admin = user.role === 'admin';
+  // role keeps the app's owner/operator vocabulary; admin and permissions are what the API checks.
+  return { user_id: user.id, workspace_id: user.workspace_id, name: user.name, role: admin ? 'owner' : 'operator', admin, permissions: admin ? PERMISSIONS : JSON.parse(user.permissions) };
+}
+const pinOf = value => { if (!validPin(value)) fail(422, 'The PIN must be exactly 4 digits.'); return value; };
+function permissionsOf(value) {
+  if (!Array.isArray(value) || value.some(p => !PERMISSIONS.includes(p))) fail(422, 'Choose valid permissions.');
+  return [...new Set(value)];
+}
+
+/** Sign in, request an account, sign out, and the names shown on the sign-in screen. */
+async function authRoute(request, db, path) {
+  if (path === '/api/auth/people' && request.method === 'GET') {
+    const [workspace, people] = await Promise.all([first(db, 'SELECT name FROM workspaces ORDER BY created_at LIMIT 1'), rows(db, "SELECT name FROM users WHERE status='active' ORDER BY name COLLATE NOCASE")]);
+    return json({ workspace: workspace?.name ?? 'Yarnflow', people: people.map(row => row.name) });
+  }
+  if (path === '/api/auth/logout' && request.method === 'POST') {
+    const token = sessionToken(request);
+    if (token) await statement(db, 'DELETE FROM sessions WHERE token_hash=?', await sha256(token)).run();
+    return json({ signedOut: true }, 200, { 'Set-Cookie': sessionCookie(request, null) });
+  }
+  const data = request.method === 'POST' ? await body(request) : null;
+  if (path === '/api/auth/login' && data) {
+    keys(data, ['name', 'pin']);
+    const pin = pinOf(data.pin);
+    const user = await first(db, 'SELECT * FROM users WHERE name_key=?', nameKey(text(data.name, 'Name', 1, 60)));
+    if (!user) fail(401, 'That name and PIN do not match.');
+    const now = Date.now();
+    if (user.locked_until > now) fail(429, `Too many wrong PINs. Try again in ${Math.ceil((user.locked_until - now) / 60000)} min.`);
+    if (await pinHash(pin, user.pin_salt) !== user.pin_hash) {
+      const attempts = user.failed_attempts + 1;
+      const locked = attempts >= LOCK_AFTER;
+      await statement(db, 'UPDATE users SET failed_attempts=?,locked_until=? WHERE id=?', locked ? 0 : attempts, locked ? now + LOCK_MS : 0, user.id).run();
+      fail(locked ? 429 : 401, locked ? 'Too many wrong PINs. Try again in 5 min.' : 'That name and PIN do not match.');
+    }
+    if (user.status !== 'active') fail(403, 'An admin still needs to approve your account.');
+    const token = randomHex(32);
+    await db.batch([
+      statement(db, 'UPDATE users SET failed_attempts=0,locked_until=0 WHERE id=?', user.id),
+      statement(db, 'DELETE FROM sessions WHERE expires_at<?', now),
+      statement(db, 'INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES(?,?,?,?)', await sha256(token), user.id, now + SESSION_MS, now),
+    ]);
+    return json({ name: user.name }, 200, { 'Set-Cookie': sessionCookie(request, token) });
+  }
+  if (path === '/api/auth/signup' && data) {
+    keys(data, ['name', 'pin']);
+    const name = text(data.name, 'Your name', 2, 40); const pin = pinOf(data.pin);
+    const workspace = await first(db, 'SELECT id FROM workspaces ORDER BY created_at LIMIT 1');
+    if (!workspace) fail(503, 'Yarnflow is not set up yet. Ask an admin.');
+    if ((await first(db, "SELECT COUNT(*) AS n FROM users WHERE status='pending'")).n >= 20) fail(429, 'Too many requests are waiting. Ask an admin to review them first.');
+    const row = await userRow({ workspaceId: workspace.id, name, pin, status: 'pending' });
+    try { await statement(db, row.sql, ...row.args).run(); } catch { fail(409, 'That name is already taken. Add your surname or ask an admin.'); }
+    return json({ pending: true }, 201);
+  }
+  fail(404, 'API route not found.');
+}
+
+/** Admins add, approve, change and remove people. The last admin can't be demoted or removed. */
+async function usersRoute(db, member, path, data) {
+  adminOnly(member);
+  const w = member.workspace_id;
+  const lastAdmin = async target => target.role === 'admin' && target.status === 'active'
+    && (await first(db, "SELECT COUNT(*) AS n FROM users WHERE workspace_id=? AND role='admin' AND status='active'", w)).n <= 1;
+  if (path === '/api/users' && !data) {
+    const now = Date.now();
+    const users = await rows(db, 'SELECT id,name,role,status,permissions,created_at,locked_until FROM users WHERE workspace_id=? ORDER BY status DESC, name COLLATE NOCASE', w);
+    return json({ users: users.map(({ locked_until, permissions, ...user }) => ({ ...user, permissions: JSON.parse(permissions), locked: locked_until > now })) });
+  }
+  if (path === '/api/users' && data) {
+    keys(data, ['name', 'pin', 'role', 'permissions']);
+    if (!['admin', 'member'].includes(data.role)) fail(422, 'Choose admin or member.');
+    const row = await userRow({ workspaceId: w, name: text(data.name, 'Name', 2, 40), pin: pinOf(data.pin), role: data.role, permissions: permissionsOf(data.permissions ?? []), createdBy: member.user_id });
+    try { await statement(db, row.sql, ...row.args).run(); } catch { fail(409, 'That name is already taken.'); }
+    return json({ id: row.args[0] }, 201);
+  }
+  if (!data) fail(405, 'Method not allowed.');
+  const target = await first(db, 'SELECT * FROM users WHERE id=? AND workspace_id=?', id(data.id), w);
+  if (!target) fail(404, 'This person was not found.');
+  if (path === '/api/users/update') {
+    keys(data, ['id', 'role', 'status', 'permissions', 'pin']);
+    const role = data.role ?? target.role; const status = data.status ?? target.status;
+    if (!['admin', 'member'].includes(role) || !['active', 'pending'].includes(status)) fail(422, 'Choose a valid role and status.');
+    if ((role !== 'admin' || status !== 'active') && await lastAdmin(target)) fail(409, 'Keep at least one admin.');
+    const permissions = data.permissions === undefined ? target.permissions : JSON.stringify(permissionsOf(data.permissions));
+    const queries = [statement(db, 'UPDATE users SET role=?,status=?,permissions=? WHERE id=?', role, status, permissions, target.id)];
+    if (data.pin !== undefined) {
+      const salt = randomHex();
+      queries.push(statement(db, 'UPDATE users SET pin_salt=?,pin_hash=?,failed_attempts=0,locked_until=0 WHERE id=?', salt, await pinHash(pinOf(data.pin), salt), target.id));
+      queries.push(statement(db, 'DELETE FROM sessions WHERE user_id=?', target.id));
+    }
+    if (status !== 'active') queries.push(statement(db, 'DELETE FROM sessions WHERE user_id=?', target.id));
+    await db.batch(queries);
+    return json({ saved: true });
+  }
+  if (path === '/api/users/remove') {
+    keys(data, ['id']);
+    if (target.id === member.user_id) fail(409, "You can't remove yourself.");
+    if (await lastAdmin(target)) fail(409, 'Keep at least one admin.');
+    await db.batch([statement(db, 'DELETE FROM sessions WHERE user_id=?', target.id), statement(db, 'DELETE FROM users WHERE id=?', target.id)]);
+    return json({ removed: true });
+  }
+  fail(404, 'API route not found.');
+}
+
+/** Whether this request comes from a signed-in person (the scanner pass-through asks before forwarding). */
+export async function signedIn(request, env) {
+  return !!env.DB && !!await currentMember(env.DB, request);
 }
 
 export async function inventoryApi(request, env) {

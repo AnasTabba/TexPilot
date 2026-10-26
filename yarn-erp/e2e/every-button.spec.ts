@@ -1,9 +1,23 @@
 import { test, expect, type Page } from "@playwright/test";
 
-// Every control on every screen does what it says. Stock lives in the browser (local inventory);
-// the scanner's model answer is a fixture here, so this checks the app's wiring, not the model.
+// Every control on every screen does what it says. Stock lives in the shared database of the dev
+// server, reset to the demo's opening stock before each test; the scanner's model answer is a fixture
+// here, so this checks the app's wiring, not the model.
 // Reduced motion: no click waits on a screen's entrance animation.
-test.use({ serviceWorkers: "block", contextOptions: { reducedMotion: "reduce" } });
+const options = { serviceWorkers: "block", contextOptions: { reducedMotion: "reduce" } } as const;
+test.use(options);
+const PIN = "2468"; // YARNFLOW_SEED_PIN in playwright.config.ts
+
+async function signIn(page: Page, name = "Anas", pin = PIN) {
+  await page.goto("/");
+  await page.getByRole("button", { name, exact: true }).click();
+  await page.getByLabel("4-digit PIN").fill(pin);
+  await expect(page.getByRole("heading", { level: 1, name: "Home", exact: true })).toBeVisible();
+}
+test.beforeEach(async ({ page }, info) => {
+  await page.request.post("/__test/reset");
+  if (!info.title.startsWith("sign-in") && !info.title.startsWith("a new person")) await signIn(page);
+});
 
 const head = (topk: [string, number][]) => ({ label: topk[0][0], confidence: topk[0][1], topk });
 const answer = {
@@ -30,11 +44,90 @@ async function reviewAndSave(page: Page, save: string) {
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
 
+  test("sign-in: names, a wrong PIN on the keypad, the right one, and signing out", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 1, name: "Who’s signing in?" })).toBeVisible();
+    await expect(page.locator(".yf-person")).toHaveText(["AAnas", "FFahad", "ZZuhair"]);
+    await page.getByRole("button", { name: "Fahad", exact: true }).click();
+    await page.getByRole("button", { name: "Not Fahad?" }).click();
+    await page.getByRole("button", { name: "Anas", exact: true }).click();
+    const keypad = page.locator(".yf-keypad");
+    for (const key of "1111") await keypad.getByRole("button", { name: key, exact: true }).click();
+    await expect(page.getByRole("alert")).toHaveText("That name and PIN do not match.");
+    await keypad.getByRole("button", { name: "9", exact: true }).click();
+    await keypad.getByRole("button", { name: "Delete last digit" }).click();
+    await expect(page.locator(".yf-pin-dots .filled")).toHaveCount(0);
+    for (const key of PIN) await keypad.getByRole("button", { name: key, exact: true }).click();
+    await title(page, "Home");
+    await expect(page.locator(".live-sidebar .yf-me")).toContainText("AnasAdmin");
+    await page.getByRole("button", { name: "Sign out Anas" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Who’s signing in?" })).toBeVisible();
+    await page.goto("/#/inventory");
+    await expect(page.getByRole("heading", { level: 1, name: "Who’s signing in?" })).toBeVisible();
+  });
+
+  test("a new person asks to join; an admin approves Stores access; both see the same stock; removal signs them out", async ({ page, browser }, info) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "New here? Ask for an account" }).click();
+    await page.getByLabel("Your name", { exact: true }).fill("Bilal");
+    await page.getByLabel("Choose a 4-digit PIN").fill("1357");
+    await page.getByLabel("Type it again").fill("1375");
+    await page.getByRole("button", { name: "Send request" }).click();
+    await expect(page.getByRole("alert")).toContainText("The two PINs are different.");
+    await page.getByLabel("Type it again").fill("1357");
+    await page.getByRole("button", { name: "Send request" }).click();
+    await expect(page.getByRole("heading", { name: "Request sent" })).toBeVisible();
+    await page.getByRole("button", { name: "Back to sign-in" }).click();
+    await expect(page.getByRole("button", { name: "Bilal", exact: true })).toHaveCount(0);
+
+    // Anas, on another device, sees the request waiting and approves it.
+    const other = await browser.newContext({ ...options.contextOptions, baseURL: info.project.use.baseURL, viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
+    const admin = await other.newPage();
+    await signIn(admin);
+    await expect(admin.locator(".live-sidebar .yf-nav-count")).toHaveText("1");
+    await admin.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: /^Team/ }).click();
+    const request = admin.getByRole("article", { name: "Bilal wants to join" });
+    await request.getByRole("button", { name: "Stores", exact: true }).click();
+    await expect(request.getByLabel(/Receive deliveries/)).toBeChecked();
+    await expect(request.getByLabel(/QC decisions/)).not.toBeChecked();
+    await request.getByRole("button", { name: "Approve Bilal" }).click();
+    await expect(admin.locator(".yf-member-row", { hasText: "Bilal" })).toContainText("Stores");
+
+    await signIn(page, "Bilal", "1357");
+    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: /^Team/ })).toHaveCount(0);
+    await page.goto("/#/inventory");
+    await page.locator(".live-lot-row", { hasText: "LOT-1024" }).click();
+    await expect(page.getByRole("heading", { level: 3, name: "Dispatch finished stock" })).toBeVisible();
+    await expect(page.locator(".yf-next")).toContainText("Someone with “Dispatch” access records this step.");
+    await expect(page.getByRole("button", { name: "Dispatch", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Review quality", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Receive stock", exact: true }).click();
+    await page.getByLabel("Weight (kg)", { exact: true }).fill("12.5");
+    await reviewAndSave(page, "Save entry");
+    await expect(page.getByRole("status").filter({ hasText: "Saved. Everyone on the team sees it now." })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Undo entry" })).toHaveCount(0);
+    await page.goto("/#/settings");
+    await expect(page.locator(".yf-access li.is-on")).toHaveCount(2);
+    await expect(page.getByRole("button", { name: "Download backup" })).toHaveCount(0);
+
+    // No reload: Anas's open page picks up Bilal's entry on its next refresh (every 10 seconds).
+    await admin.goto("/#/activity");
+    await expect(admin.locator(".live-history li", { hasText: "Recorded by Bilal" }).first()).toContainText("12.5", { timeout: 15_000 });
+    await admin.goto("/#/team");
+    await admin.locator(".yf-member-row", { hasText: "Bilal" }).click();
+    admin.once("dialog", (dialog) => dialog.accept());
+    await admin.getByRole("button", { name: "Remove Bilal" }).click();
+    await expect(admin.locator(".yf-member-row", { hasText: "Bilal" })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1, name: "Who’s signing in?" })).toBeVisible();
+    await other.close();
+  });
+
   test("sidebar, brand link and every Home control", async ({ page }) => {
     await page.goto("/#/overview");
     await title(page, "Home");
     const nav = page.getByRole("navigation", { name: "Main navigation" });
-    for (const [label, h1] of [["Stock", "Stock"], ["Scan", "Scan"], ["History", "History"], ["Settings", "Settings"], ["Help", "Help"], ["Home", "Home"]]) {
+    for (const [label, h1] of [["Stock", "Stock"], ["Scan", "Scan"], ["History", "History"], ["Team", "Team"], ["Settings", "Settings"], ["Help", "Help"], ["Home", "Home"]]) {
       await nav.getByRole("button", { name: label, exact: true }).click();
       await title(page, h1);
       await expect(nav.getByRole("button", { name: label, exact: true })).toHaveAttribute("aria-current", "page");
@@ -91,7 +184,7 @@ test.describe("desktop", () => {
     await page.getByRole("button", { name: "Edit entry", exact: true }).click();
     await expect(page.getByLabel("SKU", { exact: true })).toHaveValue("CTN-20");
     await reviewAndSave(page, "Save entry");
-    await expect(page.getByRole("status").filter({ hasText: "Saved on this device." })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "Saved. Everyone on the team sees it now." })).toBeVisible();
 
     await page.getByRole("button", { name: /New batch of Carded cotton/ }).click();
     await page.getByLabel("Batch / dye lot", { exact: true }).fill("LOT-2001");
@@ -148,7 +241,7 @@ test.describe("desktop", () => {
     expect(await page.evaluate(() => (window as unknown as { printed: number }).printed)).toBe(1);
   });
 
-  test("history links, settings backup / restore / clear, help", async ({ page }) => {
+  test("history links, settings access and backup, help", async ({ page }) => {
     await page.goto("/#/activity");
     await page.locator(".live-history .live-text-button", { hasText: "LOT-1024" }).first().click();
     await title(page, "Batch details");
@@ -159,15 +252,10 @@ test.describe("desktop", () => {
 
     await page.goto("/#/settings");
     const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download backup" }).click()]);
-    const backup = await download.path();
-    page.once("dialog", (dialog) => dialog.accept());
-    await page.getByRole("button", { name: "Clear inventory" }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Inventory cleared" })).toBeVisible();
-    await expect(page.locator(".yf-counts")).toContainText("Materials0");
-    page.once("dialog", (dialog) => dialog.accept());
-    await page.locator(".ref-import-button input[type=file]").setInputFiles(backup);
-    await expect(page.getByRole("status").filter({ hasText: "Backup restored on this device." })).toBeVisible();
+    expect(JSON.parse(await (await import("node:fs/promises")).readFile((await download.path())!, "utf8")).products).toHaveLength(4);
+    await expect(page.locator(".yf-access li.is-on")).toHaveCount(8);
     await expect(page.locator(".yf-counts")).toContainText("Materials4");
+    await expect(page.locator(".yf-counts")).toContainText("People3");
 
     await page.goto("/#/help");
     for (const summary of await page.locator(".yf-help summary").all()) {
@@ -235,6 +323,8 @@ test.describe("phone", () => {
     await bar.getByRole("button", { name: "More pages" }).click();
     const sheet = page.getByRole("dialog", { name: "Navigation menu" });
     await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "Team" })).toBeVisible();
+    await expect(sheet.locator(".yf-me")).toContainText("Anas");
     await sheet.getByRole("button", { name: "Settings" }).click();
     await title(page, "Settings");
     await expect(sheet).toBeHidden();

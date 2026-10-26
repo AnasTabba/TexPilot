@@ -1,23 +1,43 @@
-/** Loopback-only development server. Authentication is emulated ONLY in explicit local mode. */
+/** Loopback-only development server: the same API and PIN sign-in as Cloudflare, on SQLite. */
 import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { inventoryApi } from '../server/inventory.mjs';
 import { sqliteBinding } from '../server/sqlite.mjs';
+import { seedRows } from '../server/auth.mjs';
+import { seedDemoStock } from './demo-stock.mjs';
 
-if (process.env.YARNFLOW_LOCAL_DEV !== '1') throw new Error('Local preview requires YARNFLOW_LOCAL_DEV=1. Hosted production uses Sites identity and D1.');
+if (process.env.YARNFLOW_LOCAL_DEV !== '1') throw new Error('Local preview requires YARNFLOW_LOCAL_DEV=1. Hosted production runs on Cloudflare D1.');
 const root = resolve(import.meta.dirname, '..');
 const dbPath = process.env.YARNFLOW_SQLITE_PATH || resolve(root, '.local/inventory.sqlite');
 if (dbPath !== ':memory:') mkdirSync(resolve(dbPath, '..'), { recursive: true });
-const database = new DatabaseSync(dbPath);
-database.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
-database.exec('CREATE TABLE IF NOT EXISTS local_migrations(name TEXT PRIMARY KEY)');
-if (!database.prepare('SELECT name FROM local_migrations WHERE name=?').get('0000_inventory')) {
-  database.exec('BEGIN IMMEDIATE');
-  try { database.exec(readFileSync(resolve(root, 'drizzle/0000_inventory.sql'), 'utf8')); database.prepare('INSERT INTO local_migrations VALUES(?)').run('0000_inventory'); database.exec('COMMIT'); }
-  catch (error) { database.exec('ROLLBACK'); throw error; }
+// A new database gets the shared workspace, the three admins (PIN: YARNFLOW_SEED_PIN) and the
+// demo's opening stock. In test mode (in-memory only) POST /__test/reset starts it over.
+async function open() {
+  const database = new DatabaseSync(dbPath);
+  database.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
+  database.exec('CREATE TABLE IF NOT EXISTS local_migrations(name TEXT PRIMARY KEY)');
+  for (const file of readdirSync(resolve(root, 'drizzle')).filter(name => name.endsWith('.sql')).sort()) {
+    const name = file.slice(0, -4);
+    if (database.prepare('SELECT name FROM local_migrations WHERE name=?').get(name)) continue;
+    database.exec('BEGIN IMMEDIATE');
+    try { database.exec(readFileSync(resolve(root, 'drizzle', file), 'utf8')); database.prepare('INSERT INTO local_migrations VALUES(?)').run(name); database.exec('COMMIT'); }
+    catch (error) { database.exec('ROLLBACK'); throw error; }
+  }
+  const DB = sqliteBinding(database);
+  if (!database.prepare('SELECT id FROM workspaces LIMIT 1').get()) {
+    const pin = process.env.YARNFLOW_SEED_PIN;
+    if (!pin) throw new Error('New local database: set YARNFLOW_SEED_PIN (4 digits) for the admins Anas, Fahad and Zuhair.');
+    for (const { sql, args } of await seedRows(pin)) database.prepare(sql).run(...args);
+    const call = (path, body, cookie) => inventoryApi(new Request('http://local/api' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://local', ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(body) }), { DB });
+    const cookie = (await call('/auth/login', { name: 'Anas', pin })).headers.get('Set-Cookie').split(';')[0];
+    await seedDemoStock(async (path, body) => { const response = await call(path, body, cookie); if (!response.ok) throw new Error(`Demo stock ${path}: ${response.status}`); return response.json(); });
+    database.exec('DELETE FROM sessions');
+  }
+  return { database, DB };
 }
+let { database, DB } = await open();
 const bucketRoot = resolve(root, '.local/photos');
 function objectPath(key) { const path = resolve(bucketRoot, key); if (!path.startsWith(bucketRoot + '/')) throw new Error('Invalid object key'); return path; }
 const bucket = {
@@ -25,17 +45,18 @@ const bucket = {
   async get(key) { const path = objectPath(key); return existsSync(path) ? { body: readFileSync(path) } : null; },
   async delete(key) { rmSync(objectPath(key), { force: true }); },
 };
-const env = { DB: sqliteBinding(database), BUCKET: bucket, TEXPILOT_API_URL: process.env.TEXPILOT_API_URL, INVENTREE_URL: process.env.INVENTREE_URL, INVENTREE_TOKEN: process.env.INVENTREE_TOKEN };
+const env = { DB, BUCKET: bucket, TEXPILOT_API_URL: process.env.TEXPILOT_API_URL, INVENTREE_URL: process.env.INVENTREE_URL, INVENTREE_TOKEN: process.env.INVENTREE_TOKEN };
 const port = Number(process.env.PORT || 8788);
 const server = createServer(async (incoming, outgoing) => {
   try {
     const url = new URL(incoming.url || '/', `http://${incoming.headers.host || `127.0.0.1:${port}`}`);
+    if (url.pathname === '/__test/reset' && incoming.method === 'POST' && process.env.YARNFLOW_TEST_MODE === '1' && dbPath === ':memory:') {
+      database.close(); ({ database, DB } = await open()); env.DB = DB;
+      outgoing.writeHead(204); outgoing.end(); return;
+    }
     if (url.pathname.startsWith('/api/')) {
       const headers = new Headers();
-      for (const [key, value] of Object.entries(incoming.headers)) if (value && !key.startsWith('oai-')) headers.set(key, Array.isArray(value) ? value.join(',') : value);
-      const testUser = process.env.YARNFLOW_TEST_MODE === '1' ? String(incoming.headers['x-yarnflow-test-user'] || 'local-owner') : 'local-owner';
-      headers.set('oai-authenticated-user-id', testUser);
-      headers.set('oai-authenticated-user-email', `${testUser}@local.test`);
+      for (const [key, value] of Object.entries(incoming.headers)) if (value) headers.set(key, Array.isArray(value) ? value.join(',') : value);
       let body;
       if (incoming.method !== 'GET' && incoming.method !== 'HEAD') {
         const chunks = []; let size = 0;
@@ -54,5 +75,5 @@ const server = createServer(async (incoming, outgoing) => {
     outgoing.writeHead(200, { 'Content-Type': types[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); outgoing.end(readFileSync(file));
   } catch (error) { console.error('Local preview request failed:', error.message); outgoing.writeHead(500); outgoing.end('Local preview error'); }
 });
-server.listen(port, '127.0.0.1', () => console.log(`Yarnflow LOCAL DEVELOPMENT: http://127.0.0.1:${port} (emulated identity, SQLite; not a production server)`));
+server.listen(port, '127.0.0.1', () => console.log(`Yarnflow LOCAL DEVELOPMENT: http://127.0.0.1:${port} (PIN sign-in, SQLite; not a production server)`));
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => server.close(() => { database.close(); process.exit(0); }));

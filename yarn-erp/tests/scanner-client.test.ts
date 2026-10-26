@@ -123,7 +123,7 @@ test("Scanner sends surface_image, label_image and label_text using the actual m
   globalThis.fetch = async (url, init) => {
     assert.equal(url, "https://model.example/api/v1/scan");
     assert.equal(init?.method, "POST");
-    assert.equal(init?.credentials, "omit");
+    assert.equal(init?.credentials, "same-origin");
     assert.equal(init?.redirect, "error");
     assert.ok(init?.body instanceof FormData);
     assert.equal((init.body.get("surface_image") as File).name, "fabric.jpg");

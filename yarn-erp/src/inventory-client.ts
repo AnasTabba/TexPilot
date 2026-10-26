@@ -1,4 +1,3 @@
-import { localInventoryRequest } from './local-inventory';
 export type StockStage = 'raw' | 'wip' | 'finished' | 'cops';
 export type Quality = 'uninspected' | 'approved' | 'hold';
 export interface Product { id: string; sku: string; name: string; barcode: string | null }
@@ -13,25 +12,47 @@ export interface Inspection {
   id: string; lot_id: string; label_text: string; note: string; source: string;
   result_json: string | null; actor_name: string; created_at: number;
 }
+// What an admin can let each person record. Admins can do all of it; scanning and viewing need none.
+export type Permission = 'receive' | 'produce' | 'dispatch' | 'catalog' | 'inspect' | 'qc' | 'waste' | 'reverse';
+export interface Member { user_id: string; name: string; role: 'owner' | 'operator'; admin: boolean; permissions: Permission[] }
 export interface WorkspaceState {
   workspace: { id: string; name: string };
-  member: { user_id: string; name: string; role: 'owner' | 'operator' };
+  member: Member;
   products: Product[]; lots: StockLot[]; balances: StockBalance[]; movements: StockMovement[];
   members: { name: string; role: string; joined_at: number }[];
   inspections: Inspection[];
   photos: { id: string; lot_id: string; content_type: string; size: number; actor_name: string; created_at: number }[];
   qualityEvents: { id: string; lot_id: string; status: Quality; note: string; actor_name: string; created_at: number }[];
-  serverTime: number; backend: string;
+  pending: number; serverTime: number; backend: string;
 }
-export interface Unjoined { member: null; user: string }
 export class InventoryError extends Error {
   status: number;
   constructor(message: string, status = 0) { super(message); this.status = status; }
 }
 export async function inventoryRequest<T>(path: string, data?: unknown, signal?: AbortSignal): Promise<T> {
-  if (signal?.aborted) throw new InventoryError('Request cancelled.');
-  return localInventoryRequest<T>(path, data);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  const timer = setTimeout(abort, 20000);
+  try {
+    const response = await fetch('/api' + path, {
+      method: data === undefined ? 'GET' : 'POST',
+      ...(data === undefined ? {} : { body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } }),
+      credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal,
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) throw new InventoryError(result?.error || 'The request was not saved. Refresh and try again.', response.status);
+    if (result === null) throw new InventoryError('The server returned an unreadable response.');
+    return result as T;
+  } catch (error) {
+    if (error instanceof InventoryError) throw error;
+    throw new InventoryError('Could not confirm a save. Check the connection and retry with the same values; duplicate requests are safe.');
+  } finally {
+    clearTimeout(timer); signal?.removeEventListener('abort', abort);
+  }
 }
+export const can = (member: Member, permission: Permission) => member.admin || member.permissions.includes(permission);
 export const stockStages: StockStage[] = ['raw', 'wip', 'finished', 'cops'];
 export const stageName: Record<StockStage, string> = { raw: 'Raw material', wip: 'Work in progress', finished: 'Finished stock', cops: 'Cops' };
 export const qualityName: Record<Quality, string> = { uninspected: 'Needs inspection', approved: 'QC approved', hold: 'QC hold' };

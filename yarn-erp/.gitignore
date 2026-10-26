@@ -8,3 +8,4 @@ playwright-report/
 .DS_Store
 .local/
 server/assets.generated.mjs
+.wrangler/
