@@ -12,8 +12,8 @@ if (process.env.YARNFLOW_LOCAL_DEV !== '1') throw new Error('Local preview requi
 const root = resolve(import.meta.dirname, '..');
 const dbPath = process.env.YARNFLOW_SQLITE_PATH || resolve(root, '.local/inventory.sqlite');
 if (dbPath !== ':memory:') mkdirSync(resolve(dbPath, '..'), { recursive: true });
-// A new database gets the shared workspace, the three admins (PIN: YARNFLOW_SEED_PIN) and the
-// demo's opening stock. In test mode (in-memory only) POST /__test/reset starts it over.
+// A new database gets the shared workspace and the three admins (PIN: YARNFLOW_SEED_PIN), and no stock.
+// Test mode (in-memory only) adds the test fixture stock, and POST /__test/reset starts it over.
 async function open() {
   const database = new DatabaseSync(dbPath);
   database.exec('PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
@@ -30,6 +30,7 @@ async function open() {
     const pin = process.env.YARNFLOW_SEED_PIN;
     if (!pin) throw new Error('New local database: set YARNFLOW_SEED_PIN (4 digits) for the admins Anas, Fahad and Zuhair.');
     for (const { sql, args } of await seedRows(pin)) database.prepare(sql).run(...args);
+    if (process.env.YARNFLOW_TEST_MODE !== '1' || dbPath !== ':memory:') return { database, DB };
     const call = (path, body, cookie) => inventoryApi(new Request('http://local/api' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://local', ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(body) }), { DB });
     const cookie = (await call('/auth/login', { name: 'Anas', pin })).headers.get('Set-Cookie').split(';')[0];
     await seedDemoStock(async (path, body) => { const response = await call(path, body, cookie); if (!response.ok) throw new Error(`Demo stock ${path}: ${response.status}`); return response.json(); });
