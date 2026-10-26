@@ -34,6 +34,9 @@ function saveFile(name: string, value: unknown) {
 }
 function Field({ children, className = '' }: { children: ReactNode; className?: string }) {
   const [error, setError] = useState('');
+  // A field is checked on blur only after it was edited: an untouched empty field that shouted on blur
+  // shifted the form under the pointer, so the first click on Cancel or Close never landed.
+  const [edited, setEdited] = useState(false);
   const controlId = useId(); const errorId = useId();
   const nodes = Children.toArray(children);
   const label = nodes.filter(child => typeof child === 'string' || typeof child === 'number');
@@ -41,7 +44,7 @@ function Field({ children, className = '' }: { children: ReactNode; className?: 
     if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)) return;
     setError(target.validity.valid ? '' : target.validationMessage);
   }
-  return <div className={`live-field ${className}`} onBlur={e => validate(e.target)} onInvalid={e => validate(e.target)} onChange={e => { if (error) validate(e.target); }}>
+  return <div className={`live-field ${className}`} onBlur={e => { if (edited) validate(e.target); }} onInvalid={e => validate(e.target)} onChange={e => { setEdited(true); if (error) validate(e.target); }}>
     <label htmlFor={controlId}>{label}</label>
     {nodes.filter(isValidElement).map(child => cloneElement(child as ReactElement<{ id?: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean }>, { id: controlId, 'aria-describedby': error ? errorId : undefined, 'aria-invalid': !!error }))}
     {error && <span id={errorId} className="live-field-error"><TriangleAlert size={18} aria-hidden="true" />{error}</span>}
@@ -109,7 +112,8 @@ function InventoryForm({ action, state, result, onSaved, onCancel }: { action: A
       await api('/movements', { id: draft.id, lotId, action: action.type, stage: draft.stage, ...(action.type === 'transfer' ? { toStage: draft.toStage } : {}), grams: gramsFromKg(draft.kg), cartons: Number(draft.cartons), cones: Number(draft.cones), note: draft.note });
     }
     try { localStorage.removeItem(key); } catch { /* Saved inventory is not affected by draft storage. */ }
-    await onSaved(action.type === 'inspection' ? 'Inspection saved. Owner QC approval is still required.' : 'Saved on this device.', lotId, ['receive', 'dispatch', 'transfer', 'waste'].includes(action.type) ? draft.id : undefined);
+    // A new material has no batch yet: stay on Stock instead of opening whichever batch the draft defaulted to.
+    await onSaved(action.type === 'inspection' ? 'Inspection saved. Owner QC approval is still required.' : 'Saved on this device.', action.type === 'product' ? undefined : lotId, ['receive', 'dispatch', 'transfer', 'waste'].includes(action.type) ? draft.id : undefined);
   }
   const summary: [string, string][] = action.type === 'product'
     ? [['Material', draft.name], ['SKU', draft.sku], ['Barcode', draft.barcode || 'Not recorded']]
