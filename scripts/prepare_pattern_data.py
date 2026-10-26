@@ -108,7 +108,8 @@ def main():
                   views='whole photo; scanner centre resize/crop only; no garment crops',
                   label_policy='one nonplain motif (+plain allowed), or explicit plain only',
                   source='https://github.com/cvdfoundation/fashionpedia',
-                  image_license='per-image original license and URL in manifest; not uniformly CC BY 4')
+                  image_license='per-image original license and URL in manifest; '
+                                'not uniformly CC BY 4')
     (args.out / 'pattern_data_report.json').write_text(json.dumps(report, indent=1))
     print(json.dumps(report, indent=1), flush=True)
 
