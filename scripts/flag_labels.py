@@ -48,6 +48,24 @@ def available_rows(rows, caches, allow_missing=False):
     return [r for r in rows if r.path not in missing_paths], missing
 
 
+def audit_index(audit, rows, missing_paths):
+    """Audit photos as row indices, mislabelled flags and halves A/B (per class, seed 0).
+    Photos opted out as uncached are skipped without moving the others between halves;
+    any other audit photo absent from ``rows`` is still an error."""
+    pos = {r.path: i for i, r in enumerate(rows)}
+    a_idx, bad, half, skipped = [], [], [], []
+    for _, rs in sorted(audit.items()):
+        order = np.random.default_rng(0).permutation(len(rs))
+        for j, r in enumerate(rs):
+            if r["path"] in missing_paths:
+                skipped.append((r["path"], r["label_ok"]))
+                continue
+            a_idx.append(pos[r["path"]])
+            bad.append(not r["label_ok"])
+            half.append("A" if order[j] % 2 == 0 else "B")
+    return np.array(a_idx), np.array(bad), np.array(half), skipped
+
+
 def standardised(names, root, rows, fit):
     x = np.concatenate(
         [FeatureCache(root / n).assemble([r.path for r in rows]) for n in names], 1
@@ -132,15 +150,10 @@ def main(argv: list[str] | None = None) -> int:
     del x
 
     audit = json.loads(args.audit.read_text())["audit"]
-    pos = {r.path: i for i, r in enumerate(rows)}
-    a_idx, bad, half = [], [], []
-    for _, rs in sorted(audit.items()):
-        order = np.random.default_rng(0).permutation(len(rs))
-        for j, r in enumerate(rs):
-            a_idx.append(pos[r["path"]])
-            bad.append(not r["label_ok"])
-            half.append("A" if order[j] % 2 == 0 else "B")
-    a_idx, bad, half = np.array(a_idx), np.array(bad), np.array(half)
+    a_idx, bad, half, skipped = audit_index(audit, rows, {r.path for r in missing})
+    if skipped:
+        print(f"EXPLICITLY EXCLUDED {len(skipped)} uncached audit photos "
+              f"({sum(not ok for _, ok in skipped)} mislabelled)", flush=True)  # fmt: skip
     own = p[np.arange(len(y)), y]
     print(f"audit: {len(a_idx)} photos, {bad.sum()} mislabelled; AUROC of low own-label "
           f"probability {roc_auc_score(bad, -own[a_idx]):.3f}", flush=True)  # fmt: skip
