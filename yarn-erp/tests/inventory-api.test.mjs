@@ -87,7 +87,7 @@ test('PIN sign-in: wrong PINs lock the name for 5 minutes; signing out ends the 
   sql.exec("UPDATE users SET locked_until=0 WHERE name='Fahad'");
   const ok = await login('  fahad ');
   assert.equal(ok.status, 200);
-  assert.match(ok.setCookie, /^yf_session=[a-f\d]{64}; Path=\/; HttpOnly; SameSite=Strict; Max-Age=\d+; Secure$/);
+  assert.match(ok.setCookie, /^yf_session=[a-f\d]{64}; Path=\/; HttpOnly; SameSite=Strict; Secure$/);
   assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, 1);
   assert.ok(!JSON.stringify(sql.prepare('SELECT * FROM sessions').all()).includes(ok.setCookie.slice(11, 75)), 'only the token hash is stored');
   assert.equal((await call('/workspace', undefined, '  fahad ')).status, 200);

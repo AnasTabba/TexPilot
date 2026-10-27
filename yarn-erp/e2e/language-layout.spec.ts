@@ -22,6 +22,10 @@ test('Urdu selection persists through sign-in, navigation and reload', async ({ 
   await page.goto('/#/scanner');
   await expect(page.getByRole('button', { name: 'کپڑا', exact: true })).toBeVisible();
   await page.reload();
+  await expect(page.getByRole('heading', { name: 'کون سائن اِن کر رہا ہے؟' })).toBeVisible();
+  await page.getByRole('button', { name: 'Anas', exact: true }).click();
+  await page.getByLabel('چار ہندسوں کا پن').fill('2468');
+  // A reload keeps the current route; wait for the PIN to reopen it before navigating away.
   await expect(page.getByRole('heading', { name: 'اسکین', exact: true })).toBeVisible();
   await page.goto('/#/settings');
   await page.getByRole('combobox', { name: 'Language / زبان' }).selectOption('en');

@@ -16,6 +16,14 @@ import type { ScanResult } from './scanner-client';
 import { can, gramsFromKg, InventoryError, inventoryRequest as api, qualityName, stageName, stockStages, timestamp, weight, type Permission, type Quality, type StockLot, type StockMovement, type StockStage, type WorkspaceState } from './inventory-client';
 import { accessSummary, permissionInfo } from './Team';
 
+const sessionLockKey = 'yf-session-locked';
+function isSessionLocked() {
+  try { return localStorage.getItem(sessionLockKey) === '1'; } catch { return false; }
+}
+function rememberSessionLock(locked: boolean) {
+  try { if (locked) localStorage.setItem(sessionLockKey, '1'); else localStorage.removeItem(sessionLockKey); } catch { /* The current page still locks when storage is unavailable. */ }
+}
+
 type FormType = 'product' | 'lot' | 'receive' | 'dispatch' | 'transfer' | 'waste' | 'quality' | 'inspection';
 type Action = { type: FormType; lotId?: string; productId?: string };
 const tabs = [
@@ -169,8 +177,9 @@ export default function LiveApp() {
   const { t, language } = useLanguage();
   const menuDialog = useRef<HTMLDialogElement>(null);
   const [state, setState] = useState<WorkspaceState | null>(null);
-  const [error, setError] = useState(''); const [authNeeded, setAuthNeeded] = useState(false);
-  const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(''); const [authNeeded, setAuthNeeded] = useState(isSessionLocked);
+  const [loading, setLoading] = useState(!authNeeded); const [refreshing, setRefreshing] = useState(false);
+  const [endingSession, setEndingSession] = useState(false);
   const [route, setRoute] = useState(routeFromHash); const [selectedId, setSelectedId] = useState(lotFromHash);
   const [action, setAction] = useState<Action | null>(null); const [query, setQuery] = useState('');
   const [view, setView] = useState<View>(() => aliases[location.hash.split('/')[1]]?.[1] ?? 'all');
@@ -183,19 +192,49 @@ export default function LiveApp() {
   const [historyBusy, setHistoryBusy] = useState(false); const [reverse, setReverse] = useState<StockMovement | null>(null); const [reason, setReason] = useState(''); const reverseId = useRef(crypto.randomUUID());
   const theme = 'light';
   const requestSequence = useRef(0);
+  const sessionLocked = useRef(authNeeded);
+  const logoutRequest = useRef<Promise<void> | null>(null);
+  const signOut = useCallback((force = false) => {
+    if (sessionLocked.current && !force) return logoutRequest.current ?? Promise.resolve();
+    // Lock before any network work: a pending refresh or a failed logout must never reopen stock.
+    sessionLocked.current = true; rememberSessionLock(true); requestSequence.current++;
+    menuDialog.current?.close(); setState(null); setAuthNeeded(true); setLoading(false); setRefreshing(false);
+    setError(''); setNotice(''); setAction(null); setReverse(null); setHistory([]); setMoreHistory(true);
+    setLastResult(null); setMatches([]); setQuery(''); setUndoId(''); setIntegration('');
+    location.hash = '/overview';
+    if (logoutRequest.current) return logoutRequest.current;
+    setEndingSession(true);
+    // keepalive lets the same authenticated logout finish after a tab is closed.
+    const request = fetch('/api/auth/logout', {
+      method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', keepalive: true,
+      headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(20000),
+    }).then(() => {}).catch(() => { /* The local lock survives an offline or interrupted logout. */ }).finally(() => {
+      if (logoutRequest.current === request) { logoutRequest.current = null; setEndingSession(false); }
+    });
+    logoutRequest.current = request;
+    return request;
+  }, []);
   const refresh = useCallback(async (quiet = false) => {
+    if (sessionLocked.current) { setLoading(false); setRefreshing(false); return; }
     const sequence = ++requestSequence.current;
     if (!quiet) setRefreshing(true);
     try {
       const result = await api<WorkspaceState>('/workspace');
-      if (sequence !== requestSequence.current) return;
+      if (sequence !== requestSequence.current || sessionLocked.current) return;
       setState(result); setAuthNeeded(false); setSavedAt(Date.now()); setError('');
     } catch (error) {
       if (sequence !== requestSequence.current) return;
-      if (error instanceof InventoryError && error.status === 401) { setState(null); setAuthNeeded(true); }
+      if (error instanceof InventoryError && error.status === 401) { sessionLocked.current = true; setState(null); setAuthNeeded(true); }
       setError(errorMessage(error));
     } finally { if (sequence === requestSequence.current) { setLoading(false); setRefreshing(false); } }
   }, []);
+  useEffect(() => {
+    const hidden = () => { if (document.hidden) void signOut(); };
+    const closed = () => { void signOut(); };
+    document.addEventListener('visibilitychange', hidden);
+    window.addEventListener('pagehide', closed);
+    return () => { document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', closed); };
+  }, [signOut]);
   useEffect(() => { void refresh(); const interval = setInterval(() => { if (!document.hidden) void refresh(true); }, 10000); const focus = () => { if (!document.hidden) void refresh(true); }; window.addEventListener('focus', focus); document.addEventListener('visibilitychange', focus); return () => { clearInterval(interval); requestSequence.current++; window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus); }; }, [refresh]);
   useEffect(() => { const update = () => { menuDialog.current?.close(); const alias = aliases[location.hash.split('/')[1]]; if (alias) setView(alias[1]); setRoute(routeFromHash()); setSelectedId(lotFromHash()); setAction(null); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
   useEffect(() => { const network = () => { setOnline(navigator.onLine); void refresh(true); }; window.addEventListener('online', network); window.addEventListener('offline', network); return () => { window.removeEventListener('online', network); window.removeEventListener('offline', network); }; }, [refresh]);
@@ -217,18 +256,18 @@ export default function LiveApp() {
   }, [route, shellReady]);
   function navigate(to: string, lotId = '') { menuDialog.current?.close(); const alias = aliases[to]; if (alias) { to = alias[0]; setView(alias[1]); } else if (to === 'inventory' && !lotId) setView('all'); location.hash = '/' + to + (lotId ? '/' + lotId : ''); setRoute(to); setSelectedId(lotId); setAction(null); setMatches([]); setQuery(''); setNotice(''); window.scrollTo(0, 0); }
   async function saved(message: string, lotId?: string, movementId?: string) { setAction(null); if (lotId) navigate('inventory', lotId); setNotice(message); setUndoId(movementId || ''); await refresh(); }
-  if (loading) return <main className="live-loading" aria-busy="true"><Cone hue="#2f6fd6" size={48} /><h1>{t("Opening inventory…")}</h1><p>{t("Loading inventory records.")}</p></main>;
-  if (!state && authNeeded) return <SignIn onSignedIn={() => refresh()} />;
+  if (loading || endingSession) return <main className="live-loading" aria-busy="true"><Cone hue="#2f6fd6" size={48} /><h1>{endingSession ? t('Signing out…', 'سائن آؤٹ ہو رہا ہے…') : t("Opening inventory…")}</h1><p>{endingSession ? t('Your PIN is needed to open the workspace again.', 'ورک اسپیس دوبارہ کھولنے کے لیے پن درج کرنا ہوگا۔') : t("Loading inventory records.")}</p></main>;
+  if (!state && authNeeded) return <SignIn onSignedIn={async () => {
+    await logoutRequest.current;
+    if (document.hidden) { await signOut(true); return; }
+    sessionLocked.current = false; rememberSessionLock(false); await refresh();
+  }} />;
   if (!state) return <main className="live-welcome"><Cone hue="#2f6fd6" size={48} /><h1>{t("Inventory is unavailable")}</h1><p role="alert">{t(error)}</p><button className="button primary" onClick={() => void refresh()}><RefreshCw size={18} />{t("Try connection again")}</button><p>{t("The shared records are safe on the server.")}</p></main>;
   const workspace = state;
   const me = workspace.member;
   const allow = (permission: Permission) => can(me, permission);
   const shown = tabs.filter(([id]) => id !== 'team' || me.admin);
   const page = shown.some(([id]) => id === route) ? route : 'overview';
-  async function signOut() {
-    try { await api('/auth/logout', {}); } catch { /* The session cookie is cleared server-side; signing in again replaces it. */ }
-    requestSequence.current++; setState(null); setAuthNeeded(true); setError(''); setNotice(''); location.hash = '/overview';
-  }
   const selected = workspace.lots.find(l => l.id === selectedId);
   const productName = (lotId: string) => workspace.products.find(p => p.id === workspace.lots.find(l => l.id === lotId)?.product_id)?.name || t("Material");
   const batchName = (lotId: string) => workspace.lots.find(l => l.id === lotId)?.batch || lotId;

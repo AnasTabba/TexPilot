@@ -21,7 +21,7 @@ export function sessionToken(request) {
 export function sessionCookie(request, token) {
   const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
   return token
-    ? `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_MS / 1000}${secure}`
+    ? `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict${secure}`
     : `${COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
 }
 

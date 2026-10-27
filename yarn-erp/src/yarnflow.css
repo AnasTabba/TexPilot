@@ -989,7 +989,8 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
+  /* A near-zero animation still applies its translated start frame before the first paint. */
+  *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
 }
 
 @media print {
