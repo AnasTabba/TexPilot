@@ -127,8 +127,8 @@
   display: flex;
 }
 .fabric-hero-dots button {
-  width: 34px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   border: 0;
