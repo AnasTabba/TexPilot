@@ -19,6 +19,20 @@ async function visibility(page: Page, hidden: boolean) {
   }, hidden);
 }
 
+test('a fresh launch requires a PIN even when the browser restores a valid session cookie', async ({ page }) => {
+  // A browser can restore session cookies after a crash/force-close without delivering pagehide.
+  // Create that server state directly, with no page running an unload handler.
+  const login = await page.request.post('/api/auth/login', {
+    data: { name: 'Anas', pin: '2468' }, headers: { Origin: 'http://127.0.0.1:8791' },
+  });
+  expect(login.ok()).toBeTruthy();
+  expect((await page.request.get('/api/workspace')).status()).toBe(200);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Who’s signing in?', exact: true })).toBeVisible();
+  expect((await page.request.get('/api/workspace')).status()).toBe(401);
+  await signIn(page);
+});
+
 test('backgrounding ends the server session and returning requires a PIN', async ({ page }) => {
   await signIn(page);
   await visibility(page, true);

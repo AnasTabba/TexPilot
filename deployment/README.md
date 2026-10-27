@@ -31,8 +31,8 @@ available regional capacity; there is no configured Oracle account here.
 
 ## What is deployed
 
-`modal_scanner.py` uploads only `services/`, scanner-v8, the scanner-v7 compatibility
-encoder and the existing custom heads. It does not upload the repository's data,
+`modal_scanner.py` uploads only `services/`, scanner-v8 and the six taught heads in
+`models/custom` (all on v8's encoder since 27 Oct, so one encoder pass per scan). It does not upload the repository's data,
 training images, ledger, environment files or credentials. Public detector/DINO
 weights and OCR assets are cached during image build. It retains v8; the completed
 ensemble did not meet its promotion gate.

@@ -46,3 +46,19 @@ This is the 33-class archive fibre benchmark, distinct from the three-family hea
 - `yaseenazhar/texpilot-shop-heads-v8/2`: COMPLETE; five exported heads retrieved. Version 1’s historical failure was already superseded.
 
 Pattern-head and label-cleaning follow-up notebooks are separate experiments; this review did not submit new training jobs.
+
+## Follow-up, 27 October afternoon: per-class thresholds and label cleaning
+
+`yaseenazhar/texpilot-shop-heads-v8-bias/1`: same rows, product split and balanced class weights as the v8 shop heads, C grid extended to 0.03, plus a per-class logit bias for macro F1, kept only if it improves the held-out half of validation products. Test scored once.
+
+| Head | v8 test macro F1 | With bias | v8 test top-1 | With bias | Held-out val gain |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| local_fabric | 60.39% | 62.50% | 62.55% | 67.42% | +2.77 pts |
+| blend | 51.02% | 54.09% | 76.94% | 83.33% | +2.78 pts |
+| finish | 82.44% | 85.09% | 85.61% | 86.92% | +1.04 pts |
+| garment_type | 79.02% | 80.81% | 82.26% | 84.69% | +0.99 pts |
+| mix | 48.31% | 48.31% (bias rejected) | 73.34% | 73.34% | -0.60 pts |
+
+Installed in `models/custom` with the v8 fibre probe (55.33% test macro F1); the v7-encoder heads are kept in `models/custom_v7`. The scanner now runs one encoder pass.
+
+`anastabba/texpilot-label-clean-v8/2` (29 of 925 audit photos have no Kaggle features and were excluded): the rule chosen on audit half A (drop each class's lowest 30% by out-of-fold own-label probability) raised audit half B label-right macro F1 from 84.94% to 87.60% but lowered archive test macro F1 from 76.11% to 73.73%. It fails the predeclared gate; no head was exported. A milder rule looked better on both, but it was not the validation choice and needs an independent audit sample before use.

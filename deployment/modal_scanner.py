@@ -44,7 +44,6 @@ image = (
             "TEXPILOT_VISION": "scanner",
             "TEXPILOT_MODEL_BUNDLE": "/app/models/scanner-v8",
             "TEXPILOT_CUSTOM_HEADS": "/app/models/custom",
-            "TEXPILOT_CUSTOM_ENCODER": "/app/models/scanner-v7/head_a",
             "TEXPILOT_GARMENT_DETECTOR": "owlv2",
             "TEXPILOT_OCR_BACKEND": "paddle",
             "TEXPILOT_DEVICE": "cpu",
@@ -57,7 +56,6 @@ image = (
     )
     .add_local_dir(ROOT / "services", "/app/services", copy=True, ignore=["**/__pycache__/**"])
     .add_local_dir(ROOT / "models/scanner-v8", "/app/models/scanner-v8", copy=True)
-    .add_local_dir(ROOT / "models/scanner-v7/head_a", "/app/models/scanner-v7/head_a", copy=True)
     .add_local_dir(ROOT / "models/custom", "/app/models/custom", copy=True)
     .run_function(warm_models, cpu=2, memory=12288, timeout=1200, include_source=False)
 )

@@ -16,14 +16,6 @@ import type { ScanResult } from './scanner-client';
 import { can, gramsFromKg, InventoryError, inventoryRequest as api, qualityName, stageName, stockStages, timestamp, weight, type Permission, type Quality, type StockLot, type StockMovement, type StockStage, type WorkspaceState } from './inventory-client';
 import { accessSummary, permissionInfo } from './Team';
 
-const sessionLockKey = 'yf-session-locked';
-function isSessionLocked() {
-  try { return localStorage.getItem(sessionLockKey) === '1'; } catch { return false; }
-}
-function rememberSessionLock(locked: boolean) {
-  try { if (locked) localStorage.setItem(sessionLockKey, '1'); else localStorage.removeItem(sessionLockKey); } catch { /* The current page still locks when storage is unavailable. */ }
-}
-
 type FormType = 'product' | 'lot' | 'receive' | 'dispatch' | 'transfer' | 'waste' | 'quality' | 'inspection';
 type Action = { type: FormType; lotId?: string; productId?: string };
 const tabs = [
@@ -177,9 +169,10 @@ export default function LiveApp() {
   const { t, language } = useLanguage();
   const menuDialog = useRef<HTMLDialogElement>(null);
   const [state, setState] = useState<WorkspaceState | null>(null);
-  const [error, setError] = useState(''); const [authNeeded, setAuthNeeded] = useState(isSessionLocked);
-  const [loading, setLoading] = useState(!authNeeded); const [refreshing, setRefreshing] = useState(false);
-  const [endingSession, setEndingSession] = useState(false);
+  // Every document starts locked: browsers can restore cookies without firing a close event.
+  const [error, setError] = useState(''); const [authNeeded, setAuthNeeded] = useState(true);
+  const [loading, setLoading] = useState(false); const [refreshing, setRefreshing] = useState(false);
+  const [endingSession, setEndingSession] = useState(true);
   const [route, setRoute] = useState(routeFromHash); const [selectedId, setSelectedId] = useState(lotFromHash);
   const [action, setAction] = useState<Action | null>(null); const [query, setQuery] = useState('');
   const [view, setView] = useState<View>(() => aliases[location.hash.split('/')[1]]?.[1] ?? 'all');
@@ -194,14 +187,14 @@ export default function LiveApp() {
   const requestSequence = useRef(0);
   const sessionLocked = useRef(authNeeded);
   const logoutRequest = useRef<Promise<void> | null>(null);
-  const signOut = useCallback((force = false) => {
+  const signOut = useCallback((force = false, preserveRoute = false) => {
     if (sessionLocked.current && !force) return logoutRequest.current ?? Promise.resolve();
     // Lock before any network work: a pending refresh or a failed logout must never reopen stock.
-    sessionLocked.current = true; rememberSessionLock(true); requestSequence.current++;
+    sessionLocked.current = true; requestSequence.current++;
     menuDialog.current?.close(); setState(null); setAuthNeeded(true); setLoading(false); setRefreshing(false);
     setError(''); setNotice(''); setAction(null); setReverse(null); setHistory([]); setMoreHistory(true);
     setLastResult(null); setMatches([]); setQuery(''); setUndoId(''); setIntegration('');
-    location.hash = '/overview';
+    if (!preserveRoute) location.hash = '/overview';
     if (logoutRequest.current) return logoutRequest.current;
     setEndingSession(true);
     // keepalive lets the same authenticated logout finish after a tab is closed.
@@ -229,6 +222,8 @@ export default function LiveApp() {
     } finally { if (sequence === requestSequence.current) { setLoading(false); setRefreshing(false); } }
   }, []);
   useEffect(() => {
+    // Revoke any restored cookie before offering PIN entry, including after a force-close.
+    void signOut(true, true);
     const hidden = () => { if (document.hidden) void signOut(); };
     const closed = () => { void signOut(); };
     document.addEventListener('visibilitychange', hidden);
@@ -260,7 +255,7 @@ export default function LiveApp() {
   if (!state && authNeeded) return <SignIn onSignedIn={async () => {
     await logoutRequest.current;
     if (document.hidden) { await signOut(true); return; }
-    sessionLocked.current = false; rememberSessionLock(false); await refresh();
+    sessionLocked.current = false; await refresh();
   }} />;
   if (!state) return <main className="live-welcome"><Cone hue="#2f6fd6" size={48} /><h1>{t("Inventory is unavailable")}</h1><p role="alert">{t(error)}</p><button className="button primary" onClick={() => void refresh()}><RefreshCw size={18} />{t("Try connection again")}</button><p>{t("The shared records are safe on the server.")}</p></main>;
   const workspace = state;

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { ScanResult } from "../src/scanner-client";
+import { signIn } from "./helpers";
 
 // Route fixtures must reach the test rather than the production offline worker.
 test.use({ serviceWorkers: "block" });
@@ -18,7 +19,8 @@ test("model responses choose illustrations; abstentions ignore candidates and la
   await page.route("**/api/v1/model", route => route.fulfill({ json: { ready: true, model_version: "scanner-v6", mode: "scanner" } }));
   await page.route("**/api/v1/scan", route => route.fulfill({ json: result }));
   await page.context().setExtraHTTPHeaders({ "x-yarnflow-test-user": "artwork-" + crypto.randomUUID() });
-  // The app opens the FAZ workspace directly (browser-stored inventory, ed23ecf).
+  // The scanner lives behind the shared PIN sign-in now.
+  await signIn(page);
   await page.goto("/#/scanner");
   await page.locator("input[type=file]").first().setInputFiles("src/assets/fabrics/denim.webp");
   const analyze = page.getByRole("button", { name: "Analyze material", exact: true });
