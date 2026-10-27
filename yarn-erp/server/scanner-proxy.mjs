@@ -11,7 +11,15 @@ export function scannerRequest(request, env) {
     headers.set('Authorization', `Bearer ${env.TEXPILOT_API_TOKEN}`);
   }
   return new Request(target, {
-    method: request.method, headers, redirect: 'error',
+    method: request.method, headers, redirect: 'manual',
     ...(request.body ? { body: request.body, duplex: 'half' } : {}),
   });
+}
+
+// Workers accept only redirect 'follow' or 'manual' ('error' throws there, though Node allows it), so a
+// redirect is refused here: a photo or credential never follows the scanner to another address.
+export async function forwardToScanner(request, env, send = fetch) {
+  const response = await send(scannerRequest(request, env));
+  if (response.status >= 300 && response.status < 400) throw new Error('The scanner answered with a redirect');
+  return response;
 }
