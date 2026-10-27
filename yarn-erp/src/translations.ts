@@ -1,5 +1,6 @@
 /** Fixed interface copy only. Names, notes, model classes and ledger identifiers stay intact. */
 export const urdu: Record<string, string> = {
+  'The TexPilot scanner could not be reached. Please try again shortly.': 'TexPilot اسکینر سے رابطہ نہیں ہوسکا۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔',
   'Home': 'ہوم', 'Stock': 'اسٹاک', 'Scan': 'اسکین', 'History': 'ہسٹری', 'Team': 'ٹیم', 'Settings': 'ترتیبات', 'Help': 'مدد', 'More': 'مزید',
   'Add a material': 'مٹیریل شامل کریں', 'Create a batch': 'بیچ بنائیں', 'Receive stock': 'اسٹاک وصول کریں', 'Dispatch stock': 'اسٹاک روانہ کریں',
   'Move stock between stages': 'اسٹاک اگلے مرحلے میں منتقل کریں', 'Record waste': 'ضائع شدہ مال درج کریں', 'Review batch quality': 'بیچ کی کوالٹی چیک کریں',

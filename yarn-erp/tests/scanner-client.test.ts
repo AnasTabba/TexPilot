@@ -169,6 +169,17 @@ test("Scanner readiness never treats a healthy stub as a loaded model", async ()
     globalThis.fetch = original;
   }
 });
+test("Scanner connection waits for a sleeping host to start its real models", async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  context.mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) =>
+    new Promise<Response>((resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      setTimeout(() => resolve(Response.json({ ready: true, mode: 'scanner', model_version: 'scanner-v8' })), 30000);
+    }));
+  const connecting = connectModel('https://scanner.example');
+  context.mock.timers.tick(30000);
+  assert.equal((await connecting).model_version, 'scanner-v8');
+});
 test("Scanner supports older main API without claiming verified readiness", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = async (url) =>

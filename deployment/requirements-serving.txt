@@ -1,0 +1,15 @@
+# CPU torch/torchvision come from the official CPU wheel index in modal_scanner.py.
+# PaddleOCR has its own venv because its dependency pins differ from this stack.
+fastapi==0.141.1
+uvicorn==0.54.0
+python-multipart==0.0.32
+PyYAML==6.0.3
+pydantic==2.13.5
+timm==1.0.30
+transformers==5.17.0
+huggingface_hub==1.33.0
+safetensors==0.8.0
+opencv-python-headless==5.0.0.93
+numpy==2.2.6
+pillow==12.3.0
+scipy==1.14.1

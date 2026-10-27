@@ -301,6 +301,7 @@ export async function connectModel(
     endpoint + "/api/v1/model",
     { method: "GET" },
     signal,
+    120000, // A free serverless host may need to load the models after sleeping.
   );
   if (response.status === 404) {
     const health = await request(
