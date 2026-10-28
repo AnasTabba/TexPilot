@@ -13,7 +13,7 @@ export interface Inspection {
   result_json: string | null; actor_name: string; created_at: number;
 }
 // What an admin can let each person record. Admins can do all of it; scanning and viewing need none.
-export type Permission = 'receive' | 'produce' | 'dispatch' | 'catalog' | 'inspect' | 'qc' | 'waste' | 'reverse';
+export type Permission = 'receive' | 'produce' | 'dispatch' | 'catalog' | 'inspect' | 'qc' | 'waste' | 'reverse' | 'suppliers' | 'procure' | 'sales' | 'production' | 'payments';
 export interface Member { user_id: string; name: string; role: 'owner' | 'operator'; admin: boolean; permissions: Permission[] }
 export interface WorkspaceState {
   workspace: { id: string; name: string };

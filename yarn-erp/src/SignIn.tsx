@@ -37,6 +37,7 @@ export default function SignIn({ onSignedIn }: { onSignedIn: () => Promise<void>
         {!list && !loadError && <p role="status" className="live-muted">{t('Loading names…', 'نام لوڈ ہو رہے ہیں…')}</p>}
         {list && <ul className="yf-people">{list.people.map(name => <li key={name}><button className="yf-person" onClick={() => setStep({ at: 'pin', name })}><Avatar name={name} /><strong>{name}</strong><ChevronRight size={20} aria-hidden="true" /></button></li>)}</ul>}
         <button className="live-text-button yf-signin-ask" onClick={() => setStep({ at: 'request' })}><UserPlus size={18} aria-hidden="true" />{t('New here? Ask for an account', 'نئے ہیں؟ اکاؤنٹ کی درخواست کریں')}</button>
+        <a className="live-text-button yf-supplier-entry" href="#/supplier">{t('Supplier sign in or register', 'سپلائر سائن اِن یا رجسٹریشن')}</a>
       </div>}
       {step.at === 'pin' && <PinPad key={step.name} name={step.name} onBack={back} onSignedIn={onSignedIn} />}
       {step.at === 'request' && <Request onSent={name => setStep({ at: 'sent', name })} onCancel={back} />}

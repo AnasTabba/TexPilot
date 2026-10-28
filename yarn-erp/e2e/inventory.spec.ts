@@ -92,7 +92,8 @@ test.describe('Shared inventory', () => {
     const { lot, state } = await seededLot(page, 'LOT-1023');
     await page.goto('/#/inventory/' + lot.id);
     await page.getByRole('button', { name: 'Dispatch', exact: true }).click();
-    await page.getByLabel('Weight (kg)', { exact: true }).fill('999');
+    const available = state.balances.find((b: { lot_id: string; stage: string; grams: number }) => b.lot_id === lot.id && b.stage === 'raw')?.grams || 0;
+    await page.getByLabel('Weight (kg)', { exact: true }).fill(((available + 1000) / 1000).toFixed(3));
     await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save entry', exact: true }).click();
     await page.waitForTimeout(2000);
@@ -147,20 +148,21 @@ test.describe('Shared inventory', () => {
     }
     await page.goto('/#/inventory/' + lot.id);
     await page.waitForTimeout(2000);
-    await expect(page.getByText('Label photographed at goods-in. Physical QC pending.', { exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('.yf-timeline')).toContainText('Label photographed at goods-in. Physical QC pending.');
     const after = await workspace(page);
     expect(after.lots.find((candidate: { batch: string }) => candidate.batch === 'LOT-1022').quality).toBe('uninspected');
     expect(after.inspections.filter((inspection: { lot_id: string }) => inspection.lot_id === lot.id).length).toBeGreaterThan(0);
   });
 
   test('phone screens have no critical accessibility issues or horizontal overflow', async ({ page }, testInfo) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await signIn(page);
     for (const route of ['overview', 'inventory', 'scanner', 'activity', 'settings']) {
       await page.goto('/#/' + route);
       await expect(page.getByRole('main')).toBeVisible();
       const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
       const serious = result.violations.filter(v => v.impact === 'critical' || v.impact === 'serious');
-      expect(serious.map(violation => ({ id: violation.id, impact: violation.impact, nodes: violation.nodes.length }))).toEqual([]);
+      expect(serious.map(violation => ({ id: violation.id, impact: violation.impact, nodes: violation.nodes.length })), `${route}: ${JSON.stringify(serious.map(v => v.nodes.map(n => ({ target: n.target, failure: n.failureSummary }))))}`).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
     }
     await page.goto('/#/inventory');
@@ -170,7 +172,7 @@ test.describe('Shared inventory', () => {
       await expect(button.getByText('Stock', { exact: true })).toHaveCSS('font-size', '14px');
     }
     try {
-      await page.screenshot({ path: `docs/progress/live/inventory-${testInfo.project.name}.png`, fullPage: true });
+      await page.screenshot({ path: testInfo.outputPath('inventory.png'), fullPage: true });
     } catch {}
   });
 

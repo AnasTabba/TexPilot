@@ -2,6 +2,8 @@
 
 Date: 28 October 2026. Status: implementation planning only, explicitly confirmed by the user; application functionality below is not yet built or deployed.
 
+Implementation update: the user subsequently authorized implementation and pushing/publishing the verified first release. The target plan below includes future modules; released features are recorded in `docs/releases/2026-10-28-procurement.md`.
+
 Confirmed requirements: supplier portal registration/login with admin approval; supplier supplies the B/L at shipment dispatch; DataLoopLabs is the selected tracking provider and the user already has its API key. Parallel OpenCode 2 work is for planning/review only, supervised every 30 minutes.
 
 ## 1. Outcome and scope

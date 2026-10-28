@@ -1,6 +1,6 @@
 {
-  "scope": "Implementation planning and parallel OpenCode 2 review only; no application implementation or deployment",
-  "status": "plan_ready_awaiting_worker_quota",
+  "scope": "ERP implementation authorized; publish current verified supplier/procurement/receipt release at user request",
+  "status": "first_release_validation",
   "plan_path": "docs/plans/erp-expansion/implementation-plan.md",
   "resume_not_before": "2026-10-29T05:14:00+05:00",
   "worker_blocker": "Both configured OpenCode 2 free-model sessions exhausted daily messages before producing work. No worker report or application edit was produced.",
@@ -10,8 +10,22 @@
   "automation_schedule": "*/30 * * * *",
   "timezone": "Asia/Karachi",
   "workers": [
-    {"provider": "opencode2", "task_id": "task_5c7e794af0a8", "dispatch_id": "ctx_5c4095e17fc4", "scope": "procurement and shipment tracking", "outcome": "failed_quota", "terminal": "released"},
-    {"provider": "opencode2", "task_id": "task_f37e1243900b", "dispatch_id": "ctx_a9e1913d3387", "scope": "production, sales, inventory and permissions", "outcome": "failed_quota", "terminal": "released"}
+    {
+      "provider": "opencode2",
+      "task_id": "task_5c7e794af0a8",
+      "dispatch_id": "ctx_5c4095e17fc4",
+      "scope": "procurement and shipment tracking",
+      "outcome": "failed_quota",
+      "terminal": "released"
+    },
+    {
+      "provider": "opencode2",
+      "task_id": "task_f37e1243900b",
+      "dispatch_id": "ctx_a9e1913d3387",
+      "scope": "production, sales, inventory and permissions",
+      "outcome": "failed_quota",
+      "terminal": "released"
+    }
   ],
   "constraints": [
     "Planning workers edit only their assigned reports.",
@@ -26,8 +40,15 @@
     "shipment_reference": "Supplier supplies bill of lading at shipment dispatch against its accepted purchase order",
     "tracking_provider": "DataLoopLabs / TrackIT; user already has API key; do not request or use key during planning",
     "billing_evidence": "User screenshot: no free credits, USD 1.20-2.00 per container credit, first track and renewal after 30 days; force_update=true always costs one credit; default 100 requests/minute/key",
-    "authorization": "Planning/review only; no application code or live deployment"
+    "authorization": "User subsequently authorized implementation and pushing/publishing current verified work."
   },
   "pending_user_decisions": [],
-  "latest_worker_brief": "docs/plans/erp-expansion/worker-briefs.md"
+  "latest_worker_brief": "docs/plans/erp-expansion/worker-briefs.md",
+  "implementation_path": "/Users/anastabba/Documents/iba/sem7/FYP-erp",
+  "implementation_branch": "feat/erp-workflows",
+  "next_work": [
+    "Production machines/shifts and buyer-linked batches",
+    "Buyer quotations, invoicing and receivables",
+    "DataLoopLabs real API integration after contract and server key configuration"
+  ]
 }

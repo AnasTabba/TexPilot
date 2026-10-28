@@ -751,7 +751,7 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
 .yf-signin-step > .live-form { width: 100%; padding: clamp(16px, 3.5cqh, 28px); }
 .yf-signin-step > .live-form .live-panel-heading { margin-bottom: clamp(8px, 2cqh, 18px); }
 .yf-signin-step > .live-form .live-actions { margin-top: clamp(10px, 2.4cqh, 20px); }
-.yf-signin-ask { justify-self: start; display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; }
+.yf-signin-ask, .yf-supplier-entry { justify-self: start; display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; }
 .yf-signin-back { justify-self: start; display: inline-flex; align-items: center; gap: 6px; }
 .yf-signin-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: var(--warn-bg); color: var(--warn); }
 .yf-signin-sent .button { justify-self: start; margin-top: 10px; }
@@ -859,7 +859,7 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
   .live-content { flex: 1 0 auto; max-width: none; padding: 26px calc(18px + var(--safe-right)) 28px calc(18px + var(--safe-left)); border-radius: 24px 24px 0 0; background: var(--panel); }
   .live-sync { max-width: none; padding: 0 calc(18px + var(--safe-right)) calc(100px + var(--safe-bottom)) calc(18px + var(--safe-left)); background: var(--panel); }
   .live-bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 8px calc(10px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(10px + var(--safe-left)); border-radius: 24px 24px 0 0; background: var(--rail); }
-  .live-bottom-nav button { flex-direction: column; justify-content: center; gap: 3px; min-height: 58px; padding: 0 2px; font-size: 13px; font-weight: 600; text-align: center; }
+  .live-bottom-nav button { flex-direction: column; justify-content: center; gap: 3px; min-height: 58px; padding: 0 2px; font-size: 14px; font-weight: 600; text-align: center; }
   .live-bottom-nav button svg { width: 24px; height: 24px; }
   .live-page-heading { flex-wrap: wrap; align-items: flex-start; margin-bottom: 24px; }
   .live-page-heading h1 { font-size: 28px; }

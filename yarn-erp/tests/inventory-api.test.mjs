@@ -157,6 +157,8 @@ test('a stage transfer conserves exact grams, cartons and cones across the batch
   const { call, setup } = await fixture();
   const { lot } = await setup();
   await call('/movements', movement(lot.id));
+  assert.equal((await call('/movements', movement(lot.id, 'transfer', 3333, { toStage: 'wip', cartons: 1, cones: 24 }))).status, 409, 'uninspected raw material stays quarantined');
+  await call('/quality', { lotId: lot.id, status: 'approved', note: 'Raw material physically checked' });
   assert.equal((await call('/movements', movement(lot.id, 'transfer', 3333, { toStage: 'wip', cartons: 1, cones: 24 }))).status, 201);
   const balances = (await call('/workspace')).data.balances;
   assert.deepEqual(balances.map(({ stage, grams, cartons, cones }) => ({ stage, grams, cartons, cones })).sort((a,b) => a.stage.localeCompare(b.stage)), [

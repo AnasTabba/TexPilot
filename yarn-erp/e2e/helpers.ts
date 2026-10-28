@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-export const origin = 'http://127.0.0.1:8791';
+export const origin = `http://127.0.0.1:${process.env.YARNFLOW_TEST_PORT || 8794}`;
 
 /** Sign in with a name and 4-digit PIN. The app now opens on the PIN screen, not a workspace form. */
 export async function signIn(page: Page, name = 'Anas', pin = '2468') {

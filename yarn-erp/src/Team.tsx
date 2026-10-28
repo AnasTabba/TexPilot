@@ -18,12 +18,19 @@ export const permissionInfo: [Permission, string, string, LucideIcon][] = [
   ['inspect', 'Inspections', 'Record care labels and scan evidence', ClipboardCheck],
   ['qc', 'QC decisions', 'Approve a batch or put it on hold', ShieldCheck],
   ['reverse', 'Reverse entries', 'Correct a saved entry, with a reason', Undo2],
+  ['suppliers', 'Supplier directory', 'Maintain supplier contacts and categories', UserCheck],
+  ['procure', 'Procurement', 'Create RFQs, review bids and accept purchase orders', PackagePlus],
+  ['sales', 'Sales orders', 'Manage buyers, quotations and invoices', Truck],
+  ['production', 'Production planning', 'Plan machines, shifts and production batches', ArrowRightLeft],
+  ['payments', 'Customer payments', 'Record payments and manage receivables', ClipboardCheck],
 ];
 const everything = permissionInfo.map(([id]) => id);
 // Starting points for the usual jobs on a mill floor; any mix can still be ticked by hand.
 const presets: [string, Permission[]][] = [
   ['Stores', ['receive', 'catalog']], ['Production', ['produce', 'waste']], ['Dispatch', ['dispatch']],
   ['Quality', ['inspect', 'qc']], ['Supervisor', everything],
+  ['Purchase manager', ['suppliers', 'procure']], ['Sales manager', ['sales', 'payments']],
+  ['Production manager', ['production', 'produce', 'waste']], ['Inventory manager', ['receive', 'catalog', 'dispatch']],
 ];
 const same = (a: Permission[], b: Permission[]) => a.length === b.length && a.every(p => b.includes(p));
 const label = (id: Permission) => permissionInfo.find(([p]) => p === id)![1];
@@ -36,8 +43,13 @@ const permissionUrdu: Record<Permission, [string, string]> = {
   inspect: ['معائنے', 'کیئر لیبل اور اسکین کے شواہد درج کریں'],
   qc: ['کوالٹی کے فیصلے', 'بیچ منظور کریں یا روک دیں'],
   reverse: ['اندراج واپس کریں', 'وجہ بتا کر محفوظ اندراج درست کریں'],
+  suppliers: ['سپلائر ڈائریکٹری', 'سپلائر رابطے اور اقسام سنبھالیں'],
+  procure: ['خریداری', 'درخواستیں، بولیاں اور خریداری آرڈر سنبھالیں'],
+  sales: ['فروخت کے آرڈر', 'خریدار، قیمتیں اور انوائس سنبھالیں'],
+  production: ['پروڈکشن کی منصوبہ بندی', 'مشینوں، شفٹوں اور بیچوں کی منصوبہ بندی کریں'],
+  payments: ['خریدار کی ادائیگیاں', 'ادائیگیاں اور وصولیاں درج کریں'],
 };
-const presetUrdu: Record<string, string> = { Stores: 'اسٹور', Production: 'پروڈکشن', Dispatch: 'ڈسپیچ', Quality: 'کوالٹی', Supervisor: 'سپروائزر' };
+const presetUrdu: Record<string, string> = { Stores: 'اسٹور', Production: 'پروڈکشن', Dispatch: 'ڈسپیچ', Quality: 'کوالٹی', Supervisor: 'سپروائزر', 'Purchase manager': 'خریداری مینیجر', 'Sales manager': 'سیلز مینیجر', 'Production manager': 'پروڈکشن مینیجر', 'Inventory manager': 'انوینٹری مینیجر' };
 export const accessSummary = (admin: boolean, permissions: Permission[], language: 'en' | 'ur' = 'en') => {
   if (admin) return translate(language, 'Admin · can do everything', 'ایڈمن · تمام اختیارات');
   const preset = presets.find(([, p]) => same(p, permissions))?.[0];

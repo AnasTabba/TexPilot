@@ -345,6 +345,7 @@ test('numbers are tabular, headings balance, and supported squircle corners stay
     expect(type.pill!.radius).toBe('999px');
   }
 
+  await page.context().clearCookies();
   await page.goto('/');
   await page.waitForSelector('.yf-people');
   await page.getByRole('button', { name: 'Anas', exact: true }).click();

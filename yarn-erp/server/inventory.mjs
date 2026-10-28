@@ -1,5 +1,9 @@
 /** Shared inventory API: PIN sessions (server/auth.mjs) give identity, D1 supplies durable SQL. */
 import { LOCK_AFTER, LOCK_MS, PERMISSIONS, SESSION_MS, nameKey, pinHash, randomHex, sessionCookie, sessionToken, sha256, userRow, validPin } from './auth.mjs';
+import { ErpProblem } from './erp-utils.mjs';
+import { supplierPortal } from './supplier-portal.mjs';
+import { staffProcurement } from './procurement.mjs';
+import { receiving } from './receiving.mjs';
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
 class Problem extends Error {
@@ -79,6 +83,7 @@ async function saveMovement(db, member, data, reversal = false) {
     allow(member, 'reverse', 'reverse entries');
     const original = await first(db, 'SELECT * FROM movements WHERE id=? AND workspace_id=?', id(data.movementId), member.workspace_id);
     if (!original) fail(404, 'This movement was not found.');
+    if (await first(db,'SELECT id FROM goods_receipts WHERE movement_id=?',original.id)) fail(409,'Reverse this purchase receipt from Incoming stock so the purchase order stays reconciled.');
     if (original.action === 'reverse') fail(409, 'A reversal cannot be reversed.');
     record = { id: id(data.id), lotId: original.lot_id, action: 'reverse', fromStage: original.to_stage,
       toStage: original.from_stage, grams: original.grams, cartons: original.cartons,
@@ -115,7 +120,7 @@ async function saveMovement(db, member, data, reversal = false) {
     // Another device can commit between our initial read and this atomic batch.
     const raced = await first(db, 'SELECT * FROM movements WHERE id=? AND workspace_id=?', record.id, member.workspace_id);
     if (raced?.request_hash === digest) return json(raced);
-    if (/QC approval|held lot/i.test(String(error))) fail(409, 'This lot needs QC approval before dispatch or is on hold.');
+    if (/QC approval|held lot/i.test(String(error))) fail(409, 'QC approval is required before issuing raw stock or dispatching. Held lots cannot move.');
     fail(409, 'Stock changed, the quantities exceed available stock, or this entry was already reversed. Refresh and try again.');
   }
   return json(await first(db, 'SELECT * FROM movements WHERE id=?', record.id), 201);
@@ -132,6 +137,7 @@ async function route(request, env) {
     if (origin !== url.origin || request.headers.get('Sec-Fetch-Site') === 'cross-site') fail(403, 'Open Yarnflow directly before saving.');
   }
   if (path.startsWith('/api/auth/')) return authRoute(request, db, path);
+  if (path.startsWith('/api/portal/')) return supplierPortal(request, env, path);
   const member = await currentMember(db, request);
   if (!member) fail(401, 'Sign in with your name and PIN.');
   const userId = member.user_id;
@@ -187,6 +193,8 @@ async function route(request, env) {
   }
   const data = request.method === 'POST' ? await body(request) : null;
   const w = member.workspace_id;
+  if (path === '/api/erp/inbound' || path.startsWith('/api/erp/receipts')) return receiving(request, env, member, path, data);
+  if (path.startsWith('/api/erp/')) return staffProcurement(request, env, member, path, data);
   if (path.startsWith('/api/users')) return usersRoute(db, member, path, data);
   if (/^\/api\/lots\/[^/]+\/evidence$/.test(path) && request.method === 'GET') {
     const lotId = id(path.split('/')[3]);
@@ -406,7 +414,7 @@ export async function signedIn(request, env) {
 
 export async function inventoryApi(request, env) {
   try { return await route(request, env); } catch (error) {
-    if (error instanceof Problem) return json({ error: error.message }, error.status);
+    if (error instanceof Problem || error instanceof ErpProblem) return json({ error: error.message }, error.status);
     console.error('Inventory request failed:', error instanceof Error ? error.message : 'unknown');
     return json({ error: 'The server could not complete this request. No success was confirmed. Refresh and try again.' }, 500);
   }

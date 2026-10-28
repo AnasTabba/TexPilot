@@ -7,6 +7,7 @@ import WorkspaceDashboard, { QualityBadge, StockFlow, movedName, when, yarnName 
 import { ConeIcon, moveIcon } from './icons';
 import SignIn, { Avatar } from './SignIn';
 import Team from './Team';
+import Procurement from './Procurement';
 import { Menu, Package, Truck, CircleHelp, Search, ChevronRight, ShieldAlert, PackagePlus, ArrowRightLeft, Trash2, ClipboardCheck, ScanBarcode, House, History, LogOut, UsersRound } from 'lucide-react';
 import BarcodeScanner from './BarcodeScanner';
 import Scanner from './Scanner';
@@ -20,7 +21,7 @@ type FormType = 'product' | 'lot' | 'receive' | 'dispatch' | 'transfer' | 'waste
 type Action = { type: FormType; lotId?: string; productId?: string };
 const tabs = [
   ['overview', 'Home', House], ['inventory', 'Stock', ConeIcon], ['scanner', 'Scan', ScanSearch],
-  ['activity', 'History', History], ['team', 'Team', UsersRound], ['settings', 'Settings', Settings], ['help', 'Help', CircleHelp],
+  ['activity', 'History', History], ['procurement', 'Procurement', PackagePlus], ['team', 'Team', UsersRound], ['settings', 'Settings', Settings], ['help', 'Help', CircleHelp],
 ] as const;
 // Old pages that were filtered copies of the stock list (or of Home) now open Stock with that filter.
 type View = 'all' | 'quality' | 'production' | 'dispatch';
@@ -150,7 +151,7 @@ function LotDetail({ lot, state, onAction, onBack }: { lot: StockLot; state: Wor
       <div className={`yf-next is-inline ${lot.quality}`}><span className="yf-next-icon"><NextIcon size={24} aria-hidden="true" /></span><div className="yf-next-text"><h3>{next[0]}</h3><p>{nextAllowed || !next[2] ? next[1] : whoCan}</p></div>{nextAllowed && <div className="yf-next-actions"><button className="button primary" onClick={() => onAction({ type: next[2]!, lotId: lot.id })}>{actions[next[2]!][0]}<ArrowRight size={18} aria-hidden="true" /></button></div>}</div>
       <h3 className="live-subheading">{t("Stock in this batch")}</h3>
       <StockFlow balances={lotBalances} compact />
-      {others.length > 0 && <div className="live-actions yf-other-actions" aria-label={t("Other actions")}>{others.map(type => { const [label, Icon] = actions[type]; const blocked = type === 'dispatch' && lot.quality !== 'approved'; return <button className="button" key={type} onClick={() => onAction({ type, lotId: lot.id })} disabled={blocked} title={blocked ? t("Approve quality first") : undefined}><Icon size={18} aria-hidden="true" />{label}</button>; })}</div>}
+      {others.length > 0 && <div className="live-actions yf-other-actions" aria-label={t("Other actions")}>{others.map(type => { const [label, Icon] = actions[type]; const blocked = (type === 'dispatch' || type === 'transfer') && lot.quality !== 'approved'; return <button className="button" key={type} onClick={() => onAction({ type, lotId: lot.id })} disabled={blocked} title={blocked ? t("Approve quality first") : undefined}><Icon size={18} aria-hidden="true" />{label}</button>; })}</div>}
       <h3 className="live-subheading">{t("Inspection notes")}</h3>
       {evidenceError && <p className="live-error" role="alert">{t("Batch history could not be refreshed.")} {evidenceError}<button className="live-text-button" onClick={() => setEvidenceRetry(value => value + 1)}>{t("Retry history")}</button></p>}
       {!evidence && !evidenceError && <p role="status" className="live-muted">{t("Loading this batch’s inspection history…")}</p>}
@@ -251,7 +252,7 @@ export default function LiveApp() {
   const workspace = state;
   const me = workspace.member;
   const allow = (permission: Permission) => can(me, permission);
-  const shown = tabs.filter(([id]) => id !== 'team' || me.admin);
+  const shown = tabs.filter(([id]) => (id !== 'team' || me.admin) && (id !== 'procurement' || allow('suppliers') || allow('procure') || allow('receive')));
   const page = shown.some(([id]) => id === route) ? route : 'overview';
   const selected = workspace.lots.find(l => l.id === selectedId);
   const productName = (lotId: string) => workspace.products.find(p => p.id === workspace.lots.find(l => l.id === lotId)?.product_id)?.name || t("Material");
@@ -322,6 +323,7 @@ export default function LiveApp() {
       {page === 'activity' && <section className="live-panel"><div className="live-panel-heading"><h2>{t("Stock movement register")}</h2><span>Asia/Karachi</span></div>{reverse && <AsyncForm title={t("Reverse this movement")} detail={`${weight(reverse.grams)} kg · ${batchName(reverse.lot_id)}. Reversal fails if the stock has already been consumed.`} submit={t("Save reversal")} review={<dl><div><dt>{t("Batch")}</dt><dd>{batchName(reverse.lot_id)}</dd></div><div><dt>{t("Weight")}</dt><dd>{weight(reverse.grams)} kg</dd></div><div><dt>{t("Reason")}</dt><dd>{reason}</dd></div></dl>} onCancel={() => setReverse(null)} onSubmit={async () => { await api('/reversals', { id: reverseId.current, movementId: reverse.id, note: reason }); setReverse(null); setHistory([]); await saved(t("Reversal saved. The original entry is preserved.")); }}><Field>{t("Reason")}<textarea value={reason} onChange={e => { setReason(e.target.value); reverseId.current = crypto.randomUUID(); }} minLength={3} maxLength={1000} required /></Field></AsyncForm>}{activityList([...workspace.movements, ...history.filter(h => !workspace.movements.some(m => m.id === h.id))])}{workspace.movements.length >= 100 && moreHistory && <button className="button" disabled={historyBusy} onClick={async () => { setHistoryBusy(true); try { const page = await api<{ movements: StockMovement[] }>('/movements?offset=' + (100 + history.length)); setHistory(previous => [...previous, ...page.movements]); setMoreHistory(page.movements.length === 100); } catch (error) { setError(errorMessage(error)); } finally { setHistoryBusy(false); } }}>{historyBusy ? t("Loading…") : t("Load earlier movements")}</button>}</section>}
       {page==='settings'&&<div className="yf-settings"><section className="live-panel yf-language-settings"><h2>{t('Language', 'زبان')}</h2><LanguageSelect /></section><section className="live-panel"><h2>{t("Your access")}</h2><p>{accessSummary(me.admin, me.permissions, language)}{t(". Everyone can view stock and use the scanner.")}</p><ul className="yf-access">{permissionInfo.map(([id, label, , Icon]) => <li key={id} className={allow(id) ? 'is-on' : ''}><Icon size={20} aria-hidden="true" /><span>{t(label)}</span>{allow(id) ? <CheckCheck size={18} aria-label={t("Allowed")} /> : <span className="live-muted">{t("Ask an admin")}</span>}</li>)}</ul>{me.admin && <><h3 className="live-subheading">{t("Backup")}</h3><p>{t("Everyone's entries live in one shared database. Download a copy for your records.")}</p><div className="live-actions"><button className="button primary" onClick={()=>void backup()} disabled={exportBusy}><Download size={20} aria-hidden="true" />{exportBusy?t("Preparing backup…"):t("Download backup")}</button></div></>}</section><section className="live-panel yf-records"><h2>{t("Shared records")}</h2><dl className="yf-counts">{([[t("Materials"), workspace.products.length], [t("Batches"), workspace.lots.length], [t("Stock movements"), workspace.movements.length], [t("Inspections"), workspace.inspections.length], [t("QC decisions"), workspace.qualityEvents.length], [t("People"), workspace.members.length]] as const).map(([label, count]) => <div key={label}><dt>{t(label)}</dt><dd>{count}</dd></div>)}</dl></section></div>}
       {page==='team' && <Team me={me} onChanged={() => refresh(true)} />}
+      {page==='procurement' && <Procurement member={me} onInventoryChanged={() => refresh(true)} />}
 
       </>}
     </main><footer className="live-sync" role="status"><CheckCheck size={17} aria-hidden="true"/><span>{t("All changes saved")}{savedAt ? ' · '+t('checked', 'چیک کیا')+' '+new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Karachi'}).format(savedAt) : ''}</span></footer></div>
