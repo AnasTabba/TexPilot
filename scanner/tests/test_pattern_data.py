@@ -47,8 +47,10 @@ def test_shop_titles_require_an_explicit_unambiguous_pattern_and_product_split()
 def test_pattern_pixels_match_serving_for_large_exif_rotated_photo():
     import io
 
-    import numpy as np
-    from PIL import Image
+    import pytest
+
+    np = pytest.importorskip("numpy")
+    Image = pytest.importorskip("PIL.Image")
 
     from services.vision.backbone import preprocess
     from services.vision.imageio import decode_image

@@ -1,9 +1,9 @@
 """Numerical and selection boundaries for the pattern head export."""
-import numpy as np
 import pytest
-from sklearn.linear_model import LogisticRegression
 
-from training.scanner.pattern_head import fold_linear, select_head
+np = pytest.importorskip("numpy")
+LogisticRegression = pytest.importorskip("sklearn.linear_model").LogisticRegression
+from training.scanner.pattern_head import fold_linear, select_head  # noqa: E402
 
 
 def test_binary_export_preserves_sklearn_probabilities():

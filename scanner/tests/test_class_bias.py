@@ -1,9 +1,9 @@
 """Per-class logit bias tuned on val for macro F1: a rare class the head under-predicts gets
 its share back. Val only; the test set is never used to tune."""
 
-import numpy as np
 import pytest
 
+np = pytest.importorskip("numpy")
 pytest.importorskip("sklearn")
 from training.scanner.export_head_a import macro_f1, tune_class_bias  # noqa: E402
 

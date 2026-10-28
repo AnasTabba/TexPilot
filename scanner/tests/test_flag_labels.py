@@ -1,11 +1,11 @@
 """Cleaning comparisons require the same explicitly available photos for every feature set."""
 from types import SimpleNamespace
 
-import numpy as np
 import pytest
 
-from scripts.flag_labels import available_rows
-from training.textilenet.feature_cache import FeatureCache
+np = pytest.importorskip("numpy")
+from scripts.flag_labels import available_rows  # noqa: E402
+from training.textilenet.feature_cache import FeatureCache  # noqa: E402
 
 
 def test_missing_test_features_require_explicit_opt_in_and_use_common_rows(tmp_path):
