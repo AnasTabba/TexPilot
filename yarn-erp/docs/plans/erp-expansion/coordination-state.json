@@ -42,7 +42,9 @@
       "scope": "integrity and product finish review",
       "terminal": "term_7175cbec-aa4b-4a16-be61-911a59d7256d",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-finish-review",
-      "outcome": "in_progress"
+      "outcome": "succeeded",
+      "commit": "17ed12a",
+      "resource_decision": "terminal reused for completeness follow-up; findings under root review"
     },
     {
       "provider": "opencode2",
@@ -61,6 +63,24 @@
       "terminal": "term_42c1535b-858a-4fe8-8923-e384940e0089",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-ui-finish",
       "outcome": "in_progress"
+    },
+    {
+      "provider": "opencode2",
+      "task_id": "task_85a577f2516f",
+      "dispatch_id": "ctx_297c6b873185",
+      "scope": "operational chat and actionable factory updates",
+      "terminal": "term_3990a2b7-c6d5-4374-9560-a57fd3bef0ae",
+      "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-collaboration",
+      "outcome": "in_progress"
+    },
+    {
+      "provider": "opencode2",
+      "task_id": "task_204aacfb8875",
+      "dispatch_id": "ctx_57881c4e50f7",
+      "scope": "original requirements completeness and procurement depth review",
+      "terminal": "term_7175cbec-aa4b-4a16-be61-911a59d7256d",
+      "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-finish-review",
+      "outcome": "in_progress"
     }
   ],
   "constraints": [
@@ -68,7 +88,7 @@
     "Preserve existing UI/session edits and active scanner.",
     "No live ledger fixtures or supplier/buyer messages.",
     "No paid tracking requests, account upgrades, secret values in reports or unattended production deployment.",
-    "Never duplicate active dispatches; at most six current parallel workers.",
+    "Never duplicate active dispatches; at most seven current parallel workers.",
     "Remove ACTIVE after authorized work settles to skip agent wakeups."
   ],
   "confirmed_user_decisions": {
@@ -98,7 +118,9 @@
     "production": "task_3ace2f4e578c",
     "sales": "task_9ccdcc22484c",
     "tracking": "task_fae9f9a71934",
-    "integration": "task_f79d1a5861ae"
+    "integration": "task_f79d1a5861ae",
+    "collaboration": "task_85a577f2516f",
+    "completeness_review": "task_204aacfb8875"
   },
   "estimate": {
     "working_days": "4-7 after usable worker quota",
@@ -127,7 +149,7 @@
       "terminal": "released"
     }
   ],
-  "max_parallel_workers": 6,
+  "max_parallel_workers": 7,
   "quality_requirements": [
     "Real end-to-end jobs and state changes; no gimmick actions or fabricated operational data.",
     "Clear labels/defaults and loading, empty, validation, success and recovery states.",
@@ -140,6 +162,12 @@
     "UI commit and screenshots accepted before shared presentation integration",
     "Tracking status and external setup blockers explicit",
     "Supervisor findings resolved or recorded with release decision",
-    "Combined migration rehearsal, tests, and desktop/mobile/Urdu walkthrough"
-  ]
+    "Combined migration rehearsal, tests, and desktop/mobile/Urdu walkthrough",
+    "Collaboration router/navigation/auth/event hooks integrated and permission/dedupe/retry checks passed before calling chat operational",
+    "Original requirements matrix reviewed: essentials and exception cases mapped to evidence, owner and explicit setup blockers",
+    "Fix accepted staff access audit and partial shipment/receipt reversal status findings; supplier identity severity and matching design validated without unique-name assumption"
+  ],
+  "review_decisions": {
+    "report_17ed12a": "Accepted review artifact, not all severity claims. F3 access audit and F4 partial status actionable; F9 repeatable rehearsal gate. F1 manual-verification duplicate detection is fraud/UX risk unless bypass proven. Duplicate names do not bypass unique winning award. Reused reviewer to correct and expand matrix."
+  }
 }
