@@ -1,6 +1,6 @@
 {
-  "scope": "ERP implementation authorized; publish current verified supplier/procurement/receipt release at user request",
-  "status": "first_release_validation",
+  "scope": "OpenCode 2 implements remaining ERP; Codex plans, coordinates and reviews",
+  "status": "implementation_tasks_queued_awaiting_worker_quota",
   "plan_path": "docs/plans/erp-expansion/implementation-plan.md",
   "resume_not_before": "2026-10-29T05:14:00+05:00",
   "worker_blocker": "Both configured OpenCode 2 free-model sessions exhausted daily messages before producing work. No worker report or application edit was produced.",
@@ -40,15 +40,35 @@
     "shipment_reference": "Supplier supplies bill of lading at shipment dispatch against its accepted purchase order",
     "tracking_provider": "DataLoopLabs / TrackIT; user already has API key; do not request or use key during planning",
     "billing_evidence": "User screenshot: no free credits, USD 1.20-2.00 per container credit, first track and renewal after 30 days; force_update=true always costs one credit; default 100 requests/minute/key",
-    "authorization": "User subsequently authorized implementation and pushing/publishing current verified work."
+    "authorization": "User authorized implementation and current release; latest instruction delegates remaining app coding to OpenCode 2 and limits Codex to planning/coordination."
   },
   "pending_user_decisions": [],
-  "latest_worker_brief": "docs/plans/erp-expansion/worker-briefs.md",
+  "latest_worker_brief": "docs/plans/erp-expansion/parallel-implementation-plan.md",
   "implementation_path": "/Users/anastabba/Documents/iba/sem7/FYP-erp",
   "implementation_branch": "feat/erp-workflows",
   "next_work": [
     "Production machines/shifts and buyer-linked batches",
     "Buyer quotations, invoicing and receivables",
     "DataLoopLabs real API integration after contract and server key configuration"
-  ]
+  ],
+  "current_release": {
+    "commit": "f8c7fa4",
+    "worker_version": "facdae3a-b015-41b7-9cf5-bc7e8bec3e94",
+    "status": "live and verified",
+    "unit_api_tests": 66,
+    "browser_cases": 68
+  },
+  "implementation_tasks": {
+    "production": "task_3ace2f4e578c",
+    "sales": "task_9ccdcc22484c",
+    "tracking": "task_fae9f9a71934",
+    "integration": "task_f79d1a5861ae"
+  },
+  "estimate": {
+    "working_days": "4-7 after usable worker quota",
+    "parallel_wave_days": "2-3",
+    "tracking_days": "1-2",
+    "integration_days": "1-2",
+    "excludes": "quota waits and external documentation/credentials/setup"
+  }
 }
