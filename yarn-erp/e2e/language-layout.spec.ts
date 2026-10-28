@@ -12,7 +12,7 @@ async function signIn(page: Page) {
 
 test('Urdu selection persists through sign-in, navigation and reload', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('combobox', { name: 'Language / زبان' }).selectOption('ur');
+  await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'ur');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.getByRole('heading', { name: 'کون سائن اِن کر رہا ہے؟' })).toBeVisible();
@@ -22,13 +22,10 @@ test('Urdu selection persists through sign-in, navigation and reload', async ({ 
   await page.goto('/#/scanner');
   await expect(page.getByRole('button', { name: 'کپڑا', exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'کون سائن اِن کر رہا ہے؟' })).toBeVisible();
-  await page.getByRole('button', { name: 'Anas', exact: true }).click();
-  await page.getByLabel('چار ہندسوں کا پن').fill('2468');
-  // A reload keeps the current route; wait for the PIN to reopen it before navigating away.
+  // A reload keeps both the session and current route.
   await expect(page.getByRole('heading', { name: 'اسکین', exact: true })).toBeVisible();
   await page.goto('/#/settings');
-  await page.getByRole('combobox', { name: 'Language / زبان' }).selectOption('en');
+  await page.getByRole('button', { name: 'Switch language to English' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
 });
@@ -37,7 +34,7 @@ for (const language of ['en', 'ur']) for (const [width, height] of [[375, 548], 
   test(`${language}: keypad and scan inputs fit ${width}x${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await page.goto('/');
-    if (language === 'ur') await page.getByRole('combobox', { name: 'Language / زبان' }).selectOption('ur');
+    if (language === 'ur') await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
     await page.getByRole('button', { name: 'Anas', exact: true }).click();
     const keypad = page.locator('.yf-keypad');
     await expect(keypad).toBeVisible();

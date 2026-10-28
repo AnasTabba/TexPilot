@@ -161,7 +161,7 @@ function LotDetail({ lot, state, onAction, onBack }: { lot: StockLot; state: Wor
       {evidence?.photos.map(photo => <figure className="live-inspection-photo" key={photo.id}><a href={`/api/photos/${photo.id}`} target="_blank" rel="noreferrer"><img src={`/api/photos/${photo.id}`} alt={`Inspection evidence for batch ${lot.batch}`} width={420} height={320} loading="lazy" /></a><figcaption>{photo.actor_name} · {timestamp(photo.created_at)}</figcaption></figure>)}
       {evidence?.nextOffset != null && <button className="button" onClick={() => void loadEvidence()} disabled={evidenceBusy}>{evidenceBusy ? t("Loading…") : t("Load older batch evidence")}</button>}
     </section>
-    <section className="live-panel live-qr-panel"><div className="live-print-label"><Cone hue={materialHue(state.products, lot.product_id)} size={32} /><h2>yarnflow.</h2><strong>{product?.name}</strong><p>{t("Batch")} {lot.batch} · {product?.sku}</p>{qr && <img src={qr} alt={`QR code for batch ${lot.batch}`} width={240} height={240} className="live-qr" />}<code>YF:{lot.id}</code></div>{qrError && <p role="alert" className="live-error">{qrError}</p>}<p>{t("Print this label and attach it to the batch. Any phone signed in to Yarnflow can scan it to open this batch.")}</p><button className="button" onClick={() => window.print()} disabled={!qr}><Printer size={18} />{t("Print batch label")}</button></section>
+    <section className="live-panel live-qr-panel"><div className="live-print-label"><Cone hue={materialHue(state.products, lot.product_id)} size={32} /><h2>yarnflow</h2><strong>{product?.name}</strong><p>{t("Batch")} {lot.batch} · {product?.sku}</p>{qr && <img src={qr} alt={`QR code for batch ${lot.batch}`} width={240} height={240} className="live-qr" />}<code>YF:{lot.id}</code></div>{qrError && <p role="alert" className="live-error">{qrError}</p>}<p>{t("Print this label and attach it to the batch. Any phone signed in to Yarnflow can scan it to open this batch.")}</p><button className="button" onClick={() => window.print()} disabled={!qr}><Printer size={18} />{t("Print batch label")}</button></section>
   </div></>;
 }
 
@@ -169,10 +169,9 @@ export default function LiveApp() {
   const { t, language } = useLanguage();
   const menuDialog = useRef<HTMLDialogElement>(null);
   const [state, setState] = useState<WorkspaceState | null>(null);
-  // Every document starts locked: browsers can restore cookies without firing a close event.
   const [error, setError] = useState(''); const [authNeeded, setAuthNeeded] = useState(true);
-  const [loading, setLoading] = useState(false); const [refreshing, setRefreshing] = useState(false);
-  const [endingSession, setEndingSession] = useState(true);
+  const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false);
+  const [endingSession, setEndingSession] = useState(false);
   const [route, setRoute] = useState(routeFromHash); const [selectedId, setSelectedId] = useState(lotFromHash);
   const [action, setAction] = useState<Action | null>(null); const [query, setQuery] = useState('');
   const [view, setView] = useState<View>(() => aliases[location.hash.split('/')[1]]?.[1] ?? 'all');
@@ -185,7 +184,7 @@ export default function LiveApp() {
   const [historyBusy, setHistoryBusy] = useState(false); const [reverse, setReverse] = useState<StockMovement | null>(null); const [reason, setReason] = useState(''); const reverseId = useRef(crypto.randomUUID());
   const theme = 'light';
   const requestSequence = useRef(0);
-  const sessionLocked = useRef(authNeeded);
+  const sessionLocked = useRef(false);
   const logoutRequest = useRef<Promise<void> | null>(null);
   const signOut = useCallback((force = false, preserveRoute = false) => {
     if (sessionLocked.current && !force) return logoutRequest.current ?? Promise.resolve();
@@ -197,7 +196,7 @@ export default function LiveApp() {
     if (!preserveRoute) location.hash = '/overview';
     if (logoutRequest.current) return logoutRequest.current;
     setEndingSession(true);
-    // keepalive lets the same authenticated logout finish after a tab is closed.
+    // Explicit sign-out invalidates the session shared by all tabs.
     const request = fetch('/api/auth/logout', {
       method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', keepalive: true,
       headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(20000),
@@ -221,15 +220,6 @@ export default function LiveApp() {
       setError(errorMessage(error));
     } finally { if (sequence === requestSequence.current) { setLoading(false); setRefreshing(false); } }
   }, []);
-  useEffect(() => {
-    // Revoke any restored cookie before offering PIN entry, including after a force-close.
-    void signOut(true, true);
-    const hidden = () => { if (document.hidden) void signOut(); };
-    const closed = () => { void signOut(); };
-    document.addEventListener('visibilitychange', hidden);
-    window.addEventListener('pagehide', closed);
-    return () => { document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', closed); };
-  }, [signOut]);
   useEffect(() => { void refresh(); const interval = setInterval(() => { if (!document.hidden) void refresh(true); }, 10000); const focus = () => { if (!document.hidden) void refresh(true); }; window.addEventListener('focus', focus); document.addEventListener('visibilitychange', focus); return () => { clearInterval(interval); requestSequence.current++; window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus); }; }, [refresh]);
   useEffect(() => { const update = () => { menuDialog.current?.close(); const alias = aliases[location.hash.split('/')[1]]; if (alias) setView(alias[1]); setRoute(routeFromHash()); setSelectedId(lotFromHash()); setAction(null); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
   useEffect(() => { const network = () => { setOnline(navigator.onLine); void refresh(true); }; window.addEventListener('online', network); window.addEventListener('offline', network); return () => { window.removeEventListener('online', network); window.removeEventListener('offline', network); }; }, [refresh]);
@@ -313,7 +303,7 @@ export default function LiveApp() {
   }
   const today = new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Karachi' }).format(Date.now());
   const pageTitle = action ? t("Stock entry") : selected ? t("Batch details") : tabs.find(t => t[0] === route)?.[1] || t("Home");
-  const brand = <a className="live-brand" href="#/overview"><Cone hue="#2f6fd6" size={30} />yarnflow.</a>;
+  const brand = <a className="live-brand" href="#/overview"><Cone hue="#2f6fd6" size={30} />yarnflow</a>;
   const whoAmI = <div className="yf-me"><Avatar name={me.name} /><span><strong>{me.name}</strong><span>{me.admin ? t("Admin") : t("Team member")}</span></span><button className="live-icon-button" onClick={() => void signOut()} aria-label={`${t('Sign out')} ${me.name}`} title={t("Sign out")}><LogOut size={20} aria-hidden="true" /></button></div>;
   return <div className="live-app"><a className="skip-link" href="#live-main" onClick={event => { event.preventDefault(); document.getElementById('live-main')?.focus(); }}>{t("Skip to content")}</a>
     <aside className="live-sidebar">{brand}<div className="live-factory">{workspace.workspace.name}<span>{t("Shared by the whole team")}</span></div><nav aria-label={t("Main navigation")}>{shown.map(([id,label,Icon])=>[id === shown[4][0] && <span className="yf-nav-gap" key="gap" />, <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={19} aria-hidden="true" /><span>{t(label)}</span>{id === 'team' && workspace.pending > 0 && <b className="yf-nav-count" aria-label={`, ${workspace.pending} waiting`}>{workspace.pending}</b>}</button>])}</nav>{whoAmI}</aside>

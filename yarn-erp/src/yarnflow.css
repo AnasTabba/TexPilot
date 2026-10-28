@@ -677,9 +677,11 @@ button.yf-row { cursor: pointer; transition: background-color 180ms var(--ease-o
 .spec-guide { margin-bottom: 18px; border-bottom: 1px solid var(--line); }
 .spec-guide summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
 .spec-guide[open] .spec-steps { margin-block: 12px 20px; }
-.yf-language { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.yf-language label { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
-.yf-language select { width: auto; height: 44px; min-width: 120px; min-height: 44px; }
+.yf-language { display: inline-grid; flex: none; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid currentColor; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; transition: background-color var(--motion-fast), color var(--motion-fast); }
+.yf-language:hover { background: var(--rail-ink); color: var(--rail); }
+.yf-language:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.yf-language-settings .yf-language { color: var(--ink); }
+.yf-language-settings .yf-language:hover { background: var(--ink); color: var(--panel); }
 .yf-language-settings { grid-column: 1 / -1; }
 .yf-language-settings h2 { margin-bottom: 12px; }
 .live-brand { direction: ltr; }
@@ -742,7 +744,7 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
 .yf-signin-cones .yf-cone:nth-child(4) { animation-delay: 180ms; }
 .yf-signin-cones .yf-cone:nth-child(5) { animation-delay: 240ms; }
 .yf-signin-cones .yf-cone:nth-child(6) { animation-delay: 300ms; }
-.yf-signin-sheet { container: signin / size; display: grid; align-content: safe center; justify-items: center; min-height: 0; overflow-y: auto; padding: calc(clamp(14px, 5dvh, 48px) + var(--safe-top)) calc(24px + var(--safe-right)) calc(clamp(14px, 5dvh, 48px) + var(--safe-bottom)) calc(24px + var(--safe-left)); border-radius: var(--r-sheet) 0 0 var(--r-sheet); background: var(--panel); }
+.yf-signin-sheet { container: signin / size; display: grid; align-content: safe center; justify-items: center; min-height: 0; overflow-y: auto; padding: calc(clamp(14px, 5dvh, 48px) + var(--safe-top)) calc(24px + var(--safe-right)) calc(clamp(14px, 5dvh, 48px) + var(--safe-bottom)) calc(24px + var(--safe-left)); border-radius: var(--r-sheet) 0 0 var(--r-sheet); background: #f3eee6; }
 .yf-signin-step { display: grid; gap: clamp(6px, 1.6cqh, 12px); width: min(100%, 440px); animation: yf-enter 420ms var(--ease-out) backwards; }
 .yf-signin-step h1 { font-size: clamp(24px, 5cqh, 34px); line-height: 1.1; font-weight: 700; letter-spacing: -0.025em; }
 .yf-signin-step > p { color: var(--ink-2); font-size: 17px; }
@@ -966,9 +968,7 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
 }
 
 @media (max-width: 900px) {
-  .yf-signin-rail > .yf-language { margin-inline-start: auto; flex-wrap: nowrap; gap: 8px; }
-  .yf-signin-rail .yf-language label span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .yf-signin-rail .yf-language select { min-width: 92px; padding-inline: 10px; }
+  .yf-signin-rail > .yf-language { margin-inline-start: auto; }
   html[dir="rtl"] .live-main-shell { border-radius: 0; }
   html[dir="rtl"] :is(.live-content, .yf-signin-sheet) { border-radius: 24px 24px 0 0; }
 }

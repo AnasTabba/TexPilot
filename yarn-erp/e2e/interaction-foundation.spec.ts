@@ -27,7 +27,7 @@ async function signIn(page: Page, language: Language = 'en') {
   await page.goto('/');
   await page.waitForSelector('.yf-people');
   if (language === 'ur') {
-    await page.getByRole('combobox', { name: 'Language / زبان' }).selectOption('ur');
+    if (await page.locator('html').getAttribute('lang') !== 'ur') await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   }
   await page.getByRole('button', { name: 'Anas', exact: true }).click();
@@ -115,9 +115,10 @@ for (const language of ['en', 'ur'] as const) {
   test(`${language}: every screen fits every viewport without horizontal overflow`, async ({ page }) => {
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.context().clearCookies();
       await page.goto('/');
       await page.waitForSelector('.yf-people');
-      if (language === 'ur') await page.getByRole('combobox', { name: 'Language / زبان' }).selectOption('ur');
+      if (language === 'ur' && await page.locator('html').getAttribute('lang') !== 'ur') await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
       await expectNoHorizontalOverflow(page, `${language} sign-in at ${viewport.name}`);
       await signIn(page, language);
       await expectPagesFit(page, language);
@@ -130,7 +131,7 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
   await page.goto('/');
   await page.waitForSelector('.yf-people');
 
-  await expectTarget(page.locator('.yf-language select'), 'sign-in language select');
+  await expectTarget(page.locator('.yf-language'), 'sign-in language switch');
   await expectTarget(page.locator('.yf-signin-ask'), 'ask for an account');
   await page.getByRole('button', { name: 'Anas', exact: true }).click();
   await expectTarget(page.locator('.yf-signin-back'), 'back to people');
@@ -167,7 +168,7 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
   await openPage(page, '#/team', 'Team');
   await expectScreenTargets(page, 'Team');
   await openPage(page, '#/settings', 'Settings');
-  await expectTarget(page.locator('.yf-language select'), 'settings language select');
+  await expectTarget(page.locator('.yf-language'), 'settings language switch');
   await expectScreenTargets(page, 'Settings');
 
   await openPage(page, '#/scanner', 'Scan');
@@ -237,7 +238,7 @@ test.describe('safe-area tokens', () => {
     await page.setViewportSize({ width: 844, height: 390 });
     await page.goto('/');
     await page.waitForSelector('.yf-people');
-    await page.getByRole('combobox', { name: 'Language / زبان' }).selectOption('ur');
+    await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
     await page.evaluate(() => {
       document.documentElement.style.setProperty('--safe-left', '47px');
       document.documentElement.style.setProperty('--safe-right', '21px');

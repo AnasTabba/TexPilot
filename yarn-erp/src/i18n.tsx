@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
-import { Languages } from 'lucide-react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { Globe2 } from 'lucide-react';
 import { copy } from './ui-copy';
 import { urdu } from './translations';
 
@@ -48,12 +48,9 @@ export const useLanguage = () => useContext(LanguageContext);
 
 export function LanguageSelect() {
   const { language, setLanguage } = useLanguage();
-  const id = useId();
-  return <div className="yf-language" dir="ltr">
-    <label htmlFor={id}><Languages size={19} aria-hidden="true" /><span>Language / زبان</span></label>
-    <select id={id} aria-label="Language / زبان" value={language} onChange={event => setLanguage(event.target.value === 'ur' ? 'ur' : 'en')}>
-      <option value="en" lang="en">English</option>
-      <option value="ur" lang="ur">اردو</option>
-    </select>
-  </div>;
+  const next = language === 'en' ? 'ur' : 'en';
+  const label = next === 'ur' ? 'Switch language to Urdu / اردو' : 'Switch language to English / انگریزی';
+  return <button type="button" className="yf-language" dir="ltr" aria-label={label} title={label} onClick={() => setLanguage(next)}>
+    <Globe2 size={21} aria-hidden="true" />
+  </button>;
 }

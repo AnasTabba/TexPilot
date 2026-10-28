@@ -24,7 +24,7 @@ export default function SignIn({ onSignedIn }: { onSignedIn: () => Promise<void>
   const back = () => setStep({ at: 'people' });
   return <main className="yf-signin">
     <header className="yf-signin-rail">
-      <span className="live-brand"><Cone hue="#2f6fd6" size={30} />yarnflow.</span>
+      <span className="live-brand"><Cone hue="#2f6fd6" size={30} />yarnflow</span>
       <LanguageSelect />
       <div className="yf-signin-cones" aria-hidden="true">{['#2f6fd6', '#c2417f', '#0f8a8a', '#4a4540', '#a4502a', '#5b6b7a'].map(hue => <Cone key={hue} hue={hue} size={84} />)}</div>
       <p><strong>{list?.workspace}</strong>{t('Stock, scans and QC for the whole factory, shared by everyone who signs in.', 'پوری فیکٹری کا اسٹاک، اسکین اور کوالٹی چیک، سائن اِن کرنے والی پوری ٹیم کے لیے۔')}</p>

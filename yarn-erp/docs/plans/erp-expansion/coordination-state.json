@@ -1,0 +1,33 @@
+{
+  "scope": "Implementation planning and parallel OpenCode 2 review only; no application implementation or deployment",
+  "status": "plan_ready_awaiting_worker_quota",
+  "plan_path": "docs/plans/erp-expansion/implementation-plan.md",
+  "resume_not_before": "2026-10-29T05:14:00+05:00",
+  "worker_blocker": "Both configured OpenCode 2 free-model sessions exhausted daily messages before producing work. No worker report or application edit was produced.",
+  "run_id": "run_5e3706b32318",
+  "coordinator_terminal": "term_ac0bbd5e-a703-4cad-94a6-271e17f998ea",
+  "automation_id": "c3ddf186-21f7-4901-9d13-0371380000f4",
+  "automation_schedule": "*/30 * * * *",
+  "timezone": "Asia/Karachi",
+  "workers": [
+    {"provider": "opencode2", "task_id": "task_5c7e794af0a8", "dispatch_id": "ctx_5c4095e17fc4", "scope": "procurement and shipment tracking", "outcome": "failed_quota", "terminal": "released"},
+    {"provider": "opencode2", "task_id": "task_f37e1243900b", "dispatch_id": "ctx_a9e1913d3387", "scope": "production, sales, inventory and permissions", "outcome": "failed_quota", "terminal": "released"}
+  ],
+  "constraints": [
+    "Planning workers edit only their assigned reports.",
+    "Preserve existing UI/session edits and active scanner.",
+    "No live ledger test entries or supplier/buyer messages.",
+    "No API purchase or secret values in reports.",
+    "Coordinator synthesizes reports into implementation-plan.md.",
+    "Remove ACTIVE after authorized work settles to skip agent wakeups."
+  ],
+  "confirmed_user_decisions": {
+    "supplier_portal": "Supplier registration/login; admin must approve new registrations before operational access",
+    "shipment_reference": "Supplier supplies bill of lading at shipment dispatch against its accepted purchase order",
+    "tracking_provider": "DataLoopLabs / TrackIT; user already has API key; do not request or use key during planning",
+    "billing_evidence": "User screenshot: no free credits, USD 1.20-2.00 per container credit, first track and renewal after 30 days; force_update=true always costs one credit; default 100 requests/minute/key",
+    "authorization": "Planning/review only; no application code or live deployment"
+  },
+  "pending_user_decisions": [],
+  "latest_worker_brief": "docs/plans/erp-expansion/worker-briefs.md"
+}
