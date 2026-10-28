@@ -1,9 +1,7 @@
 {
   "scope": "OpenCode 2 implements remaining ERP; Codex plans, coordinates and reviews",
-  "status": "implementation_tasks_queued_awaiting_worker_quota",
+  "status": "parallel_implementation_active",
   "plan_path": "docs/plans/erp-expansion/implementation-plan.md",
-  "resume_not_before": "2026-10-29T05:14:00+05:00",
-  "worker_blocker": "Both configured OpenCode 2 free-model sessions exhausted daily messages before producing work. No worker report or application edit was produced.",
   "run_id": "run_5e3706b32318",
   "coordinator_terminal": "term_ac0bbd5e-a703-4cad-94a6-271e17f998ea",
   "automation_id": "c3ddf186-21f7-4901-9d13-0371380000f4",
@@ -12,27 +10,65 @@
   "workers": [
     {
       "provider": "opencode2",
-      "task_id": "task_5c7e794af0a8",
-      "dispatch_id": "ctx_5c4095e17fc4",
-      "scope": "procurement and shipment tracking",
-      "outcome": "failed_quota",
-      "terminal": "released"
+      "task_id": "task_3ace2f4e578c",
+      "dispatch_id": "ctx_c53aac1d4dd1",
+      "scope": "production",
+      "terminal": "term_88f5defb-fad7-4481-9bc9-588de78115bf",
+      "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-production",
+      "outcome": "in_progress"
     },
     {
       "provider": "opencode2",
-      "task_id": "task_f37e1243900b",
-      "dispatch_id": "ctx_a9e1913d3387",
-      "scope": "production, sales, inventory and permissions",
-      "outcome": "failed_quota",
-      "terminal": "released"
+      "task_id": "task_9ccdcc22484c",
+      "dispatch_id": "ctx_9fc971c271e8",
+      "scope": "sales and buyer portal",
+      "terminal": "term_9c6e196e-2e7f-4c29-ab3e-3ccf291d1bf5",
+      "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-sales",
+      "outcome": "in_progress"
+    },
+    {
+      "provider": "opencode2",
+      "task_id": "task_fae9f9a71934",
+      "dispatch_id": "ctx_37eb8c8ebbbe",
+      "scope": "shipment tracking",
+      "terminal": "term_0368b744-212e-4d91-9ec7-60db6aac8f1f",
+      "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-tracking",
+      "outcome": "in_progress"
+    },
+    {
+      "provider": "opencode2",
+      "task_id": "task_ba58a95adbe8",
+      "dispatch_id": "ctx_6823f0d9cafe",
+      "scope": "integrity and product finish review",
+      "terminal": "term_7175cbec-aa4b-4a16-be61-911a59d7256d",
+      "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-finish-review",
+      "outcome": "in_progress"
+    },
+    {
+      "provider": "opencode2",
+      "task_id": "task_f79dd807cc33",
+      "dispatch_id": "ctx_0a76f7d8b0e7",
+      "scope": "milestone quality supervisor",
+      "terminal": "term_ad198ebe-74ec-4180-b43e-b89154058fa6",
+      "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-supervision",
+      "outcome": "in_progress"
+    },
+    {
+      "provider": "opencode2",
+      "task_id": "task_99c009f6d09b",
+      "dispatch_id": "ctx_bae8a856c6c3",
+      "scope": "visual design and interaction polish",
+      "terminal": "term_42c1535b-858a-4fe8-8923-e384940e0089",
+      "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-ui-finish",
+      "outcome": "in_progress"
     }
   ],
   "constraints": [
-    "Planning workers edit only their assigned reports.",
+    "OpenCode 2 workers implement only their assigned files in isolated worktrees; Codex plans, coordinates and reviews.",
     "Preserve existing UI/session edits and active scanner.",
-    "No live ledger test entries or supplier/buyer messages.",
-    "No API purchase or secret values in reports.",
-    "Coordinator synthesizes reports into implementation-plan.md.",
+    "No live ledger fixtures or supplier/buyer messages.",
+    "No paid tracking requests, account upgrades, secret values in reports or unattended production deployment.",
+    "Never duplicate active dispatches; at most six current parallel workers.",
     "Remove ACTIVE after authorized work settles to skip agent wakeups."
   ],
   "confirmed_user_decisions": {
@@ -70,5 +106,40 @@
     "tracking_days": "1-2",
     "integration_days": "1-2",
     "excludes": "quota waits and external documentation/credentials/setup"
-  }
+  },
+  "observed_model": "GLM-5.3-Flash Free OpenCode",
+  "model_switch_verified": "Both current terminals show GLM-5.3-Flash Free and substantive repository reads; no quota popup at verification.",
+  "previous_workers": [
+    {
+      "provider": "opencode2",
+      "task_id": "task_5c7e794af0a8",
+      "dispatch_id": "ctx_5c4095e17fc4",
+      "scope": "procurement and shipment tracking",
+      "outcome": "failed_quota",
+      "terminal": "released"
+    },
+    {
+      "provider": "opencode2",
+      "task_id": "task_f37e1243900b",
+      "dispatch_id": "ctx_a9e1913d3387",
+      "scope": "production, sales, inventory and permissions",
+      "outcome": "failed_quota",
+      "terminal": "released"
+    }
+  ],
+  "max_parallel_workers": 6,
+  "quality_requirements": [
+    "Real end-to-end jobs and state changes; no gimmick actions or fabricated operational data.",
+    "Clear labels/defaults and loading, empty, validation, success and recovery states.",
+    "Refined warm textile palette; selective elegant italic headings, readable upright body and data typography; proper Urdu text.",
+    "Purposeful responsive interaction and motion, reduced-motion, keyboard, contrast, touch and Urdu RTL checks.",
+    "Architecture, first tests/screenshots, handoff and integrated flow review before release."
+  ],
+  "integration_gates": [
+    "Production and sales contracts accepted",
+    "UI commit and screenshots accepted before shared presentation integration",
+    "Tracking status and external setup blockers explicit",
+    "Supervisor findings resolved or recorded with release decision",
+    "Combined migration rehearsal, tests, and desktop/mobile/Urdu walkthrough"
+  ]
 }
