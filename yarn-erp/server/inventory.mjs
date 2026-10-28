@@ -4,6 +4,8 @@ import { ErpProblem } from './erp-utils.mjs';
 import { supplierPortal } from './supplier-portal.mjs';
 import { staffProcurement } from './procurement.mjs';
 import { receiving } from './receiving.mjs';
+import { salesApi } from './sales.mjs';
+import { buyerPortalApi } from './buyer-portal.mjs';
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
 class Problem extends Error {
@@ -138,6 +140,7 @@ async function route(request, env) {
   }
   if (path.startsWith('/api/auth/')) return authRoute(request, db, path);
   if (path.startsWith('/api/portal/')) return supplierPortal(request, env, path);
+  if (path.startsWith('/api/buyer/')) return buyerPortalApi(request, env, path);
   const member = await currentMember(db, request);
   if (!member) fail(401, 'Sign in with your name and PIN.');
   const userId = member.user_id;
@@ -194,6 +197,7 @@ async function route(request, env) {
   const data = request.method === 'POST' ? await body(request) : null;
   const w = member.workspace_id;
   if (path === '/api/erp/inbound' || path.startsWith('/api/erp/receipts')) return receiving(request, env, member, path, data);
+  if (path.startsWith('/api/erp/sales')) return salesApi(request, env, member, path, data);
   if (path.startsWith('/api/erp/')) return staffProcurement(request, env, member, path, data);
   if (path.startsWith('/api/users')) return usersRoute(db, member, path, data);
   if (/^\/api\/lots\/[^/]+\/evidence$/.test(path) && request.method === 'GET') {

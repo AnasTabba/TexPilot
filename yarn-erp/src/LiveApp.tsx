@@ -8,6 +8,7 @@ import { ConeIcon, moveIcon } from './icons';
 import SignIn, { Avatar } from './SignIn';
 import Team from './Team';
 import Procurement from './Procurement';
+import Sales from './Sales';
 import { Menu, Package, Truck, CircleHelp, Search, ChevronRight, ShieldAlert, PackagePlus, ArrowRightLeft, Trash2, ClipboardCheck, ScanBarcode, House, History, LogOut, UsersRound } from 'lucide-react';
 import BarcodeScanner from './BarcodeScanner';
 import Scanner from './Scanner';
@@ -21,7 +22,7 @@ type FormType = 'product' | 'lot' | 'receive' | 'dispatch' | 'transfer' | 'waste
 type Action = { type: FormType; lotId?: string; productId?: string };
 const tabs = [
   ['overview', 'Home', House], ['inventory', 'Stock', ConeIcon], ['scanner', 'Scan', ScanSearch],
-  ['activity', 'History', History], ['procurement', 'Procurement', PackagePlus], ['team', 'Team', UsersRound], ['settings', 'Settings', Settings], ['help', 'Help', CircleHelp],
+  ['activity', 'History', History], ['procurement', 'Procurement', PackagePlus], ['sales', 'Sales', Truck], ['team', 'Team', UsersRound], ['settings', 'Settings', Settings], ['help', 'Help', CircleHelp],
 ] as const;
 // Old pages that were filtered copies of the stock list (or of Home) now open Stock with that filter.
 type View = 'all' | 'quality' | 'production' | 'dispatch';
@@ -252,7 +253,7 @@ export default function LiveApp() {
   const workspace = state;
   const me = workspace.member;
   const allow = (permission: Permission) => can(me, permission);
-  const shown = tabs.filter(([id]) => (id !== 'team' || me.admin) && (id !== 'procurement' || allow('suppliers') || allow('procure') || allow('receive')));
+  const shown = tabs.filter(([id]) => (id !== 'team' || me.admin) && (id !== 'procurement' || allow('suppliers') || allow('procure') || allow('receive')) && (id !== 'sales' || allow('sales') || allow('payments') || allow('dispatch')));
   const page = shown.some(([id]) => id === route) ? route : 'overview';
   const selected = workspace.lots.find(l => l.id === selectedId);
   const productName = (lotId: string) => workspace.products.find(p => p.id === workspace.lots.find(l => l.id === lotId)?.product_id)?.name || t("Material");
@@ -324,6 +325,7 @@ export default function LiveApp() {
       {page==='settings'&&<div className="yf-settings"><section className="live-panel yf-language-settings"><h2>{t('Language', 'زبان')}</h2><LanguageSelect /></section><section className="live-panel"><h2>{t("Your access")}</h2><p>{accessSummary(me.admin, me.permissions, language)}{t(". Everyone can view stock and use the scanner.")}</p><ul className="yf-access">{permissionInfo.map(([id, label, , Icon]) => <li key={id} className={allow(id) ? 'is-on' : ''}><Icon size={20} aria-hidden="true" /><span>{t(label)}</span>{allow(id) ? <CheckCheck size={18} aria-label={t("Allowed")} /> : <span className="live-muted">{t("Ask an admin")}</span>}</li>)}</ul>{me.admin && <><h3 className="live-subheading">{t("Backup")}</h3><p>{t("Everyone's entries live in one shared database. Download a copy for your records.")}</p><div className="live-actions"><button className="button primary" onClick={()=>void backup()} disabled={exportBusy}><Download size={20} aria-hidden="true" />{exportBusy?t("Preparing backup…"):t("Download backup")}</button></div></>}</section><section className="live-panel yf-records"><h2>{t("Shared records")}</h2><dl className="yf-counts">{([[t("Materials"), workspace.products.length], [t("Batches"), workspace.lots.length], [t("Stock movements"), workspace.movements.length], [t("Inspections"), workspace.inspections.length], [t("QC decisions"), workspace.qualityEvents.length], [t("People"), workspace.members.length]] as const).map(([label, count]) => <div key={label}><dt>{t(label)}</dt><dd>{count}</dd></div>)}</dl></section></div>}
       {page==='team' && <Team me={me} onChanged={() => refresh(true)} />}
       {page==='procurement' && <Procurement member={me} onInventoryChanged={() => refresh(true)} />}
+      {page==='sales' && <Sales member={me} onInventoryChanged={() => refresh(true)} />}
 
       </>}
     </main><footer className="live-sync" role="status"><CheckCheck size={17} aria-hidden="true"/><span>{t("All changes saved")}{savedAt ? ' · '+t('checked', 'چیک کیا')+' '+new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Karachi'}).format(savedAt) : ''}</span></footer></div>

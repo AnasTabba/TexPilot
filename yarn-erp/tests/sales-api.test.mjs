@@ -7,6 +7,8 @@ import { buyerPortalApi as portal } from '../server/buyer-portal.mjs';
 import { ErpProblem } from '../server/erp-utils.mjs';
 import { sqliteBinding } from '../server/sqlite.mjs';
 import { seedRows, userRow } from '../server/auth.mjs';
+import { inventoryApi } from '../server/inventory.mjs';
+import { sha256 } from '../server/auth.mjs';
 
 const origin = 'https://yarnflow.test', pw = 'A strong buyer password 2026';
 const DAY = 86400000, PKT = 5 * 3600_000;
@@ -55,8 +57,9 @@ async function fixture() {
   }
   let buyerSeq = 0;
   async function registerBuyer(name = 'Hina Fabrics', email = name.toLowerCase().replace(/[^a-z]/g, '') + '@buyer.test') {
+    // Keep fixtures unique even when their human-readable names only differ by digits.
+    if (arguments.length < 2) email = `${name.toLowerCase().replace(/[^a-z]/g, '')}${++buyerSeq}@buyer.test`;
     const reg = await buyer('/api/buyer/register', { company: name, contactName: name + ' Contact', email, phone: '+923331234567', city: 'Lahore', password: pw });
-    if (reg.status !== 201) { console.log('REGISTER DEBUG', JSON.stringify({ name, email, body: reg.data }), JSON.stringify(sql.prepare('SELECT * FROM buyer_users').all()), JSON.stringify(sql.prepare('SELECT * FROM buyers').all())); }
     assert.equal(reg.status, 201);
     const id = sql.prepare('SELECT buyer_id FROM buyer_users WHERE email=?').get(email).buyer_id;
     const login = await buyer('/api/buyer/login', { email, password: pw });
@@ -86,16 +89,19 @@ async function fixture() {
   async function approve(cookie, revision) {
     return buyer('/api/buyer/approve', { revisionId: revision.id, version: revision.version, note: 'Approved as quoted' }, cookie);
   }
+  let lotSeq = 0;
   function seedLot(productSku = 'SJ-180', grams = 100000, stage = 'finished') {
+    productSku = `${productSku}-${++lotSeq}`;
     const productId = crypto.randomUUID(), lotId = crypto.randomUUID();
     sql.prepare('INSERT INTO products(id,workspace_id,sku,name,created_at) VALUES(?,?,?,?,?)').run(productId, workspaceId, productSku, 'Single jersey', Date.now());
     sql.prepare("INSERT INTO lots(id,workspace_id,product_id,batch,quality,created_at) VALUES(?,?,?,?, 'approved',?)").run(lotId, workspaceId, productId, 'B-' + productSku, Date.now());
     sql.prepare('INSERT INTO balances(lot_id,stage,grams,cartons,cones) VALUES(?,?,?,?,?)').run(lotId, stage, grams, 0, 0);
     return { productId, lotId };
   }
-  async function dispatch(order, lotId, quantityMilli, at = Date.now() - 3600000, by = manager) {
+  async function dispatch(order, lotId, quantityMilli, at = Date.now() - 3600000, by = manager, expectedStatus = 201) {
     const response = await staff('/api/erp/sales/dispatches', { id: crypto.randomUUID(), orderId: order.id, lotId, stage: 'finished', quantityMilli, grams: quantityMilli, cartons: 0, cones: 0, carrier: 'TCS Roadline', packages: [], documentsNote: '', dispatchedAt: at }, by);
-    assert.equal(response.status, 201, JSON.stringify(response.data));
+    assert.equal(response.status, expectedStatus, JSON.stringify(response.data));
+    if (expectedStatus !== 201) return response;
     return response.data.dispatch;
   }
   async function deliver(disp, deliveryDate = Date.now() - 600000, by = manager) {
@@ -129,6 +135,21 @@ test('buyer portal identity is separate from staff accounts and gated by admin r
   assert.equal((await f.buyer('/api/buyer/approve', { revisionId: crypto.randomUUID(), version: 1 }, pending.cookie)).status, 404);
   assert.equal((await f.buyer('/api/erp/sales', undefined, pending.cookie)).status, 404, 'buyer portal does not serve staff paths');
   assert.equal((await f.buyer('/api/buyer/me', undefined, 'yf_buyer_session=' + 'd'.repeat(64))).status, 401);
+});
+
+test('the production API router serves staff sales and the public buyer portal behind their intended sessions', async () => {
+  const f = await fixture();
+  const token = crypto.randomUUID().replaceAll('-', '').repeat(2);
+  f.sql.prepare('INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES(?,?,?,?)')
+    .run(await sha256(token), f.admin.user_id, Date.now() + DAY, Date.now());
+  const staffResponse = await inventoryApi(new Request(origin + '/api/erp/sales', { headers: { Cookie: `yf_session=${token}` } }), f.env);
+  assert.equal(staffResponse.status, 200);
+  assert.equal((await staffResponse.json()).buyers.length, 0);
+  const publicResponse = await inventoryApi(new Request(origin + '/api/buyer/config'), f.env);
+  assert.equal(publicResponse.status, 200, 'buyer registration configuration is public');
+  assert.equal((await publicResponse.json()).registrationAvailable, true);
+  const blocked = await inventoryApi(new Request(origin + '/api/erp/sales'), f.env);
+  assert.equal(blocked.status, 401, 'staff sales requires the staff session');
 });
 
 test('buyer approval confirms one order and issues exactly one numbered invoice with exact money', async () => {
@@ -174,8 +195,8 @@ test('duplicate and stale approvals cannot mint a second invoice; numbering neve
   assert.equal(f.sql.prepare('SELECT COUNT(DISTINCT number) n FROM invoices').get().n, 2);
   // Non-divisible price×quantity pairs cannot draft a quote at all.
   const thirdBuyer = await f.approvedBuyer('Third Co');
-  const po = await f.buyerPo(thirdBuyer.cookie, 'PO-THIRD-1', 1000, 'kg');
-  assert.equal((await f.staff('/api/erp/sales/quotes', { id: crypto.randomUUID(), poId: po.id, priceMinor: 1234, currency: 'PKR', specifications: 'Cotton yarn 30/1 ring spun', requestedDeliveryAt: po.requested_delivery_at, paymentTerms: po.payment_terms })).status, 422, 'price×quantity must divide into whole minor units');
+  const po = await f.buyerPo(thirdBuyer.cookie, 'PO-THIRD-1', 999, 'kg');
+  assert.equal((await f.staff('/api/erp/sales/quotes', { id: crypto.randomUUID(), poId: po.id, priceMinor: 1235, currency: 'PKR', specifications: 'Cotton yarn 30/1 ring spun', requestedDeliveryAt: po.requested_delivery_at, paymentTerms: po.payment_terms })).status, 422, 'price×quantity must divide into whole minor units');
 });
 
 test('partial dispatch, delivery and payment keep exact cumulative amounts', async () => {
@@ -190,7 +211,7 @@ test('partial dispatch, delivery and payment keep exact cumulative amounts', asy
   assert.equal(one.receivable.amount_minor, 7500000, '60% of PKR 125,000.00');
   assert.equal((await f.staff('/api/erp/sales/deliveries', { id: crypto.randomUUID(), dispatchId: first.id, deliveryDate: Date.now() - 600000 })).status, 200, 're-delivery is idempotent');
   assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM receivables').get().n, 1);
-  assert.equal((await f.dispatch(order, lotId, 60000)).status, 409, 'cannot exceed the ordered quantity');
+  assert.equal((await f.dispatch(order, lotId, 60000, Date.now() - 3600000, f.manager, 409)).status, 409, 'cannot exceed the ordered quantity');
   const second = await f.dispatch(order, lotId, 40000);
   assert.equal(f.sql.prepare('SELECT status FROM sales_orders WHERE id=?').get(order.id).status, 'dispatched');
   const two = await f.deliver(second);
@@ -252,7 +273,7 @@ test('role and organization isolation: staff matrix, buyer scoping, no cross-dom
   if (openReceivable) assert.equal((await f.staff('/api/erp/sales/payments', { id: crypto.randomUUID(), receivableId: openReceivable.id, amountMinor: 1000 }, seller)).status, 403, 'sales cannot record payments');
   const mover = await f.member('Mujeeb Mover', ['dispatch']);
   const second = await f.confirmedOrder(50000, 125000);
-  assert.equal((await f.dispatch(second.order, second.lotId, 50000, Date.now() - 7200000, mover)).status, 201, 'dispatch permission is enough to dispatch');
+  assert.ok((await f.dispatch(second.order, second.lotId, 50000, Date.now() - 7200000, mover)).id, 'dispatch permission is enough to dispatch');
   // Buyer scoping: another buyer sees none of this buyer's records.
   const other = await f.approvedBuyer('Isolated Co');
   const view = await f.buyer('/api/buyer/workspace', undefined, other.cookie);
@@ -262,15 +283,15 @@ test('role and organization isolation: staff matrix, buyer scoping, no cross-dom
   assert.equal((await f.buyer('/api/buyer/invoices/' + invoice.id, undefined, other.cookie)).status, 404, 'another buyer cannot download the invoice');
   assert.equal((await f.buyer('/api/buyer/approve', { revisionId: revision.id, version: revision.version }, other.cookie)).status, 404, 'another buyer cannot approve');
   assert.equal((await f.buyer('/api/buyer/pos', { id: crypto.randomUUID(), reference: 'X-PO-1', specifications: 'Isolation test PO spec', quantityMilli: 1000, unit: 'kg', requestedDeliveryAt: Date.now() + DAY, paymentTerms: 'Net 30' }, other.cookie)).status, 201, 'own PO still works');
-  assert.equal((await f.buyer('/api/buyer/pos', { id: crypto.randomUUID(), reference: 'X-PO-2', specifications: 'Reference clash test', quantityMilli: 1000, unit: 'kg', requestedDeliveryAt: Date.now() + DAY, paymentTerms: 'Net 30' }, b.cookie)).status, 409, 'workspace-unique PO references');
+  assert.equal((await f.buyer('/api/buyer/pos', { id: crypto.randomUUID(), reference: 'X-PO-1', specifications: 'Reference clash test', quantityMilli: 1000, unit: 'kg', requestedDeliveryAt: Date.now() + DAY, paymentTerms: 'Net 30' }, b.cookie)).status, 409, 'workspace-unique PO references');
   void disp;
 });
 
 test('scheduled reminders deduplicate, target correctly, and stop after settlement', async () => {
   const f = await fixture();
   const { buyer: b, order, lotId } = await f.confirmedOrder(60000, 125000);
-  const disp = await f.dispatch(order, lotId, 60000);
-  const { receivable } = await f.deliver(disp, Date.now() - 3600000 + 5 * DAY);
+  const disp = await f.dispatch(order, lotId, 60000, Date.now() - 4 * DAY);
+  const { receivable } = await f.deliver(disp, Date.now() - 3 * DAY);
   const open = f.sql.prepare('SELECT id FROM receivables WHERE status=?').get('open');
   const now = Date.now();
   f.sql.prepare('UPDATE receivables SET due_at=? WHERE id=?').run(now + 3 * DAY, open.id);
@@ -283,7 +304,7 @@ test('scheduled reminders deduplicate, target correctly, and stop after settleme
   assert.equal(f.sql.prepare('SELECT target_role FROM sales_reminders WHERE receivable_id=? AND kind=?').get(open.id, 'overdue').target_role, 'sales_manager');
   assert.equal((await salesScheduled(f.env, now)).created, 0, 'third run deduplicates completely');
   // Admin fallback when the assigned manager is inactive.
-  f.sql.prepare('UPDATE users SET status=? WHERE id=?').run('inactive', f.manager.user_id);
+  f.sql.prepare('UPDATE users SET status=? WHERE id=?').run('pending', f.manager.user_id);
   const open2 = f.sql.prepare("SELECT r.id FROM receivables r WHERE r.status='open'").get();
   f.sql.prepare('UPDATE receivables SET due_at=? WHERE id=?').run(now + DAY, open2.id);
   f.sql.prepare('UPDATE buyers SET assigned_manager_id=? WHERE id=?').run(f.manager.user_id, b.id);
