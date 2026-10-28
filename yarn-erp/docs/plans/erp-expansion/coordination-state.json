@@ -1,6 +1,6 @@
 {
   "scope": "OpenCode 2 implements remaining ERP; Codex plans, coordinates and reviews",
-  "status": "settled_quota_blocked",
+  "status": "implementation_resumed",
   "plan_path": "docs/plans/erp-expansion/implementation-plan.md",
   "run_id": "run_5e3706b32318",
   "coordinator_terminal": "term_ac0bbd5e-a703-4cad-94a6-271e17f998ea",
@@ -15,9 +15,7 @@
       "scope": "production",
       "terminal": "term_88f5defb-fad7-4481-9bc9-588de78115bf",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-production",
-      "outcome": "failed_quota",
-      "lifecycle": "abandoned after positive final-turn daily quota evidence; task failed",
-      "resource_decision": "retained in place by worker-abandon; no process or filesystem action",
+      "outcome": "in_progress",
       "resume_not_before": "2026-10-29T05:50:00+05:00",
       "preserved_work": {
         "head": "0475098",
@@ -26,7 +24,12 @@
           "?? yarn-erp/server/production.mjs",
           "?? yarn-erp/tests/production-api.test.mjs"
         ]
-      }
+      },
+      "retry_dispatch_id": "ctx_97d9a47bb2b8",
+      "retry_status": "active",
+      "observed_model": "Flint 40B Free OpenCode",
+      "prior_dispatch_id": "ctx_c53aac1d4dd1",
+      "resume_worktree_confirmed": "/Users/anastabba/orca/workspaces/FYP/erp-production"
     },
     {
       "provider": "opencode2",
@@ -35,9 +38,7 @@
       "scope": "sales and buyer portal",
       "terminal": "term_9c6e196e-2e7f-4c29-ab3e-3ccf291d1bf5",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-sales",
-      "outcome": "failed_quota",
-      "lifecycle": "abandoned after positive final-turn daily quota evidence; task failed",
-      "resource_decision": "worker-release followed literal nextAction; Orca retained with identity_unproven, processAction none. Do not force close or retry release blindly.",
+      "outcome": "in_progress",
       "resume_not_before": "2026-10-29T05:50:00+05:00",
       "preserved_work": {
         "head": "0475098",
@@ -52,7 +53,11 @@
           "?? yarn-erp/src/sales.css",
           "?? yarn-erp/tests/sales-api.test.mjs"
         ]
-      }
+      },
+      "prior_dispatch_id": "ctx_9fc971c271e8",
+      "retry_dispatch_id": "ctx_50e500740a3a",
+      "observed_model": "Flint 40B Free OpenCode",
+      "resume_worktree_confirmed": "/Users/anastabba/orca/workspaces/FYP/erp-sales"
     },
     {
       "provider": "opencode2",
@@ -61,9 +66,7 @@
       "scope": "shipment tracking",
       "terminal": "term_0368b744-212e-4d91-9ec7-60db6aac8f1f",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-tracking",
-      "outcome": "failed_quota",
-      "lifecycle": "abandoned after positive final-turn daily quota evidence; task failed",
-      "resource_decision": "worker-release followed literal nextAction; Orca retained with identity_unproven, processAction none. Do not force close or retry release blindly.",
+      "outcome": "in_progress",
       "resume_not_before": "2026-10-29T05:50:00+05:00",
       "preserved_work": {
         "head": "0475098",
@@ -75,7 +78,11 @@
           "?? yarn-erp/server/tracking.mjs",
           "?? yarn-erp/tests/tracking-api.test.mjs"
         ]
-      }
+      },
+      "prior_dispatch_id": "ctx_37eb8c8ebbbe",
+      "retry_dispatch_id": "ctx_34a55c0685be",
+      "observed_model": "Flint 40B Free OpenCode",
+      "resume_worktree_confirmed": "/Users/anastabba/orca/workspaces/FYP/erp-tracking"
     },
     {
       "provider": "opencode2",
@@ -95,14 +102,16 @@
       "scope": "milestone quality supervisor",
       "terminal": "term_ad198ebe-74ec-4180-b43e-b89154058fa6",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-supervision",
-      "outcome": "failed_quota",
-      "lifecycle": "abandoned after positive final-turn daily quota evidence; task failed",
-      "resource_decision": "worker-release followed literal nextAction; Orca retained with identity_unproven, processAction none. Do not force close or retry release blindly.",
+      "outcome": "in_progress",
       "resume_not_before": "2026-10-29T05:50:00+05:00",
       "preserved_work": {
         "head": "3eb2bde",
         "status": []
-      }
+      },
+      "prior_dispatch_id": "ctx_0a76f7d8b0e7",
+      "retry_dispatch_id": "ctx_4ea31a8a2e99",
+      "observed_model": "Flint 40B Free OpenCode",
+      "resume_worktree_confirmed": "/Users/anastabba/orca/workspaces/FYP/erp-supervision"
     },
     {
       "provider": "opencode2",
@@ -111,9 +120,7 @@
       "scope": "visual design and interaction polish",
       "terminal": "term_42c1535b-858a-4fe8-8923-e384940e0089",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-ui-finish",
-      "outcome": "failed_quota",
-      "lifecycle": "abandoned after positive final-turn daily quota evidence; task failed",
-      "resource_decision": "retained in place by worker-abandon; no process or filesystem action",
+      "outcome": "in_progress",
       "resume_not_before": "2026-10-29T05:50:00+05:00",
       "preserved_work": {
         "head": "0475098",
@@ -126,7 +133,11 @@
           "?? yarn-erp/scripts/ui-contrast.mjs",
           "?? yarn-erp/scripts/ui-shots.mjs"
         ]
-      }
+      },
+      "prior_dispatch_id": "ctx_bae8a856c6c3",
+      "retry_dispatch_id": "ctx_0c105c1d2731",
+      "observed_model": "Flint 40B Free OpenCode",
+      "resume_worktree_confirmed": "/Users/anastabba/orca/workspaces/FYP/erp-ui-finish"
     },
     {
       "provider": "opencode2",
@@ -135,9 +146,7 @@
       "scope": "operational chat and actionable factory updates",
       "terminal": "term_3990a2b7-c6d5-4374-9560-a57fd3bef0ae",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-collaboration",
-      "outcome": "failed_quota",
-      "lifecycle": "abandoned after positive final-turn daily quota evidence; task failed",
-      "resource_decision": "retained in place by worker-abandon; no process or filesystem action",
+      "outcome": "in_progress",
       "resume_not_before": "2026-10-29T05:50:00+05:00",
       "preserved_work": {
         "head": "77376ae",
@@ -146,7 +155,11 @@
           "?? yarn-erp/server/collaboration.mjs",
           "?? yarn-erp/tests/collaboration-api.test.mjs"
         ]
-      }
+      },
+      "prior_dispatch_id": "ctx_297c6b873185",
+      "retry_dispatch_id": "ctx_616b251b0609",
+      "observed_model": "Flint 40B Free OpenCode",
+      "resume_worktree_confirmed": "/Users/anastabba/orca/workspaces/FYP/erp-collaboration"
     },
     {
       "provider": "opencode2",
@@ -258,14 +271,23 @@
     "report_17ed12a": "Accepted review artifact, not all severity claims. F3 access audit and F4 partial status actionable; F9 repeatable rehearsal gate. F1 manual-verification duplicate detection is fraud/UX risk unless bypass proven. Duplicate names do not bypass unique winning award. Reused reviewer to correct and expand matrix.",
     "report_ca4698d": "Accepted completeness matrix and revalidation. F1 reclassified P1 fraud-prevention UX owned by root (UNIQUE supplier-name mandate withdrawn, award uniqueness confirmed intact), F2 to P2, F4/F6/F7 narrowed, stale zero-code/quota claims corrected. 8-item P1 correction queue with exact owners routed via supervisor msg_77136db53e6e; three-way-match/costing/returns-flo stay out of scope pending user sign-off. Root still owns F1 fix assignment to a settled worker terminal."
   },
-  "resume_not_before": "2026-10-29T05:50:00+05:00",
-  "worker_blocker": "All six remaining configured GLM-5.3-Flash Free terminal final turns explicitly report daily free messages exhausted, reset 5:50 AM 10/29/2026. No final worker_done. Attempts fenced and tasks failed; files and terminals preserved. No model/account changes or retry.",
-  "active_dispatches": [],
-  "pending_coordinator_messages": 0,
-  "active_marker_removed": true,
+  "resume_not_before": null,
+  "worker_blocker": null,
+  "active_dispatches": [
+    "ctx_97d9a47bb2b8",
+    "ctx_50e500740a3a",
+    "ctx_34a55c0685be",
+    "ctx_0c105c1d2731",
+    "ctx_616b251b0609",
+    "ctx_4ea31a8a2e99"
+  ],
+  "pending_coordinator_messages": "Check root inbox before each coordinator wait and process messages before ack.",
+  "active_marker_removed": false,
   "supervision_settled_at": "2026-10-28T17:10:53.621683+00:00",
   "integration_status": "blocked pending reviewed successful handoffs and all recorded gates",
-  "resume_policy": "ACTIVE removed as explicitly requested after all dispatches settled. Scheduled precheck exits 1 while absent. Resume requires deliberate reactivation and quota gate; use retry-of only, exact preserved worktrees, no duplicates. Reset time is a provider statement, not proof of usable quota.",
+  "resume_policy": "User explicitly changed the configured OpenCode model and authorized continuing. Retries use --retry-of on original failed tasks and exact preserved worktrees; no duplicates. If quota recurs record exact reset and preserve. Scheduler remains active every 30 minutes.",
   "latest_supervision_checkpoint": "docs/plans/erp-expansion/quota-checkpoint-2026-10-28.md",
-  "cleanup_verified": "All six quota attempts settled failed/abandoned; no active dispatches. All worktrees retained. Three requested release receipts returned retained/identity_unproven with no process action. No coordinator inbox messages."
+  "cleanup_verified": "All six quota attempts settled failed/abandoned; no active dispatches. All worktrees retained. Three requested release receipts returned retained/identity_unproven with no process action. No coordinator inbox messages.",
+  "model_switch_observed": "All six resumed workers independently display Flint 40B Free OpenCode.",
+  "resume_started_at": "2026-10-29 Asia/Karachi"
 }

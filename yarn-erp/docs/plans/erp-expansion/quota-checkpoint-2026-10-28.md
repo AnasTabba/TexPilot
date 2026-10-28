@@ -107,3 +107,8 @@ On deliberate continuation: restore ACTIVE only with quota availability, use exa
 Preserve all release gates: verified domain/UI handoffs; truthful tracking setup and no paid calls; complete requirement/exception matrix; staff-audit and partial-shipment/receipt corrections; rehearsal of migrations 0004–0006 including ledger/FK preservation; chat router/auth/event hooks and real deduplicated notifications. No live fixtures, business messages, secret dumps or unattended deployment. Scanner and deployed release untouched.
 
 Cleanup follow-through: fleet nextAction requested release for sales, tracking and supervisor. Root followed each once; Orca returned retained/identity_unproven and processAction none for all three. No terminal was force-closed; preserve this resource decision and inspect exact identity before future reuse.
+
+
+## Resumption — 29 October 2026 (Asia/Karachi)
+
+User explicitly changed the OpenCode model and requested continuation. Six prior failed Tasks resumed via `--retry-of`, each in its preserved worktree; production, sales, tracking, visual polish, chat and quality supervision. Every new terminal independently displayed `Flint 40B Free OpenCode`; no duplicate tasks or model overrides were used. Resumed dispatch IDs are recorded in `coordination-state.json`. ACTIVE has been restored; the precheck gate is past the previous quota reset and the 30-minute automation remains enabled. All original release gates still apply.
