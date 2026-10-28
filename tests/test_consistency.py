@@ -97,7 +97,7 @@ def test_structure_and_family_can_both_flag():
 
 def test_kb_has_a_family_threshold_and_imitation_exemptions():
     kb = load_kb()
-    assert kb["version"] == 3 and 0.5 < kb["tolerance"]["family_min_confidence"] <= 1.0
+    assert kb["version"] == 5 and 0.5 < kb["tolerance"]["family_min_confidence"] <= 1.0
     assert set(kb["family_check_exempt"]) <= set(kb["fabrics"])
 
 

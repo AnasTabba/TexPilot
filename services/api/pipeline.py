@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 
 from services.api.schemas import (
@@ -16,7 +17,7 @@ from services.api.schemas import (
     ScanResult,
     StatedComposition,
 )
-from services.consistency.engine import evaluate
+from services.consistency.engine import evaluate, yarn_advice
 from services.ocr.parser import parse_composition
 from services.vision.predictor import HeadOutput, Predictor
 
@@ -53,6 +54,30 @@ def _read_label(ocr, label_image: bytes, flags: list[FlagModel]):
         return None
 
 
+def stated_composition(label_text, label_image, ocr, notes: list[FlagModel]):
+    """(fibres, StatedComposition) from typed label text (wins: a human correction) or a label
+    photo read by OCR; explains in ``notes`` when a photo gave nothing usable."""
+    if label_text:
+        composition = parse_composition(label_text)
+        if composition is not None:
+            return composition, StatedComposition(
+                source=CompositionSource.CARE_LABEL,
+                fibers=[FiberComponent(name=c.name, pct=c.pct) for c in composition],
+            )
+    elif label_image is not None and ocr is not None:
+        ex = _read_label(ocr, label_image, notes)
+        if ex is not None and ex.fibers:
+            return ex.fibers, StatedComposition(
+                source=CompositionSource.CARE_LABEL,
+                fibers=[FiberComponent(name=c.name, pct=c.pct) for c in ex.fibers],
+                ocr_confidence=ex.confidence,
+                section=ex.section,
+            )
+        if ex is not None and ex.reason in _REASONS:
+            notes.append(_info(*_REASONS[ex.reason]))
+    return None, StatedComposition()
+
+
 def run_scan(
     predictor: Predictor,
     surface_image: bytes,
@@ -62,29 +87,15 @@ def run_scan(
     ocr=None,
     model_version: str = "stub-0",
 ) -> ScanResult:
+    start = time.perf_counter()
     vision = predictor.predict(surface_image)
     notes = [_info(n.code, n.message) for n in vision.notes]
-
-    composition, stated = None, StatedComposition()
-    if label_text:  # typed text is a human correction: it wins over OCR
-        composition = parse_composition(label_text)
-        if composition is not None:
-            stated = StatedComposition(
-                source=CompositionSource.CARE_LABEL,
-                fibers=[FiberComponent(name=c.name, pct=c.pct) for c in composition],
-            )
-    elif label_image is not None and ocr is not None:
-        ex = _read_label(ocr, label_image, notes)
-        if ex is not None and ex.fibers:
-            composition = ex.fibers
-            stated = StatedComposition(
-                source=CompositionSource.CARE_LABEL,
-                fibers=[FiberComponent(name=c.name, pct=c.pct) for c in composition],
-                ocr_confidence=ex.confidence,
-                section=ex.section,
-            )
-        elif ex is not None and ex.reason in _REASONS:
-            notes.append(_info(*_REASONS[ex.reason]))
+    t = time.perf_counter()
+    composition, stated = stated_composition(label_text, label_image, ocr, notes)
+    timings = dict(vision.timings_ms)
+    if label_image is not None and not label_text:
+        timings["label_reader"] = round(1000 * (time.perf_counter() - t), 1)
+    timings["total"] = round(1000 * (time.perf_counter() - start), 1)
 
     verdict = evaluate(vision, composition)
     g = vision.garment
@@ -99,6 +110,10 @@ def run_scan(
         else GarmentPrediction(label=g.label, confidence=g.confidence, box=g.box),
         stated_composition=stated,
         capture_quality=CaptureQuality(**vision.quality) if vision.quality else CaptureQuality(),
+        candidates=vision.candidates,
+        custom={name: _head(out) for name, out in vision.custom.items()},
+        yarn_advice=yarn_advice(composition),
+        timings_ms=timings,
         flags=[
             FlagModel(code=f.code, message=f.message, severity=f.severity) for f in verdict.flags
         ]

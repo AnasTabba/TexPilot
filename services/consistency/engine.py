@@ -129,3 +129,28 @@ def evaluate(
     if flags:
         return Verdict("FLAG", tuple(flags), version)
     return Verdict("PASS" if structure_checked else "INSUFFICIENT_EVIDENCE", kb_version=version)
+
+
+def _blend(composition: list[FiberPct]) -> str:
+    """The label's fibres as a yarn buyer names them: 60% cotton / 40% polyester is CVC 60/40."""
+    parts = sorted(composition, key=lambda c: -c.pct)
+    line = "Fibre (from the label): " + " / ".join(
+        f"{c.pct:g}% {c.name.replace('_', ' ')}" for c in parts
+    )
+    pct = {c.name: c.pct for c in parts}
+    cotton, poly = pct.get("cotton", 0.0), pct.get("polyester", 0.0)
+    if cotton and poly:
+        line += (
+            f"; order CVC {cotton:g}/{poly:g}"
+            if cotton >= poly
+            else f"; order PC {poly:g}/{cotton:g}"
+        )
+    if pct.get("elastane_spandex"):
+        line += "; for the stretch, core-spun yarn with a spandex core"
+    return line
+
+
+def yarn_advice(composition: list[FiberPct] | None) -> list[str]:
+    """What to order, from what was read: the label's blend. Counts come from the Yarn spec
+    measurement (services/api/spec.py); nothing is looked up from the fabric name."""
+    return [_blend(composition)] if composition else []

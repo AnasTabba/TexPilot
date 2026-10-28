@@ -28,8 +28,21 @@ def test_macro_f1_matches_hand_computation():
     s = summarize(_onehot_logits(pred), y, CLASSES)
     # class a: P=1, R=.5 -> F1=2/3 ; class b: P=2/3, R=1 -> F1=.8 ; others absent
     assert s["macro_f1"] == pytest.approx((2 / 3 + 0.8) / 2)
+    assert s["weighted_f1"] == pytest.approx((2 / 3 + 0.8) / 2)
+    assert s["micro_f1"] == pytest.approx(0.75)
+    assert s["balanced_accuracy"] == pytest.approx(0.75)
     assert s["classes_absent"] == ["c", "d", "e", "f"]
     assert s["per_class"]["c"]["recall"] is None
+
+
+def test_weighted_f1_uses_support_and_balanced_accuracy_uses_class_recall():
+    y = np.array([0, 0, 0, 1])
+    pred = np.array([0, 0, 1, 1])
+    s = summarize(_onehot_logits(pred), y, CLASSES)
+    # a: F1=.8, recall=2/3; b: F1=2/3, recall=1.
+    assert s["weighted_f1"] == pytest.approx((3 * 0.8 + 2 / 3) / 4)
+    assert s["micro_f1"] == pytest.approx(0.75)
+    assert s["balanced_accuracy"] == pytest.approx((2 / 3 + 1) / 2)
 
 
 def test_confused_pairs_are_row_normalised_and_ranked():

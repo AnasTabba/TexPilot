@@ -1,0 +1,242 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/ajrak.html"
+        ],
+        "createdAt": "2026-10-26T15:35:45.528Z",
+        "reason": "decision sketch for a full redesign the user requested; DESIGN.md is being replaced"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/selvedge.html"
+        ],
+        "createdAt": "2026-10-26T15:35:45.544Z",
+        "reason": "decision sketch for a full redesign the user requested; DESIGN.md is being replaced"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-transit.html"
+        ],
+        "createdAt": "2026-10-26T15:35:45.560Z",
+        "reason": "decision sketch for a full redesign the user requested; DESIGN.md is being replaced"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-warm.html"
+        ],
+        "createdAt": "2026-10-26T15:35:45.575Z",
+        "reason": "decision sketch for a full redesign the user requested; DESIGN.md is being replaced"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/canon.html"
+        ],
+        "createdAt": "2026-10-26T15:35:45.591Z",
+        "reason": "decision sketch for a full redesign the user requested; DESIGN.md is being replaced"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/emission.html"
+        ],
+        "createdAt": "2026-10-26T15:40:47.585Z",
+        "reason": "decision sketch for a full redesign the user requested; DESIGN.md is being replaced"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-yellow.html"
+        ],
+        "createdAt": "2026-10-26T15:40:47.607Z",
+        "reason": "decision sketch for a full redesign the user requested; DESIGN.md is being replaced"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-pass.html"
+        ],
+        "createdAt": "2026-10-26T15:40:47.628Z",
+        "reason": "decision sketch for a full redesign the user requested; DESIGN.md is being replaced"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-metro.html"
+        ],
+        "createdAt": "2026-10-26T15:40:47.647Z",
+        "reason": "decision sketch for a full redesign the user requested; DESIGN.md is being replaced"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/carelabel.html"
+        ],
+        "createdAt": "2026-10-26T15:42:35.254Z",
+        "reason": "decision sketch for a full redesign the user requested; DESIGN.md is being replaced"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/conecode.html"
+        ],
+        "createdAt": "2026-10-26T15:42:35.280Z",
+        "reason": "decision sketch for a full redesign the user requested; DESIGN.md is being replaced"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/testreport.html"
+        ],
+        "createdAt": "2026-10-26T15:42:35.303Z",
+        "reason": "decision sketch for a full redesign the user requested; DESIGN.md is being replaced"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/selvedge.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.265Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/selvedge.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.283Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-warm.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.301Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-warm.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.318Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "overused-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/canon.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.336Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "overused-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-metro.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.355Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-metro.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.372Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-yellow.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.389Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "tight-leading",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-yellow.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.405Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-pass.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.423Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-pass.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.439Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "repeating-stripes-gradient",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/ajrak.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.456Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "repeating-stripes-gradient",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/emission.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.473Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      },
+      {
+        "rule": "codex-grid-background",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/testreport.html"
+        ],
+        "createdAt": "2026-10-26T16:18:24.490Z",
+        "reason": "spent decision sketch of an unchosen direction, kept as the round record; not shipped (user chose Cone Code)"
+      }
+    ]
+  }
+}

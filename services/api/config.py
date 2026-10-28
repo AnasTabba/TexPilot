@@ -12,12 +12,31 @@ from pathlib import Path
 
 from services.vision.predictor import Predictor, StubPredictor
 
+DEFAULT_BROWSER_ORIGINS = (
+    "https://yarnflow-factory-glass.thryuil.chatgpt.site",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+)
+
+
+def browser_origins(env=os.environ) -> tuple[str, ...]:
+    """Explicit browser clients; never allow arbitrary origins or credentials."""
+    configured = env.get("TEXPILOT_CORS_ORIGINS")
+    if configured is None:
+        return DEFAULT_BROWSER_ORIGINS
+    origins = tuple(
+        origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()
+    )
+    if "*" in origins:
+        raise ValueError("TEXPILOT_CORS_ORIGINS must list exact origins, not '*'")
+    return origins
+
 
 @dataclass(frozen=True)
 class Settings:
     vision: str = "stub"  # stub | scanner
-    bundle: Path = Path("models/scanner-v2")
-    detector: str = "gdino"  # gdino | owlv2 | rtdetr | florence2
+    bundle: Path = Path("models/scanner-v8")
+    detector: str = "owlv2"  # owlv2 | gdino | rtdetr | florence2
     ocr: str = "none"  # none | apple | paddle | florence2
     device: str = "auto"
     store: str = "none"  # none | a folder that keeps every scan (parent spec §9)
@@ -27,8 +46,8 @@ class Settings:
         vision = env.get("TEXPILOT_VISION", "stub")
         return cls(
             vision=vision,
-            bundle=Path(env.get("TEXPILOT_MODEL_BUNDLE", "models/scanner-v2")),
-            detector=env.get("TEXPILOT_GARMENT_DETECTOR", "gdino"),
+            bundle=Path(env.get("TEXPILOT_MODEL_BUNDLE", "models/scanner-v8")),
+            detector=env.get("TEXPILOT_GARMENT_DETECTOR", "owlv2"),
             # OCR defaults on only with the scanner, so stub mode runs on any OS.
             ocr=env.get("TEXPILOT_OCR_BACKEND", "apple" if vision == "scanner" else "none"),
             device=env.get("TEXPILOT_DEVICE", "auto"),
@@ -46,7 +65,8 @@ def build_predictor(s: Settings) -> tuple[Predictor, str]:
     from services.vision.scanner import build_scanner
 
     predictor = build_scanner(s.bundle, s.detector, pick_device(s.device))
-    return predictor, f"scanner-v{predictor.heads.version}+det={s.detector}+ocr={s.ocr}"
+    taught = "".join(f"+{h.name}={h.digest}" for h in predictor.heads.custom)
+    return predictor, f"scanner-v{predictor.heads.version}+det={s.detector}+ocr={s.ocr}{taught}"
 
 
 def build_ocr(s: Settings):

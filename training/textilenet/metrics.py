@@ -40,6 +40,7 @@ def summarize(logits: np.ndarray, y: np.ndarray, classes: list[str], n_pairs: in
             0.0,
         )
     present = support > 0
+    evaluated = support.sum()
 
     rates = np.where(support[:, None] > 0, cm / np.maximum(support[:, None], 1), 0.0)
     np.fill_diagonal(rates, 0)
@@ -62,8 +63,11 @@ def summarize(logits: np.ndarray, y: np.ndarray, classes: list[str], n_pairs: in
         "top1": topk_accuracy(logits, y, 1),
         "top5": topk_accuracy(logits, y, 5),
         "macro_f1": float(np.nanmean(np.where(present, f1, np.nan))),
-        "weighted_f1": float((f1 * support).sum() / max(support.sum(), 1)),
-        "balanced_accuracy": float(np.nanmean(recall)),
+        "weighted_f1": float(np.nansum(f1 * support) / evaluated) if evaluated else None,
+        "micro_f1": float(tp.sum() / evaluated) if evaluated else None,
+        "balanced_accuracy": float(np.nanmean(np.where(present, recall, np.nan)))
+        if evaluated
+        else None,
         "classes_absent": [c for c, p in zip(classes, present, strict=True) if not p],
         "per_class": {
             c: {

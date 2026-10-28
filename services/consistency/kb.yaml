@@ -9,7 +9,8 @@
 #
 # `expected_treatment` is checked only when present.
 
-version: 3
+
+version: 5
 tolerance:
   # Minimum visual confidence before a flag may be raised. Tuned for PRECISION:
   # a scanner that cries wolf gets switched off at the QC desk.
@@ -27,30 +28,60 @@ tolerance:
 family_check_exempt: [faux_fur, faux_leather]
 
 fabrics:
-  canvas:       {families: [cellulosic, synthetic]}
-  chambray:     {families: [cellulosic], expected_treatment: yarn_dyed}
-  chenille:     {families: [cellulosic, synthetic]}
-  chiffon:      {families: [protein, synthetic]}
-  corduroy:     {families: [cellulosic]}
-  crepe:        {families: [protein, synthetic, cellulosic]}
-  denim:        {families: [cellulosic], expected_treatment: yarn_dyed}
-  faux_fur:     {families: [synthetic]}
-  faux_leather: {families: [synthetic]}
-  flannel:      {families: [protein, cellulosic]}
-  fleece:       {families: [synthetic]}
-  gingham:      {families: [cellulosic], expected_treatment: yarn_dyed}
-  jersey:       {families: [cellulosic, protein, synthetic, blend]}
-  knit:         {families: [cellulosic, protein, synthetic, blend]}
-  lace:         {families: [synthetic, cellulosic]}
-  lawn:         {families: [cellulosic]}
-  neoprene:     {families: [synthetic]}
-  organza:      {families: [protein, synthetic]}
-  plush:        {families: [synthetic]}
-  satin:        {families: [protein, synthetic, cellulosic]}
-  serge:        {families: [protein, cellulosic, synthetic]}
-  taffeta:      {families: [protein, synthetic]}
-  tulle:        {families: [synthetic, cellulosic]}
-  tweed:        {families: [protein]}
-  twill:        {families: [cellulosic, protein, synthetic, blend]}
-  velvet:       {families: [protein, synthetic, cellulosic]}
-  vinyl:        {families: [synthetic]}
+  canvas:
+    families: [cellulosic, synthetic]
+  chambray:
+    families: [cellulosic]
+    expected_treatment: yarn_dyed
+  chenille:
+    families: [cellulosic, synthetic]
+  chiffon:
+    families: [protein, synthetic]
+  corduroy:
+    families: [cellulosic]
+  crepe:
+    families: [protein, synthetic, cellulosic]
+  denim:
+    families: [cellulosic]
+    expected_treatment: yarn_dyed
+  faux_fur:
+    families: [synthetic]
+  faux_leather:
+    families: [synthetic]
+  flannel:
+    families: [protein, cellulosic]
+  fleece:
+    families: [synthetic]
+  gingham:
+    families: [cellulosic]
+    expected_treatment: yarn_dyed
+  jersey:
+    families: [cellulosic, protein, synthetic, blend]
+  knit:
+    families: [cellulosic, protein, synthetic, blend]
+  lace:
+    families: [synthetic, cellulosic]
+  lawn:
+    families: [cellulosic]
+  neoprene:
+    families: [synthetic]
+  organza:
+    families: [protein, synthetic]
+  plush:
+    families: [synthetic]
+  satin:
+    families: [protein, synthetic, cellulosic]
+  serge:
+    families: [protein, cellulosic, synthetic]
+  taffeta:
+    families: [protein, synthetic]
+  tulle:
+    families: [synthetic, cellulosic]
+  tweed:
+    families: [protein]
+  twill:
+    families: [cellulosic, protein, synthetic, blend]
+  velvet:
+    families: [protein, synthetic, cellulosic]
+  vinyl:
+    families: [synthetic]

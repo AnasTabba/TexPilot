@@ -14,10 +14,12 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 
-from services.api.config import Settings, build_ocr, build_predictor, build_store
+from services.api.config import Settings, browser_origins, build_ocr, build_predictor, build_store
 from services.api.pipeline import run_scan
-from services.api.schemas import FlagModel, ScanResult
+from services.api.schemas import FlagModel, ScanResult, SpecResult
+from services.api.spec import run_spec
 from services.api.uploads import check_upload
 from services.vision.errors import UnsupportedImage
 from services.vision.predictor import Predictor, StubPredictor
@@ -40,6 +42,13 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="TexPilot Scanner", version="0.2.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(browser_origins()),
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
 
 
 def get_predictor() -> Predictor:
@@ -49,6 +58,14 @@ def get_predictor() -> Predictor:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/v1/model")
+def model_info() -> dict[str, str | bool]:
+    """A healthy stub is not a loaded model. Let browser clients tell them apart."""
+    version = _state["model_version"]
+    ready = not isinstance(get_predictor(), StubPredictor) and "stub" not in version.lower()
+    return {"ready": ready, "mode": "scanner" if ready else "stub", "model_version": version}
 
 
 @app.post("/api/v1/scan", response_model=ScanResult)
@@ -91,3 +108,41 @@ async def scan(
                 )
             )
     return result
+
+
+@app.post("/api/v1/spec", response_model=SpecResult)
+def spec(
+    scan_image: UploadFile = File(...),
+    dpi: float | None = Form(default=None),
+    construction: str = Form(default="woven"),
+    gsm: float | None = Form(default=None),
+    oz: float | None = Form(default=None),
+    label_image: UploadFile | None = File(default=None),
+    label_text: str | None = Form(default=None),
+    card_mm: float | None = Form(default=None),
+) -> SpecResult:
+    """Yarn to order for a fabric scanned flat at a known dpi, or photographed with the printed
+    card on it (services/api/spec.py).
+
+    Sync on purpose: the measurement takes a second or two of CPU, so it runs in the
+    threadpool instead of blocking scans. Unusable input (no scale, absurd weight) is a 422.
+    """
+    data = scan_image.file.read()
+    label = label_image.file.read() if label_image is not None else None
+    try:
+        check_upload(data, "scan_image")
+        if label is not None:
+            check_upload(label, "label_image")
+        return run_spec(
+            data,
+            dpi=dpi,
+            construction=construction,
+            gsm=gsm,
+            oz=oz,
+            label_text=label_text,
+            label_image=label,
+            ocr=_state["ocr"],
+            card_mm=card_mm,
+        )
+    except UnsupportedImage as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e

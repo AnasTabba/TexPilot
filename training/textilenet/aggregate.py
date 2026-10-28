@@ -57,6 +57,14 @@ def fmt(xs: list[float]) -> str:
     return f"{m:.2f} ± {s:.2f}" if len(xs) > 1 else f"{m:.2f}"
 
 
+def ranking_score(run: dict, metric: str) -> float:
+    """Rank by validation only; old baseline reports retain their top-1 field."""
+    if metric == "top1":
+        return run["best"]["val_top1"]
+    selected = "tta" if run.get("tta") else "plain"
+    return run["val"][selected]["macro_f1"]
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--runs", type=Path, default=Path("runs"))
@@ -64,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=Path("training/textilenet/results.md"))
     ap.add_argument("--export", type=Path, default=Path("training/textilenet/results"))
     ap.add_argument("--checkpoints", type=Path, default=Path("checkpoints"))
+    ap.add_argument("--rank-by", choices=["top1", "macro_f1"], default="top1")
     args = ap.parse_args(argv)
 
     runs: dict[tuple[str, str], list[dict]] = defaultdict(list)
@@ -84,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     for part in ("fabric", "fibre"):
         tags = sorted(
             {t for p, t in runs if p == part},
-            key=lambda t: -mean_std([r["best"]["val_top1"] for r in runs[(part, t)]])[0],
+            key=lambda t: -mean_std([ranking_score(r, args.rank_by) for r in runs[(part, t)]])[0],
         )
         if not tags:
             continue
@@ -92,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
         md += [
             f"\n## {part.capitalize()} ({len(runs[(part, tags[0])][0]['test']['per_class'])}"
             " classes)\n",
-            "| Model | Pretraining | Test top-1 | Test top-5 | Test macro-F1 | Val top-1 "
+            f"| Model | Pretraining | Test top-1 | Test top-5 | Test macro-F1 | Val {args.rank_by} "
             "| Seeds | Δ top-1 vs best baseline |",
             "|---|---|---|---|---|---|---|---|",
         ]
@@ -109,14 +118,16 @@ def main(argv: list[str] | None = None) -> int:
                 f"| {DISPLAY.get(t, t)} | {PRETRAINING.get(t, rs[0].get('timm_name', '?'))} "
                 f"| {fmt(top1)} | {fmt([r['test']['top5'] for r in rs])} "
                 f"| {fmt([r['test']['macro_f1'] for r in rs])} "
-                f"| {fmt([r['best']['val_top1'] for r in rs])} | {len(rs)} | {delta:+.2f} |"
+                f"| {fmt([ranking_score(r, args.rank_by) for r in rs])} "
+                f"| {len(rs)} | {delta:+.2f} |"
             )
 
-        winner = tags[0]  # highest mean val top-1
+        winner = tags[0]  # highest mean selected validation metric
         rs = runs[(part, winner)]
-        best_run = max(rs, key=lambda r: r["best"]["val_top1"])
+        best_run = max(rs, key=lambda r: ranking_score(r, args.rank_by))
         md += [
-            f"\n**Selected model (highest mean val top-1): {DISPLAY.get(winner, winner)}.** "
+            f"\n**Selected model (highest mean val {args.rank_by}): "
+            f"{DISPLAY.get(winner, winner)}.** "
             f"Per-class and confusion figures below are its seed {best_run['seed']} run "
             f"(test n = {best_run['test']['n']}).\n"
         ]

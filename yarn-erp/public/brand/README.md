@@ -1,0 +1,1 @@
+Yarnflow mark: a cross-wound yarn cone on its kraft tube, drawn in code on 26 October 2026 for the Cone Code redesign (src/Cone.tsx is the source; this PNG and the app icons in public/ are Chrome renders of the same SVG). Palette: cone blue #2f6fd6, kraft #b98a5c, tube shadow #7d5a38; app icons sit on ink #1d1b19. No user or account data is embedded.

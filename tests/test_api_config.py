@@ -14,9 +14,9 @@ def test_defaults_are_the_stub_without_ocr():
     assert build_ocr(s) is None
 
 
-def test_scanner_mode_defaults_to_grounding_dino_and_apple_vision():
+def test_scanner_mode_defaults_to_owlv2_and_apple_vision():
     s = Settings.from_env({"TEXPILOT_VISION": "scanner"})
-    assert (s.detector, s.ocr) == ("gdino", "apple")
+    assert (s.detector, s.ocr) == ("owlv2", "apple")
 
 
 def test_unknown_vision_mode_fails_at_startup():
@@ -39,4 +39,4 @@ def test_the_default_bundle_is_scanner_v2():
     # head: test top-1, coverage at the 90% target, macro-F1 and calibration (docs/results.md).
     from pathlib import Path
 
-    assert Settings.from_env({"TEXPILOT_VISION": "scanner"}).bundle == Path("models/scanner-v2")
+    assert Settings.from_env({"TEXPILOT_VISION": "scanner"}).bundle == Path("models/scanner-v8")

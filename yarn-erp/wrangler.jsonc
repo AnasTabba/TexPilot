@@ -1,0 +1,20 @@
+{
+  // Cloudflare deployment of the Yarnflow web app (npm run deploy:cloudflare).
+  // Static files come from dist. /api/* runs server/cloudflare.mjs: sign-in, accounts and the shared
+  // stock ledger on the D1 database below (migrations in drizzle/), and /api/v1/* passes through to
+  // the TexPilot scanner on the Mac. Its tunnel address is the TEXPILOT_API_URL secret, set by
+  // scripts/scanner-tunnel.sh each time the tunnel starts.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "yarnflow",
+  "main": "server/cloudflare.mjs",
+  "compatibility_date": "2026-10-20",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "yarnflow-db", "database_id": "987ffaba-7994-4987-a860-5cff34483f0e", "migrations_dir": "drizzle" }
+  ],
+  "observability": { "enabled": true }
+}

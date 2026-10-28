@@ -1,0 +1,38 @@
+{
+  "name": "yarnflow-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build && node scripts/prepare-offline.mjs && node scripts/build-worker.mjs",
+    "typecheck": "tsc -b",
+    "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
+    "api:dev": "YARNFLOW_LOCAL_DEV=1 node scripts/dev-server.mjs",
+    "preview": "YARNFLOW_LOCAL_DEV=1 node scripts/dev-server.mjs",
+    "test:api": "node --test tests/inventory-api.test.mjs",
+    "test:e2e": "playwright test",
+    "deploy:cloudflare": "tsc -b && vite build && node scripts/prepare-offline.mjs && wrangler deploy",
+    "scanner:tunnel": "zsh scripts/scanner-tunnel.sh"
+  },
+  "dependencies": {
+    "@fontsource-variable/figtree": "^5.3.0",
+    "@zxing/browser": "^0.2.1",
+    "lucide-react": "^0.468.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.0",
+    "@playwright/test": "^1.51.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.28.2",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.5",
+    "wrangler": "^4.153.0"
+  }
+}
