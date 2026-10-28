@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env*
+!.env.example
+*.tsbuildinfo
+test-results/
+playwright-report/
+.DS_Store
+.local/
+server/assets.generated.mjs
+.wrangler/
+# Screenshots the e2e suite writes
+docs/progress/

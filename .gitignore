@@ -1,13 +1,20 @@
 # Environments
 .venv/
 venv/
+.venv-paddle/
 __pycache__/
 *.py[cod]
 node_modules/
 
-# Data & models (never commit)
+# Scanner data, model bundles and run outputs (never commit). The root entries cover
+# checkouts that still keep them at the top level.
 /data/
+/models/
 /datasets/
+/scanner/data/
+/scanner/models/
+/scanner/datasets/
+/scanner/results/bakeoff/*.json
 *.zip
 *.pt
 *.pth
@@ -17,6 +24,15 @@ node_modules/
 runs/
 wandb/
 mlruns/
+
+# Local agent and tool state
+/.superpowers/
+.agents/
+.claude/
+.impeccable/
+.playwright-mcp/
+.pytest_cache/
+.ruff_cache/
 
 # OS / editor
 .DS_Store
@@ -32,21 +48,3 @@ mlruns/
 *.egg-info/
 build/
 dist/
-
-# Scanner model bundles, the isolated PaddleOCR venv, and plan-execution scratch
-/models/
-.venv-paddle/
-/.superpowers/
-
-# Bake-off prediction caches (bakeoff.md is committed)
-/results/bakeoff/*.json
-
-# Local shared-inventory preview database and generated deploy bundle
-yarn-erp/.local/
-yarn-erp/server/assets.generated.mjs
-yarn-erp/test-results/
-yarn-erp/playwright-report/
-
-# Generated Expo session state (not application source)
-app/.expo/
-app/expo-env.d.ts
