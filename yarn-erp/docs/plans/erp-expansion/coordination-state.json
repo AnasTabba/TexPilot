@@ -1,6 +1,6 @@
 {
   "scope": "OpenCode 2 implements remaining ERP; Codex plans, coordinates and reviews",
-  "status": "parallel_implementation_active",
+  "status": "settled_quota_blocked",
   "plan_path": "docs/plans/erp-expansion/implementation-plan.md",
   "run_id": "run_5e3706b32318",
   "coordinator_terminal": "term_ac0bbd5e-a703-4cad-94a6-271e17f998ea",
@@ -15,7 +15,18 @@
       "scope": "production",
       "terminal": "term_88f5defb-fad7-4481-9bc9-588de78115bf",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-production",
-      "outcome": "in_progress"
+      "outcome": "failed_quota",
+      "lifecycle": "abandoned after positive final-turn daily quota evidence; task failed",
+      "resource_decision": "retained in place by worker-abandon; no process or filesystem action",
+      "resume_not_before": "2026-10-29T05:50:00+05:00",
+      "preserved_work": {
+        "head": "0475098",
+        "status": [
+          "?? yarn-erp/drizzle/0005_production.sql",
+          "?? yarn-erp/server/production.mjs",
+          "?? yarn-erp/tests/production-api.test.mjs"
+        ]
+      }
     },
     {
       "provider": "opencode2",
@@ -24,7 +35,24 @@
       "scope": "sales and buyer portal",
       "terminal": "term_9c6e196e-2e7f-4c29-ab3e-3ccf291d1bf5",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-sales",
-      "outcome": "in_progress"
+      "outcome": "failed_quota",
+      "lifecycle": "abandoned after positive final-turn daily quota evidence; task failed",
+      "resource_decision": "worker-release followed literal nextAction; Orca retained with identity_unproven, processAction none. Do not force close or retry release blindly.",
+      "resume_not_before": "2026-10-29T05:50:00+05:00",
+      "preserved_work": {
+        "head": "0475098",
+        "status": [
+          "?? yarn-erp/drizzle/0004_sales.sql",
+          "?? yarn-erp/node_modules",
+          "?? yarn-erp/server/buyer-portal.mjs",
+          "?? yarn-erp/server/sales.mjs",
+          "?? yarn-erp/src/BuyerPortal.tsx",
+          "?? yarn-erp/src/Sales.tsx",
+          "?? yarn-erp/src/sales-client.ts",
+          "?? yarn-erp/src/sales.css",
+          "?? yarn-erp/tests/sales-api.test.mjs"
+        ]
+      }
     },
     {
       "provider": "opencode2",
@@ -33,7 +61,21 @@
       "scope": "shipment tracking",
       "terminal": "term_0368b744-212e-4d91-9ec7-60db6aac8f1f",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-tracking",
-      "outcome": "in_progress"
+      "outcome": "failed_quota",
+      "lifecycle": "abandoned after positive final-turn daily quota evidence; task failed",
+      "resource_decision": "worker-release followed literal nextAction; Orca retained with identity_unproven, processAction none. Do not force close or retry release blindly.",
+      "resume_not_before": "2026-10-29T05:50:00+05:00",
+      "preserved_work": {
+        "head": "0475098",
+        "status": [
+          "?? yarn-erp/drizzle/0006_tracking.sql",
+          "?? yarn-erp/scripts/migration-rehearse-0006.mjs",
+          "?? yarn-erp/server/datalooplabs.mjs",
+          "?? yarn-erp/server/tracking-budget.mjs",
+          "?? yarn-erp/server/tracking.mjs",
+          "?? yarn-erp/tests/tracking-api.test.mjs"
+        ]
+      }
     },
     {
       "provider": "opencode2",
@@ -53,7 +95,14 @@
       "scope": "milestone quality supervisor",
       "terminal": "term_ad198ebe-74ec-4180-b43e-b89154058fa6",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-supervision",
-      "outcome": "in_progress"
+      "outcome": "failed_quota",
+      "lifecycle": "abandoned after positive final-turn daily quota evidence; task failed",
+      "resource_decision": "worker-release followed literal nextAction; Orca retained with identity_unproven, processAction none. Do not force close or retry release blindly.",
+      "resume_not_before": "2026-10-29T05:50:00+05:00",
+      "preserved_work": {
+        "head": "3eb2bde",
+        "status": []
+      }
     },
     {
       "provider": "opencode2",
@@ -62,7 +111,22 @@
       "scope": "visual design and interaction polish",
       "terminal": "term_42c1535b-858a-4fe8-8923-e384940e0089",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-ui-finish",
-      "outcome": "in_progress"
+      "outcome": "failed_quota",
+      "lifecycle": "abandoned after positive final-turn daily quota evidence; task failed",
+      "resource_decision": "retained in place by worker-abandon; no process or filesystem action",
+      "resume_not_before": "2026-10-29T05:50:00+05:00",
+      "preserved_work": {
+        "head": "0475098",
+        "status": [
+          "M yarn-erp/src/LiveApp.tsx",
+          " M yarn-erp/src/i18n.tsx",
+          " M yarn-erp/src/main.tsx",
+          " M yarn-erp/src/yarnflow.css",
+          "?? yarn-erp/.shots/",
+          "?? yarn-erp/scripts/ui-contrast.mjs",
+          "?? yarn-erp/scripts/ui-shots.mjs"
+        ]
+      }
     },
     {
       "provider": "opencode2",
@@ -71,7 +135,18 @@
       "scope": "operational chat and actionable factory updates",
       "terminal": "term_3990a2b7-c6d5-4374-9560-a57fd3bef0ae",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-collaboration",
-      "outcome": "in_progress"
+      "outcome": "failed_quota",
+      "lifecycle": "abandoned after positive final-turn daily quota evidence; task failed",
+      "resource_decision": "retained in place by worker-abandon; no process or filesystem action",
+      "resume_not_before": "2026-10-29T05:50:00+05:00",
+      "preserved_work": {
+        "head": "77376ae",
+        "status": [
+          "?? yarn-erp/drizzle/0007_collaboration.sql",
+          "?? yarn-erp/server/collaboration.mjs",
+          "?? yarn-erp/tests/collaboration-api.test.mjs"
+        ]
+      }
     },
     {
       "provider": "opencode2",
@@ -80,7 +155,9 @@
       "scope": "original requirements completeness and procurement depth review",
       "terminal": "term_7175cbec-aa4b-4a16-be61-911a59d7256d",
       "worktree": "/Users/anastabba/orca/workspaces/FYP/erp-finish-review",
-      "outcome": "in_progress"
+      "outcome": "succeeded",
+      "commit": "ca4698d",
+      "resource_decision": "release receipt retained/user_takeover; terminal parked alive, fresh dispatch for integrated release review after domain/UI handoffs settle"
     }
   ],
   "constraints": [
@@ -103,9 +180,10 @@
   "implementation_path": "/Users/anastabba/Documents/iba/sem7/FYP-erp",
   "implementation_branch": "feat/erp-workflows",
   "next_work": [
-    "Production machines/shifts and buyer-linked batches",
-    "Buyer quotations, invoicing and receivables",
-    "DataLoopLabs real API integration after contract and server key configuration"
+    "After explicit reactivation and documented quota availability, retry failed domain/UI/chat/supervision Tasks with --retry-of exact prior Dispatch and exact preserved worktree. Do not start duplicate editors or obsolete planning Tasks.",
+    "Finish and review scoped commits, missing screens and handoff evidence; no acceptance inferred from partial tests.",
+    "Assign bounded F1 P1 fraud-prevention UX to settled worker per recorded root decision; no UNIQUE company-name constraint.",
+    "Unblock integration only after reviewed handoffs; implement accepted staff audit/partial statuses, rehearsal and real chat event wiring; no unattended deployment."
   ],
   "current_release": {
     "commit": "f8c7fa4",
@@ -167,7 +245,27 @@
     "Original requirements matrix reviewed: essentials and exception cases mapped to evidence, owner and explicit setup blockers",
     "Fix accepted staff access audit and partial shipment/receipt reversal status findings; supplier identity severity and matching design validated without unique-name assumption"
   ],
+  "contract_decisions_2026_10_28": {
+    "sales_actor_type": "0004_sales.sql granted additive erp_audit_events.actor_type CHECK 'buyer'; rehearsed, sales test evidence required",
+    "migration_rehearsal": "scripts/migration-rehearse.mjs (counts, FK check, canonical write paths) is a release gate before 0004/0005/0006 apply to shared staging",
+    "movement_actions": "0005_production.sql conditionally granted to extend movements.action CHECK with 'consume'/'produce' (consume=stage-out in actual run, produce=measured uninspected output lot traceable to sales_order_lines.id). BLOCKED at integration unless: rehearsal-test on 0000-0004 chain, D1 pragma risk proven via defer_foreign_keys=ON or real-D1 run, both actions unit-exercised end-to-end, no silent extra contract additions",
+    "cross_module_status": "production_batches.status dispatch states reserved for sales; cross-module transition lifecycle is explicit integration-owner wiring neither worker reuses",
+    "finish_review": "report_ca4698d accepted: F1 reclassified P1 fraud-prevention UX owned by root, F2 P2, F4/F6/F7 narrowed, 8-item queue owners routed; out-of-scope proposals (three-way match, costing, returns-flo, RFQ amend/cancel, landed cost, retest, count corrections, credit notes) need explicit user sign-off",
+    "ui_shared_files": "Granted to UI worker task_99c009f6d09b: src/i18n.tsx LanguageSelect rewrite, src/main.tsx figtree italic import, plus paired updates to language-layout.spec.ts and interaction-foundation.spec.ts only; green full-suite evidence required before commit; all other shared drift reverts; handoff report must list the four touched files",
+    "f1_fix": "Bounded minimum fix (additive supplier dedupe/claim, approve-time collision display, supplier.claim audit) assigned to a settled worker terminal only after current wave frees one; reviewer never implements fixes"
+  },
   "review_decisions": {
-    "report_17ed12a": "Accepted review artifact, not all severity claims. F3 access audit and F4 partial status actionable; F9 repeatable rehearsal gate. F1 manual-verification duplicate detection is fraud/UX risk unless bypass proven. Duplicate names do not bypass unique winning award. Reused reviewer to correct and expand matrix."
-  }
+    "report_17ed12a": "Accepted review artifact, not all severity claims. F3 access audit and F4 partial status actionable; F9 repeatable rehearsal gate. F1 manual-verification duplicate detection is fraud/UX risk unless bypass proven. Duplicate names do not bypass unique winning award. Reused reviewer to correct and expand matrix.",
+    "report_ca4698d": "Accepted completeness matrix and revalidation. F1 reclassified P1 fraud-prevention UX owned by root (UNIQUE supplier-name mandate withdrawn, award uniqueness confirmed intact), F2 to P2, F4/F6/F7 narrowed, stale zero-code/quota claims corrected. 8-item P1 correction queue with exact owners routed via supervisor msg_77136db53e6e; three-way-match/costing/returns-flo stay out of scope pending user sign-off. Root still owns F1 fix assignment to a settled worker terminal."
+  },
+  "resume_not_before": "2026-10-29T05:50:00+05:00",
+  "worker_blocker": "All six remaining configured GLM-5.3-Flash Free terminal final turns explicitly report daily free messages exhausted, reset 5:50 AM 10/29/2026. No final worker_done. Attempts fenced and tasks failed; files and terminals preserved. No model/account changes or retry.",
+  "active_dispatches": [],
+  "pending_coordinator_messages": 0,
+  "active_marker_removed": true,
+  "supervision_settled_at": "2026-10-28T17:10:53.621683+00:00",
+  "integration_status": "blocked pending reviewed successful handoffs and all recorded gates",
+  "resume_policy": "ACTIVE removed as explicitly requested after all dispatches settled. Scheduled precheck exits 1 while absent. Resume requires deliberate reactivation and quota gate; use retry-of only, exact preserved worktrees, no duplicates. Reset time is a provider statement, not proof of usable quota.",
+  "latest_supervision_checkpoint": "docs/plans/erp-expansion/quota-checkpoint-2026-10-28.md",
+  "cleanup_verified": "All six quota attempts settled failed/abandoned; no active dispatches. All worktrees retained. Three requested release receipts returned retained/identity_unproven with no process action. No coordinator inbox messages."
 }
