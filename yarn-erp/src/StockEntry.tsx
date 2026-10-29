@@ -118,7 +118,7 @@ export default function StockEntry({ preset, lotId, state, onSaved, onCancel }: 
     check={() => { setShown(true); return !Object.keys(errors).length; }}
     labels={{ next: say('next'), reviewTitle: say('checkThis'), reviewHint: say('checkThisHint'), change: say('change'), cancel: say('cancel'), saving: say('saving'), fixAbove: say('fixAbove') }}
     review={<EntrySentence sentence={sentence} numbers={[[say('cartons'), String(cartons)], [say('cones'), String(cones)], ['kg', weight(grams)]]} warnings={warnings} />}>
-    <div className="yf-entry-batch"><span className="yf-entry-icon"><Icon size={26} aria-hidden="true" /></span><Cone hue={materialHue(state.products, lot.product_id)} size={40} /><div><strong>{yarn}</strong><span><bdi>{lot.batch}</bdi>{lot.supplier ? <> · <bdi>{lot.supplier}</bdi></> : ''}</span></div><QualityBadge value={lot.quality} /></div>
+    <BatchHeader state={state} lotId={lotId} icon={Icon} />
     {offer && stored && <div className="live-warning yf-draft-offer" role="status"><span>{say('draftBack', { time: when.format(stored.startedAt, language) })}</span><div className="live-actions"><button type="button" className="button" onClick={() => { setDraft(stored); setOffer(false); }}>{say('draftKeep')}</button><button type="button" className="button" onClick={() => { forget(); setOffer(false); }}>{say('draftFresh')}</button></div></div>}
     {info.movement === 'receive' && (changePlace
       ? <ChoiceCards label={say('to')} value={to} onChange={v => set('to', v)} options={stageCards('to')} />
@@ -131,6 +131,13 @@ export default function StockEntry({ preset, lotId, state, onSaved, onCancel }: 
     <fieldset className="yf-qty-grid"><legend>{say('howMuch')}</legend>{numberBox('cartons')}{numberBox('cones')}{numberBox('kg', true)}</fieldset>
     <div className="live-field"><label htmlFor="yf-note">{say(preset === 'dispatch' ? 'noteDispatch' : 'note')}</label><textarea id="yf-note" rows={2} maxLength={1000} value={draft.note} onChange={e => set('note', e.target.value)} /></div>
   </AsyncForm>;
+}
+
+/** The batch a form is about, with the job's icon: the same header on every entry. */
+export function BatchHeader({ state, lotId, icon: Icon }: { state: WorkspaceState; lotId: string; icon: LucideIcon }) {
+  const lot = state.lots.find(l => l.id === lotId); if (!lot) return null;
+  const product = state.products.find(p => p.id === lot.product_id);
+  return <div className="yf-entry-batch"><span className="yf-entry-icon"><Icon size={26} aria-hidden="true" /></span><Cone hue={materialHue(state.products, lot.product_id)} size={40} /><div><strong>{yarnName(product?.name || '')}</strong><span><bdi>{lot.batch}</bdi>{lot.supplier ? <> · <bdi>{lot.supplier}</bdi></> : ''}</span></div><QualityBadge value={lot.quality} /></div>;
 }
 
 /** Choose the batch for a job: big rows, batches that can take the job first, most recently used first. */
