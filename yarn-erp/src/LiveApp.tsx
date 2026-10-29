@@ -22,7 +22,7 @@ import Scanner from './Scanner';
 import SpecScan from './SpecScan';
 import { Cone, materialHue } from './Cone';
 import type { ScanResult } from './scanner-client';
-import { roleLabel, can, gramsFromKg, InventoryError, inventoryRequest as api, stageName, timestamp, weight, type Permission, type Role, type StockLot, type StockMovement, type StockStage, type WorkspaceState } from './inventory-client';
+import { roleLabel, gramsFromKg, InventoryError, inventoryRequest as api, stageName, timestamp, weight, type Role, type StockLot, type StockMovement, type StockStage, type WorkspaceState } from './inventory-client';
 
 // Old pages that were filtered copies of the stock list (or of Home) now open Stock with that filter.
 type View = 'all' | 'quality' | 'production' | 'dispatch';
@@ -275,7 +275,7 @@ export default function LiveApp() {
   if (!state) return <main className="live-welcome"><Cone hue="#2f6fd6" size={48} /><h1>{t("Inventory is unavailable")}</h1><p role="alert">{t(error)}</p><button className="button primary" onClick={() => void refresh()}><RefreshCw size={18} />{t("Try connection again")}</button><p>{t("The shared records are safe on the server.")}</p></main>;
   const workspace = state;
   const me = workspace.member;
-  const allow = (permission: Permission) => can(me, permission);
+  const canAddBatch = me.admin || me.role === 'supervisor';
   const shown = [...NAV[me.role], ...COMMON];
   const adminPage = me.role === 'admin' && route === 'history' ? 'movement-history' : route;
   const page = shown.some(section => section.id === adminPage) || (me.role === 'admin' && ['movement-history', 'inventory'].includes(adminPage)) ? adminPage : 'dashboard';
@@ -300,7 +300,7 @@ export default function LiveApp() {
     return <div className="yf-stock-groups">{groups.map(({ p, lots }) => <section className="yf-stock-group" key={p.id} aria-label={p.name}>
       <header><Cone hue={materialHue(workspace.products, p.id)} size={36} /><div><strong>{yarnName(p.name)}</strong><span>{p.sku}{p.barcode ? ' · ' + p.barcode : ''}</span></div><strong className="live-row-weight">{weight(workspace.lots.filter(l => l.product_id === p.id).reduce((sum, l) => sum + lotGrams(l.id), 0))} <small>kg</small></strong></header>
       {lots.map(lot => <button key={lot.id} className="live-lot-row" onClick={() => { navigate('inventory', lot.id); }}><span className="live-lot-name"><strong>{t("Batch")} {lot.batch}</strong><span>{lot.supplier || 'Supplier not recorded'}</span></span><QualityBadge value={lot.quality} /><strong className="live-row-weight">{weight(lotGrams(lot.id))} <small>kg</small></strong><ChevronRight size={20} aria-hidden="true" /></button>)}
-      {!lots.length && <p className="yf-stock-empty">{allow('catalog') ? 'No batches yet. Tap + to add one.' : 'No batches yet.'}</p>}
+      {!lots.length && <p className="yf-stock-empty">{canAddBatch ? 'No batches yet. Tap + to add one.' : 'No batches yet.'}</p>}
     </section>)}{!groups.length && <div className="live-empty"><h3>{workspace.products.length ? 'Nothing matches' : 'Start with your first material'}</h3><p>{workspace.products.length ? 'Try another name, batch or filter.' : 'Add a material (for example Cotton 30/1), then add its batches.'}</p></div>}</div>;
   }
   function activityList(movements: StockMovement[]) {

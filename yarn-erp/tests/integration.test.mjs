@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { portalFixture } from './portal-fixture.mjs';
 import { inventoryApi } from '../server/inventory.mjs';
-import { supplierOperations } from '../server/procurement.mjs';
 
 const uuid = () => crypto.randomUUID(), DAY = 86400000;
 const registration = () => ({ id: uuid(), company: 'Cotton Mill', contactName: 'Mill Contact', email: 'mill@example.test', phone: '+923001234567', categories: ['cotton'] });
@@ -108,8 +107,8 @@ test('bid replay and actor attribution are explicit across both transports', asy
   assert.equal(f.rows('SELECT * FROM supplier_bid_history').length, 1); assert.equal(f.rows('SELECT * FROM supplier_bid_history')[0].actor_id, a);
   const event = f.rows("SELECT * FROM erp_audit_events WHERE action='bid.submitted'")[0]; assert.deepEqual([event.actor_id, event.actor_type, event.actor_role], [a, 'supplier', 'supplier']);
   assert.equal(f.rows("SELECT * FROM notifications WHERE event='bid.received'").length, 1);
-  const { supplierId, ...legacy } = bid(b, r), userId = uuid();
-  const response = await supplierOperations(null, f.env, { user_id: userId, supplier_id: b, workspace_id: f.workspaceId, status: 'approved' }, '/api/portal/bids', legacy);
+  const legacy = bid(b, r), userId = b;
+  const response = await f.api('/bids', legacy);
   assert.equal(response.status, 201); assert.equal(f.rows('SELECT * FROM supplier_bid_history WHERE bid_id=?', legacy.id)[0].actor_id, userId);
   assert.equal(f.rows("SELECT * FROM notifications WHERE event='bid.received'").length, 2);
   assert.equal((await f.api('/bids', { ...body, version: 1, priceMinor: 126000 })).status, 201);
@@ -143,7 +142,7 @@ test('a stale bid update aborts history, audit and notifications; currency and R
   assert.equal(f.rows("SELECT * FROM notifications WHERE event='bid.received'").length, 2);
   assert.equal(f.rows('SELECT price_minor FROM supplier_bids')[0].price_minor, 130000);
   assert.equal((await f.api('/bids', body)).status, 200, 'old snapshot still replays after a revision');
-  await assert.rejects(supplierOperations(null, f.env, { supplier_id: sid, user_id: uuid(), status: 'approved', workspace_id: uuid() }, '/api/portal/bids', (({ supplierId, ...terms }) => terms)(body)), e => e.status === 404);
+  assert.equal((await f.api('/bids', { ...body, supplierId: uuid() })).status, 404);
   for (const change of ['currency', 'closed', 'recipient']) {
     const g = await setup(), supplier = await g.insertSupplier({ status: 'approved' }), r = await rfq(g), original = g.env.DB.batch;
     g.env.DB.batch = async statements => {
@@ -215,4 +214,8 @@ test('RFQ intake winning the buyer approval race makes approval retry without lo
   assert.equal(f.rows("SELECT * FROM erp_audit_events WHERE action='buyer.approved'").length, 0);
   assert.equal((await f.call('/erp/sales/buyers/review', review, 'Sana')).status, 200);
   assert.equal(f.rows("SELECT * FROM notifications WHERE event='buyer_rfq.received'").length, 1);
+});
+test('the factory no longer serves portal session APIs', async () => {
+  const f = await setup();
+  assert.equal((await f.call('/portal/login', {})).status, 404); assert.equal((await f.call('/buyer/login', {})).status, 404); assert.equal((await f.call('/portal/config')).status, 404);
 });

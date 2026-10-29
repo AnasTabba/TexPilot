@@ -2,16 +2,7 @@
 // A 4-digit PIN has only 10,000 values, so its real protection is the lockout (5 wrong tries,
 // then 5 minutes) and access to the database itself; the salted hash keeps PINs unreadable
 // to anyone who reads the users table, including admins.
-const legacyPermissions = ['receive', 'produce', 'dispatch', 'catalog', 'inspect', 'qc', 'waste', 'reverse', 'suppliers', 'procure', 'sales', 'production', 'payments'];
 export const ROLES = ['admin', 'purchase_manager', 'quality_inspector', 'supervisor', 'sales_manager', 'dispatch'];
-export const ROLE_PERMISSIONS = {
-  admin: legacyPermissions,
-  purchase_manager: ['suppliers', 'procure', 'receive'],
-  quality_inspector: ['inspect', 'qc'],
-  supervisor: ['receive', 'produce', 'catalog', 'qc', 'waste', 'reverse', 'dispatch'],
-  sales_manager: ['sales', 'payments'],
-  dispatch: ['dispatch'],
-};
 export const LOCK_AFTER = 5;
 export const LOCK_MS = 5 * 60_000;
 export const SESSION_MS = 30 * 24 * 3600_000;

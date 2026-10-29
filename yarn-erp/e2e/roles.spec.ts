@@ -133,3 +133,17 @@ test('quality and stock-issue notifications open the exact item for the inspecto
   await open('Anas', /Inspection submitted/, new RegExp(`#\\/modules\\/supervisor\\/reviews\\/reports\\/${submittedId}$`), 'Inspection review', 2);
   await open('Anas', /Stock issue raised/, new RegExp(`#\\/modules\\/supervisor\\/requests\\/stock-issues\\/${issueId}$`), 'Requests', 2);
 });
+
+test('removed external portal hashes never render portal screens', async ({ page }) => {
+  for (const hash of ['#/supplier', '#/buyer']) {
+    await page.goto('/' + hash);
+    await expect(page.getByRole('heading', { name: /signing in/ })).toBeVisible();
+    await expect(page.getByText(/Register your company|Supplier sign in|Buyer sign in|Request approval/)).toHaveCount(0);
+  }
+  await signIn(page, 'Anas');
+  for (const hash of ['#/supplier', '#/buyer']) {
+    await page.goto('/' + hash);
+    await expect(page.getByRole('heading', { level: 1, name: 'Dashboard', exact: true })).toBeVisible();
+    await expect(page.getByText(/Register your company|Supplier sign in|Buyer sign in|Request approval/)).toHaveCount(0);
+  }
+});

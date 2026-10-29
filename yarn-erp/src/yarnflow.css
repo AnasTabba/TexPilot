@@ -804,7 +804,7 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
 .yf-signin-step > .live-form { width: 100%; padding: clamp(16px, 3.5cqh, 28px); }
 .yf-signin-step > .live-form .live-panel-heading { margin-bottom: clamp(8px, 2cqh, 18px); }
 .yf-signin-step > .live-form .live-actions { margin-top: clamp(10px, 2.4cqh, 20px); }
-.yf-signin-ask, .yf-supplier-entry { justify-self: start; display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; }
+.yf-signin-ask { justify-self: start; display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; }
 .yf-signin-back { justify-self: start; display: inline-flex; align-items: center; gap: 6px; }
 .yf-signin-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: var(--warn-bg); color: var(--warn); }
 .yf-signin-sent .button { justify-self: start; margin-top: 10px; }
@@ -875,11 +875,6 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
 @media (hover: hover) and (pointer: fine) { .yf-perm-list label:hover { background: var(--sunken); } }
 .yf-pin-reset { display: flex; align-items: flex-end; gap: 12px; }
 .yf-pin-reset .live-field { width: min(100%, 320px); }
-.yf-access { display: grid; margin: 14px 0 0; padding: 0; list-style: none; }
-.yf-access li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); }
-.yf-access li.is-on { color: var(--ink); font-weight: 600; }
-.yf-access li.is-on > svg:last-child { color: var(--ok); }
-.yf-access li > .live-muted { font-weight: 400; }
 
 @media (max-width: 900px) {
   .yf-signin { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }

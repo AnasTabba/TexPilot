@@ -58,9 +58,6 @@ export function role(member, data, ...roles) {
 export function viewer(member, ...roles) {
   if (member.role !== 'admin' && !roles.includes(member.role)) fail(403, 'Your role cannot do this. Ask an admin.');
 }
-export function allow(member, permission) {
-  if (!member.admin && !member.permissions.includes(permission)) fail(403, 'Your account does not have permission for this action. Ask an admin.');
-}
 export function audit(db, member, action, id, detail = {}, type = 'staff', { objectType = action.split('.')[0], before = null, after = null, reason = null, intervention = null } = {}) {
   const now = Date.now();
   return query(db, 'INSERT INTO erp_audit_events(id,workspace_id,actor_id,actor_type,action,record_id,detail_json,created_at,actor_role,object_type,old_json,new_json,reason,intervention_reason,created_by,status,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',

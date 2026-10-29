@@ -14,7 +14,7 @@ test('existing users map to the closest of the six roles and keep signing in', a
   assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM sessions').get().n,sessions);
   assert.deepEqual(sql.prepare('SELECT id FROM roles ORDER BY sort_order').all().map(r => r.id),ROLES);
   const f = await portalFixture(sql); assert.equal((await f.login('Stores')).status,200);
-  const me = await f.member('Stores'); assert.equal(me.role,'supervisor'); assert.ok(me.permissions.includes('receive')); assert.ok(me.permissions.includes('catalog'));
+  const me = await f.member('Stores'); assert.equal(me.role,'supervisor'); assert.equal(Object.hasOwn(me,'permissions'),false);
 });
 test('admin creates users with exactly one of the six roles', async () => {
   const f = await portalFixture();
@@ -107,4 +107,13 @@ test('concurrent edits cannot audit a stale transition; invalid and foreign targ
   const outsider = await userRow({workspaceId:'other',name:'Outsider',pin:'2468',role:'admin'}); f.sql.prepare(outsider.sql).run(...outsider.args);
   assert.equal((await f.call(update,{id:outsider.args[0],role:'dispatch'})).status,404);
   assert.equal((await f.call(users,{name:'Saima',pin:'2468',role:'dispatch'})).status,409);
+});
+test('effective access follows the six roles and the member has no permissions property', async () => {
+  const f = await portalFixture(), finished = name => f.call('/erp/stock/finished', {}, name);
+  for (const [name, r] of [['Saima','supervisor'],['Pervaiz','purchase_manager'],['Qasim','quality_inspector'],['Danish','dispatch'],['Sana','sales_manager']]) await f.person(name, r);
+  assert.notEqual((await finished('Saima')).status, 403);
+  for (const name of ['Pervaiz','Qasim','Danish','Sana']) assert.equal((await finished(name)).status, 403, name);
+  assert.equal((await f.call(users, undefined, 'Saima')).status, 403);
+  for (const name of ['Saima','Pervaiz','Qasim','Danish','Sana']) assert.equal(Object.hasOwn(await f.member(name), 'permissions'), false);
+  assert.equal(Object.hasOwn(await f.member('Anas'), 'permissions'), false);
 });
