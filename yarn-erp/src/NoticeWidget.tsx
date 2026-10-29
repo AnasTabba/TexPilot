@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type KeyboardEvent } from 'react';
-import { Bell, BellOff, CheckCheck, ClipboardCheck, FileText, ShieldAlert, Truck, type LucideIcon } from 'lucide-react';
+import { BellOff, Bell, CheckCheck, ClipboardCheck, FileText, Factory, ListChecks, ShieldAlert, Truck, Wallet, type LucideIcon } from 'lucide-react';
 import { portal } from './PortalCommon';
 import { useOpen, type Inbox, type Notice } from './Notifications';
 import { useLanguage } from './i18n';
@@ -8,32 +8,41 @@ import { when } from './WorkspaceDashboard';
 import type { Member } from './inventory-client';
 import './notice-widget.css';
 
-const CORAL = '#e4572e';
 const LIMIT = 8;
 
-function toneFor(objectType: string): { color: string; fg: string; Icon: LucideIcon } {
-  if (['dispatch', 'sales'].includes(objectType)) return { color: '#0f8b8d', fg: '#fff', Icon: Truck };
-  if (['rfq', 'bid', 'supplier', 'purchase'].includes(objectType)) return { color: '#4f5bd5', fg: '#fff', Icon: FileText };
-  if (['qc', 'inspection'].includes(objectType)) return { color: '#f2a541', fg: '#1d1b19', Icon: ClipboardCheck };
-  if (['claim', 'approval'].includes(objectType)) return { color: CORAL, fg: '#fff', Icon: ShieldAlert };
-  return { color: '#8e5bb5', fg: '#fff', Icon: Bell };
+type Tone = 'kraft' | 'ok' | 'warn' | 'bad' | 'ink';
+// Icon and tone follow the event kind, so each row reads at a glance. Tones are theme tokens (see .nw-chip in notice-widget.css).
+function kindFor(event: string): { Icon: LucideIcon; tone: Tone } {
+  if (/^(qc\.|inspection\.|lot\.|stock\.ready_for_production)/.test(event)) return { Icon: ClipboardCheck, tone: 'ok' };
+  if (/^(approval|award\.pending|supplier\.pending|buyer\.pending|dispatch\.(approval_requested|held))/.test(event)) return { Icon: ListChecks, tone: 'warn' };
+  if (/^stock(_|\.)/.test(event)) return { Icon: Factory, tone: 'kraft' };
+  if (/^(dispatch|shipment)\./.test(event)) return { Icon: Truck, tone: 'ink' };
+  if (/^(po\.|rfq|bid|bidding|buyer_rfq|award\.|supplier\.rated)/.test(event)) return { Icon: FileText, tone: 'kraft' };
+  if (/^claim\./.test(event) || event === 'payment.overdue') return { Icon: ShieldAlert, tone: 'bad' };
+  if (/^payment\./.test(event)) return { Icon: Wallet, tone: 'warn' };
+  return { Icon: Bell, tone: 'ink' };
 }
 
 function NoticeRow({ notice, index, onOpen }: { notice: Notice; index: number; onOpen: (notice: Notice) => void }) {
   const { language, t } = useLanguage();
   const [en, ur] = eventTitle[notice.event] || [notice.event, notice.event];
-  const { color, fg, Icon } = toneFor(notice.object_type);
+  const { Icon, tone } = kindFor(notice.event);
   const unread = notice.status === 'unread';
+  const title = t(en, ur);
   const onKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
     if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(notice); }
   };
   return <tr className={`nw-row${unread ? ' is-unread' : ''}`} role="button" tabIndex={0} style={{ '--d': `${index * 60}ms` } as CSSProperties}
     onClick={() => onOpen(notice)} onKeyDown={onKeyDown}>
-    <td className="nw-name">
-      <span className="nw-chip" style={{ '--c': color, '--fg': fg } as CSSProperties}><Icon size={18} aria-hidden="true" /></span>
-      <span className="nw-title">{t(en, ur)}</span>
+    <td>
+      <div className="nw-name">
+        <span className={`nw-chip is-${tone}`}><Icon size={18} aria-hidden="true" /></span>
+        <span className="nw-text">
+          <span className="nw-title" title={title}>{title}</span>
+          <span className="nw-detail" title={notice.label}>{notice.label}</span>
+        </span>
+      </div>
     </td>
-    <td className="nw-detail">{notice.label}</td>
     <td className="nw-time">{when.format(notice.created_at, language)}</td>
     <td><span className={`nw-pill ${unread ? 'is-unread' : 'is-read'}`}>{unread ? t('Unread', 'غیر پڑھی') : t('Read', 'پڑھی')}</span></td>
   </tr>;
@@ -65,15 +74,14 @@ export function NoticeWidget({ member, inbox, reload }: { member: Member; inbox:
     </div>
 
     {unread.length
-      ? <table className="nw-table">
+      ? <div className="nw-scroll"><table className="nw-table">
         <thead><tr>
           <th scope="col">{t('Notification', 'اطلاع')}</th>
-          <th scope="col" className="nw-detail">{t('Details', 'تفصیل')}</th>
           <th scope="col">{t('Time', 'وقت')}</th>
           <th scope="col">{t('Status', 'حیثیت')}</th>
         </tr></thead>
         <tbody>{unread.map((notice, i) => <NoticeRow key={notice.id} notice={notice} index={i} onOpen={notice => void open(notice)} />)}</tbody>
-      </table>
+      </table></div>
       : <div className="nw-empty">
         <BellOff size={36} aria-hidden="true" />
         <p>{t('No new notifications', 'کوئی نئی اطلاع نہیں')}</p>

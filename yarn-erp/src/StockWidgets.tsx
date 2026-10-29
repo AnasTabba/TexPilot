@@ -93,10 +93,11 @@ export function ProductionWidget({ state }: { state: WorkspaceState }) {
             onChange={next => { setRange(next); setActive(null); }}
             label="Production period"
           />
-          {range !== 'all' && (
+          {/* The trend only shows when the previous period has a value to compare against. */}
+          {range !== 'all' && pct !== null && (
             <span className={`stw-delta ${up ? 'up' : 'down'}`}>
               {up ? <ArrowUpRight size={15} aria-hidden /> : <ArrowDownRight size={15} aria-hidden />}
-              {pct !== null ? `${Math.abs(pct)}%` : current > 0 ? 'new' : '—'}
+              {`${Math.abs(pct)}%`}
             </span>
           )}
           <div className="stw-sub">all time {weight(allTime)} kg</div>

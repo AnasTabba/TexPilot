@@ -10,7 +10,7 @@
   color: var(--ink);
 }
 
-.stw-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.stw-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-right: 64px; }
 .stw-label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .stw-kpi {
   margin-top: 4px;
@@ -178,7 +178,7 @@
   .stw-cell { animation: none; transition: none; }
 }
 
-.stw-title { margin: 0 0 16px; font-size: 16px; font-weight: 600; color: var(--ink); grid-column: 1 / -1; }
+.stw-title { margin: 0 0 16px; font-size: 16px; font-weight: 600; color: var(--ink); grid-column: 1 / -1; padding-right: 64px; }
 
 /* Dashboard cards are ~460px wide: keep the donut beside compact chips, and keep the table on one line per batch. */
 .stw-inv { container-type: inline-size; }

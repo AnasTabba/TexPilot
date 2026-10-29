@@ -144,18 +144,19 @@ function Latest({ data }: { data: Data }) {
         <thead>
           <tr>
             <th scope="col">Invoice</th>
-            <th scope="col">Order</th>
             <th scope="col" className="sw-col-date">Date</th>
-            <th scope="col">Amount</th>
+            <th scope="col" className="sw-col-amount">Amount</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(invoice => (
             <tr key={invoice.id} tabIndex={0} onClick={open} onKeyDown={onKey}>
-              <td>{invoice.number}</td>
-              <td>{invoice.order_reference ?? '—'}</td>
+              <td>
+                <span className="sw-id" title={invoice.number}>{invoice.number}</span>
+                <span className="sw-order" title={invoice.order_reference ?? ''}>{invoice.order_reference ?? '—'}</span>
+              </td>
               <td className="sw-col-date">{factoryDay(invoice.issued_at)}</td>
-              <td>{money(invoice.total_minor, invoice.currency)}</td>
+              <td className="sw-col-amount">{money(invoice.total_minor, invoice.currency)}</td>
             </tr>
           ))}
         </tbody>
