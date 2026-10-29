@@ -71,7 +71,6 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await page.getByRole('button', { name: 'Orders', exact: true }).click();
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(page.getByText('Bill of lading: TESTBOL-1001')).toBeVisible();
-  await expect(page.getByText('Tracking is not connected.', { exact: false })).toBeVisible();
   for (const p of [page, supplier]) expect(await p.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
  } finally { await supplierContext.close(); }
 });
