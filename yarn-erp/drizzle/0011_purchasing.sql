@@ -17,11 +17,25 @@ UPDATE supplier_purchase_orders SET quantity_milli=json_extract(terms_snapshot,'
  total_minor=(json_extract(terms_snapshot,'$.price_minor')*json_extract(terms_snapshot,'$.quantity_milli')+500)/1000,
  updated_at=created_at, created_by=accepted_by;
 
--- Task 1 metadata contract. Old bids and revisions keep their unknown creator; they are not rewritten.
+-- Task 1 metadata contract. Revisions retain their recorded actor and timestamp.
 ALTER TABLE supplier_bids ADD COLUMN created_by TEXT NOT NULL DEFAULT 'legacy:unknown';
 ALTER TABLE supplier_bid_history ADD COLUMN status TEXT NOT NULL DEFAULT 'recorded' CHECK(status='recorded');
 ALTER TABLE supplier_bid_history ADD COLUMN created_by TEXT NOT NULL DEFAULT 'legacy:unknown';
 ALTER TABLE supplier_bid_history ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;
+DROP TRIGGER bid_history_no_update;
+UPDATE supplier_bid_history SET created_by=actor_id,updated_at=created_at;
+CREATE TRIGGER bid_history_no_update BEFORE UPDATE ON supplier_bid_history BEGIN SELECT RAISE(ABORT,'immutable bid revision'); END;
+
+-- Dispatch capacity follows the current approved PO quantity, including quantity changes.
+DROP TRIGGER validate_procurement_dispatch;
+CREATE TRIGGER validate_procurement_dispatch BEFORE INSERT ON procurement_shipments BEGIN
+ SELECT RAISE(ABORT,'invalid shipment order') WHERE NOT EXISTS (
+  SELECT 1 FROM supplier_purchase_orders p
+  WHERE p.id=NEW.purchase_order_id AND p.workspace_id=NEW.workspace_id AND p.supplier_id=NEW.supplier_id
+  AND p.status IN ('accepted','dispatched') AND
+  NEW.quantity_milli + COALESCE((SELECT SUM(quantity_milli) FROM procurement_shipments WHERE purchase_order_id=p.id),0)<=p.quantity_milli
+ );
+END;
 
 -- An award that went stale between request and approval fails the whole batch instead of creating nothing silently.
 CREATE TRIGGER validate_purchase_order BEFORE INSERT ON supplier_purchase_orders BEGIN

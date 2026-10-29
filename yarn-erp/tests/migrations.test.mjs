@@ -41,3 +41,14 @@ test('roles and newly created users carry required metadata', async () => {
   const user = f.sql.prepare('SELECT * FROM users WHERE id=?').get(id);
   assert.equal(user.created_by,f.adminId); assert.equal(user.status,'active'); assert.equal(user.updated_at,user.created_at);
 });
+
+test('purchasing backfills bid revision metadata and restores immutability', () => {
+  const sql = legacy();
+  sql.prepare("INSERT INTO supplier_bid_history(id,bid_id,version,snapshot,actor_id,created_at) VALUES('revision','bid',1,'{}','supplier-person',12345)").run();
+  upgrade(sql);
+  const row = sql.prepare("SELECT * FROM supplier_bid_history WHERE id='revision'").get();
+  assert.equal(row.created_by, 'supplier-person'); assert.equal(row.updated_at, 12345); assert.equal(row.status, 'recorded');
+  assert.equal(row.snapshot, '{}'); assert.equal(row.actor_id, 'supplier-person'); assert.equal(row.created_at, 12345);
+  assert.throws(() => sql.exec("UPDATE supplier_bid_history SET snapshot='changed' WHERE id='revision'"), /immutable bid revision/);
+  assert.throws(() => sql.exec("DELETE FROM supplier_bid_history WHERE id='revision'"), /immutable bid revision/);
+});

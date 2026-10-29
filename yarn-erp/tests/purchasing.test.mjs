@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { portalFixture } from './portal-fixture.mjs';
-import { purchasingScheduled, staffProcurement } from '../server/procurement.mjs';
+import { purchasingScheduled, staffProcurement, supplierOperations } from '../server/procurement.mjs';
 
 const fixture = async () => {
   const f = await portalFixture();
@@ -321,4 +321,61 @@ test('a purchase order cannot be created from a stale bid, an unapproved supplie
   f.sql.prepare('UPDATE procurement_rfqs SET cancelled_at=1 WHERE id=?').run(rfqId); assert.throws(insert, /bid or supplier no longer valid/);
   f.sql.prepare('UPDATE procurement_rfqs SET cancelled_at=NULL WHERE id=?').run(rfqId);
   f.sql.prepare("UPDATE supplier_bids SET status='rejected',rejection_reason='x' WHERE id=?").run(bidId); assert.throws(insert, /bid or supplier no longer valid/);
+});
+
+const dispatch = (f, orderId, quantityMilli) => supplierOperations(null, f.env,
+  { supplier_id: f.supplier, workspace_id: f.workspaceId, user_id: 'supplier:test', status: 'approved' }, '/api/portal/dispatches',
+  { id: crypto.randomUUID(), orderId, quantityMilli, billOfLading: 'BOL-TEST', carrier: 'Test carrier', containers: [], dispatchedAt: Date.now(), note: '' });
+test('supplier dispatch uses the approved increased PO quantity', async () => {
+  const f = await fixture(), { rfqId, bidId } = await setup(f);
+  f.setThreshold('purchase', 15000000);
+  const order = (await award(f, bidId)).data.order;
+  const change = await f.call('/erp/orders/quantity', { id: order.id, version: 1, quantityMilli: 150000 }, 'Pervaiz');
+  assert.equal(change.status, 202);
+  assert.equal((await decide(f, change.data.approvalId)).status, 200);
+  assert.equal((await dispatch(f, order.id, 100000)).status, 201);
+  assert.equal((await dispatch(f, order.id, 50000)).status, 201);
+  await assert.rejects(dispatch(f, order.id, 1));
+  assert.equal(count(f, 'procurement_shipments'), 2); assert.equal(audits(f, 'shipment.dispatched').length, 2);
+  assert.equal(po(f, rfqId).quantity_milli, 150000);
+});
+test('a dispatch that loses a race to a PO decrease aborts all its effects', async () => {
+  const f = await fixture(), { rfqId, bidId } = await setup(f), order = (await award(f, bidId)).data.order;
+  const batch = f.env.DB.batch;
+  f.env.DB.batch = async statements => {
+    f.env.DB.batch = batch;
+    const changed = await f.call('/erp/orders/quantity', { id: order.id, version: 1, quantityMilli: 80000 }, 'Pervaiz');
+    assert.equal(changed.status, 200);
+    return batch(statements);
+  };
+  await assert.rejects(dispatch(f, order.id, 90000));
+  assert.equal(count(f, 'procurement_shipments'), 0); assert.equal(audits(f, 'shipment.dispatched').length, 0);
+  assert.equal(po(f, rfqId).status, 'accepted'); assert.equal(po(f, rfqId).quantity_milli, 80000);
+  assert.equal((await dispatch(f, order.id, 80000)).status, 201);
+});
+test('scheduled close surfaces transaction errors and rolls back all effects', async () => {
+  const f = await fixture(), id = await published(f);
+  f.sql.exec("CREATE TRIGGER fail_close_audit BEFORE INSERT ON erp_audit_events WHEN NEW.action='rfq.closed' BEGIN SELECT RAISE(ABORT,'audit unavailable'); END;");
+  await assert.rejects(purchasingScheduled(f.env, Date.now() + 2 * day), /audit unavailable/);
+  assert.equal(f.sql.prepare('SELECT status FROM procurement_rfqs WHERE id=?').get(id).status, 'open');
+  assert.equal(audits(f, 'rfq.closed').length, 0); assert.deepEqual(notified(f, 'bidding.closed'), []);
+});
+test('threshold fixture uses configured currency on insert and replacement', async () => {
+  const f = await fixture();
+  f.setThreshold('purchase', 100);
+  assert.equal((await f.call('/erp/admin/settings', { key: 'currency', value: 'USD' })).status, 200);
+  for (const type of ['purchase', 'claim']) {
+    f.setThreshold(type, 200);
+    const row = f.sql.prepare('SELECT value,currency FROM thresholds WHERE workspace_id=? AND type=?').get(f.workspaceId, type);
+    assert.equal(row.value, 200); assert.equal(row.currency, 'USD');
+  }
+});
+
+test('purchasing category reads require a purchase manager or admin', async () => {
+  const f = await fixture();
+  for (const name of ['Pervaiz', 'Anas']) {
+    const response = await f.call('/erp/categories', undefined, name);
+    assert.equal(response.status, 200); assert.ok(response.data.categories.some(c => c.id === 'cotton'));
+  }
+  assert.equal((await f.call('/erp/categories', undefined, 'Inspector')).status, 403);
 });

@@ -95,13 +95,18 @@ export async function purchasingScheduled(env, now = Date.now()) {
   const db = env.DB; let closed = 0;
   for (const r of await all(db, "SELECT * FROM procurement_rfqs WHERE status='open' AND cancelled_at IS NULL AND deadline_at<=?", now)) {
     try { await db.batch([...closeQueries(db, r, now), audit(db, { workspace_id: r.workspace_id, user_id: 'system:purchasing', role: 'system' }, 'rfq.closed', r.id, { reason: 'deadline' }, 'staff', { before: { status: 'open' }, after: { status: 'closed' } })]); closed++; }
-    catch { /* a person closed or cancelled it first */ }
+    catch (error) {
+      // Only the zero-row guard followed by an ineligible RFQ is a lost close race.
+      if (!/malformed JSON/i.test(error.message)) throw error;
+      const current = await one(db, 'SELECT status,cancelled_at FROM procurement_rfqs WHERE id=?', r.id);
+      if (!current || (current.status === 'open' && current.cancelled_at === null)) throw error;
+    }
   }
   return { closed };
 }
 export async function staffProcurement(request, env, member, path, data) {
   const db = env.DB; const w = member.workspace_id; const now = Date.now();
-  if (path === '/api/erp/categories') return json({ categories: await categories(db) });
+  if (path === '/api/erp/categories' && !data) { viewer(member, 'purchase_manager'); return json({ categories: await categories(db) }); }
   if (path.startsWith('/api/erp/suppliers')) {
     const listed = async id => { const s = await one(db, `SELECT ${supplierFields} FROM suppliers WHERE id=? AND workspace_id=? AND status IN (${LISTED.map(() => '?').join(',')})`, id, w, ...LISTED); if (!s) fail(404, 'Supplier not found.'); return s; };
     if (!data) {
