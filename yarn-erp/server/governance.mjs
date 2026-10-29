@@ -1,4 +1,5 @@
 import { all, one, fail, integer, text, query, audit, role, viewer, reason, keys, recordId, json } from './erp-utils.mjs';
+import { notifyRole } from './notify.mjs';
 export const THRESHOLDS = ['purchase','inventory_adjustment','claim','dispatch_stock_issue'];
 export const DEFAULT_SETTINGS = { currency: 'PKR', tax_rate_bp: 1800, invoice_format: 'INV-{YYYY}-{NNNN}', reminder_hours: 24, credit_alert_days: [7, 3] };
 export async function settingsOf(db, workspaceId) {
@@ -36,7 +37,8 @@ export function approvalQueries(db, member, { id = crypto.randomUUID(), type, ob
   // Capture currency in the INSERT, keeping the statement-array interface synchronous.
   return [query(db, `INSERT INTO approval_requests(id,workspace_id,type,object_type,object_id,amount,threshold,unit,currency,payload_json,requested_by,requested_role,created_by,created_at,updated_at)
     VALUES(?,?,?,?,?,?,?,?,CASE WHEN ?='minor' THEN COALESCE((SELECT json_extract(value_json,'$') FROM settings WHERE workspace_id=? AND key='currency'),'PKR') ELSE NULL END,?,?,?,?,?,?)`,
-    id, member.workspace_id, type, objectType, objectId, amount, threshold, unit, unit, member.workspace_id, JSON.stringify(payload), member.user_id, member.role, member.user_id, now, now)];
+    id, member.workspace_id, type, objectType, objectId, amount, threshold, unit, unit, member.workspace_id, JSON.stringify(payload), member.user_id, member.role, member.user_id, now, now),
+    notifyRole(db, member.workspace_id, 'admin', type === 'purchase_award' ? 'award.pending_approval' : 'approval.pending', 'approval', id, type)];
 }
 const approvalRow = row => ({ ...row, payload: JSON.parse(row.payload_json) });
 const objectValue = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -80,6 +82,7 @@ export async function approvalsApi(request, env, member, path, data, handlers) {
         await db.batch([
           query(db, 'UPDATE approval_requests SET status=?,decided_by=?,decided_at=?,updated_at=?,reason=? WHERE id=? AND workspace_id=?', status, member.user_id, now, now, decisionReason, id, member.workspace_id),
           ...effects,
+          notifyRole(db, member.workspace_id, row.requested_role, 'approval.decided', 'approval', id, row.type),
           audit(db, member, 'approval.' + status, id, { type: row.type }, 'staff', { objectType: 'approval', before: { status: 'pending' }, after: { status }, reason: decisionReason }),
         ]);
       } catch (error) { fail(409, String(error.message).includes('approval already decided') ? APPROVAL_DECIDED : APPROVAL_CHANGED); }
