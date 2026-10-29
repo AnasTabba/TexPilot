@@ -1,5 +1,6 @@
 import { ROLES, userRow, validPin, randomHex, pinHash } from './auth.mjs';
 import { all, one, query, json, fail, keys, text, recordId, integer, role, viewer, audit } from './erp-utils.mjs';
+import { THRESHOLDS, DEFAULT_SETTINGS, settingsOf, settingValue } from './governance.mjs';
 const roleOf = value => { if (!ROLES.includes(value)) fail(422, 'Choose a valid role.'); return value; };
 const pinOf = value => { if (!validPin(value)) fail(422, 'The PIN must be exactly 4 digits.'); return value; };
 
@@ -7,6 +8,13 @@ export async function adminApi(request, env, member, path, data) {
   const db = env.DB, w = member.workspace_id;
   if (request.method === 'GET') {
     viewer(member);
+    if (path === '/api/erp/admin/settings') return json({ settings: await settingsOf(db, w) });
+    if (path === '/api/erp/admin/thresholds') return json({
+      thresholds: await all(db, `SELECT t.type,t.value,t.currency,u.name AS updated_by_name,t.updated_at FROM thresholds t
+        LEFT JOIN users u ON u.id=t.updated_by AND u.workspace_id=t.workspace_id WHERE t.workspace_id=? ORDER BY t.type`, w),
+      history: await all(db, `SELECT h.type,h.old_value,h.new_value,h.old_currency,h.new_currency,u.name AS changed_by_name,h.changed_at FROM threshold_history h
+        LEFT JOIN users u ON u.id=h.changed_by AND u.workspace_id=h.workspace_id WHERE h.workspace_id=? ORDER BY h.changed_at DESC,h.rowid DESC`, w),
+    });
     if (path === '/api/erp/admin/audit') {
       const params = new URL(request.url).searchParams, where = ['e.workspace_id=?'], args = [w];
       for (const [key, column] of [['actor','actor_id'],['action','action'],['objectType','object_type'],['objectId','record_id']]) {
@@ -35,6 +43,39 @@ export async function adminApi(request, env, member, path, data) {
     return json({ users: users.map(({ deactivated_at, locked_until, ...user }) => ({ ...user, status: deactivated_at === null ? user.status : 'deactivated', locked: locked_until > Date.now() })) });
   }
   role(member, data, 'admin');
+  if (path === '/api/erp/admin/thresholds' || path === '/api/erp/admin/settings') {
+    const threshold = path.endsWith('/thresholds');
+    keys(data, [threshold ? 'type' : 'key','value','interventionReason']);
+    const key = threshold ? data.type : data.key;
+    if (threshold && !THRESHOLDS.includes(key)) fail(422, 'Choose a valid threshold.');
+    const value = threshold ? integer(data.value, 'Threshold', 0, Number.MAX_SAFE_INTEGER) : settingValue(key, data.value);
+    const table = threshold ? 'thresholds' : 'settings', column = threshold ? 'type' : 'key';
+    const previous = await one(db, `SELECT * FROM ${table} WHERE workspace_id=? AND ${column}=?`, w, key);
+    const settings = await settingsOf(db, w), currency = threshold && ['purchase','claim'].includes(key) ? settings.currency : null;
+    const before = threshold ? previous?.value ?? null : previous ? JSON.parse(previous.value_json) : DEFAULT_SETTINGS[key];
+    const now = Math.max(Date.now(), (previous?.updated_at ?? 0) + 1);
+    // A missing-required-value insert aborts the whole batch if our snapshot lost a race.
+    const guard = query(db, `INSERT INTO ${table}(workspace_id,${column}) SELECT ?,? WHERE
+      (SELECT updated_at FROM ${table} WHERE workspace_id=? AND ${column}=?) IS NOT ?
+      OR (SELECT ${threshold ? 'value' : 'value_json'} FROM ${table} WHERE workspace_id=? AND ${column}=?) IS NOT ?
+      ${threshold ? "OR (SELECT currency FROM thresholds WHERE workspace_id=? AND type=?) IS NOT ?" : ''}`,
+      w, key, w, key, previous?.updated_at ?? null, w, key, threshold ? previous?.value ?? null : previous?.value_json ?? null,
+      ...(threshold ? [w,key,previous?.currency ?? null] : []));
+    const write = threshold ? query(db, `INSERT INTO thresholds(workspace_id,type,value,currency,created_by,created_at,updated_by,updated_at) VALUES(?,?,?,?,?,?,?,?)
+      ON CONFLICT(workspace_id,type) DO UPDATE SET value=excluded.value,currency=excluded.currency,updated_by=excluded.updated_by,updated_at=excluded.updated_at`,
+      w,key,value,currency,member.user_id,now,member.user_id,now)
+      : query(db, `INSERT INTO settings(workspace_id,key,value_json,created_by,created_at,updated_by,updated_at) VALUES(?,?,?,?,?,?,?)
+      ON CONFLICT(workspace_id,key) DO UPDATE SET value_json=excluded.value_json,updated_by=excluded.updated_by,updated_at=excluded.updated_at`,
+      w,key,JSON.stringify(value),member.user_id,now,member.user_id,now);
+    try { await db.batch([guard, write, audit(db, member, threshold ? 'threshold.changed' : 'setting.changed', key,
+      threshold ? { old_currency: previous?.currency ?? null, new_currency: currency } : {}, 'staff', { before: { value: before }, after: { value } })]); }
+    catch (error) {
+      if (/Close open bids/.test(String(error))) fail(409, 'Close open bids and unaccepted quotations and settle unpaid invoices before changing currency.');
+      if (/constraint failed|factory currency/i.test(String(error))) fail(409, 'This configuration changed. Refresh and try again.');
+      throw error;
+    }
+    return json({ saved: true });
+  }
   if (path === '/api/erp/admin/users') {
     keys(data, ['name','pin','role','interventionReason']);
     const row = await userRow({ workspaceId: w, name: text(data.name, 'Name', 2, 40), pin: pinOf(data.pin), role: roleOf(data.role), createdBy: member.user_id });
