@@ -29,12 +29,12 @@ export interface SalesOrderLine {
 }
 export interface Invoice {
   id: string; number: string; sales_order_id: string; revision_id: string; buyer_id: string; lines_json: string;
-  total_minor: number; currency: string; issued_at: number; order_reference?: string;
+  total_minor: number; currency: string; issued_at: number; order_reference?: string; due_at?: number | null; paid_minor?: number; credited_minor?: number; outstanding_minor?: number;
 }
 export interface SalesDispatch {
   id: string; sales_order_id: string; order_reference?: string; movement_id: string; lot_id: string; from_stage: 'finished' | 'cops';
   quantity_milli: number; unit: SalesUnit; grams: number; cartons: number; cones: number; carrier: string;
-  packages_json: string; documents_note: string; dispatched_at: number; created_at: number; movement_reversed?: number | null;
+  packages_json: string; documents_note: string; dispatched_at: number; created_at: number; movement_reversed?: number | null; delivery_status?: 'dispatched' | 'delivered';
 }
 export interface SalesDelivery {
   id: string; dispatch_id: string; delivery_date: number; evidence_note: string; confirmed_by: string; created_at: number;

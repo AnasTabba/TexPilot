@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, FileText, LogOut, RefreshCw, Truck } from 'lucide-react';
 import { AsyncForm, Field, errorMessage } from './forms';
 import { LanguageSelect, useLanguage } from './i18n';
@@ -9,6 +9,7 @@ import {
   buyerRequest,
   type BuyerIdentity, type BuyerWorkspace, type QuoteRevision,
 } from './sales-client';
+import type { SalesDispatch } from './sales-client';
 import { PdfDownloadButton } from './InvoiceDocument';
 import { invoiceDocData, type BuyerSource, type InvoiceSource, type SaleLineSource } from './invoice-pdf';
 import './erp.css';
@@ -98,24 +99,44 @@ export default function BuyerPortal() {
           {state.dispatches.filter(d => d.sales_order_id === o.id).map(d => <div className="sales-dispatch" key={d.id}>
             <strong><Truck size={18} /> {quantity(d.quantity_milli)} {d.unit} · {d.carrier}</strong>
             <span>{t('Dispatched', 'روانہ')} {factoryTime(d.dispatched_at)}</span>
+            {!state.deliveries.some(y => y.dispatch_id === d.id) && (open === `delivery:${d.id}`
+              ? <BuyerDeliveryForm dispatch={d} onCancel={() => setOpen('')} onSaved={saved} />
+              : <button className="button primary" onClick={() => setOpen(`delivery:${d.id}`)}><CheckCircle2 size={18} />{t('Confirm delivery received', 'ترسیل موصول ہونے کی تصدیق')}</button>)}
             {state.deliveries.filter(y => y.dispatch_id === d.id).map(y => <span key={y.id} className="live-muted">
               {t('Delivered', 'ترسیل')} {factoryTime(y.delivery_date)}{y.evidence_note ? ' · ' + y.evidence_note : ''}</span>)}
           </div>)}
         </article>)}</div>
       </section>
       <section className="live-panel"><h2>{t('Your account', 'آپ کا حساب')}</h2>
-        {!state.receivables.length && <p className="live-muted">{t('Amounts appear when a delivery is confirmed. Payment is due 30 days after each delivery.', 'ترسیل کی تصدیق کے بعد رقم نظر آئے گی۔ ہر ترسیل سے ۳۰ دن بعد ادائیگی۔')}</p>}
-        <div className="erp-records">{state.receivables.map(r => <article className="erp-record" key={r.id}>
-          <div className="erp-record-head"><div><h3>{state.invoices.find(i => i.id === r.invoice_id)?.number ?? r.invoice_id}</h3>
-            <p>{rate(r.amount_minor, r.currency)} · {t('paid', 'وصول')} {rate(r.paid_minor, r.currency)}</p></div>
-            <span className={`erp-status is-${r.status}`}>{r.status === 'settled' ? t('Settled', 'مکمل وصول') : t('Open', 'بقایا')}</span></div>
-          <p className="live-muted">{t('Due', 'آخری تاریخ')} {factoryTime(r.due_at)} · {t('revision', 'ترمیم')} {r.due_revision}</p>
-          {state.payments.filter(p => p.invoice_id === r.invoice_id).map(p => <p className="live-muted" key={p.id}>
-            {t('Payment', 'ادائیگی')} {rate(p.amount_minor, p.currency)} · {factoryTime(p.created_at)}</p>)}
+        {!state.invoices.length && <p className="live-muted">{t('Your issued invoices and payment balances appear here.', 'آپ کی جاری شدہ انوائسز اور ادائیگی کا بقایا یہاں نظر آئے گا۔')}</p>}
+        <div className="erp-records">{state.invoices.map(invoice => <article className="erp-record" key={invoice.id}>
+          <div className="erp-record-head"><div><h3>{invoice.number}</h3>
+            <p>{t('Total', 'کل')}: {rate(invoice.total_minor, invoice.currency)} · {t('Paid', 'ادا شدہ')}: {rate(invoice.paid_minor ?? 0, invoice.currency)}</p></div>
+            <span className="erp-status">{(invoice.outstanding_minor ?? invoice.total_minor) === 0 ? t('Settled', 'مکمل وصول') : t('Outstanding', 'بقایا')}</span></div>
+          <p>{t('Balance', 'بقایا')}: {rate(invoice.outstanding_minor ?? invoice.total_minor, invoice.currency)}</p>
+          {invoice.due_at && <p className="live-muted">{t('Payment due under your invoice terms', 'انوائس کی شرائط کے مطابق ادائیگی کی تاریخ')}: {factoryTime(invoice.due_at)}</p>}
         </article>)}</div>
       </section>
     </>}
    </main></div>;
+}
+
+function BuyerDeliveryForm({ dispatch, onCancel, onSaved }: { dispatch: SalesDispatch; onCancel: () => void; onSaved: (message?: string) => Promise<void> }) {
+  const { t } = useLanguage();
+  const [id] = useState(() => crypto.randomUUID()), [note, setNote] = useState('');
+  const receiptAt = useRef(0);
+  return <AsyncForm title={t('Confirm delivery received', 'ترسیل موصول ہونے کی تصدیق')} submit={t('Confirm receipt', 'وصولی کی تصدیق')} onCancel={onCancel}
+    note={t('Confirm only after this shipment has arrived. This records your receipt permanently; it does not change the invoice amount or agreed payment terms.', 'صرف یہ کھیپ پہنچنے کے بعد تصدیق کریں۔ وصولی مستقل محفوظ ہوگی؛ انوائس کی رقم اور متفقہ ادائیگی کی شرائط تبدیل نہیں ہوں گی۔')}
+    onSubmit={async () => {
+      // Keep the receipt timestamp with this request so a retry after a lost response is identical.
+      receiptAt.current ||= Date.now();
+      await buyerRequest('/deliveries/confirm', { id, dispatchId: dispatch.id, deliveryDate: receiptAt.current, note });
+      await onSaved(t('Delivery receipt saved.', 'ترسیل کی وصولی محفوظ ہو گئی۔'));
+    }}>
+    <p>{quantity(dispatch.quantity_milli)} {dispatch.unit}</p>
+    <Field>{t('Receipt note (optional)', 'وصولی کا نوٹ (اختیاری)')}<textarea value={note} onChange={e => setNote(e.target.value)} maxLength={500} /></Field>
+    <Field><input type="checkbox" required />{t('I have received this shipment.', 'مجھے یہ کھیپ موصول ہو گئی ہے۔')}</Field>
+  </AsyncForm>;
 }
 
 function QuotesToApprove({ state, open, setOpen, saved }: { state: BuyerWorkspace; open: string; setOpen: (v: string) => void; saved: (message?: string) => Promise<void> }) {

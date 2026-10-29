@@ -20,6 +20,7 @@ export const eventTitle: Record<string, [string, string]> = {
   'payment.due_today': ['Payment due today', 'ادائیگی آج واجب ہے'],
   'payment.overdue': ['Payment overdue', 'ادائیگی کی مدت گزر چکی ہے'],
   'dispatch.approval_requested': ['Dispatch needs approval', 'ڈسپیچ کو منظوری درکار ہے'],
+  'dispatch.delivered': ['Delivery received', 'ترسیل موصول ہو گئی'],
   'dispatch.approved': ['Dispatch approved', 'ڈسپیچ منظور ہو گیا'],
   'dispatch.held': ['Dispatch on hold', 'ڈسپیچ روک دیا گیا'],
   'dispatch.hold_notice': ['Dispatch hold notice', 'ڈسپیچ روکنے کا نوٹس'],

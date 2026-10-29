@@ -9,6 +9,7 @@ import { approvalQueries, needsApproval, thresholdOf } from './governance.mjs';
 import { notifyRole, notifyUser } from './notify.mjs';
 import { movementQueries, reversalQueries } from './stock-ledger.mjs';
 import { adjustmentQueries } from './stock.mjs';
+import { confirmDelivery } from './delivery.mjs';
 
 const MAX_GRAMS = 9_000_000_000_000;
 const STATUSES = ['pending_approval', 'approved', 'on_hold', 'dispatched', 'delivered'];
@@ -340,12 +341,7 @@ export async function dispatchApi(request, env, member, path, data) {
     if (!row) fail(404, 'This dispatch was not found in your workspace.');
     if (row.status === 'delivered') return json({ dispatch: row });
     if (row.status !== 'dispatched') fail(409, 'Only a dispatched delivery can be confirmed.');
-    try {
-      await db.batch([
-        query(db, "UPDATE dispatches SET status='delivered',delivery_proof=?,delivered_at=?,updated_at=? WHERE id=? AND workspace_id=?", proof, now, now, dispatchId, w),
-        audit(db, member, 'dispatch.delivered', dispatchId, { delivered: row.sales_dispatch_id }, 'staff', { objectType: 'dispatch', intervention }),
-      ]);
-    } catch { fail(409, 'The dispatch changed while confirming delivery. Refresh and try again.'); }
+    await confirmDelivery(db, member, { id: crypto.randomUUID(), salesDispatchId: row.sales_dispatch_id, deliveryDate: now, note: proof, intervention, now });
     return json({ dispatch: await dispatchOf(db, dispatchId, w) }, 200);
   }
 
