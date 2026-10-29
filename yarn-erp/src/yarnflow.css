@@ -1138,3 +1138,8 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
   .yf-dash-collapse, .yf-dash-grip, .yf-dash-tools button { transition: none; }
   .yf-dash-grip:active, .yf-dash-tools button:active { transform: none; }
 }
+
+/* One card size for every widget: wider than the old S (4/12), narrower than M (6/12). Width buttons are gone. */
+.yf-dash-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 460px)); grid-auto-flow: row; }
+.yf-dash-grid > .yf-dash-item, .yf-dash-grid > .yf-dash-item[data-w] { grid-column: auto; }
+@media (max-width: 760px) { .yf-dash-grid { grid-template-columns: minmax(0, 1fr); } }

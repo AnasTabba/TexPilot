@@ -179,3 +179,17 @@
 }
 
 .stw-title { margin: 0 0 16px; font-size: 16px; font-weight: 600; color: var(--ink); grid-column: 1 / -1; }
+
+/* Dashboard cards are ~460px wide: keep the donut beside compact chips, and keep the table on one line per batch. */
+.stw-inv { container-type: inline-size; }
+@container (max-width: 560px) {
+  .stw-donut-wrap { grid-template-columns: 150px minmax(0, 1fr); justify-items: stretch; gap: 16px; }
+  .stw-donut { width: 150px; height: 150px; }
+  .stw-donut-centre b { font-size: 22px; }
+  .stw-chips { flex-direction: column; flex-wrap: nowrap; gap: 6px; }
+  .stw-chip { justify-content: space-between; white-space: nowrap; padding-block: 6px; font-size: 13px; }
+  .stw-table { font-size: 13px; table-layout: fixed; }
+  .stw-table th:nth-child(3), .stw-table td:nth-child(3) { display: none; }
+  .stw-table td { padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stw-table th:nth-child(1) { width: 26%; } .stw-table th:nth-child(4) { width: 18%; } .stw-table th:nth-child(5) { width: 30%; }
+}

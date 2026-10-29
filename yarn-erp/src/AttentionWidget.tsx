@@ -75,7 +75,7 @@ export function AttentionWidget({ member, onChanged }: { member: Member; onChang
       <h2 id="att-title"><BellRing size={18} aria-hidden="true" />{t('Needs attention', 'توجہ طلب')}</h2>
       {total > 0 && <span className="att-count" aria-label={`${total} ${t('items', 'اشیاء')}`}>{total}</span>}
     </div>
-    {isAdmin && <div className="att-reason">
+    {isAdmin && total > 0 && <div className="att-reason">
       <label htmlFor="att-reason">{t('Admin reason', 'ایڈمن کی وجہ')}</label>
       <input id="att-reason" className="att-input" value={reason} maxLength={1000} onChange={e => setReason(e.target.value)} />
       <small>{t('Admins act outside their role, so each action needs a reason of at least 5 characters.', 'ایڈمن اپنے کردار سے باہر کام کرتے ہیں، اس لیے ہر کارروائی کے لیے کم از کم 5 حروف کی وجہ ضروری ہے۔')}</small>

@@ -122,7 +122,6 @@ function DashItem({ slot, index, total, title, dragging, drop, draggable, onMove
       </button>
       <span className="yf-dash-title">{title}</span>
       <div className="yf-dash-tools">
-        <button type="button" className="yf-dash-width" onClick={onWidth} aria-label={widthTitle} title={widthTitle}>{widthLabel}</button>
         <button type="button" className="yf-dash-min" onClick={onToggle} aria-expanded={!slot.min} aria-label={minLabel} title={minLabel}>
           {slot.min ? <ChevronDown size={16} aria-hidden="true" /> : <Minus size={16} aria-hidden="true" />}
         </button>
