@@ -15,6 +15,8 @@ import { parseHash } from './routes.ts';
 import SignIn, { Avatar } from './SignIn';
 import Team, { permissionInfo } from './Team';
 import Procurement from './Procurement';
+import SalesScreens from './SalesScreens';
+import DispatchScreens from './DispatchScreens';
 import { Menu, Package, Truck, Search, ChevronRight, ShieldAlert, ArrowRightLeft, ClipboardCheck, ScanBarcode, LogOut } from 'lucide-react';
 import BarcodeScanner from './BarcodeScanner';
 import Scanner from './Scanner';
@@ -30,10 +32,15 @@ type View = 'all' | 'quality' | 'production' | 'dispatch';
 const aliases: Record<string, [string, View]> = { materials: ['inventory', 'all'], production: ['inventory', 'production'], quality: ['inventory', 'quality'], reports: ['dashboard', 'all'], overview: ['dashboard', 'all'], settings: ['profile', 'all'] };
 const sections = [...new Set([...Object.values(NAV).flat(), ...COMMON])];
 const tabsOf = Object.fromEntries(sections.flatMap(section => section.tabs ? [[section.id, section.tabs.map(tab => tab.id)]] : []));
-const routeFromHash = () => {
-  const { section } = parseHash(location.hash, tabsOf);
-  return aliases[section]?.[0] ?? (sections.some(known => known.id === section) ? section : 'dashboard');
+const routeDetailsFromHash = () => {
+  const pieces = location.hash.replace(/^#\/?/, '').split('/');
+  const module = pieces[0] === 'modules' ? pieces[1] : '';
+  const source = module ? '#/' + pieces.slice(2).join('/') : location.hash;
+  const parsed = parseHash(source, tabsOf);
+  const section = aliases[parsed.section]?.[0] ?? (sections.some(known => known.id === parsed.section) ? parsed.section : 'dashboard');
+  return { ...parsed, section, module };
 };
+const routeFromHash = () => routeDetailsFromHash().section;
 const lotFromHash = () => location.hash.startsWith('#/inventory/') ? location.hash.split('/')[2] || '' : '';
 function saveFile(name: string, value: unknown) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
@@ -257,6 +264,7 @@ export default function LiveApp() {
   const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
   const [route, setRoute] = useState(routeFromHash); const [selectedId, setSelectedId] = useState(lotFromHash);
+  const [routeInfo, setRouteInfo] = useState(routeDetailsFromHash);
   const [action, setAction] = useState<Action | null>(null); const [query, setQuery] = useState('');
   const [view, setView] = useState<View>(() => aliases[location.hash.split('/')[1]]?.[1] ?? 'all');
   const [online, setOnline] = useState(navigator.onLine); const [savedAt, setSavedAt] = useState(0);
@@ -308,7 +316,7 @@ export default function LiveApp() {
     } finally { if (sequence === requestSequence.current) { setLoading(false); setRefreshing(false); } }
   }, []);
   useEffect(() => { void refresh(); const interval = setInterval(() => { if (!document.hidden) void refresh(true); }, 10000); const focus = () => { if (!document.hidden) void refresh(true); }; window.addEventListener('focus', focus); document.addEventListener('visibilitychange', focus); return () => { clearInterval(interval); requestSequence.current++; window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus); }; }, [refresh]);
-  useEffect(() => { const update = () => { menuDialog.current?.close(); const alias = aliases[location.hash.split('/')[1]]; if (alias) setView(alias[1]); setRoute(routeFromHash()); setSelectedId(lotFromHash()); setAction(null); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
+  useEffect(() => { const update = () => { menuDialog.current?.close(); const alias = aliases[location.hash.split('/')[1]]; if (alias) setView(alias[1]); setRoute(routeFromHash()); setRouteInfo(routeDetailsFromHash()); setSelectedId(lotFromHash()); setAction(null); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
   useEffect(() => { const network = () => { setOnline(navigator.onLine); void refresh(true); }; window.addEventListener('online', network); window.addEventListener('offline', network); return () => { window.removeEventListener('online', network); window.removeEventListener('offline', network); }; }, [refresh]);
   useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem('yf-theme', theme); } catch { /* The theme can remain in memory. */ } }, [theme]);
   // A form or reversal opens at its top, not wherever the page was scrolled to when it was asked for.
@@ -326,7 +334,7 @@ export default function LiveApp() {
     const watch = new ResizeObserver(place); document.querySelectorAll('.live-sidebar nav, .live-bottom-nav, .live-segments').forEach(n => watch.observe(n));
     place(); return () => watch.disconnect();
   }, [route, scanTab, shellReady]);
-  function navigate(to: string, lotId = '') { menuDialog.current?.close(); const alias = aliases[to]; if (alias) { to = alias[0]; setView(alias[1]); } else if (to === 'inventory' && !lotId) setView('all'); location.hash = '/' + to + (lotId ? '/' + lotId : ''); setRoute(to); setSelectedId(lotId); setAction(null); setMatches([]); setQuery(''); setNotice(''); window.scrollTo(0, 0); }
+  function navigate(to: string, lotId = '', fromModule = true) { menuDialog.current?.close(); const alias = aliases[to]; if (alias) { to = alias[0]; setView(alias[1]); } else if (to === 'inventory' && !lotId) setView('all'); const target = to.includes('/') ? to : to + (lotId ? '/' + encodeURIComponent(lotId) : ''); const targetSection = target.split('/')[0]; const moduleSections: Record<string, string[]> = { sales: ['dashboard', 'buyers', 'buyer-rfqs', 'invoices', 'dispatch-requests', 'analytics'], dispatch: ['dashboard', 'dispatches', 'new-dispatch', 'history'] }; const keepModule = fromModule && routeInfo.module && moduleSections[routeInfo.module]?.includes(targetSection); const hash = keepModule ? '/modules/' + routeInfo.module + '/' + target : '/' + target; location.hash = hash; const next = routeDetailsFromHash(); setRoute(next.section); setRouteInfo(next); setSelectedId(lotId); setAction(null); setMatches([]); setQuery(''); setNotice(''); window.scrollTo(0, 0); }
   async function saved(message: string, lotId?: string) { setAction(null); if (lotId) navigate('inventory', lotId); setNotice(message); await refresh(); }
   if (loading || endingSession) return <main className="live-loading" aria-busy="true"><Cone hue="#2f6fd6" size={48} /><h1>{endingSession ? t('Signing out…', 'سائن آؤٹ ہو رہا ہے…') : t("Opening inventory…")}</h1><p>{endingSession ? t('Your PIN is needed to open the workspace again.', 'ورک اسپیس دوبارہ کھولنے کے لیے پن درج کرنا ہوگا۔') : t("Loading inventory records.")}</p></main>;
   if (!state && authNeeded) return <SignIn onSignedIn={async () => {
@@ -340,6 +348,9 @@ export default function LiveApp() {
   const allow = (permission: Permission) => can(me, permission);
   const shown = [...NAV[me.role], ...COMMON];
   const page = shown.some(section => section.id === route) ? route : 'dashboard';
+  const ownerModule = routeInfo.module === 'sales' || routeInfo.module === 'dispatch'
+    || (me.role === 'sales_manager' && ['dashboard', 'buyers', 'buyer-rfqs', 'invoices', 'dispatch-requests', 'analytics'].includes(routeInfo.section))
+    || (me.role === 'dispatch' && ['dashboard', 'dispatches', 'new-dispatch', 'history'].includes(routeInfo.section));
   const reloadInbox = async () => { setInbox(await portal<Inbox>('/notifications')); };
   const selected = workspace.lots.find(l => l.id === selectedId);
   const productName = (lotId: string) => workspace.products.find(p => p.id === workspace.lots.find(l => l.id === lotId)?.product_id)?.name || t("Material");
@@ -398,15 +409,15 @@ export default function LiveApp() {
   const brand = <a className="live-brand" href="#/dashboard"><Cone hue="#2f6fd6" size={30} />yarnflow</a>;
   const whoAmI = <div className="yf-me"><Avatar name={me.name} /><span><strong>{me.name}</strong><span>{t(...roleLabel[me.role])}</span></span><button className="live-icon-button" onClick={() => void signOut()} aria-label={`${t('Sign out')} ${me.name}`} title={t("Sign out")}><LogOut size={20} aria-hidden="true" /></button></div>;
   return <div className="live-app"><a className="skip-link" href="#live-main" onClick={event => { event.preventDefault(); document.getElementById('live-main')?.focus(); }}>{t("Skip to content")}</a>
-    <aside className="live-sidebar">{brand}<div className="live-factory">{workspace.workspace.name}<span>{t("Shared by the whole team")}</span></div><nav aria-label={t("Main navigation")}>{shown.map(({ id, en, ur, icon: Icon }) => [id === COMMON[0].id && <span className="yf-nav-gap" key="gap" />, <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={19} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>])}</nav>{whoAmI}</aside>
-    <dialog className="yf-mobile-menu" ref={menuDialog} onClick={e=>{if(e.target===e.currentTarget)menuDialog.current?.close();}} aria-label={t("Navigation menu")}><div>{brand}<button className="live-icon-button" onClick={()=>menuDialog.current?.close()} aria-label={t("Close navigation")}><X aria-hidden="true" /></button></div><nav aria-label={t("All pages")}>{shown.map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={22} aria-hidden="true" />{t(en, ur)}{badge(id)}</button>)}</nav>{whoAmI}</dialog>
+    <aside className="live-sidebar">{brand}<div className="live-factory">{workspace.workspace.name}<span>{t("Shared by the whole team")}</span></div><nav aria-label={t("Main navigation")}>{shown.map(({ id, en, ur, icon: Icon }) => [id === COMMON[0].id && <span className="yf-nav-gap" key="gap" />, <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id, '', false)}><Icon size={19} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>])}</nav>{whoAmI}</aside>
+    <dialog className="yf-mobile-menu" ref={menuDialog} onClick={e=>{if(e.target===e.currentTarget)menuDialog.current?.close();}} aria-label={t("Navigation menu")}><div>{brand}<button className="live-icon-button" onClick={()=>menuDialog.current?.close()} aria-label={t("Close navigation")}><X aria-hidden="true" /></button></div><nav aria-label={t("All pages")}>{shown.map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} onClick={()=>navigate(id, '', false)}><Icon size={22} aria-hidden="true" />{t(en, ur)}{badge(id)}</button>)}</nav>{whoAmI}</dialog>
     <div className="live-main-shell"><header className="live-topbar">{brand}{shown.some(section => section.id === 'inventory') && <button className="live-icon-button" aria-label={t("Find a batch")} onClick={()=>{navigate('inventory');setTimeout(()=>document.querySelector<HTMLInputElement>('input[type="search"]')?.focus(),0);}}><Search size={22} aria-hidden="true" /></button>}</header>
     <main id="live-main" key={`${route}:${selected?.id || ''}:${action?.type || ''}`} className="live-content" data-page={action ? 'form' : selected ? 'batch' : page} tabIndex={-1}>
       <div className="live-page-heading"><div><h1>{pageTitle}</h1><p hidden={!!(action || selected)}>{page === 'dashboard' && !action && !selected ? `${workspace.workspace.name} · ${today}` : page === 'inventory' ? t("Your materials and their batches, from delivery to dispatch.") : page === 'scanner' ? t("Photograph a fabric, measure its yarn, or scan a stock label.") : page === 'activity' ? t("Every stock movement, oldest records kept.") : page === 'notifications' ? t('What needs your attention, newest first.', 'جن چیزوں پر توجہ چاہیے، تازہ ترین پہلے۔') : page === 'help' ? t("Answers to common questions.") : page === 'lots' ? t("Arrived lots waiting for you, and your inspection drafts.", "آپ کے منتظر آمد شدہ لاٹس اور معائنے کے مسودے۔") : page === 'team' ? t("Who can sign in, and what each person can record.") : page === 'procurement' ? t("Buying from suppliers: directory, bids, orders and incoming stock.", "سپلائرز سے خریداری: ڈائریکٹری، بولیاں، آرڈر اور آنے والا اسٹاک۔") : t("Your access, and the records everyone shares.")}</p></div>{!action && !selected && page === 'inventory' && (allow('catalog') || me.role === 'purchase_manager') && <div className="live-actions"><button className="button" onClick={() => setAction({ type: 'product' })}><Package size={18} aria-hidden="true" />{t("New material")}</button>{workspace.products.length > 0 && allow('catalog') && <button className="button primary" onClick={() => setAction({ type: 'finished' })}><Plus size={18} aria-hidden="true" />{t("Finished goods")}</button>}</div>}</div>
       {error && <div className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{t(error)}<button className="live-text-button" onClick={() => void refresh()}>{t("Retry connection")}</button></div>}
       {!online && <div className="live-warning" role="status"><WifiOff size={18} />{t("You are offline. Entries can be saved again once the connection is back.")}</div>}
       {notice && <div className="live-success" role="status"><CheckCheck size={19} /><span>{t(notice)}</span><button aria-label={t("Dismiss message")} className="live-icon-button" onClick={() => setNotice('')}><X size={17} /></button></div>}
-      {action ? <InventoryForm key={`${action.type}:${action.lotId || ''}`} action={action} state={workspace} result={action.type === 'inspection' ? lastResult : null} onSaved={saved} onCancel={() => setAction(null)} /> : selected ? <LotDetail key={selected.id} lot={selected} state={workspace} onAction={setAction} onBack={() => navigate('inventory')} /> : <>
+      {ownerModule ? ((routeInfo.module === 'sales' || me.role === 'sales_manager') ? <SalesScreens member={me} section={routeInfo.section} tab={routeInfo.tab} id={routeInfo.id} navigate={navigate} /> : <DispatchScreens member={me} section={routeInfo.section} tab={routeInfo.tab} id={routeInfo.id} navigate={navigate} />) : action ? <InventoryForm key={`${action.type}:${action.lotId || ''}`} action={action} state={workspace} result={action.type === 'inspection' ? lastResult : null} onSaved={saved} onCancel={() => setAction(null)} /> : selected ? <LotDetail key={selected.id} lot={selected} state={workspace} onAction={setAction} onBack={() => navigate('inventory')} /> : <>
       {page === 'dashboard' && <Dashboard member={me} inbox={inbox} reload={reloadInbox} />}
       {page === 'notifications' && <Notifications member={me} inbox={inbox} reload={reloadInbox} />}
       {page === 'dispatch' && <DispatchPanel state={workspace} />}{page === 'inventory' && <section className="yf-stock-panel" aria-label={t("Stock")}><div className="yf-views" role="group" aria-label={t("Show")}>{views.map(([id, label, Icon]) => <button key={id} aria-pressed={view === id} onClick={() => setView(id)}><Icon size={20} aria-hidden="true" /><span>{t(label)}</span><b>{workspace.lots.filter(l => inView(l, id)).length}</b></button>)}</div><Field className="live-search-label">{t("Search")}<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder={t("Material, batch or supplier")} /></Field>{stockList()}</section>}
@@ -421,6 +432,6 @@ export default function LiveApp() {
 
       </>}
     </main><footer className="live-sync" role="status"><CheckCheck size={17} aria-hidden="true"/><span>{t("All changes saved")}{savedAt ? ' · '+t('checked', 'چیک کیا')+' '+new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Karachi'}).format(savedAt) : ''}</span></footer></div>
-    <nav className="live-bottom-nav" aria-label={t("Phone navigation")}>{[...NAV[me.role].slice(0, 3), COMMON[0]].map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={23} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>)}<button onClick={()=>menuDialog.current?.showModal()} aria-label={workspace.pending > 0 ? `More pages, ${workspace.pending} waiting in Team` : t("More pages")}><Menu size={23} aria-hidden="true" /><span>{t("More")}</span>{workspace.pending > 0 && <b className="yf-nav-count" aria-hidden="true">{workspace.pending}</b>}</button></nav>
+    <nav className="live-bottom-nav" aria-label={t("Phone navigation")}>{[...NAV[me.role].slice(0, 3), COMMON[0]].map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id, '', false)}><Icon size={23} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>)}<button onClick={()=>menuDialog.current?.showModal()} aria-label={workspace.pending > 0 ? `More pages, ${workspace.pending} waiting in Team` : t("More pages")}><Menu size={23} aria-hidden="true" /><span>{t("More")}</span>{workspace.pending > 0 && <b className="yf-nav-count" aria-hidden="true">{workspace.pending}</b>}</button></nav>
   </div>;
 }

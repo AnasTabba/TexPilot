@@ -7,9 +7,9 @@ for (const [name, sections] of [
   ['Anas', ['Dashboard', 'Stock', 'History', 'Procurement', 'Team']],
   ['Pervaiz', ['Dashboard', 'Procurement']],
   ['Saima', ['Dashboard', 'Review', 'Stock', 'History', 'Dispatch']],
-  ['Sana', ['Dashboard', 'Dispatch']],
+  ['Sana', ['Dashboard', 'Buyers', 'Buyer RFQs', 'Invoices', 'Dispatch requests', 'Analytics']],
   ['Qasim', ['Dashboard', 'Inspections', 'Stock', 'History']],
-  ['Danish', ['Dashboard', 'Dispatch', 'Stock', 'History']],
+  ['Danish', ['Dashboard', 'Dispatches', 'New dispatch', 'History']],
 ] as const) test(`${name} sees only the sections of their role, plus the common ones`, async ({ page }) => {
   await signIn(page, name);
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
@@ -25,11 +25,41 @@ test('a hash for a section the role lacks falls back to the dashboard', async ({
 
 test('dispatch role opens the approval-gated sale dispatch screen', async ({ page }) => {
   await signIn(page, 'Danish');
-  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /^Dispatch/ }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Dispatch', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 2, name: 'Dispatch workflow', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 3, name: 'Request a sale dispatch', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Request approval', exact: true })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /^Dispatches/ }).click();
+  await expect(page.getByText('No dispatches in this view.')).toBeVisible();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'New dispatch', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Request dispatch approval' })).toBeVisible();
+  await expect(page.locator('.live-warning').filter({ hasText: 'Raw stock cannot be sale-dispatched' })).toBeVisible();
+});
+
+test('invoice and dispatch notifications open the owner screen and admin module deep links', async ({ page, browser, baseURL }) => {
+  const invoiceId = crypto.randomUUID();
+  const ownerNotice = await page.request.post('/__test/notify', { data: { role: 'sales_manager', event: 'payment.overdue', objectType: 'invoice', objectId: invoiceId, label: 'INV-TEST' } });
+  expect(ownerNotice.ok()).toBeTruthy();
+  await signIn(page, 'Sana'); await page.goto('/#/notifications');
+  await page.getByRole('button', { name: /Payment overdue/ }).click();
+  await expect(page).toHaveURL(new RegExp(`#\\/invoices\\/${invoiceId}$`));
+
+  const dispatchId = crypto.randomUUID();
+  const dispatchNotice = await page.request.post('/__test/notify', { data: { role: 'dispatch', event: 'dispatch.approval_requested', objectType: 'dispatch', objectId: dispatchId, label: 'SO-TEST' } });
+  expect(dispatchNotice.ok()).toBeTruthy();
+  const dispatchContext = await browser.newContext({ baseURL }); const dispatch = await dispatchContext.newPage();
+  try {
+    await signIn(dispatch, 'Danish'); await dispatch.goto('/#/notifications');
+    await dispatch.getByRole('button', { name: /Dispatch needs approval/ }).click();
+    await expect(dispatch).toHaveURL(new RegExp(`#\\/dispatches\\/${dispatchId}$`));
+  } finally { await dispatchContext.close(); }
+
+  const adminId = crypto.randomUUID();
+  const adminNotice = await page.request.post('/__test/notify', { data: { role: 'admin', event: 'payment.overdue', objectType: 'invoice', objectId: adminId, label: 'INV-ADMIN' } });
+  expect(adminNotice.ok()).toBeTruthy();
+  await page.getByRole('button', { name: 'Sign out Sana', exact: true }).click();
+  await page.goto('/'); await page.getByRole('button', { name: 'Anas', exact: true }).click(); await page.getByLabel('4-digit PIN', { exact: true }).fill('2468');
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible(); await page.goto('/#/notifications');
+  await page.getByRole('button', { name: /Payment overdue/ }).click();
+  await expect(page).toHaveURL(new RegExp(`#\\/modules\\/sales\\/invoices\\/${adminId}$`));
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'Dashboard', exact: true }).click();
+  await expect(page).toHaveURL(/#\/dashboard$/);
 });
 
 test('a notification appears with its unread count and opens its item', async ({ page }) => {

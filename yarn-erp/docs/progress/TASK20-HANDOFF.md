@@ -1,0 +1,7 @@
+# Task20 handoff
+
+Implemented Task20 sales manager and dispatch screens, replaced their role navigation, preserved `section/tab/id` hashes for owner pages and admin module notifications, and moved retained sales styling into `erp.css`. Dispatch requests use the real Task14 routes: they require sales approval, hold notices can be acted on with a reason, finished stock changes only on dispatch, and raw/cops/WIP balances are shown as unavailable. Removed the legacy `Sales`, `BuyerPortal`, `sales-client`, and `sales.css` files.
+
+Evidence on 2026-10-29 (Asia/Karachi): `npx tsc -b` passed; `npm test` passed 313/313; `npm run build` passed; `YARNFLOW_TEST_PORT=8798 npx playwright test e2e/sales-dispatch.spec.ts e2e/roles.spec.ts --project=desktop-chromium` passed 18/18, including buyer approval/quote/invoice, stock query answer, partial payments, mixed-currency analytics groups, dispatch hold/approval/stock deduction, stock issues/notifications, role navigation, and owner/admin notification links.
+
+Task14 router and migration were integrated from committed upstream Task14 (`03f5c98`) as local commit `f0989b3`, with the Task16 analytics mount retained. Task18's `ModuleViews.tsx` remains owned in its separate worktree and is not present here; `LiveApp.tsx` directly wires sales/dispatch owner routes and admin module deep links until the shared Task18 integration adds module registration. No production DB, deploy, or push was used.
