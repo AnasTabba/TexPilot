@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); 
 for (const [name, sections] of [
   ['Anas', ['Dashboard', 'Stock', 'History', 'Team']],
   ['Pervaiz', ['Dashboard', 'Suppliers', 'RFQs', 'Orders', 'Claims', 'Analytics']],
-  ['Saima', ['Dashboard', 'Review', 'Stock', 'History', 'Dispatch']],
+  ['Saima', ['Dashboard', 'Reviews', 'Inventory', 'Requests', 'Report', 'History']],
   ['Sana', ['Dashboard', 'Buyers', 'Buyer RFQs', 'Invoices', 'Dispatch requests', 'Analytics']],
   ['Qasim', ['Dashboard', 'Inspections', 'Stock', 'History']],
   ['Danish', ['Dashboard', 'Dispatches', 'New dispatch', 'History']],

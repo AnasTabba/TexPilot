@@ -132,7 +132,7 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   try {
    await signIn(supervisor, 'Saima');
    await supervisor.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /^Review/ }).click();
-   await expect(supervisor.getByRole('heading', { level: 1, name: 'Review', exact: true })).toBeVisible();
+   await expect(supervisor.getByRole('heading', { level: 1, name: 'Reviews', exact: true })).toBeVisible();
    await supervisor.getByRole('button', { name: 'Accept report', exact: true }).click();
    await expect(supervisor.getByRole('status').filter({ hasText: 'Report accepted' })).toBeVisible();
    const stock = await (await supervisor.request.get('/api/workspace')).json();
