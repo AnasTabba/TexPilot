@@ -14,9 +14,10 @@ import { trackingApi } from './tracking.mjs';
 import { qualityApi, approvalHandlers as qualityHandlers } from './quality.mjs';
 import { stockApi, approvalHandlers as stockHandlers } from './stock.mjs';
 import { analyticsApi } from './analytics.mjs';
+import { dispatchApi, approvalHandlers as dispatchHandlers } from './dispatch.mjs';
 import { readPhoto } from './photos.mjs';
-const erp = { admin: adminApi, analytics: analyticsApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi, qc: qualityApi, stock: stockApi };
-erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, { ...approvalHandlers, ...qualityHandlers, ...stockHandlers });
+const erp = { admin: adminApi, analytics: analyticsApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi, qc: qualityApi, stock: stockApi, dispatch: dispatchApi };
+erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, { ...approvalHandlers, ...qualityHandlers, ...stockHandlers, ...dispatchHandlers });
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
 class Problem extends Error {
@@ -59,10 +60,6 @@ async function body(request) {
   for (const chunk of chunks) { bytes.set(chunk, position); position += chunk.length; }
   try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { fail(400, 'The request is not valid JSON.'); }
 }
-async function hash(value) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
-}
 const rows = async (db, sql, ...args) => (await db.prepare(sql).bind(...args).all()).results;
 const first = (db, sql, ...args) => db.prepare(sql).bind(...args).first();
 const statement = (db, sql, ...args) => db.prepare(sql).bind(...args);
@@ -71,7 +68,6 @@ const allow = (member, permission, what) => { if (!member.admin && !member.permi
 // Quality inspectors record inspections, photos and issues through /api/erp/qc/*, and the purchase manager registers arrivals as QC lots; the old stock writes stay for admins and supervisors.
 const useQc = (member, role, what) => { if (member.role === role) fail(403, `${what} now goes through the lot inspection flow. The old stock record is read-only for your role.`); };
 const adminOnly = member => { if (!member.admin) fail(403, 'Only an admin can do this.'); };
-const movementPermission = { dispatch: ['dispatch', 'dispatch stock'] };
 
 async function snapshot(db, member) {
   const w = member.workspace_id;
@@ -91,40 +87,7 @@ async function snapshot(db, member) {
   return { workspace, member, products, lots, balances, movements, members, inspections, qualityEvents, photos, pending, serverTime: Date.now(), backend: 'Yarnflow / Cloudflare D1' };
 }
 
-/** The temporary immediate sale dispatch (Task 14 replaces it); every other stock change goes through server/stock.mjs. */
-async function saveMovement(db, member, data) {
-  keys(data, ['id', 'lotId', 'action', 'grams', 'cartons', 'cones', 'stage', 'toStage', 'note']);
-  allow(member, ...movementPermission.dispatch);
-  if (!STAGES.includes(data.stage)) fail(422, 'Choose a valid stock stage.');
-  const record = { id: id(data.id), lotId: id(data.lotId), action: 'dispatch', fromStage: data.stage, toStage: null,
-    grams: integer(data.grams, 'Weight in grams', 1, 9_000_000_000_000),
-    cartons: integer(data.cartons ?? 0, 'Cartons'), cones: integer(data.cones ?? 0, 'Cones'),
-    note: text(data.note ?? '', 'Note', 0, 1000), reverses: null };
-  const digest = await hash(JSON.stringify(record));
-  const previous = await first(db, 'SELECT * FROM movements WHERE id=? AND workspace_id=?', record.id, member.workspace_id);
-  if (previous) {
-    if (previous.request_hash !== digest) fail(409, 'This request ID was already used for different values.');
-    return json(previous);
-  }
-  const lot = await first(db, 'SELECT * FROM lots WHERE id=? AND workspace_id=?', record.lotId, member.workspace_id);
-  if (!lot) fail(404, 'This lot was not found in your workspace.');
-  const now = Date.now();
-  const queries = [statement(db, `INSERT INTO movements(id,workspace_id,lot_id,action,from_stage,to_stage,grams,cartons,cones,note,actor,actor_name,reverses,request_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    record.id, member.workspace_id, record.lotId, record.action, record.fromStage, record.toStage,
-    record.grams, record.cartons, record.cones, record.note, member.user_id, member.name, record.reverses, digest, now)];
-  for (const [stage, sign] of [[record.fromStage, -1], [record.toStage, 1]]) {
-    if (stage) queries.push(statement(db, 'INSERT INTO stock_deltas(id,movement_id,lot_id,stage,grams,cartons,cones) VALUES(?,?,?,?,?,?,?)',
-      uuid(), record.id, record.lotId, stage, sign * record.grams, sign * record.cartons, sign * record.cones));
-  }
-  try { await db.batch(queries); } catch (error) {
-    // Another device can commit between our initial read and this atomic batch.
-    const raced = await first(db, 'SELECT * FROM movements WHERE id=? AND workspace_id=?', record.id, member.workspace_id);
-    if (raced?.request_hash === digest) return json(raced);
-    if (/QC approval|held lot/i.test(String(error))) fail(409, 'QC approval is required before issuing raw stock or dispatching. Held lots cannot move.');
-    fail(409, 'Stock changed, the quantities exceed available stock. Refresh and try again.');
-  }
-  return json(await first(db, 'SELECT * FROM movements WHERE id=?', record.id), 201);
-}
+/** Stock movements were the old immediate dispatch; every stock change now goes through server/stock.mjs and server/dispatch.mjs. */
 
 async function route(request, env) {
   const url = new URL(request.url);
@@ -198,8 +161,8 @@ async function route(request, env) {
   }
   if (path === '/api/lots' && data) fail(410, 'Batches are created when the supervisor records finished goods or accepts an inspection report. Use POST /api/erp/stock/finished.');
   if (path === '/api/movements' && data?.action === 'receive') fail(410, 'Raw stock is received when the supervisor accepts an inspection report. Use POST /api/erp/qc/reports/decide.');
-  if (path === '/api/movements' && data && data.action !== 'dispatch') fail(410, 'Stock changes now go through the supervisor: POST /api/erp/stock/finished or /api/erp/stock/adjustments. Dispatch is the only movement left here.');
-  if (path === '/api/movements' && data) return saveMovement(db, member, data);
+  if (path === '/api/movements' && data?.action === 'dispatch') fail(410, 'Dispatches are sale requests now: create the dispatch request with POST /api/erp/dispatch; goods leave only when the dispatch is approved and runs.');
+  if (path === '/api/movements' && data) fail(410, 'Stock changes now go through the supervisor: POST /api/erp/stock/finished or /api/erp/stock/adjustments.');
   if (path === '/api/reversals' && data) fail(410, 'Reversals are closed. Record a reasoned stock adjustment with POST /api/erp/stock/adjustments.');
   if (path === '/api/quality' && data) fail(410, 'QC decisions are made on the inspection report. Use POST /api/erp/qc/reports/decide or /api/erp/qc/rejections/decide.');
   if (path === '/api/inspections' && data) {

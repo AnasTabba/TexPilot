@@ -1,4 +1,4 @@
-import { Bell, CircleHelp, ClipboardCheck, CircleUserRound, House, History, PackagePlus, ScanSearch, UsersRound, type LucideIcon } from 'lucide-react';
+import { Bell, CircleHelp, ClipboardCheck, CircleUserRound, House, History, PackagePlus, ScanSearch, UsersRound, Truck, type LucideIcon } from 'lucide-react';
 import { ConeIcon } from './icons';
 import type { Role } from './inventory-client';
 import { objectRoute as route } from './routes.ts';
@@ -13,15 +13,16 @@ const procurement: Section = { id: 'procurement', en: 'Procurement', ur: 'خری
 const lots: Section = { id: 'lots', en: 'Inspections', ur: 'معائنے', icon: ClipboardCheck };
 const reviews: Section = { id: 'reviews', en: 'Review', ur: 'جائزہ', icon: ClipboardCheck };
 const team: Section = { id: 'team', en: 'Team', ur: 'ٹیم', icon: UsersRound };
+const dispatches: Section = { id: 'dispatch', en: 'Dispatch', ur: 'ڈسپیچ', icon: Truck };
 
 // Until a role's owner task lands, its users keep the legacy screens they had; Tasks 18-21 replace these lists.
 export const NAV: Record<Role, Section[]> = {
   admin: [dashboard, stock, history, procurement, team],
   purchase_manager: [dashboard, procurement],
-  sales_manager: [dashboard],
-  dispatch: [dashboard, stock, history],
+  sales_manager: [dashboard, dispatches],
+  dispatch: [dashboard, dispatches, stock, history],
   quality_inspector: [dashboard, lots, stock, history],
-  supervisor: [dashboard, reviews, stock, history],
+  supervisor: [dashboard, reviews, stock, history, dispatches],
 };
 export const COMMON: Section[] = [
   { id: 'notifications', en: 'Notifications', ur: 'اطلاعات', icon: Bell },

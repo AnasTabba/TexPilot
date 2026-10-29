@@ -105,14 +105,14 @@ test('two different devices read one durable stock ledger and barcode lookup', a
   assert.equal((await call('/lookup?code=' + encodeURIComponent(`YF:${lot.id}`), undefined, 'Zuhair')).data.lotId, lot.id);
 });
 
-test('duplicate delivery is idempotent; reusing its key for different stock is rejected', async () => {
-  const { call, received } = await fixture();
+test('immediate dispatch is closed; only the approval lifecycle can deduct stock', async () => {
+  const { call, received, sql } = await fixture();
   const { lot } = await received();
-  const payload = movement(lot.id, 'dispatch', 4000, { cartons: 0, cones: 0 });
-  assert.equal((await call('/movements', payload)).status, 201);
-  assert.equal((await call('/movements', payload)).status, 200);
-  assert.equal((await call('/movements', { ...payload, grams: 5000 })).status, 409);
-  assert.equal((await call('/workspace')).data.balances[0].grams, 6000);
+  const before = sql.prepare('SELECT lot_id,stage,grams FROM balances ORDER BY lot_id,stage').all();
+  const movements = sql.prepare('SELECT COUNT(*) AS n FROM movements').get().n;
+  assert.equal((await call('/movements', movement(lot.id, 'dispatch', 4000, { cartons: 0, cones: 0 }))).status, 410);
+  assert.deepEqual(sql.prepare('SELECT lot_id,stage,grams FROM balances ORDER BY lot_id,stage').all(), before);
+  assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM movements').get().n, movements);
 });
 
 test('the old transfer, waste, reversal and batch writes are closed; balances stay as they were', async () => {
@@ -127,30 +127,13 @@ test('the old transfer, waste, reversal and batch writes are closed; balances st
   assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM movements').get().n, movements);
 });
 
-test('stock cannot go negative, including concurrent dispatches', async () => {
-  const { call, received } = await fixture();
-  const { lot } = await received();
-  const responses = await Promise.all([
-    call('/movements', movement(lot.id, 'dispatch', 7000, { cartons: 0, cones: 0 })),
-    call('/movements', movement(lot.id, 'dispatch', 7000, { cartons: 0, cones: 0 })),
-  ]);
-  assert.deepEqual(responses.map(x => x.status).sort(), [201, 409]);
-  const failed = await call('/movements', movement(lot.id, 'dispatch', 4000, { cartons: 0, cones: 0 }));
-  assert.equal(failed.status, 409);
-  const state = (await call('/workspace')).data;
-  assert.equal(state.balances.find(b => b.stage === 'raw').grams, 3000);
-  assert.equal(state.balances.some(b => b.stage === 'finished' && b.grams > 0), false);
-  assert.equal(state.movements.length, 2, 'the receipt and the one dispatch');
-});
-
-test('QC-approved stock can be dispatched by a dispatcher; the old QC toggle is closed to everyone', async () => {
-  const { call, received, addPerson } = await fixture();
+test('legacy dispatch writers stay closed for every role', async () => {
+  const { call, received, addPerson, sql } = await fixture();
   const { lot } = await received();
   await addPerson('Store', 'dispatch');
-  assert.equal((await call('/quality', { lotId: lot.id, status: 'hold', note: 'Manager inspected' })).status, 410);
-  assert.equal((await call('/quality', { lotId: lot.id, status: 'approved', note: 'Looks fine' }, 'Store')).status, 410);
-  assert.equal((await call('/movements', movement(lot.id, 'dispatch', 1000, { cartons: 0, cones: 0 }), 'Store')).status, 201);
-  assert.equal((await call('/reversals', { id: crypto.randomUUID(), movementId: (await call('/workspace')).data.movements[0].id, note: 'Oops' }, 'Store')).status, 410);
+  const before = sql.prepare('SELECT lot_id,stage,grams FROM balances ORDER BY lot_id,stage').all();
+  for (const as of ['Anas', 'Store']) assert.equal((await call('/movements', movement(lot.id, 'dispatch', 1000, { cartons: 0, cones: 0 }), as)).status, 410);
+  assert.deepEqual(sql.prepare('SELECT lot_id,stage,grams FROM balances ORDER BY lot_id,stage').all(), before);
 });
 
 test('the ledger is immutable and a decided QC receipt is never reversed', async () => {
@@ -159,7 +142,7 @@ test('the ledger is immutable and a decided QC receipt is never reversed', async
   const dispatch = movement(lot.id, 'dispatch', 4000, { cartons: 0, cones: 0 });
   await call('/movements', dispatch);
   assert.equal((await call('/reversals', { id: crypto.randomUUID(), movementId: dispatch.id, note: 'Wrong dispatch' })).status, 410);
-  assert.equal((await call('/workspace')).data.balances[0].grams, 6000);
+  assert.equal((await call('/workspace')).data.balances[0].grams, 10000);
   assert.throws(() => sql.exec('DELETE FROM movements'), /immutable/);
   assert.throws(() => sql.exec('UPDATE stock_deltas SET grams = 1'), /immutable/);
 });
@@ -168,7 +151,7 @@ test('workspace data never leaks to other members or ambiguous barcode matches',
   const { call, setup, addOutsider, addLot } = await fixture();
   const { product, lot } = await setup();
   await addOutsider();
-  assert.equal((await call('/movements', movement(lot.id, 'dispatch', 1000, { cartons: 0, cones: 0 }), 'Outsider')).status, 404);
+  assert.equal((await call('/movements', movement(lot.id, 'dispatch', 1000, { cartons: 0, cones: 0 }), 'Outsider')).status, 410);
   assert.equal((await call('/lookup?code=' + encodeURIComponent(`YF:${lot.id}`), undefined, 'Outsider')).status, 404);
   assert.equal((await call('/erp/admin/users', undefined, 'Outsider')).data.users.length, 1);
   addLot(product.id, 'DYE-002');
@@ -181,9 +164,9 @@ test('invalid quantities, unknown fields and forged provenance fail; old receipt
   const { call, setup } = await fixture();
   const { lot } = await setup();
   for (const grams of [-1, 0, 0.3, 1e17, '100']) {
-    assert.equal((await call('/movements', movement(lot.id, 'dispatch', grams))).status, 422);
+    assert.equal((await call('/movements', movement(lot.id, 'dispatch', grams))).status, 410);
   }
-  assert.equal((await call('/movements', { ...movement(lot.id, 'dispatch'), by: 'Administrator' })).status, 422);
+  assert.equal((await call('/movements', { ...movement(lot.id, 'dispatch'), by: 'Administrator' })).status, 410);
   assert.equal((await call('/movements', movement(lot.id, 'receive'))).status, 410, 'raw stock enters only through a report decision');
 });
 

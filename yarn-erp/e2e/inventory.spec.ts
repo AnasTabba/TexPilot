@@ -7,7 +7,7 @@ test.use({ serviceWorkers: 'block' });
 test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
 
 test.describe('Shared inventory', () => {
-  test('finished goods are entered with a reason when an admin steps in; dispatch works on QC-approved stock and nothing can be reversed', async ({ page }) => {
+  test('finished goods remain recorded and immediate stock dispatch is closed', async ({ page }) => {
     await signIn(page);
     await page.goto('/#/inventory');
     await page.getByRole('button', { name: 'New material', exact: true }).click();
@@ -30,22 +30,15 @@ test.describe('Shared inventory', () => {
     expect([finished.inventory_type, finished.source, finished.quality]).toEqual(['finished', 'production', 'approved']);
     await expect(page.getByRole('button', { name: 'Receive stock', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Review quality', exact: true })).toHaveCount(0);
-    // Dispatch works on QC-approved stock that arrived through the inspection flow.
+    // Legacy stock dispatch is closed; only the order approval flow may deduct stock.
     const { lot, state: seeded } = await seededLot(page, 'LOT-1024');
-    const rawOf = (state: { balances: { lot_id: string; stage: string; grams: number }[] }) => state.balances.find(balance => balance.lot_id === lot.id && balance.stage === 'raw')!.grams;
-    const movementsOf = (state: { movements: { lot_id: string }[] }) => state.movements.filter(movement => movement.lot_id === lot.id).length;
-    await page.goto('/#/inventory/' + lot.id);
-    await page.getByRole('button', { name: 'Dispatch', exact: true }).click();
-    await page.getByLabel('Weight (kg)', { exact: true }).fill('1.250');
-    await page.getByLabel('Cartons', { exact: true }).fill('0');
-    await page.getByLabel('Cones', { exact: true }).fill('0');
-    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
-    await page.getByRole('button', { name: 'Save entry', exact: true }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Saved. Everyone on the team sees it now.' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Undo entry', exact: true })).toHaveCount(0);
-    const state = await workspace(page);
-    expect(rawOf(state)).toBe(rawOf(seeded) - 1250);
-    expect(movementsOf(state)).toBe(movementsOf(seeded) + 1);
+    const rawBefore = seeded.balances.find((balance: { lot_id: string; stage: string }) => balance.lot_id === lot.id && balance.stage === 'raw')!.grams;
+    const movementsBefore = seeded.movements.filter((movement: { lot_id: string }) => movement.lot_id === lot.id).length;
+    const legacy = await page.request.post('/api/movements', { headers: { Origin: origin }, data: { id: crypto.randomUUID(), lotId: lot.id, action: 'dispatch', stage: 'raw', grams: 1250, cartons: 0, cones: 0, note: 'Legacy attempt' } });
+    expect(legacy.status()).toBe(410);
+    const after = await workspace(page);
+    expect(after.balances.find((balance: { lot_id: string; stage: string }) => balance.lot_id === lot.id && balance.stage === 'raw')!.grams).toBe(rawBefore);
+    expect(after.movements.filter((movement: { lot_id: string }) => movement.lot_id === lot.id)).toHaveLength(movementsBefore);
     await page.goto('/#/activity');
     await expect(page.getByRole('button', { name: 'Reverse entry' })).toHaveCount(0);
   });

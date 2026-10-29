@@ -6,10 +6,10 @@ test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); 
 for (const [name, sections] of [
   ['Anas', ['Dashboard', 'Stock', 'History', 'Procurement', 'Team']],
   ['Pervaiz', ['Dashboard', 'Procurement']],
-  ['Saima', ['Dashboard', 'Review', 'Stock', 'History']],
-  ['Sana', ['Dashboard']],
+  ['Saima', ['Dashboard', 'Review', 'Stock', 'History', 'Dispatch']],
+  ['Sana', ['Dashboard', 'Dispatch']],
   ['Qasim', ['Dashboard', 'Inspections', 'Stock', 'History']],
-  ['Danish', ['Dashboard', 'Stock', 'History']],
+  ['Danish', ['Dashboard', 'Dispatch', 'Stock', 'History']],
 ] as const) test(`${name} sees only the sections of their role, plus the common ones`, async ({ page }) => {
   await signIn(page, name);
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
@@ -21,6 +21,15 @@ test('a hash for a section the role lacks falls back to the dashboard', async ({
   await signIn(page, 'Sana');
   await page.goto('/#/team');
   await expect(page.getByRole('heading', { level: 1, name: 'Dashboard', exact: true })).toBeVisible();
+});
+
+test('dispatch role opens the approval-gated sale dispatch screen', async ({ page }) => {
+  await signIn(page, 'Danish');
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /^Dispatch/ }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Dispatch', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Dispatch workflow', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 3, name: 'Request a sale dispatch', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Request approval', exact: true })).toBeVisible();
 });
 
 test('a notification appears with its unread count and opens its item', async ({ page }) => {
