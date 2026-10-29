@@ -5,7 +5,6 @@ import { adminApi } from './admin.mjs';
 import { ErpProblem, role } from './erp-utils.mjs';
 import { supplierPortal } from './supplier-portal.mjs';
 import { staffProcurement, approvalHandlers } from './procurement.mjs';
-import { receiving } from './receiving.mjs';
 import { salesApi } from './sales.mjs';
 import { buyerPortalApi } from './buyer-portal.mjs';
 import { notificationsApi } from './notify.mjs';
@@ -139,7 +138,7 @@ async function route(request, env) {
   if (path === '/api/erp/qc/photos' && request.method === 'POST') return qualityApi(request, env, member, path, null);
   const data = request.method === 'POST' ? await body(request) : null;
   const w = member.workspace_id;
-  if (path === '/api/erp/inbound' || path.startsWith('/api/erp/receipts')) return receiving(request, env, member, path, data);
+  if (path === '/api/erp/inbound' || path.startsWith('/api/erp/receipts')) fail(410, 'Legacy purchase receipt routes are retired. Historical receipt rows remain unchanged; use /api/erp/qc/lots for arrivals.');
   if (path.startsWith('/api/erp/')) return (Object.hasOwn(erp, path.split('/')[3]) ? erp[path.split('/')[3]] : staffProcurement)(request, env, member, path, data);
   if (/^\/api\/lots\/[^/]+\/evidence$/.test(path) && request.method === 'GET') {
     const lotId = id(path.split('/')[3]);

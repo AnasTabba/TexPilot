@@ -4,8 +4,8 @@ import { signIn } from './helpers';
 test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
 
 for (const [name, sections] of [
-  ['Anas', ['Dashboard', 'Stock', 'History', 'Procurement', 'Team']],
-  ['Pervaiz', ['Dashboard', 'Procurement']],
+  ['Anas', ['Dashboard', 'Stock', 'History', 'Team']],
+  ['Pervaiz', ['Dashboard', 'Suppliers', 'RFQs', 'Orders', 'Claims', 'Analytics']],
   ['Saima', ['Dashboard', 'Review', 'Stock', 'History', 'Dispatch']],
   ['Sana', ['Dashboard', 'Buyers', 'Buyer RFQs', 'Invoices', 'Dispatch requests', 'Analytics']],
   ['Qasim', ['Dashboard', 'Inspections', 'Stock', 'History']],
@@ -74,9 +74,9 @@ test('a notification appears with its unread count and opens its item', async ({
   await bell.click();
   await expect(page.getByRole('heading', { level: 1, name: 'Notifications', exact: true })).toBeVisible();
   await page.getByRole('button', { name: /New supplier pending/ }).click();
-  await expect(page).toHaveURL(/#\/notifications$/);
+  await expect(page).toHaveURL(/#\/suppliers\//);
   await expect(bell.locator('.yf-nav-count')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /New supplier pending/ })).toContainText('Noor Spinning');
+  await expect(page.getByRole('heading', { level: 1, name: 'Suppliers', exact: true })).toBeVisible();
 });
 
 test('My profile shows the role and switches language', async ({ page }) => {

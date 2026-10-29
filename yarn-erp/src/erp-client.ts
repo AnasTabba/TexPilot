@@ -28,7 +28,7 @@ export interface ProcurementState {
 }
 export interface SupplierIdentity { user: { id: string; name: string; email: string }; supplier: Supplier }
 export const quantity = (milli: number) => new Intl.NumberFormat('en', { maximumFractionDigits: 3 }).format(milli / 1000);
-export const rate = (minor: number, currency: string) => new Intl.NumberFormat('en', { style: 'currency', currency }).format(minor / 100);
+export const rate = (minor: number, currency: string) => new Intl.NumberFormat('en', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(minor / 100);
 export const factoryTime = (time: number) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium', timeStyle: 'short' }).format(time);
 export function fixedInput(value: string, precision: number, name: string) {
  if (!new RegExp(`^\\d+(?:\\.\\d{1,${precision}})?$`).test(value.trim())) throw new Error(`${name}: use a positive number with up to ${precision} decimal places.`);

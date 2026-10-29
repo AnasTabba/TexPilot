@@ -16,8 +16,9 @@ if (typeof crypto.randomUUID !== "function")
       (+c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (+c / 4)))).toString(16),
     ) as ReturnType<Crypto["randomUUID"]>;
 function Application() {
-  const [supplier, setSupplier] = useState(location.hash.startsWith('#/supplier'));
-  useEffect(() => { const route = () => { setSupplier(location.hash.startsWith('#/supplier')); }; addEventListener('hashchange', route); return () => removeEventListener('hashchange', route); }, []);
+  const isSupplierPortal = () => /^#\/supplier(?:\/|$)/.test(location.hash);
+  const [supplier, setSupplier] = useState(isSupplierPortal);
+  useEffect(() => { const route = () => { setSupplier(isSupplierPortal()); }; addEventListener('hashchange', route); return () => removeEventListener('hashchange', route); }, []);
   return supplier ? <SupplierPortal /> : <LiveApp />;
 }
 createRoot(document.getElementById("root")!).render(

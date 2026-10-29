@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
 import { AsyncForm, Field, errorMessage } from './forms';
-import { can, inventoryRequest as api, type Member, type Product } from './inventory-client';
+import { inventoryRequest as api, type Member, type Product } from './inventory-client';
 import { useLanguage } from './i18n';
 import { InterventionField } from './PortalCommon';
 import { factoryInput, factoryTime, fixedInput, localFactoryInput, quantity } from './erp-client';
@@ -9,20 +9,19 @@ import { factoryInput, factoryTime, fixedInput, localFactoryInput, quantity } fr
 interface InboundOrder { id: string; reference: string; status: string; supplier_name: string; title: string; specifications: string; quantity_milli: number; arrived_milli: number; unit: string }
 interface Shipment { id: string; purchase_order_id: string; bill_of_lading: string }
 interface QcLot { id: string; purchase_order_id: string; reference: string; supplier_lot: string; quantity_milli: number; unit: string; arrived_at: number; status: 'awaiting_inspection' | 'under_review' | 'settled'; product_name: string }
-interface Receipt { id: string; purchase_order_id: string; lot_id: string; quantity_milli: number; grams: number; batch: string; supplier_lot: string; created_at: number; reversal_id: string | null }
-interface InboundState { orders: InboundOrder[]; receipts: Receipt[]; products: Product[]; shipments: Shipment[]; lots: QcLot[] }
+interface InboundState { orders: InboundOrder[]; products: Product[]; shipments: Shipment[]; lots: QcLot[] }
 const lotStatus = { awaiting_inspection: ['Awaiting inspection', 'معائنے کا منتظر'], under_review: ['Under review', 'جائزے میں'], settled: ['Settled', 'نمٹا دیا گیا'] } as const;
 export default function IncomingStock({ member, onInventoryChanged }: { member: Member; onInventoryChanged: () => Promise<void> }) {
  const { t } = useLanguage();const [state,setState]=useState<InboundState|null>(null),[error,setError]=useState(''),[open,setOpen]=useState(''),[notice,setNotice]=useState('');
- const load=useCallback(async()=>{try{const [inbound, { lots }] = await Promise.all([api<Omit<InboundState, 'lots'>>('/erp/inbound'), api<{ lots: QcLot[] }>('/erp/qc/lots')]);setState({ ...inbound, lots });setError('');}catch(e){setError(errorMessage(e));}},[]);
+ const load=useCallback(async()=>{try{const [procurement, inventory, quality, shipmentData] = await Promise.all([api<{orders:(InboundOrder & {terms:{title:string;specifications:string;unit:string}})[]}>('/erp/procurement'), api<{products:Product[]}>('/workspace'), api<{lots:QcLot[]}>('/erp/qc/lots'), api<{shipments:Shipment[]}>('/erp/shipments')]);const lots=quality.lots;const orders=procurement.orders.map(o=>({...o, title:o.terms.title, specifications:o.terms.specifications, unit:o.terms.unit, arrived_milli:lots.filter(l=>l.purchase_order_id===o.id).reduce((n,l)=>n+l.quantity_milli,0)}));setState({orders,products:inventory.products,shipments:shipmentData.shipments,lots});setError('');}catch(e){setError(errorMessage(e));}},[]);
  useEffect(()=>{void load();},[load]);const saved=async()=>{await onInventoryChanged();await load();setOpen('');setNotice(t('Arrival registered. Quality inspectors have been told it is ready to inspect.', 'آمد درج ہو گئی۔ کوالٹی انسپکٹرز کو بتا دیا گیا ہے کہ معائنہ تیار ہے۔'));};
  return <section className="live-panel"><div className="yf-head"><div><h2>{t('Incoming stock', 'آنے والا اسٹاک')}</h2><p>{t('Register each arrival against its purchase order and shipment. Quality inspectors then count, photograph and report what they accepted and rejected.', 'ہر آمد کو اس کے خریداری آرڈر اور شپمنٹ کے ساتھ درج کریں۔ پھر کوالٹی انسپکٹر قبول اور مسترد مال گنتے، تصویر لیتے اور رپورٹ کرتے ہیں۔')}</p></div><button className="button" onClick={()=>void load()}><RefreshCw size={18}/>{t('Refresh arrivals', 'آمد تازہ کریں')}</button></div>
   {error&&<p className="live-error" role="alert">{t(error)}</p>}{notice&&<p className="live-success" role="status">{notice}</p>}{!state&&!error&&<p role="status">{t('Loading incoming orders…','آنے والے آرڈر لوڈ ہو رہے ہیں…')}</p>}
   {state&&!state.orders.length&&<p className="live-muted">{t('Accepted supplier purchase orders appear here.', 'منظور شدہ سپلائر خریداری آرڈر یہاں نظر آئیں گے۔')}</p>}
-  <div className="erp-records">{state?.orders.map(o=>{const receipts=state.receipts.filter(r=>r.purchase_order_id===o.id),lots=state.lots.filter(l=>l.purchase_order_id===o.id),remaining=o.quantity_milli-o.arrived_milli;return <article className="erp-record" key={o.id}><h3>{o.reference} · {o.supplier_name}</h3><h4>{o.title}</h4><p className="erp-multiline">{o.specifications}</p><p>{t('Still to arrive:', 'آنا باقی:')} {quantity(remaining)} {o.unit}</p>
+  <div className="erp-records">{state?.orders.map(o=>{const lots=state.lots.filter(l=>l.purchase_order_id===o.id),remaining=o.quantity_milli-o.arrived_milli;return <article className="erp-record" key={o.id}><h3>{o.reference} · {o.supplier_name}</h3><h4>{o.title}</h4><p className="erp-multiline">{o.specifications}</p><p>{t('Still to arrive:', 'آنا باقی:')} {quantity(remaining)} {o.unit}</p>
    {open==='receive:'+o.id?<ArrivalForm member={member} order={o} remaining={remaining} products={state.products} shipments={state.shipments.filter(x=>x.purchase_order_id===o.id)} onSaved={saved} onCancel={()=>setOpen('')}/>:remaining>0&&['purchase_manager','admin'].includes(member.role)&&['accepted','dispatched'].includes(o.status)&&<button className="button primary" onClick={()=>setOpen('receive:'+o.id)}><Plus size={18}/>{t('Register arrival', 'آمد درج کریں')}</button>}
    {lots.map(l=><div className="erp-shipment" key={l.id}><strong>{l.reference} · {l.product_name} · {quantity(l.quantity_milli)} {l.unit}</strong><span>{factoryTime(l.arrived_at)}{l.supplier_lot?' · '+l.supplier_lot:''} · {t(lotStatus[l.status][0], lotStatus[l.status][1])}</span></div>)}
-   {receipts.map(r=><div className="erp-shipment" key={r.id}><strong>{t('Earlier receipt', 'پرانی وصولی')} {r.batch} · {quantity(r.quantity_milli)} {o.unit}</strong><span>{factoryTime(r.created_at)}{r.supplier_lot?' · '+r.supplier_lot:''}{r.reversal_id?' · '+t('Reversed','واپس کیا گیا'):''}</span><a className="button" href={'#/inventory/'+r.lot_id}>{t('Open batch', 'بیچ کھولیں')}</a>{!r.reversal_id&&can(member,'reverse')&&(open==='reverse:'+r.id?<ReverseReceipt member={member} receipt={r} onSaved={async()=>{await onInventoryChanged();setOpen('');setNotice(t('Receipt reversed. The original remains in history.','وصولی واپس کر دی گئی۔ اصل اندراج ہسٹری میں موجود ہے۔'));await load();}} onCancel={()=>setOpen('')}/>:<button className="live-text-button" onClick={()=>setOpen('reverse:'+r.id)}>{t('Correct this receipt', 'یہ وصولی درست کریں')}</button>)}</div>)}
+
   </article>;})}</div>
  </section>;
 }
@@ -37,8 +36,4 @@ function ArrivalForm({member,order,remaining,products,shipments,onSaved,onCancel
   <div className="live-fields"><Field>{t(`Arrived quantity (${order.unit})`,`پہنچنے والی مقدار (${order.unit})`)}<input inputMode="decimal" value={qty} onChange={e=>setQty(e.target.value)} required/></Field><Field>{t('Arrived at (factory time)','آمد کا وقت (فیکٹری وقت)')}<input type="datetime-local" value={arrived} onChange={e=>setArrived(e.target.value)} required/></Field></div>
  <InterventionField member={member} owners={['purchase_manager']} value={intervention} onChange={setIntervention}/>
  </AsyncForm>;
-}
-function ReverseReceipt({member,receipt,onSaved,onCancel}:{member:Member;receipt:Receipt;onSaved:()=>Promise<void>;onCancel:()=>void}){
- const {t}=useLanguage();const [id]=useState(crypto.randomUUID()),[reason,setReason]=useState(''),[intervention,setIntervention]=useState('');
- return <AsyncForm title={t('Reverse purchase receipt','خریداری وصولی واپس کریں')} detail={receipt.batch} submit={t('Reverse receipt','وصولی واپس کریں')} onCancel={onCancel} note={t('A receipt cannot be reversed after its stock has been used. The original record is kept.', 'اسٹاک استعمال ہونے کے بعد وصولی واپس نہیں کی جا سکتی۔ اصل اندراج محفوظ رہتا ہے۔')} onSubmit={async()=>{await api('/erp/receipts/reverse',{id,receiptId:receipt.id,reason,...(intervention?{interventionReason:intervention}:{})});await onSaved();}}><Field>{t('Correction reason','درستگی کی وجہ')}<textarea value={reason} onChange={e=>setReason(e.target.value)} minLength={5} maxLength={1000} required/></Field><InterventionField member={member} owners={['supervisor']} value={intervention} onChange={setIntervention}/></AsyncForm>;
 }
