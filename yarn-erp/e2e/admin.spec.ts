@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { signIn, apiPost } from './helpers';
 
-test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
+test.beforeEach(async ({ page, isMobile }) => { test.skip(isMobile, 'These specs drive the desktop sidebar.'); await page.request.post('/__test/reset'); });
 
 test('threshold history records old and new values and follows currency settings', async ({ page }) => {
   await signIn(page);

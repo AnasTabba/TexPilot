@@ -76,8 +76,8 @@ test.describe('Shared inventory', () => {
     await page.goto('/#/inventory');
     const phoneNavigation = page.getByRole('navigation', { name: 'Phone navigation' });
     if (await phoneNavigation.isVisible()) {
-      const button = phoneNavigation.getByRole('button', { name: 'Stock', exact: true });
-      await expect(button.getByText('Stock', { exact: true })).toHaveCSS('font-size', '14px');
+      const button = phoneNavigation.getByRole('button', { name: 'Approvals', exact: true });
+      await expect(button.getByText('Approvals', { exact: true })).toHaveCSS('font-size', '14px');
     }
     try {
       await page.screenshot({ path: testInfo.outputPath('inventory.png'), fullPage: true });
