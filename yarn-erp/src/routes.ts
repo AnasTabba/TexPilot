@@ -29,6 +29,7 @@ export const eventTitle: Record<string, [string, string]> = {
   'stock.received': ['Finished stock received', 'تیار اسٹاک موصول ہوا'],
   'stock.adjusted': ['Stock adjusted', 'اسٹاک میں تبدیلی ہوئی'],
   'stock.to_production': ['Batch sent to production', 'بیچ پیداوار کو بھیجا گیا'],
+  'stock.finished': ['Batch finished', 'بیچ تیار ہو گیا'],
   'stock.ready_for_production': ['QC passed: ready for production', 'QC منظور: پیداوار کے لیے تیار'],
   'qc.report_waiting': ['QC report waiting for acceptance', 'QC رپورٹ قبولیت کی منتظر ہے'],
   'user.added': ['Team member added', 'ٹیم میں نیا رکن شامل ہوا'],

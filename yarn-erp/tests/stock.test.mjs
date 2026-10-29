@@ -320,6 +320,30 @@ test('all legacy stage balances remain readable but new writes use raw or finish
   assert.equal(stock.raw_grams, 900); assert.equal(stock.cops_grams, 2000);
 });
 
+test('work in progress moves to finished through /finish; replays and over-finishing are safe', async () => {
+  const f = await fixture(), productId = await f.insertProduct(), lotId = uuid();
+  f.sql.prepare("INSERT INTO lots(id,workspace_id,product_id,batch,supplier,quality,created_at) VALUES(?,?,?,?,?,?,?)").run(lotId, f.workspaceId, productId, 'FIN-WIP', 'Mill', 'approved', Date.now());
+  const seed = uuid();
+  f.sql.prepare("INSERT INTO movements(id,workspace_id,lot_id,action,from_stage,to_stage,grams,cartons,cones,note,actor,actor_name,request_hash,created_at) VALUES(?,?,?,'receive',NULL,'raw',?,0,0,'Seed','x','Seed',?,?)").run(seed, f.workspaceId, lotId, 10000, seed, Date.now());
+  f.sql.prepare('INSERT INTO stock_deltas(id,movement_id,lot_id,stage,grams,cartons,cones) VALUES(?,?,?,?,?,0,0)').run(uuid(), seed, lotId, 'raw', 10000);
+  assert.equal((await f.call('/erp/stock/production', { id: uuid(), lotId, grams: 6000 }, 'Saima')).status, 201);
+  const finishId = uuid(), body = { id: finishId, lotId, grams: 2500, note: 'Cones packed' };
+  assert.equal((await f.call('/erp/stock/finish', body, 'Qasim')).status, 403, 'only the supervisor finishes stock');
+  const done = await f.call('/erp/stock/finish', body, 'Saima');
+  assert.equal(done.status, 201); assert.equal(done.data.movementId, finishId);
+  assert.deepEqual([grams(f, lotId, 'raw'), grams(f, lotId, 'wip'), grams(f, lotId, 'finished')], [4000, 3500, 2500]);
+  const movement = one(f, 'SELECT * FROM movements WHERE id=?', finishId);
+  assert.deepEqual([movement.action, movement.from_stage, movement.to_stage, movement.grams, movement.actor_name], ['transfer', 'wip', 'finished', 2500, 'Saima']);
+  const [event] = audits(f, 'stock.finished'); assert.deepEqual([event.record_id, event.actor_role], [finishId, 'supervisor']);
+  const replay = await f.call('/erp/stock/finish', body, 'Saima');
+  assert.equal(replay.status, 200); assert.equal(replay.data.movementId, finishId);
+  assert.equal((await f.call('/erp/stock/finish', { ...body, grams: 100 }, 'Saima')).status, 409, 'the id cannot be reused for different stock');
+  assert.deepEqual([grams(f, lotId, 'wip'), grams(f, lotId, 'finished')], [3500, 2500]);
+  const over = await f.call('/erp/stock/finish', { id: uuid(), lotId, grams: 4000 }, 'Saima');
+  assert.equal(over.status, 409); assert.equal(over.data.error, 'Not enough work-in-progress stock in this batch.');
+  assert.deepEqual([grams(f, lotId, 'wip'), grams(f, lotId, 'finished')], [3500, 2500]);
+});
+
 test('supervisors read threshold previews without admin settings access', async () => {
   const f = await fixture();
   assert.deepEqual((await f.call('/erp/stock', undefined, 'Saima')).data.adjustmentThreshold, { value: null, unit: 'grams' });

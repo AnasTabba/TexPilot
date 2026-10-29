@@ -105,7 +105,7 @@ function InventoryForm({ action, state, result, onSaved, onCancel }: { action: A
   </AsyncForm>;
 }
 
-function LotDetail({ lot, state, onAction, onBack, onProduce }: { lot: StockLot; state: WorkspaceState; onAction: (action: Action) => void; onBack: () => void; onProduce?: () => void }) {
+function LotDetail({ lot, state, onAction, onBack, onProduce, onFinish }: { lot: StockLot; state: WorkspaceState; onAction: (action: Action) => void; onBack: () => void; onProduce?: () => void; onFinish?: () => void }) {
   const { t, language } = useLanguage();
   const product = state.products.find(p => p.id === lot.product_id);
   const [qr, setQr] = useState(''); const [qrError, setQrError] = useState('');
@@ -139,11 +139,11 @@ function LotDetail({ lot, state, onAction, onBack, onProduce }: { lot: StockLot;
   const inspected = lot.quality !== 'uninspected' || !!evidence?.inspections.length;
   // Where this batch is in its life, and the one step that moves it on.
   const steps: [string, boolean][] = [
-    [t("Received"), lotMoves.some(m => m.action === 'receive') || at('raw', 'wip', 'finished', 'cops') > 0],
+    [t("Received"), lotMoves.some(m => m.action === 'receive') || at('raw', 'wip', 'finished') > 0],
     [t("Inspected"), inspected],
     [lot.quality === 'hold' ? t("On QC hold") : t("QC approved"), lot.quality === 'approved'],
-    [t("In production"), at('wip', 'finished', 'cops') > 0],
-    [t("Finished"), at('finished', 'cops') > 0],
+    [t("In production"), at('wip', 'finished') > 0],
+    [t("Finished"), at('finished') > 0],
     [t("Dispatched"), lotMoves.some(m => m.action === 'dispatch')],
   ];
   const current = steps.findIndex(([, done]) => !done);
@@ -152,15 +152,20 @@ function LotDetail({ lot, state, onAction, onBack, onProduce }: { lot: StockLot;
   // Inspectors inspect through the Inspections page, so the old inspection note is not offered to them.
   const closed: Partial<Record<Role, Step[]>> = { quality_inspector: ['inspection'] };
   const allowed = (type: Step) => can(state.member, actions[type][2] as Permission) && !closed[state.member.role]?.includes(type);
+  // Work in progress not yet finished is the finish step; once some finished stock exists, dispatch stays the next step.
+  const toFinish = at('wip') > 0 && at('finished') === 0;
   // Stock arrives, and a batch becomes QC-approved, only when the supervisor decides an inspection report.
   const next: [string, string, Step | null] = !steps[0][1] ? [t("Waiting for the first delivery"), t("Stock appears here when the supervisor accepts an inspection report."), null]
     : !inspected ? [t("Inspect this batch"), t("Record the care label and a physical check. QC approval comes after."), 'inspection']
     : lot.quality !== 'approved' ? [lot.quality === 'hold' ? t("On QC hold") : t("Waiting for QC approval"), t("The supervisor approves a batch by accepting its inspection report."), null]
     : !steps[3][1] ? [t("Send to production"), t("This batch passed QC. Move it into production next."), null]
+    : toFinish ? [t("Finish production"), t("Record the yarn that came off the machines as finished stock."), null]
     : [t("Dispatch finished stock"), t("Send approved stock out with its delivery reference."), 'dispatch'];
   // QC-passed raw stock goes to production next; the button only shows for people who can start production.
   const toProduce = lot.quality === 'approved' && !steps[3][1];
-  const NextIcon = next[2] ? actions[next[2]][1] : toProduce ? Factory : ShieldCheck;
+  // Finishing is also offered beside the dispatch step when finished stock already exists and work in progress remains.
+  const finishMore = !!onFinish && !toFinish && at('wip') > 0;
+  const NextIcon = next[2] ? actions[next[2]][1] : toProduce ? Factory : toFinish ? CheckCircle2 : ShieldCheck;
   // Someone without the permission for the next step still sees it, with who can do it instead of a button.
   const nextAllowed = !!next[2] && allowed(next[2]);
   const permissionName = next[2] ? permissionInfo.find(([id]) => id === actions[next[2]!][2])![1] : '';
@@ -170,10 +175,10 @@ function LotDetail({ lot, state, onAction, onBack, onProduce }: { lot: StockLot;
   return <><button className="button yf-back" onClick={onBack}><ArrowLeft size={18} aria-hidden="true" />{t("All stock")}</button><div className="live-detail-grid">
     <section className="live-panel yf-batch"><div className="live-panel-heading"><div className="yf-batch-title"><Cone hue={materialHue(state.products, lot.product_id)} size={44} /><div><h2>{yarnName(product?.name || t("Material"))}</h2><p>{product?.sku} {t("· Batch")} {lot.batch} · {lot.supplier || t("Supplier not recorded")} {t("· since")} {when.format(lot.created_at, language)}</p></div></div></div>
       <ol className="yf-steps" aria-label={t("Batch progress")}>{steps.map(([label, done], i) => <li key={label} className={done ? 'done' : i === current ? 'current' : ''} aria-current={i === current ? 'step' : undefined}><span>{done ? <Check size={14} aria-hidden="true" /> : i + 1}</span>{label}</li>)}</ol>
-      <div className={`yf-next is-inline ${lot.quality}`}><span className="yf-next-icon"><NextIcon size={24} aria-hidden="true" /></span><div className="yf-next-text"><h3>{next[0]}</h3><p>{nextAllowed || !next[2] ? next[1] : whoCan}</p></div>{nextAllowed && <div className="yf-next-actions"><button className="button primary" onClick={() => onAction({ type: next[2]!, lotId: lot.id })}>{actions[next[2]!][0]}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toProduce && onProduce && <div className="yf-next-actions"><button className="button primary" onClick={onProduce}>{t("To production")}<ArrowRight size={18} aria-hidden="true" /></button></div>}</div>
+      <div className={`yf-next is-inline ${lot.quality}`}><span className="yf-next-icon"><NextIcon size={24} aria-hidden="true" /></span><div className="yf-next-text"><h3>{next[0]}</h3><p>{nextAllowed || !next[2] ? next[1] : whoCan}</p></div>{nextAllowed && <div className="yf-next-actions"><button className="button primary" onClick={() => onAction({ type: next[2]!, lotId: lot.id })}>{actions[next[2]!][0]}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toProduce && onProduce && <div className="yf-next-actions"><button className="button primary" onClick={onProduce}>{t("To production")}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toFinish && onFinish && <div className="yf-next-actions"><button className="button primary" onClick={onFinish}>{t("Mark finished")}<ArrowRight size={18} aria-hidden="true" /></button></div>}</div>
       <h3 className="live-subheading">{t("Stock in this batch")}</h3>
       <StockFlow balances={lotBalances} compact />
-      {(others.length > 0 || (onProduce && !toProduce)) && <div className="live-actions yf-other-actions" aria-label={t("Other actions")}>{others.map(type => { const [label, Icon] = actions[type]; const blocked = type === 'dispatch' && (lot.quality !== 'approved' || at('finished') <= 0); return <button className="button" key={type} onClick={() => onAction({ type, lotId: lot.id })} disabled={blocked} title={blocked ? t("Only finished, QC-approved stock can be dispatched") : undefined}><Icon size={18} aria-hidden="true" />{label}</button>; })}{onProduce && !toProduce && <button className="button" onClick={onProduce}><Factory size={18} aria-hidden="true" />{t("To production")}</button>}</div>}
+      {(others.length > 0 || (onProduce && !toProduce) || finishMore) && <div className="live-actions yf-other-actions" aria-label={t("Other actions")}>{others.map(type => { const [label, Icon] = actions[type]; const blocked = type === 'dispatch' && (lot.quality !== 'approved' || at('finished') <= 0); return <button className="button" key={type} onClick={() => onAction({ type, lotId: lot.id })} disabled={blocked} title={blocked ? t("Only finished, QC-approved stock can be dispatched") : undefined}><Icon size={18} aria-hidden="true" />{label}</button>; })}{onProduce && !toProduce && <button className="button" onClick={onProduce}><Factory size={18} aria-hidden="true" />{t("To production")}</button>}{finishMore && <button className="button" onClick={onFinish}><CheckCircle2 size={18} aria-hidden="true" />{t("Mark finished")}</button>}</div>}
       <h3 className="live-subheading">{t("Inspection notes")}</h3>
       {evidenceError && <p className="live-error" role="alert">{t("Batch history could not be refreshed.")} {evidenceError}<button className="live-text-button" onClick={() => setEvidenceRetry(value => value + 1)}>{t("Retry history")}</button></p>}
       {!evidence && !evidenceError && <p role="status" className="live-muted">{t("Loading this batch’s inspection history…")}</p>}
@@ -316,6 +321,10 @@ export default function LiveApp() {
   const started = (lotId: string) => workspace.balances.some(b => b.lot_id === lotId && b.stage !== 'raw' && b.grams > 0);
   const canProduce = (lot: StockLot) => (me.role === 'supervisor' || me.role === 'admin') && lot.quality === 'approved' && rawOf(lot.id) > 0 && !started(lot.id);
   const openProduction = (lot: StockLot) => setProducing({ lotId: lot.id, batch: lot.batch, productName: productName(lot.id), rawGrams: rawOf(lot.id) });
+  // Finishing moves work-in-progress stock to finished stock; same permission as starting production, keyed on WIP instead of raw.
+  const wipOf = (lotId: string) => workspace.balances.filter(b => b.lot_id === lotId && b.stage === 'wip').reduce((sum, b) => sum + b.grams, 0);
+  const canFinish = (lot: StockLot) => (me.role === 'supervisor' || me.role === 'admin') && lot.quality === 'approved' && wipOf(lot.id) > 0;
+  const openFinish = (lot: StockLot) => setProducing({ lotId: lot.id, batch: lot.batch, productName: productName(lot.id), rawGrams: wipOf(lot.id), mode: 'finish' });
   // One list: each material with its batches under it (a material is what you buy; a batch is one delivery of it).
   function stockList() {
     const q = query.toLowerCase();
@@ -377,7 +386,7 @@ export default function LiveApp() {
       {error && <div className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{t(error)}<button className="live-text-button" onClick={() => void refresh()}>{t("Retry connection")}</button></div>}
       {!online && <div className="live-warning" role="status"><WifiOff size={18} />{t("You are offline. Entries can be saved again once the connection is back.")}</div>}
       {notice && <div className="live-success" role="status"><CheckCheck size={19} /><span>{t(notice)}</span><button aria-label={t("Dismiss message")} className="live-icon-button" onClick={() => setNotice('')}><X size={17} /></button></div>}
-      {action ? <InventoryForm key={`${action.type}:${action.lotId || ''}`} action={action} state={workspace} result={action.type === 'inspection' ? lastResult : null} onSaved={saved} onCancel={() => setAction(null)} /> : selected ? <LotDetail key={selected.id} lot={selected} state={workspace} onAction={setAction} onBack={() => navigate('inventory')} onProduce={canProduce(selected) ? () => openProduction(selected) : undefined} /> : <>
+      {action ? <InventoryForm key={`${action.type}:${action.lotId || ''}`} action={action} state={workspace} result={action.type === 'inspection' ? lastResult : null} onSaved={saved} onCancel={() => setAction(null)} /> : selected ? <LotDetail key={selected.id} lot={selected} state={workspace} onAction={setAction} onBack={() => navigate('inventory')} onProduce={canProduce(selected) ? () => openProduction(selected) : undefined} onFinish={canFinish(selected) ? () => openFinish(selected) : undefined} /> : <>
       {page === 'dashboard' && <Dashboard member={me} inbox={inbox} reload={reloadInbox} state={state} onChanged={() => refresh(true)} />}
       {page === 'notifications' && <Notifications member={me} inbox={inbox} reload={reloadInbox} />}
       {page === 'inventory' && <section className="yf-stock-panel" aria-label={t("Stock")}><div className="yf-views" role="group" aria-label={t("Show")}>{views.map(([id, label, Icon]) => <button key={id} aria-pressed={view === id} onClick={() => setView(id)}><Icon size={20} aria-hidden="true" /><span>{t(label)}</span><b>{workspace.lots.filter(l => inView(l, id)).length + (id === 'all' || id === 'quality' ? workspace.qcArrivals?.length ?? 0 : 0)}</b></button>)}</div><Field className="live-search-label">{t("Search")}<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder={t("Material, batch or supplier")} /></Field>{stockList()}</section>}

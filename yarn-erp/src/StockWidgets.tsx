@@ -48,7 +48,7 @@ export function ProductionWidget({ state }: { state: WorkspaceState }) {
     let allTime = 0;
     for (const m of state.movements) {
       if (m.action !== 'transfer' || reversed.has(m.id)) continue;
-      if (m.to_stage !== 'finished' && m.to_stage !== 'cops') continue;
+      if (m.to_stage !== 'finished') continue;
       allTime += m.grams;
       counted.push({ time: m.created_at, grams: m.grams });
     }

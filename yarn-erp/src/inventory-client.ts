@@ -60,7 +60,7 @@ export async function inventoryRequest<T>(path: string, data?: unknown, signal?:
   }
 }
 export const can = (member: Member, permission: Permission) => member.admin || member.permissions.includes(permission);
-export const stockStages: StockStage[] = ['raw', 'wip', 'finished', 'cops'];
+export const stockStages: StockStage[] = ['raw', 'wip', 'finished'];
 export const stageName: Record<StockStage, string> = { raw: 'Raw material', wip: 'Work in progress', finished: 'Finished stock', cops: 'Cops' };
 export const qualityName: Record<Quality, string> = { uninspected: 'Needs inspection', approved: 'QC approved', hold: 'QC hold' };
 export const weight = (grams: number) => new Intl.NumberFormat('en', { maximumFractionDigits: 3 }).format(grams / 1000);

@@ -327,7 +327,7 @@ function DispatchForm({ order, line, state, member, onSaved, onCancel }: {
   const already = state.dispatches.filter(d => d.sales_order_id === order.id && !d.movement_reversed).reduce((n, d) => n + d.quantity_milli, 0);
   const remaining = line.quantity_milli - already;
   const usable = state.finishedStock.filter(s => s.quality === 'approved' && (!line.product_id || s.product_id === line.product_id));
-  const [stage, setStage] = useState<'finished' | 'cops'>(usable.find(s => s.stage === 'finished') ? 'finished' : 'cops');
+  const stage = 'finished' as const;
   const options = usable.filter(s => s.stage === stage);
   const [lotId, setLot] = useState(options[0]?.lot_id ?? ''), [qty, setQty] = useState(''), [grams, setGrams] = useState('');
   const [cartons, setCartons] = useState('0'), [cones, setCones] = useState('0'), [carrier, setCarrier] = useState('');
@@ -347,8 +347,6 @@ function DispatchForm({ order, line, state, member, onSaved, onCancel }: {
       await onSaved(t('Dispatch recorded and stock issued.', 'روانگی درج اور اسٹاک جاری ہو گیا۔'));
     }}>
     <div className="live-fields">
-      <Field>{t('Stock stage', 'اسٹاک اسٹیج')}<select value={stage} onChange={e => { setStage(e.target.value as 'finished' | 'cops'); setLot(''); }}>
-        <option value="finished">{t('Finished stock', 'تیار اسٹاک')}</option><option value="cops">{t('Cops', 'کوپس')}</option></select></Field>
       <Field>{t('QC-approved lot', 'قمیت منظور شدہ لوٹ')}<select value={lotId} onChange={e => setLot(e.target.value)} required>
         {!options.length && <option value="">{t('No approved stock at this stage', 'اس اسٹیج پر منظور شدہ اسٹاک نہیں')}</option>}
         {options.map(s => <option value={s.lot_id} key={s.lot_id}>{s.product_name} · {s.batch} · {s.grams.toLocaleString()} g</option>)}</select></Field>
