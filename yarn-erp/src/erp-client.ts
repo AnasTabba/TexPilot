@@ -7,7 +7,7 @@ export interface Supplier {
 export interface ProcurementRfq {
  id: string; reference: string; title: string; category_id: string; specifications: string;
  quantity_milli: number; unit: 'kg' | 'tonne'; delivery_location: string; deadline_at: number;
- requested_delivery_at: number; status: 'draft' | 'open' | 'awarded' | 'closed'; recipient_count?: number; bid_count?: number;
+ requested_delivery_at: number; status: 'draft' | 'open' | 'awarded' | 'closed' | 'cancelled'; recipient_count?: number; bid_count?: number;
 }
 export interface SupplierBid {
  id: string; rfq_id: string; supplier_id: string; supplier_name?: string; quantity_milli: number;
@@ -16,14 +16,14 @@ export interface SupplierBid {
 }
 export interface PurchaseOrder {
  id: string; rfq_id: string; bid_id: string; supplier_id: string; supplier_name?: string; reference: string;
- status: string; terms: SupplierBid & { title: string; specifications: string; unit: string; accepted_bid_version: number };
+ status: string; quantity_milli: number; total_minor: number; approval_status: 'approved' | 'pending_admin'; version: number; terms: SupplierBid & { title: string; specifications: string; unit: string; accepted_bid_version: number };
 }
 export interface ProcurementShipment {
  id: string; purchase_order_id: string; bill_of_lading: string; carrier: string; containers_json: string;
  quantity_milli: number; dispatched_at: number; note: string; tracking_status: string;
 }
 export interface ProcurementState {
- rfqs: ProcurementRfq[]; bids: SupplierBid[]; orders: PurchaseOrder[]; shipments: ProcurementShipment[];
+ rfqs: ProcurementRfq[]; bids: SupplierBid[]; orders: PurchaseOrder[]; shipments: ProcurementShipment[]; currency?: string;
  tracking?: { configured: boolean; provider: string; reason: string };
 }
 export interface SupplierIdentity { user: { id: string; name: string; email: string }; supplier: Supplier }
@@ -45,3 +45,5 @@ export function localFactoryInput(time: number) {
  // HTML datetime-local is deliberately labelled as factory time, independent of the device timezone.
  return new Date(time + 5 * 3600_000).toISOString().slice(0, 16);
 }
+
+export interface PendingPurchasing { awards: { approvalId: string; rfqId: string; bidId: string; bidVersion: number; amount: number }[]; changes: { approvalId: string; orderId: string; quantityMilli: number }[] }

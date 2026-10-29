@@ -68,7 +68,7 @@ async function bidFixture() {
   return {...f,id};
 }
 test('legacy bid rejection survives migration 0006 and audits once', async () => {
-  const f=await bidFixture(), body={id:f.id,version:1,reason:'Price above budget'};
+  const f=await bidFixture(), body={id:f.id,version:1,reason:'Price above budget',interventionReason:'Purchase manager is away'};
   assert.equal((await f.call('/erp/bids/reject',{...body,version:2})).status,409);
   assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM erp_audit_events').get().n,0);
   assert.equal((await f.call('/erp/bids/reject',body)).status,200);
@@ -111,7 +111,7 @@ test('a bid rejection losing at the same timestamp emits no duplicate audit', as
       await batch([audit(f.env.DB,m,'bid.rejected',f.id,{},'staff',{reason:'Price above budget'})]);
       return batch(statements);
     };
-    assert.equal((await f.call('/erp/bids/reject',{id:f.id,version:1,reason:'Price above budget'})).status,409);
+    assert.equal((await f.call('/erp/bids/reject',{id:f.id,version:1,reason:'Price above budget',interventionReason:'Purchase manager is away'})).status,409);
     assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM erp_audit_events').get().n,1);
   } finally { Date.now=original; }
 });

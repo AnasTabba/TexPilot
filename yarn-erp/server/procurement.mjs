@@ -1,5 +1,7 @@
 import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, website, recordId, allow, reason as decisionReason, role, viewer, audit } from './erp-utils.mjs';
 import { sha256 } from './auth.mjs';
+import { settingsOf, needsApproval, approvalQueries } from './governance.mjs';
+import { notifyRole } from './notify.mjs';
 
 export const categories = db => all(db, 'SELECT * FROM supplier_categories ORDER BY sort_order');
 export async function categoryIds(db, value) {
@@ -34,6 +36,68 @@ export function supplierData(data) {
     email: email(data.email), phone: phone(data.phone), city: text(data.city ?? '', 'City', 0, 100), website: website(data.website), source: website(data.sourceUrl) };
 }
 const reference = prefix => `${prefix}-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+const orderTotal = (priceMinor, quantityMilli) => Math.round(priceMinor * quantityMilli / 1000);
+// Quantity that has arrived against a PO and not been reversed; a PO can never drop below it.
+const ARRIVED = "(SELECT COALESCE(SUM(g.quantity_milli),0) FROM goods_receipts g WHERE g.purchase_order_id=supplier_purchase_orders.id AND NOT EXISTS(SELECT 1 FROM receipt_reversals r WHERE r.receipt_id=g.id))";
+// An open RFQ past its deadline reads as closed; cancelled is a closed row with cancelled_at set.
+const rfqView = (r, now) => ({ ...r, status: r.cancelled_at ? 'cancelled' : r.status === 'open' && r.deadline_at <= now ? 'closed' : r.status });
+// A zero-row conditional write cannot guard later statements, so this aborts the whole batch when the write before it lost.
+const lostRace = db => query(db, "SELECT json('!') WHERE changes()=0");
+const closeQueries = (db, r, now) => [query(db, "UPDATE procurement_rfqs SET status='closed',closed_at=?,updated_at=? WHERE id=? AND status='open' AND cancelled_at IS NULL", now, now, r.id), lostRace(db),
+  notifyRole(db, r.workspace_id, 'purchase_manager', 'bidding.closed', 'rfq', r.id, r.reference)];
+const quantityUpdate = (db, orderId, pin, quantity, total, now) => query(db, `UPDATE supplier_purchase_orders SET quantity_milli=?,total_minor=?,approval_status='approved',version=version+1,updated_at=?
+  WHERE id=? AND version=? AND quantity_milli=? AND approval_status=? AND status!='cancelled' AND ?>=${ARRIVED}`, quantity, total, now, orderId, pin.version, pin.from, pin.status, quantity);
+const quantityAudit = (db, member, order, quantity, total, intervention = null) => audit(db, member, 'po.quantity_changed', order.id, {}, 'staff',
+  { before: { quantity_milli: order.quantity_milli, total_minor: order.total_minor }, after: { quantity_milli: quantity, total_minor: total }, intervention });
+// The one writer of a PO. Guards re-read the bid in the committing transaction, so a stale, expired or edited bid aborts everything.
+export function poInsertQueries(db, member, { bidId, bidVersion, termsSnapshot: t, currency, acceptedBy = member.user_id, intervention = null }, now) {
+  const id = crypto.randomUUID(), w = member.workspace_id, total = orderTotal(t.price_minor, t.quantity_milli);
+  return [query(db, `SELECT json('!') WHERE NOT EXISTS(SELECT 1 FROM supplier_bids b WHERE b.id=? AND b.version=? AND b.status='submitted' AND b.valid_until>=? AND b.price_minor=? AND b.currency=? AND b.payment_terms=? AND b.delivery_at=? AND b.valid_until=? AND b.note=? AND b.quantity_milli>=?
+      AND ?=COALESCE((SELECT json_extract(value_json,'$') FROM settings WHERE workspace_id=? AND key='currency'),'PKR'))`,
+      bidId, bidVersion, now, t.price_minor, t.currency, t.payment_terms, t.delivery_at, t.valid_until, t.note, t.quantity_milli, currency, w),
+    query(db, "INSERT INTO supplier_purchase_orders(id,workspace_id,rfq_id,bid_id,supplier_id,reference,terms_snapshot,status,accepted_by,created_at,quantity_milli,total_minor,approval_status,version,updated_at,created_by) VALUES(?,?,?,?,?,?,?,'accepted',?,?,?,?,'approved',1,?,?)",
+      id, w, t.rfq_id, bidId, t.supplier_id, reference('PO'), JSON.stringify(t), acceptedBy, now, t.quantity_milli, total, now, acceptedBy),
+    query(db, "UPDATE procurement_rfqs SET status='awarded',updated_at=? WHERE id=? AND status IN ('open','closed') AND cancelled_at IS NULL", now, t.rfq_id), lostRace(db),
+    audit(db, member, 'po.created', id, { bidId, bidVersion }, 'staff', { objectType: 'po', after: { total_minor: total, quantity_milli: t.quantity_milli }, intervention })];
+}
+const sameCurrency = async (db, workspaceId, currency) => { if ((await settingsOf(db, workspaceId)).currency !== currency) throw new Error('currency changed'); };
+export const approvalHandlers = {
+  purchase_award: {
+    async approve(db, member, request, { now }) { await sameCurrency(db, member.workspace_id, request.payload.currency); return poInsertQueries(db, member, { ...request.payload, acceptedBy: request.requested_by }, now); },
+    reject: async () => [],
+    async describe(db, request) {
+      const p = request.payload, rfq = await one(db, 'SELECT * FROM procurement_rfqs WHERE id=? AND workspace_id=?', request.object_id, request.workspace_id);
+      const bid = await one(db, 'SELECT * FROM supplier_bids WHERE id=?', p.bidId), supplier = await one(db, 'SELECT id,name FROM suppliers WHERE id=?', bid.supplier_id);
+      return { objectType: 'rfq', objectId: rfq.id, label: rfq.reference, currency: request.currency, evidence: { rfq: { reference: rfq.reference, title: rfq.title, quantity_milli: rfq.quantity_milli, unit: rfq.unit }, bid, supplier, termsSnapshot: p.termsSnapshot },
+        proposed: { bidId: p.bidId, bidVersion: p.bidVersion, totalMinor: request.amount } };
+    },
+  },
+  po_change: {
+    async approve(db, member, request, { now }) {
+      const p = request.payload; await sameCurrency(db, member.workspace_id, p.currency);
+      const order = await one(db, 'SELECT * FROM supplier_purchase_orders WHERE id=? AND workspace_id=?', request.object_id, member.workspace_id);
+      if (!order || order.version !== p.poVersion || order.quantity_milli !== p.fromQuantityMilli) throw new Error('order changed');
+      const total = orderTotal(JSON.parse(order.terms_snapshot).price_minor, p.quantityMilli);
+      return [quantityUpdate(db, order.id, { version: p.poVersion, from: p.fromQuantityMilli, status: 'pending_admin' }, p.quantityMilli, total, now), lostRace(db), quantityAudit(db, member, order, p.quantityMilli, total)];
+    },
+    async reject(db, member, request, { now }) {
+      return [query(db, "UPDATE supplier_purchase_orders SET approval_status='approved',updated_at=? WHERE id=? AND version=? AND approval_status='pending_admin'", now, request.object_id, request.payload.poVersion), lostRace(db)];
+    },
+    async describe(db, request) {
+      const p = request.payload, order = await one(db, `SELECT p.*,s.name AS supplier_name,${ARRIVED.replace('supplier_purchase_orders.id', 'p.id')} AS arrived FROM supplier_purchase_orders p JOIN suppliers s ON s.id=p.supplier_id WHERE p.id=? AND p.workspace_id=?`, request.object_id, request.workspace_id);
+      return { objectType: 'purchase_order', objectId: order.id, label: order.reference, currency: request.currency, evidence: { order: { reference: order.reference, supplier: order.supplier_name, quantity_milli: order.quantity_milli, total_minor: order.total_minor, version: order.version }, arrivedQuantityMilli: order.arrived },
+        proposed: { quantityMilli: p.quantityMilli, fromQuantityMilli: p.fromQuantityMilli, totalMinor: request.amount } };
+    },
+  },
+};
+export async function purchasingScheduled(env, now = Date.now()) {
+  const db = env.DB; let closed = 0;
+  for (const r of await all(db, "SELECT * FROM procurement_rfqs WHERE status='open' AND cancelled_at IS NULL AND deadline_at<=?", now)) {
+    try { await db.batch([...closeQueries(db, r, now), audit(db, { workspace_id: r.workspace_id, user_id: 'system:purchasing', role: 'system' }, 'rfq.closed', r.id, { reason: 'deadline' }, 'staff', { before: { status: 'open' }, after: { status: 'closed' } })]); closed++; }
+    catch { /* a person closed or cancelled it first */ }
+  }
+  return { closed };
+}
 export async function staffProcurement(request, env, member, path, data) {
   const db = env.DB; const w = member.workspace_id; const now = Date.now();
   if (path === '/api/erp/categories') return json({ categories: await categories(db) });
@@ -105,72 +169,133 @@ export async function staffProcurement(request, env, member, path, data) {
     }
     fail(404, 'Supplier route not found.');
   }
-  allow(member, 'procure');
   if (path === '/api/erp/procurement' && !data) {
+    viewer(member, 'purchase_manager');
     const rfqs = await all(db, `SELECT r.*,(SELECT COUNT(*) FROM rfq_recipients WHERE rfq_id=r.id) AS recipient_count,(SELECT COUNT(*) FROM supplier_bids WHERE rfq_id=r.id) AS bid_count FROM procurement_rfqs r WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100`,w);
     const bids = await all(db, 'SELECT b.*,s.name AS supplier_name FROM supplier_bids b JOIN suppliers s ON s.id=b.supplier_id JOIN procurement_rfqs r ON r.id=b.rfq_id WHERE r.workspace_id=? ORDER BY b.updated_at DESC LIMIT 500',w);
     const orders = await all(db, 'SELECT p.*,s.name AS supplier_name FROM supplier_purchase_orders p JOIN suppliers s ON s.id=p.supplier_id WHERE p.workspace_id=? ORDER BY p.created_at DESC LIMIT 100',w);
     const shipments = await all(db, 'SELECT * FROM procurement_shipments WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100',w);
-    return json({ rfqs,bids,orders:orders.map(o=>({...o,terms:JSON.parse(o.terms_snapshot)})),shipments,tracking:{configured:false,provider:'DataLoopLabs',reason:'Tracking API contract and credit policy must be configured before a paid lookup.'} });
+    return json({ rfqs:rfqs.map(r=>rfqView(r,now)),bids,orders:orders.map(o=>({...o,terms:JSON.parse(o.terms_snapshot)})),shipments,currency:(await settingsOf(db,w)).currency,tracking:{configured:false,provider:'DataLoopLabs',reason:'Tracking API contract and credit policy must be configured before a paid lookup.'} });
+  }
+  if (path === '/api/erp/orders/pending-approvals' && !data) {
+    viewer(member, 'purchase_manager');
+    const pending = type => all(db, "SELECT * FROM approval_requests WHERE workspace_id=? AND type=? AND status='pending' ORDER BY created_at,id", w, type);
+    const common = a => ({ approvalId: a.id, amount: a.amount, currency: a.currency, threshold: a.threshold, status: 'pending', created_at: a.created_at });
+    return json({ awards: (await pending('purchase_award')).map(a => { const p = JSON.parse(a.payload_json); return { approvalId: a.id, rfqId: a.object_id, bidId: p.bidId, bidVersion: p.bidVersion, ...common(a) }; }),
+      changes: (await pending('po_change')).map(a => { const p = JSON.parse(a.payload_json); return { approvalId: a.id, orderId: a.object_id, quantityMilli: p.quantityMilli, fromQuantityMilli: p.fromQuantityMilli, ...common(a) }; }) });
   }
   if (path === '/api/erp/rfqs' && data) {
-    keys(data,['id','title','categoryId','specifications','quantityMilli','unit','deliveryLocation','deadlineAt','requestedDeliveryAt']);
+    const intervention = role(member, data, 'purchase_manager');
+    keys(data,['id','title','categoryId','specifications','quantityMilli','unit','deliveryLocation','deadlineAt','requestedDeliveryAt','interventionReason']);
     const id = recordId(data.id); const c = (await categoryIds(db,[data.categoryId]))[0];
     const existing = await one(db,'SELECT * FROM procurement_rfqs WHERE id=?',id);
-    const normalized = {title:text(data.title,'RFQ title',3,120),category:c,specifications:multiline(data.specifications,'Specifications',5,4000),quantity:integer(data.quantityMilli,'Quantity'),unit:data.unit,location:text(data.deliveryLocation,'Delivery location',3,200),deadline:date(data.deadlineAt,'Bid deadline'),delivery:date(data.requestedDeliveryAt,'Requested delivery')};
+    const normalized = {title:text(data.title,'RFQ title',3,120),category:c,specifications:multiline(data.specifications,'Specifications',5,4000),quantity:integer(data.quantityMilli,'Quantity'),unit:data.unit,location:data.deliveryLocation===undefined?'':text(data.deliveryLocation,'Delivery location',3,200),deadline:date(data.deadlineAt,'Bid deadline'),delivery:date(data.requestedDeliveryAt,'Requested delivery')};
     if (!['kg','tonne'].includes(normalized.unit)) fail(422,'Choose kg or tonne.');
     if (normalized.delivery < normalized.deadline) fail(422,'Delivery must be after the bid deadline.');
     const digest=await sha256(JSON.stringify(normalized));
     if (existing) { if (existing.workspace_id!==w||existing.request_hash!==digest) fail(409,'Record ID was used for different RFQ values.'); return json({rfq:existing}); }
     date(normalized.deadline,'Bid deadline',true);date(normalized.delivery,'Requested delivery',true);
-    await db.batch([query(db,'INSERT INTO procurement_rfqs(id,workspace_id,reference,title,category_id,specifications,quantity_milli,unit,delivery_location,deadline_at,requested_delivery_at,status,request_hash,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      id,w,reference('RFQ'),normalized.title,c,normalized.specifications,normalized.quantity,normalized.unit,normalized.location,normalized.deadline,normalized.delivery,'draft',digest,member.user_id,now),audit(db,member,'rfq.created',id,normalized)]);
+    await db.batch([query(db,'INSERT INTO procurement_rfqs(id,workspace_id,reference,title,category_id,specifications,quantity_milli,unit,delivery_location,deadline_at,requested_delivery_at,status,request_hash,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      id,w,reference('RFQ'),normalized.title,c,normalized.specifications,normalized.quantity,normalized.unit,normalized.location,normalized.deadline,normalized.delivery,'draft',digest,member.user_id,now,now),audit(db,member,'rfq.created',id,normalized,'staff',{intervention})]);
     return json({rfq:await one(db,'SELECT * FROM procurement_rfqs WHERE id=?',id)},201);
   }
   if (path === '/api/erp/rfqs/publish' && data) {
-    keys(data,['id']); const r = await one(db,'SELECT * FROM procurement_rfqs WHERE id=? AND workspace_id=?',recordId(data.id),w);
+    const intervention = role(member, data, 'purchase_manager');
+    keys(data,['id','interventionReason']); const r = await one(db,'SELECT * FROM procurement_rfqs WHERE id=? AND workspace_id=?',recordId(data.id),w);
     if (!r) fail(404,'RFQ not found.');
     if (r.status==='open') return json({published:true,recipients:(await one(db,'SELECT COUNT(*) AS n FROM rfq_recipients WHERE rfq_id=?',r.id)).n});
     if (r.status!=='draft'||r.deadline_at<=now) fail(409,'Only a draft with a future deadline can be published.');
-    const eligible = await all(db, "SELECT s.* FROM suppliers s JOIN supplier_category_links c ON c.supplier_id=s.id WHERE s.workspace_id=? AND s.status='approved' AND c.category_id=? AND EXISTS (SELECT 1 FROM supplier_users u WHERE u.supplier_id=s.id)",w,r.category_id);
-    if (!eligible.length) fail(409,'No approved registered suppliers match this category. Add and approve suppliers first.');
+    const eligible = await all(db, "SELECT s.* FROM suppliers s JOIN supplier_category_links c ON c.supplier_id=s.id WHERE s.workspace_id=? AND s.status='approved' AND c.category_id=?",w,r.category_id);
+    if (!eligible.length) fail(409,'No approved suppliers match this category. Approve suppliers first.');
     await db.batch([...eligible.map(s=>query(db, "INSERT OR IGNORE INTO rfq_recipients(rfq_id,supplier_id,supplier_snapshot,delivered_at) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM procurement_rfqs WHERE id=? AND status='draft') AND EXISTS(SELECT 1 FROM suppliers WHERE id=? AND status='approved')",r.id,s.id,JSON.stringify({name:s.name,email:s.email,phone:s.phone}),now,r.id,s.id)),
-      query(db,"UPDATE procurement_rfqs SET status='open',published_at=? WHERE id=? AND status='draft' AND EXISTS(SELECT 1 FROM rfq_recipients WHERE rfq_id=?)",now,r.id,r.id),audit(db,member,'rfq.publish_requested',r.id,{channel:'supplier_portal',recipients:eligible.map(s=>s.id)})]);
+      query(db,"UPDATE procurement_rfqs SET status='open',published_at=?,updated_at=? WHERE id=? AND status='draft' AND EXISTS(SELECT 1 FROM rfq_recipients WHERE rfq_id=?)",now,now,r.id,r.id),audit(db,member,'rfq.opened',r.id,{channel:'supplier_portal',recipients:eligible.map(s=>s.id)},'staff',{before:{status:'draft'},after:{status:'open'},intervention})]);
     if((await one(db,'SELECT status FROM procurement_rfqs WHERE id=?',r.id)).status!=='open')fail(409,'No eligible supplier remained when publishing. Reload and review supplier access.');
     return json({published:true,recipients:(await one(db,'SELECT COUNT(*) AS n FROM rfq_recipients WHERE rfq_id=?',r.id)).n});
   }
+  if (path === '/api/erp/rfqs/close' && data) {
+    const intervention = role(member, data, 'purchase_manager');
+    keys(data,['id','interventionReason']); const r = await one(db,'SELECT * FROM procurement_rfqs WHERE id=? AND workspace_id=?',recordId(data.id),w);
+    if (!r) fail(404,'RFQ not found.');
+    if (r.status!=='open'||r.cancelled_at) fail(409,'Only an open RFQ can be closed.');
+    try { await db.batch([...closeQueries(db,r,now),audit(db,member,'rfq.closed',r.id,{},'staff',{before:{status:'open'},after:{status:'closed'},intervention})]); }
+    catch { fail(409,'The RFQ changed. Reload first.'); }
+    return json({closed:true});
+  }
+  if (path === '/api/erp/rfqs/cancel' && data) {
+    const intervention = role(member, data, 'purchase_manager');
+    keys(data,['id','reason','interventionReason']); const r = await one(db,'SELECT * FROM procurement_rfqs WHERE id=? AND workspace_id=?',recordId(data.id),w);
+    if (!r) fail(404,'RFQ not found.');
+    const reason=decisionReason(data.reason,'Cancellation reason');
+    if (r.status==='awarded'||r.cancelled_at) fail(409,'An awarded or cancelled RFQ cannot be cancelled.');
+    try { await db.batch([query(db,"UPDATE procurement_rfqs SET status='closed',cancelled_at=?,cancel_reason=?,closed_at=COALESCE(closed_at,?),updated_at=? WHERE id=? AND status!='awarded' AND cancelled_at IS NULL",now,reason,now,now,r.id),lostRace(db),
+      audit(db,member,'rfq.cancelled',r.id,{},'staff',{reason,before:{status:r.status},after:{status:'cancelled'},intervention})]); }
+    catch { fail(409,'The RFQ changed. Reload first.'); }
+    return json({cancelled:true});
+  }
   if (path === '/api/erp/bids/reject' && data) {
+    const intervention = role(member, data, 'purchase_manager');
     keys(data,['id','version','reason','interventionReason']);
     const b = await one(db,'SELECT b.* FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id WHERE b.id=? AND r.workspace_id=?',recordId(data.id),w);
     if(!b) fail(404,'Bid not found.');
-    const reason=decisionReason(data.reason,'Rejection reason');
+    const reason=decisionReason(data.reason,'Rejection reason'), version=integer(data.version,'Version');
     if(b.status==='rejected') fail(409,'This bid was already rejected.');
-    const result=await db.batch([query(db,"UPDATE supplier_bids SET status='rejected',rejection_reason=?,updated_at=? WHERE id=? AND version=? AND status='submitted' AND EXISTS(SELECT 1 FROM procurement_rfqs WHERE id=supplier_bids.rfq_id AND status='open')",reason,now,b.id,integer(data.version,'Version')),
-      query(db,"INSERT INTO erp_audit_events(id,workspace_id,actor_id,actor_type,action,record_id,detail_json,created_at,actor_role,object_type,reason,intervention_reason,created_by,status,updated_at) SELECT ?,?,?,'staff','bid.rejected',?,?,?,?, 'bid',?,NULL,?,'recorded',? WHERE changes()>0 AND EXISTS(SELECT 1 FROM supplier_bids WHERE id=? AND status='rejected' AND rejection_reason=? AND updated_at=?)",crypto.randomUUID(),w,member.user_id,b.id,JSON.stringify({reason}),now,member.role ?? 'staff',reason,member.user_id,now,b.id,reason,now)]);
-    if(!result[0].meta.changes) fail(409,'The bid or RFQ changed. Reload first.');
+    try { await db.batch([query(db,"UPDATE supplier_bids SET status='rejected',rejection_reason=?,updated_at=? WHERE id=? AND version=? AND status='submitted' AND EXISTS(SELECT 1 FROM procurement_rfqs WHERE id=supplier_bids.rfq_id AND status IN ('open','closed') AND cancelled_at IS NULL)",reason,now,b.id,version),lostRace(db),
+      audit(db,member,'bid.rejected',b.id,{},'staff',{reason,intervention})]); }
+    catch { fail(409,'The bid or RFQ changed. Reload first.'); }
     return json({saved:true});
   }
   if (path === '/api/erp/bids/award' && data) {
-    keys(data,['id','version']); const bid = await one(db,'SELECT b.*,r.workspace_id,r.reference AS rfq_reference,r.title,r.specifications,r.unit,r.quantity_milli AS required_quantity FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id WHERE b.id=? AND r.workspace_id=?',recordId(data.id),w);
+    const intervention = role(member, data, 'purchase_manager');
+    keys(data,['id','version','interventionReason']); const bid = await one(db,'SELECT b.*,r.workspace_id,r.reference AS rfq_reference,r.title,r.specifications,r.unit,r.quantity_milli AS required_quantity FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id WHERE b.id=? AND r.workspace_id=?',recordId(data.id),w);
     if(!bid) fail(404,'Bid not found.');
     const previous=await one(db,'SELECT * FROM supplier_purchase_orders WHERE rfq_id=?',bid.rfq_id);
     if(previous) {if(previous.bid_id!==bid.id||JSON.parse(previous.terms_snapshot).accepted_bid_version!==data.version) fail(409,'Another bid or revision has already been accepted.'); return json({order:previous});}
-    if(bid.status!=='submitted'||bid.valid_until<=now||bid.version!==data.version||bid.quantity_milli<bid.required_quantity) fail(409,'Use a current, valid bid covering the full requested quantity.');
-    const id=crypto.randomUUID(); const terms=JSON.stringify({...bid,quantity_milli:bid.required_quantity,accepted_bid_version:bid.version});
+    const rfq=await one(db,'SELECT status,cancelled_at FROM procurement_rfqs WHERE id=?',bid.rfq_id), settings=await settingsOf(db,w);
+    if(rfq.cancelled_at||!['open','closed'].includes(rfq.status)) fail(409,'This RFQ is not open for awarding.');
+    if(bid.currency!==settings.currency) fail(409,`This bid is in ${bid.currency}, but the factory currency is ${settings.currency}.`);
+    if(bid.status!=='submitted'||bid.valid_until<now||bid.version!==data.version||bid.quantity_milli<bid.required_quantity) fail(409,'Use a current, valid bid covering the full requested quantity.');
+    if(await one(db,"SELECT id FROM approval_requests WHERE object_type='rfq' AND object_id=? AND status='pending'",bid.rfq_id)) fail(409,'An award for this RFQ is waiting for admin approval.');
+    const award={bidId:bid.id,bidVersion:bid.version,termsSnapshot:{...bid,quantity_milli:bid.required_quantity,accepted_bid_version:bid.version},currency:settings.currency};
+    const total=orderTotal(bid.price_minor,bid.required_quantity), gate=await needsApproval(db,w,'purchase',total);
+    // Each side re-checks the other inside its transaction: a pending request blocks an immediate PO and a PO blocks a new request.
+    const pending=query(db,"SELECT json('!') WHERE EXISTS(SELECT 1 FROM approval_requests WHERE object_type='rfq' AND object_id=? AND status='pending')",bid.rfq_id);
+    const awarded=query(db,"SELECT json('!') WHERE EXISTS(SELECT 1 FROM supplier_purchase_orders WHERE rfq_id=?)",bid.rfq_id);
+    const approvalId=crypto.randomUUID();
     try {
-      await db.batch([query(db,`INSERT INTO supplier_purchase_orders(id,workspace_id,rfq_id,bid_id,supplier_id,reference,terms_snapshot,status,accepted_by,created_at)
-        SELECT ?,?,?,?,?,?,?,'accepted',?,? WHERE EXISTS (SELECT 1 FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id JOIN suppliers s ON s.id=b.supplier_id WHERE b.id=? AND b.version=? AND b.status='submitted' AND b.valid_until>? AND r.status='open' AND s.status='approved')`,
-        id,w,bid.rfq_id,bid.id,bid.supplier_id,reference('PO'),terms,member.user_id,now,bid.id,data.version,now),
-        query(db,"UPDATE procurement_rfqs SET status='awarded' WHERE id=? AND EXISTS(SELECT 1 FROM supplier_purchase_orders WHERE id=?)",bid.rfq_id,id),
-        query(db,"INSERT INTO erp_audit_events(id,workspace_id,actor_id,actor_type,action,record_id,detail_json,created_at,actor_role,object_type,reason,intervention_reason,created_by,status,updated_at) SELECT ?,?,?,'staff','bid.awarded',?,?,?,?,'bid',NULL,NULL,?,'recorded',? WHERE EXISTS(SELECT 1 FROM supplier_purchase_orders WHERE id=?)",crypto.randomUUID(),w,member.user_id,bid.id,JSON.stringify({version:bid.version}),now,member.role ?? 'staff',member.user_id,now,id)]);
+      await db.batch(gate.required ? [awarded,...approvalQueries(db,member,{id:approvalId,type:'purchase_award',objectType:'rfq',objectId:bid.rfq_id,amount:total,threshold:gate.threshold,unit:'minor',payload:award},now)] : [pending,...poInsertQueries(db,member,{...award,intervention},now)]);
     } catch {
       const raced=await one(db,'SELECT * FROM supplier_purchase_orders WHERE rfq_id=?',bid.rfq_id);
       if(raced?.bid_id===bid.id) return json({order:raced});
-      fail(409,'Another award won. Reload the RFQ.');
+      fail(409,'Another award won, or the bid changed. Reload the RFQ.');
     }
-    const order=await one(db,'SELECT * FROM supplier_purchase_orders WHERE id=?',id);
+    if(gate.required) return json({pendingApproval:true,approvalId},202);
+    const order=await one(db,'SELECT * FROM supplier_purchase_orders WHERE rfq_id=?',bid.rfq_id);
     if(!order) fail(409,'The bid or supplier status changed. Reload before accepting.');
     return json({order},201);
+  }
+  if (path === '/api/erp/orders/quantity' && data) {
+    const intervention = role(member, data, 'purchase_manager');
+    keys(data,['id','version','quantityMilli','interventionReason']);
+    const order = await one(db,'SELECT * FROM supplier_purchase_orders WHERE id=? AND workspace_id=?',recordId(data.id),w);
+    if (!order) fail(404,'Purchase order not found.');
+    const version=integer(data.version,'Version'), quantity=integer(data.quantityMilli,'Quantity');
+    if (order.version!==version) fail(409,'The order changed. Reload before changing it.');
+    if (order.approval_status==='pending_admin') fail(409,'A quantity change for this order is already waiting for admin approval.');
+    if (order.status==='cancelled') fail(409,'A cancelled order cannot change.');
+    if (quantity===order.quantity_milli) fail(422,'Choose a different quantity.');
+    const terms=JSON.parse(order.terms_snapshot), settings=await settingsOf(db,w);
+    if (terms.currency!==settings.currency) fail(409,`This order is in ${terms.currency}, but the factory currency is ${settings.currency}.`);
+    const { arrived } = await one(db,`SELECT ${ARRIVED} AS arrived FROM supplier_purchase_orders WHERE id=?`,order.id);
+    if (quantity<arrived) fail(409,'This order has already received more than that quantity.');
+    const total=orderTotal(terms.price_minor,quantity), gate=await needsApproval(db,w,'purchase',total), approvalId=crypto.randomUUID();
+    const pin={version,from:order.quantity_milli,status:'approved'};
+    try {
+      await db.batch(gate.required ? [query(db,"UPDATE supplier_purchase_orders SET approval_status='pending_admin',updated_at=? WHERE id=? AND version=? AND quantity_milli=? AND approval_status='approved' AND status!='cancelled'",now,order.id,version,order.quantity_milli),lostRace(db),
+        ...approvalQueries(db,member,{id:approvalId,type:'po_change',objectType:'purchase_order',objectId:order.id,amount:total,threshold:gate.threshold,unit:'minor',payload:{quantityMilli:quantity,fromQuantityMilli:order.quantity_milli,poVersion:version,currency:settings.currency}},now)]
+        : [quantityUpdate(db,order.id,pin,quantity,total,now),lostRace(db),quantityAudit(db,member,order,quantity,total,intervention)]);
+    } catch { fail(409,'The order changed, or goods have arrived since. Reload before changing it.'); }
+    if (gate.required) return json({pendingApproval:true,approvalId},202);
+    return json({order:await one(db,'SELECT * FROM supplier_purchase_orders WHERE id=?',order.id)});
   }
   fail(404,'Procurement route not found.');
 }
@@ -196,6 +321,7 @@ export async function supplierOperations(request, env, user, path, data) {
     if(!['PKR','USD','EUR','GBP'].includes(data.currency)) fail(422,'Choose a supported currency.');
     const version=integer(data.version,'Version',0); if(previous&&previous.id!==id) fail(409,'A bid already exists. Reload it before editing.');
     if(previous?.status==='rejected') fail(409,'This bid was rejected. Contact the purchase manager.');
+    if(data.currency!==(await settingsOf(db,user.workspace_id)).currency) fail(409,'Bid in the factory currency only.');
     const payment=multiline(data.paymentTerms,'Payment terms',3,1000), delivery=date(data.deliveryAt,'Delivery date'), valid=date(data.validUntil,'Valid until'), note=multiline(data.note??'','Note',0,2000);
     const snapshot=JSON.stringify({quantity_milli:quantity,price_minor:price,currency:data.currency,payment_terms:payment,delivery_at:delivery,valid_until:valid,note});
     if(previous?.version===version+1) {
@@ -205,8 +331,8 @@ export async function supplierOperations(request, env, user, path, data) {
     if((previous?.version??0)!==version) fail(409,'This bid changed. Reload before editing.');
     date(delivery,'Delivery date',true);date(valid,'Valid until',true);
     const write=previous ? query(db,'UPDATE supplier_bids SET quantity_milli=?,price_minor=?,currency=?,payment_terms=?,delivery_at=?,valid_until=?,note=?,version=version+1,updated_at=? WHERE id=? AND version=?',quantity,price,data.currency,payment,delivery,valid,note,now,id,version)
-      : query(db,"INSERT INTO supplier_bids(id,rfq_id,supplier_id,quantity_milli,price_minor,currency,payment_terms,delivery_at,valid_until,note,version,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,1,'submitted',?,?)",id,r.id,sid,quantity,price,data.currency,payment,delivery,valid,note,now,now);
-    try {await db.batch([write,query(db,'INSERT INTO supplier_bid_history(id,bid_id,version,snapshot,actor_id,created_at) VALUES(?,?,?,?,?,?)',crypto.randomUUID(),id,version+1,snapshot,user.user_id,now),audit(db,user,'bid.submitted',id,{version:version+1},'supplier')]);}
+      : query(db,"INSERT INTO supplier_bids(id,rfq_id,supplier_id,quantity_milli,price_minor,currency,payment_terms,delivery_at,valid_until,note,version,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,1,'submitted',?,?,?)",id,r.id,sid,quantity,price,data.currency,payment,delivery,valid,note,'supplier:'+user.user_id,now,now);
+    try {await db.batch([write,query(db,"INSERT INTO supplier_bid_history(id,bid_id,version,snapshot,actor_id,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,'recorded',?,?,?)",crypto.randomUUID(),id,version+1,snapshot,user.user_id,user.user_id,now,now),audit(db,user,'bid.submitted',id,{version:version+1},'supplier'),...(previous?[]:[notifyRole(db,user.workspace_id,'purchase_manager','bid.received','bid',id,r.reference)])]);}
     catch {fail(409,'The RFQ or bid changed. Reload and retry.');}
     return json({bid:await one(db,'SELECT * FROM supplier_bids WHERE id=? AND supplier_id=?',id,sid)},previous?200:201);
   }

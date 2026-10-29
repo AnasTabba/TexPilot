@@ -18,7 +18,7 @@ async function fixture() {
   return {status:response.status,data:await response.json(),cookie:response.headers.get('Set-Cookie')?.split(';')[0]};
  }
  const admin=(await request('/auth/login',{name:'Anas',pin:'2468'})).cookie;
- const staff=(path,data)=>request(path,data,admin);
+ const staff=(path,data)=>request(path,data,/^\/erp\/(rfqs|bids|orders|procurement)/.test(path)?manager:admin);
  const workspaceId=sql.prepare('SELECT id FROM workspaces').get().id;
  const login=async(name,role)=>{const row=await userRow({workspaceId,name,pin:'2468',role});sql.prepare(row.sql).run(...row.args);return (await request('/auth/login',{name,pin:'2468'})).cookie;};
  const manager=await login('Pervaiz','purchase_manager');
