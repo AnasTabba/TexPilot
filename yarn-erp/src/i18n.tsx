@@ -48,9 +48,9 @@ export const useLanguage = () => useContext(LanguageContext);
 
 export function LanguageSelect() {
   const { language, setLanguage } = useLanguage();
-  const next = language === 'en' ? 'ur' : 'en';
-  const label = next === 'ur' ? 'Switch language to Urdu / اردو' : 'Switch language to English / انگریزی';
-  return <button type="button" className="yf-language" dir="ltr" aria-label={label} title={label} onClick={() => setLanguage(next)}>
-    <Globe2 size={21} aria-hidden="true" />
-  </button>;
+  return <div className="yf-language" role="group" aria-label="Language" dir="ltr">
+    <span className="yf-language-globe"><Globe2 size={17} aria-hidden="true" /></span>
+    <button type="button" aria-pressed={language === 'en'} aria-label="Switch language to English" onClick={() => setLanguage('en')}>EN</button>
+    <button type="button" aria-pressed={language === 'ur'} aria-label="Switch language to Urdu" onClick={() => setLanguage('ur')}>اردو</button>
+  </div>;
 }

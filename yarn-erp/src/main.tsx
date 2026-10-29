@@ -1,6 +1,8 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource-variable/figtree";
+// The true italic face for elegant display headings (no synthetic slant).
+import "@fontsource-variable/figtree/wght-italic.css";
 import LiveApp from "./LiveApp";
 import SupplierPortal from './SupplierPortal';
 import { useEffect, useState } from 'react';
