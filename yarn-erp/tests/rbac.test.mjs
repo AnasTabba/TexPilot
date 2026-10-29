@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
+import { readdirSync } from 'node:fs';
 import { portalFixture, migrate, liveShapedRows, legacyMigrations } from './portal-fixture.mjs';
 import { role, viewer, reason } from '../server/erp-utils.mjs';
 import { ROLES, userRow } from '../server/auth.mjs';
@@ -13,6 +14,8 @@ test('existing users map to the closest of the six roles and keep signing in', a
   assert.equal(sql.prepare("SELECT status FROM users WHERE name='Pending'").get().status,'pending');
   assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM sessions').get().n,sessions);
   assert.deepEqual(sql.prepare('SELECT id FROM roles ORDER BY sort_order').all().map(r => r.id),ROLES);
+  // The rest of the schema (QC, stock, sales) is live too; the workspace read touches it.
+  migrate(sql,readdirSync(new URL('../drizzle/', import.meta.url)).filter(name => name.endsWith('.sql') && name > '0005_roles.sql').sort());
   const f = await portalFixture(sql); assert.equal((await f.login('Stores')).status,200);
   const me = await f.member('Stores'); assert.equal(me.role,'supervisor'); assert.ok(me.permissions.includes('receive')); assert.ok(me.permissions.includes('catalog'));
 });

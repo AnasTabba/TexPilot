@@ -39,7 +39,7 @@ export async function adminApi(request, env, member, path, data) {
       return json({ events, next: rows.length > 100 ? `${last.created_at}:${last.id}` : null });
     }
     if (path !== '/api/erp/admin/users') fail(404, 'API route not found.');
-    const users = await all(db, 'SELECT id,name,portal_role AS role,status,deactivated_at,created_at,locked_until FROM users WHERE workspace_id=? ORDER BY name COLLATE NOCASE', w);
+    const users = await all(db, 'SELECT id,name,portal_role AS role,status,deactivated_at,created_at,locked_until FROM users WHERE workspace_id=? AND removed_at IS NULL ORDER BY name COLLATE NOCASE', w);
     return json({ users: users.map(({ deactivated_at, locked_until, ...user }) => ({ ...user, status: deactivated_at === null ? user.status : 'deactivated', locked: locked_until > Date.now() })) });
   }
   role(member, data, 'admin');
@@ -82,6 +82,28 @@ export async function adminApi(request, env, member, path, data) {
     try { await db.batch([query(db, row.sql, ...row.args), audit(db, member, 'user.created', row.args[0], { name: data.name.trim(), role: data.role })]); }
     catch (error) { if (/UNIQUE constraint failed: users.name_key/.test(String(error))) fail(409, 'That name is already taken.'); throw error; }
     return json({ id: row.args[0] }, 201);
+  }
+  if (path === '/api/erp/admin/users/remove') {
+    // Soft delete: history keeps pointing at the row; sessions end now. Admins are never removable.
+    keys(data, ['userId']);
+    const target = await one(db, 'SELECT * FROM users WHERE id=? AND workspace_id=?', recordId(data.userId), w);
+    if (!target) fail(404, 'This person was not found.');
+    if (target.id === member.user_id) fail(403, "You can't remove yourself.");
+    if (target.portal_role === 'admin' || target.role === 'admin') fail(403, 'Admins cannot be removed.');
+    if (target.removed_at !== null) fail(409, 'This person was already removed.');
+    const now = Date.now();
+    // Abort the batch if another account edit won after our read, as the update path does.
+    const guard = query(db, 'INSERT INTO users(id) SELECT ? WHERE NOT EXISTS (SELECT 1 FROM users WHERE id=? AND removed_at IS NULL AND portal_role IS ?)', target.id, target.id, target.portal_role);
+    try {
+      await db.batch([guard,
+        query(db, 'UPDATE users SET deactivated_at=?,deactivated_by=?,removed_at=?,updated_at=? WHERE id=?', now, member.user_id, now, Math.max(now, (target.updated_at ?? 0) + 1), target.id),
+        query(db, 'DELETE FROM sessions WHERE user_id=?', target.id),
+        audit(db, member, 'user.removed', target.id, { name: target.name, role: target.portal_role }, 'staff', { before: { removed: false }, after: { removed: true } })]);
+    } catch (error) {
+      if (/constraint failed: users\./i.test(String(error))) fail(409, 'This account changed. Refresh and try again.');
+      throw error;
+    }
+    return json({ saved: true });
   }
   if (path !== '/api/erp/admin/users/update') fail(404, 'API route not found.');
   keys(data, ['id','role','pin','active','interventionReason']);

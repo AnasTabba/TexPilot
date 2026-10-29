@@ -102,6 +102,7 @@ function Member({ person, self, open, onToggle, onDone }: { person: Person; self
       {error && <p className="live-error" role="alert">{t(error)}</p>}
       {notice && <p className="live-success" role="status"><span>{t(...notice)}</span></p>}
       {!self && <button className="live-text-button yf-danger" disabled={busy} onClick={() => void act('/erp/admin/users/update', { id: person.id, active: person.status === 'deactivated' }, null)}>{person.status === 'deactivated' ? t('Reactivate', 'دوبارہ فعال کریں') : t('Deactivate', 'غیر فعال کریں')}</button>}
+      {!self && person.role !== 'admin' && <button className="yf-remove" disabled={busy} onClick={() => { if (window.confirm(t(`Remove ${person.name} from the team? They will be signed out and cannot sign in again.`, `${person.name} کو ٹیم سے ہٹائیں؟ وہ سائن آؤٹ ہو جائیں گے اور دوبارہ سائن اِن نہیں کر سکیں گے۔`))) void act('/erp/admin/users/remove', { userId: person.id }, null); }}><Trash2 size={16} aria-hidden="true" />{t('Remove', 'ہٹائیں')}</button>}
     </div>}
   </li>;
 }

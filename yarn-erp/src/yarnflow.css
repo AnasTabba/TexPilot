@@ -855,6 +855,9 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
 .yf-member-body { display: grid; gap: 18px; padding: 6px 14px 22px 68px; animation: yf-enter 320ms var(--ease-out); }
 .yf-member-body .live-actions { margin-top: 0; }
 .yf-member-body .yf-danger { justify-self: start; margin-top: 0; }
+.yf-remove { justify-self: start; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: 1px solid var(--bad); border-radius: 12px; background: transparent; color: var(--bad); font: inherit; font-weight: 600; cursor: pointer; transition: transform 160ms var(--ease-out); }
+.yf-remove:active:not(:disabled) { transform: scale(0.97); }
+.yf-remove:disabled { opacity: 0.5; cursor: default; }
 .yf-switch { display: flex; align-items: flex-start; gap: 14px; cursor: pointer; }
 .yf-switch input { position: relative; flex: none; width: 48px; height: 28px; min-height: 0; margin: 0; border: 0; border-radius: var(--r-pill); background: var(--line-strong); appearance: none; cursor: pointer; transition: background-color 180ms ease; }
 .yf-switch input::after { content: ""; position: absolute; left: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(29 27 25 / 25%); transition: transform 220ms var(--ease-out); }
