@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env*
+!.env.example
+*.tsbuildinfo
+test-results/
+playwright-report/
+.DS_Store
+.local/
+server/assets.generated.mjs

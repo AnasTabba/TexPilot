@@ -1,0 +1,445 @@
+{
+  "description": "Illustrative artwork only; never scanner evidence. Exact fibre composition comes from the care label.",
+  "motion": {
+    "duration_ms": 4200,
+    "timeline_frames": 35,
+    "frame_duration_ms": 120,
+    "loop": "infinite"
+  },
+  "notes": {
+    "blend": "Defined family; not currently trained."
+  },
+  "groups": {
+    "Fabric": {
+      "canvas": "canvas",
+      "chambray": "chambray",
+      "chenille": "chenille",
+      "chiffon": "chiffon",
+      "corduroy": "corduroy",
+      "crepe": "crepe",
+      "denim": "denim",
+      "faux_fur": "faux_fur",
+      "faux_leather": "faux_leather",
+      "flannel": "flannel",
+      "fleece": "fleece",
+      "gingham": "gingham",
+      "jersey": "jersey",
+      "knit": "knit",
+      "lace": "lace",
+      "lawn": "lawn",
+      "neoprene": "neoprene",
+      "organza": "organza",
+      "plush": "plush",
+      "satin": "satin",
+      "serge": "serge",
+      "taffeta": "taffeta",
+      "tulle": "tulle",
+      "tweed": "tweed",
+      "twill": "twill",
+      "velvet": "velvet",
+      "vinyl": "vinyl"
+    },
+    "Fibre family": {
+      "cellulosic": "cellulosic",
+      "protein": "protein",
+      "synthetic": "synthetic",
+      "blend": "blend"
+    },
+    "Treatment": {
+      "printed": "printed",
+      "piece_dyed": "piece_dyed",
+      "yarn_dyed": "yarn_dyed",
+      "undyed": "undyed"
+    },
+    "Garment": {
+      "shirt_blouse": "shirt_blouse",
+      "top_tshirt_sweatshirt": "cotton",
+      "sweater": "sweater",
+      "cardigan": "cardigan",
+      "jacket": "polyester",
+      "vest": "vest",
+      "pants": "denim",
+      "shorts": "shorts",
+      "skirt": "skirt",
+      "coat": "coat",
+      "dress": "dress",
+      "jumpsuit": "jumpsuit",
+      "cape": "cape",
+      "scarf": "scarf"
+    },
+    "Verification": {
+      "PASS": "pass",
+      "FLAG": "flag",
+      "INSUFFICIENT_EVIDENCE": "insufficient_evidence"
+    },
+    "Uncertain detection": {
+      "uncertain": "uncertain"
+    }
+  },
+  "assets": {
+    "canvas": {
+      "id": "canvas",
+      "label": "Canvas",
+      "still": "still/canvas.webp",
+      "animated": "animated/canvas.webp",
+      "generated": true
+    },
+    "chambray": {
+      "id": "chambray",
+      "label": "Chambray",
+      "still": "still/chambray.webp",
+      "animated": "animated/chambray.webp",
+      "generated": true
+    },
+    "chenille": {
+      "id": "chenille",
+      "label": "Chenille",
+      "still": "still/chenille.webp",
+      "animated": "animated/chenille.webp",
+      "generated": true
+    },
+    "chiffon": {
+      "id": "chiffon",
+      "label": "Chiffon",
+      "still": "still/chiffon.webp",
+      "animated": "animated/chiffon.webp",
+      "generated": true
+    },
+    "corduroy": {
+      "id": "corduroy",
+      "label": "Corduroy",
+      "still": "still/corduroy.webp",
+      "animated": "animated/corduroy.webp",
+      "generated": true
+    },
+    "crepe": {
+      "id": "crepe",
+      "label": "Crepe",
+      "still": "still/crepe.webp",
+      "animated": "animated/crepe.webp",
+      "generated": true
+    },
+    "faux_fur": {
+      "id": "faux_fur",
+      "label": "Faux Fur",
+      "still": "still/faux_fur.webp",
+      "animated": "animated/faux_fur.webp",
+      "generated": true
+    },
+    "faux_leather": {
+      "id": "faux_leather",
+      "label": "Faux Leather",
+      "still": "still/faux_leather.webp",
+      "animated": "animated/faux_leather.webp",
+      "generated": true
+    },
+    "flannel": {
+      "id": "flannel",
+      "label": "Flannel",
+      "still": "still/flannel.webp",
+      "animated": "animated/flannel.webp",
+      "generated": true
+    },
+    "fleece": {
+      "id": "fleece",
+      "label": "Fleece",
+      "still": "still/fleece.webp",
+      "animated": "animated/fleece.webp",
+      "generated": true
+    },
+    "gingham": {
+      "id": "gingham",
+      "label": "Gingham",
+      "still": "still/gingham.webp",
+      "animated": "animated/gingham.webp",
+      "generated": true
+    },
+    "jersey": {
+      "id": "jersey",
+      "label": "Jersey",
+      "still": "still/jersey.webp",
+      "animated": "animated/jersey.webp",
+      "generated": true
+    },
+    "knit": {
+      "id": "knit",
+      "label": "Knit",
+      "still": "still/knit.webp",
+      "animated": "animated/knit.webp",
+      "generated": true
+    },
+    "lace": {
+      "id": "lace",
+      "label": "Lace",
+      "still": "still/lace.webp",
+      "animated": "animated/lace.webp",
+      "generated": true
+    },
+    "lawn": {
+      "id": "lawn",
+      "label": "Lawn",
+      "still": "still/lawn.webp",
+      "animated": "animated/lawn.webp",
+      "generated": true
+    },
+    "neoprene": {
+      "id": "neoprene",
+      "label": "Neoprene",
+      "still": "still/neoprene.webp",
+      "animated": "animated/neoprene.webp",
+      "generated": true
+    },
+    "organza": {
+      "id": "organza",
+      "label": "Organza",
+      "still": "still/organza.webp",
+      "animated": "animated/organza.webp",
+      "generated": true
+    },
+    "plush": {
+      "id": "plush",
+      "label": "Plush",
+      "still": "still/plush.webp",
+      "animated": "animated/plush.webp",
+      "generated": true
+    },
+    "satin": {
+      "id": "satin",
+      "label": "Satin",
+      "still": "still/satin.webp",
+      "animated": "animated/satin.webp",
+      "generated": true
+    },
+    "serge": {
+      "id": "serge",
+      "label": "Serge",
+      "still": "still/serge.webp",
+      "animated": "animated/serge.webp",
+      "generated": true
+    },
+    "taffeta": {
+      "id": "taffeta",
+      "label": "Taffeta",
+      "still": "still/taffeta.webp",
+      "animated": "animated/taffeta.webp",
+      "generated": true
+    },
+    "tulle": {
+      "id": "tulle",
+      "label": "Tulle",
+      "still": "still/tulle.webp",
+      "animated": "animated/tulle.webp",
+      "generated": true
+    },
+    "tweed": {
+      "id": "tweed",
+      "label": "Tweed",
+      "still": "still/tweed.webp",
+      "animated": "animated/tweed.webp",
+      "generated": true
+    },
+    "twill": {
+      "id": "twill",
+      "label": "Twill",
+      "still": "still/twill.webp",
+      "animated": "animated/twill.webp",
+      "generated": true
+    },
+    "velvet": {
+      "id": "velvet",
+      "label": "Velvet",
+      "still": "still/velvet.webp",
+      "animated": "animated/velvet.webp",
+      "generated": true
+    },
+    "vinyl": {
+      "id": "vinyl",
+      "label": "Vinyl",
+      "still": "still/vinyl.webp",
+      "animated": "animated/vinyl.webp",
+      "generated": true
+    },
+    "cellulosic": {
+      "id": "cellulosic",
+      "label": "Cellulosic",
+      "still": "still/cellulosic.webp",
+      "animated": "animated/cellulosic.webp",
+      "generated": true
+    },
+    "protein": {
+      "id": "protein",
+      "label": "Protein",
+      "still": "still/protein.webp",
+      "animated": "animated/protein.webp",
+      "generated": true
+    },
+    "synthetic": {
+      "id": "synthetic",
+      "label": "Synthetic",
+      "still": "still/synthetic.webp",
+      "animated": "animated/synthetic.webp",
+      "generated": true
+    },
+    "blend": {
+      "id": "blend",
+      "label": "Blend",
+      "still": "still/blend.webp",
+      "animated": "animated/blend.webp",
+      "generated": true
+    },
+    "printed": {
+      "id": "printed",
+      "label": "Printed",
+      "still": "still/printed.webp",
+      "animated": "animated/printed.webp",
+      "generated": true
+    },
+    "piece_dyed": {
+      "id": "piece_dyed",
+      "label": "Piece Dyed",
+      "still": "still/piece_dyed.webp",
+      "animated": "animated/piece_dyed.webp",
+      "generated": true
+    },
+    "yarn_dyed": {
+      "id": "yarn_dyed",
+      "label": "Yarn Dyed",
+      "still": "still/yarn_dyed.webp",
+      "animated": "animated/yarn_dyed.webp",
+      "generated": true
+    },
+    "undyed": {
+      "id": "undyed",
+      "label": "Undyed",
+      "still": "still/undyed.webp",
+      "animated": "animated/undyed.webp",
+      "generated": true
+    },
+    "shirt_blouse": {
+      "id": "shirt_blouse",
+      "label": "Shirt Blouse",
+      "still": "still/shirt_blouse.webp",
+      "animated": "animated/shirt_blouse.webp",
+      "generated": true
+    },
+    "sweater": {
+      "id": "sweater",
+      "label": "Sweater",
+      "still": "still/sweater.webp",
+      "animated": "animated/sweater.webp",
+      "generated": true
+    },
+    "cardigan": {
+      "id": "cardigan",
+      "label": "Cardigan",
+      "still": "still/cardigan.webp",
+      "animated": "animated/cardigan.webp",
+      "generated": true
+    },
+    "vest": {
+      "id": "vest",
+      "label": "Vest",
+      "still": "still/vest.webp",
+      "animated": "animated/vest.webp",
+      "generated": true
+    },
+    "shorts": {
+      "id": "shorts",
+      "label": "Shorts",
+      "still": "still/shorts.webp",
+      "animated": "animated/shorts.webp",
+      "generated": true
+    },
+    "skirt": {
+      "id": "skirt",
+      "label": "Skirt",
+      "still": "still/skirt.webp",
+      "animated": "animated/skirt.webp",
+      "generated": true
+    },
+    "coat": {
+      "id": "coat",
+      "label": "Coat",
+      "still": "still/coat.webp",
+      "animated": "animated/coat.webp",
+      "generated": true
+    },
+    "dress": {
+      "id": "dress",
+      "label": "Dress",
+      "still": "still/dress.webp",
+      "animated": "animated/dress.webp",
+      "generated": true
+    },
+    "jumpsuit": {
+      "id": "jumpsuit",
+      "label": "Jumpsuit",
+      "still": "still/jumpsuit.webp",
+      "animated": "animated/jumpsuit.webp",
+      "generated": true
+    },
+    "cape": {
+      "id": "cape",
+      "label": "Cape",
+      "still": "still/cape.webp",
+      "animated": "animated/cape.webp",
+      "generated": true
+    },
+    "scarf": {
+      "id": "scarf",
+      "label": "Scarf",
+      "still": "still/scarf.webp",
+      "animated": "animated/scarf.webp",
+      "generated": true
+    },
+    "pass": {
+      "id": "pass",
+      "label": "Pass",
+      "still": "still/pass.webp",
+      "animated": "animated/pass.webp",
+      "generated": true
+    },
+    "flag": {
+      "id": "flag",
+      "label": "Flag",
+      "still": "still/flag.webp",
+      "animated": "animated/flag.webp",
+      "generated": true
+    },
+    "insufficient_evidence": {
+      "id": "insufficient_evidence",
+      "label": "Insufficient Evidence",
+      "still": "still/insufficient_evidence.webp",
+      "animated": "animated/insufficient_evidence.webp",
+      "generated": true
+    },
+    "uncertain": {
+      "id": "uncertain",
+      "label": "Uncertain",
+      "still": "still/uncertain.webp",
+      "animated": "animated/uncertain.webp",
+      "generated": true
+    },
+    "denim": {
+      "id": "denim",
+      "label": "Denim",
+      "still": "still/denim.webp",
+      "animated": "animated/denim.webp",
+      "generated": false
+    },
+    "cotton": {
+      "id": "cotton",
+      "label": "Cotton",
+      "still": "still/cotton.webp",
+      "animated": "animated/cotton.webp",
+      "generated": false
+    },
+    "polyester": {
+      "id": "polyester",
+      "label": "Polyester",
+      "still": "still/polyester.webp",
+      "animated": "animated/polyester.webp",
+      "generated": false
+    }
+  }
+}

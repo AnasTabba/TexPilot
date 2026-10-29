@@ -1,0 +1,8 @@
+{
+  "checks": [
+    "No fabricated history is added to the practice ledger",
+    "A real dated production fixture appears on its day",
+    "Reversing that production removes it from the chart"
+  ],
+  "passed": true
+}
