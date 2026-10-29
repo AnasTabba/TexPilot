@@ -70,7 +70,7 @@ export const urdu: Record<string, string> = {
   'Who can do what?': 'کون کیا کرسکتا ہے؟',
   'Everyone can view stock and use the scanner. Admins choose what each person can record: deliveries, production moves, dispatch, waste, materials and batches, inspections, QC decisions and reversals.': 'سب اسٹاک دیکھ اور اسکین کرسکتے ہیں۔ ایڈمن وصولی، پیداوار، روانگی، ضائع شدہ مال، مٹیریل، بیچ، معائنہ، کوالٹی اور واپسی کی اجازتیں دیتے ہیں۔',
   'How do new people join?': 'نیا ممبر کیسے شامل ہو؟',
-  'On the sign-in screen, choose “New here? Ask for an account”. An admin approves the request in Team and chooses what the person can record.': 'سائن اِن صفحے پر اکاؤنٹ کی درخواست دیں۔ ایڈمن ٹیم میں درخواست منظور کرکے اجازتیں منتخب کرے گا۔',
+  'Ask an admin to create your account. The admin chooses your role in Team and gives you your PIN.': 'ایڈمن سے اپنا اکاؤنٹ بنوائیں۔ ایڈمن ٹیم میں آپ کا کردار منتخب کرکے آپ کو PIN دے گا۔',
   'Forgot your PIN?': 'پن بھول گئے؟',
   'Ask an admin to set a new one in Team. Five wrong PINs lock a name for five minutes.': 'ایڈمن سے ٹیم میں نیا پن سیٹ کروائیں۔ پانچ غلط کوششوں کے بعد نام پانچ منٹ کے لیے بند ہوجاتا ہے۔',
   'Phone and computer': 'فون اور کمپیوٹر',
