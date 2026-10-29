@@ -7,7 +7,13 @@ export async function settingsOf(db, workspaceId) {
   for (const row of await all(db, 'SELECT key,value_json FROM settings WHERE workspace_id=?', workspaceId)) settings[row.key] = JSON.parse(row.value_json);
   return settings;
 }
-export async function thresholdOf(db, workspaceId, type) {
+// A supervisor's own limit (user_thresholds) wins when it is in the factory currency; otherwise the workspace threshold applies.
+export async function thresholdOf(db, workspaceId, type, userId = null) {
+  if (userId) {
+    const personal = await one(db, `SELECT value FROM user_thresholds WHERE workspace_id=? AND user_id=? AND type=? AND
+      (currency IS NULL OR currency=COALESCE((SELECT json_extract(value_json,'$') FROM settings WHERE workspace_id=? AND key='currency'),'PKR'))`, workspaceId, userId, type, workspaceId);
+    if (personal) return personal.value;
+  }
   const row = await one(db, `SELECT value FROM thresholds WHERE workspace_id=? AND type=? AND
     (currency IS NULL OR currency=COALESCE((SELECT json_extract(value_json,'$') FROM settings WHERE workspace_id=? AND key='currency'),'PKR'))`, workspaceId, type, workspaceId);
   return row?.value ?? null;
@@ -29,8 +35,8 @@ export function settingValue(key, value) {
 const APPROVAL_TYPES = ['purchase_award','po_change','inventory_adjustment','claim','dispatch_stock_issue','escalation'];
 const APPROVAL_CHANGED = 'The item changed since this request was raised. Reload and review it again.';
 const APPROVAL_DECIDED = 'This request was already decided. Reload.';
-export async function needsApproval(db, workspaceId, thresholdType, amount) {
-  const threshold = await thresholdOf(db, workspaceId, thresholdType);
+export async function needsApproval(db, workspaceId, thresholdType, amount, userId = null) {
+  const threshold = await thresholdOf(db, workspaceId, thresholdType, userId);
   return { required: threshold !== null && amount >= threshold, threshold };
 }
 export function approvalQueries(db, member, { id = crypto.randomUUID(), type, objectType, objectId, amount, threshold, unit, payload = {} }, now) {

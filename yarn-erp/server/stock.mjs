@@ -238,7 +238,7 @@ export async function stockApi(request, env, member, path, data) {
     if (lot.inventory_type && lot.inventory_type !== data.stage) fail(422, `This lot holds ${lot.inventory_type} stock.`);
     if (compensatesId && !await adjustmentOf(db, compensatesId, w)) fail(404, 'The adjustment to compensate was not found.');
     if (deltaGrams < 0 && await balanceOf(db, lotId, data.stage) + deltaGrams < 0) fail(409, NEGATIVE);
-    const approval = await needsApproval(db, w, 'inventory_adjustment', Math.abs(deltaGrams)), approvalId = crypto.randomUUID();
+    const approval = await needsApproval(db, w, 'inventory_adjustment', Math.abs(deltaGrams), member.user_id), approvalId = crypto.randomUUID();
     const statements = approval.required
       ? [query(db, "INSERT INTO inventory_adjustments(id,workspace_id,lot_id,stage,kind,delta_grams,reason,status,source,compensates_id,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'pending_approval','supervisor',?,?,?,?)", id, w, lotId, data.stage, data.kind, deltaGrams, why, compensatesId, member.user_id, now, now),
         ...approvalQueries(db, member, { id: approvalId, type: 'inventory_adjustment', objectType: 'inventory_adjustment', objectId: id, amount: Math.abs(deltaGrams), threshold: approval.threshold, unit: 'grams', payload: { adjustmentId: id, intervention } }, now),

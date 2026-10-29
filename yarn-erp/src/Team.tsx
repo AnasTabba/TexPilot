@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { ArrowRightLeft, ChevronDown, ClipboardCheck, KeyRound, Package, PackagePlus, ShieldCheck, Trash2, Truck, Undo2, UserCheck, UserPlus, type LucideIcon } from 'lucide-react';
 import { AsyncForm, Field, errorMessage } from './forms';
 import { Avatar } from './SignIn';
 import { when } from './WorkspaceDashboard';
 import { inventoryRequest as api, roleLabel, type Role, type Member, type Permission } from './inventory-client';
 import { translate, useLanguage } from './i18n';
+import { kg, money } from './PortalCommon';
 
 interface Person { id: string; name: string; role: Role | null; status: 'active' | 'pending' | 'deactivated'; created_at: number; locked: boolean }
 
@@ -30,11 +31,79 @@ function RolePicker({ value, onChange, disabled = false }: { value: Role; onChan
   return <Field>{t('Role', 'کردار')}<select value={value} disabled={disabled} onChange={e => onChange(e.target.value as Role)}>{(Object.keys(roleLabel) as Role[]).map(role => <option key={role} value={role}>{t(...roleLabel[role])}</option>)}</select></Field>;
 }
 
+// Approval limits a supervisor gets for their own approvals. Blank means the factory limit applies.
+const limitTypes = ['purchase', 'inventory_adjustment', 'claim', 'dispatch_stock_issue'] as const;
+type LimitType = typeof limitTypes[number];
+const limitName: Record<LimitType, [string, string]> = {
+  purchase: ['Purchase approval', 'خریداری کی منظوری'],
+  inventory_adjustment: ['Stock adjustment', 'اسٹاک کی تبدیلی'],
+  claim: ['Claim approval', 'دعوے کی منظوری'],
+  dispatch_stock_issue: ['Dispatch stock issue', 'ڈسپیچ اسٹاک مسئلہ'],
+};
+const currencies = ['PKR', 'USD', 'EUR', 'GBP'];
+const moneyLimit = (type: LimitType) => type === 'purchase' || type === 'claim';
+// Money limits are stored in minor units and stock limits in grams, as the workspace thresholds are.
+const scaleOf = (type: LimitType) => (moneyLimit(type) ? 100 : 1000);
+const showLimit = (type: LimitType, value: number, currency: string) => (moneyLimit(type) ? money(value, currency) : kg(value));
+type Draft = Record<LimitType, { amount: string; currency: string }>;
+interface PersonalLimit { type: LimitType; value: number; currency: string | null }
+interface Factory { currency: string; values: Partial<Record<LimitType, number>> }
+interface LimitChange { type: LimitType; value: number | null; currency?: string }
+const blankDraft = (): Draft => Object.fromEntries(limitTypes.map(type => [type, { amount: '', currency: '' }])) as Draft;
+const draftFrom = (rows: PersonalLimit[]): Draft => {
+  const draft = blankDraft();
+  for (const row of rows) draft[row.type] = { amount: String(row.value / scaleOf(row.type)), currency: row.currency ?? '' };
+  return draft;
+};
+function useFactoryLimits() {
+  const [factory, setFactory] = useState<Factory | null>(null), [error, setError] = useState('');
+  useEffect(() => {
+    let live = true;
+    void Promise.all([api<{ thresholds: { type: LimitType; value: number }[] }>('/erp/admin/thresholds'), api<{ settings: { currency: string } }>('/erp/admin/settings')])
+      .then(([thresholds, settings]) => { if (live) setFactory({ currency: settings.settings.currency, values: Object.fromEntries(thresholds.thresholds.map(row => [row.type, row.value])) }); })
+      .catch(caught => { if (live) setError(errorMessage(caught)); });
+    return () => { live = false; };
+  }, []);
+  return { factory, error };
+}
+// The changed limits only. Throws before anything is saved when a number is not valid.
+function limitChanges(draft: Draft, saved: Draft, factoryCurrency: string): LimitChange[] {
+  return limitTypes.flatMap((type): LimitChange[] => {
+    const next = draft[type], before = saved[type], amount = next.amount.trim();
+    const sameCurrency = (next.currency || factoryCurrency) === (before.currency || factoryCurrency);
+    if (amount === before.amount.trim() && (!moneyLimit(type) || sameCurrency)) return [];
+    if (amount === '') return [{ type, value: null }];
+    const parsed = Number(amount);
+    if (!Number.isFinite(parsed) || parsed < 0) throw new Error('Enter a valid non-negative limit.');
+    return [{ type, value: Math.round(parsed * scaleOf(type)), ...(moneyLimit(type) && next.currency ? { currency: next.currency } : {}) }];
+  });
+}
+async function saveLimitChanges(userId: string, changes: LimitChange[]) {
+  for (const change of changes) await api('/erp/admin/users/thresholds', { userId, ...change });
+}
+function LimitFields({ draft, onChange, factory, disabled }: { draft: Draft; onChange: (draft: Draft) => void; factory: Factory | null; disabled: boolean }) {
+  const { t } = useLanguage();
+  const update = (type: LimitType, patch: Partial<Draft[LimitType]>) => onChange({ ...draft, [type]: { ...draft[type], ...patch } });
+  return <fieldset className="yf-limits" disabled={disabled}>
+    <legend>{t('Approval limits', 'منظوری کی حدیں')}</legend>
+    <p className="live-muted">{t('Blank uses the factory limit. Amounts are in the factory currency; stock limits are in kg.', 'خالی چھوڑنے پر فیکٹری کی حد لاگو ہوگی۔ رقم فیکٹری کی کرنسی میں اور اسٹاک کی حد کلوگرام میں ہے۔')}</p>
+    <div className="live-fields">{limitTypes.map(type => {
+      const inherited = factory?.values[type];
+      const placeholder = !factory ? t('Loading…', 'لوڈ ہو رہا ہے…') : inherited === undefined ? t('Factory limit not set', 'فیکٹری کی حد مقرر نہیں') : `${t('Factory', 'فیکٹری')}: ${showLimit(type, inherited, factory.currency)}`;
+      return <Fragment key={type}>
+        <Field>{t(...limitName[type])}<input inputMode="decimal" aria-label={t(...limitName[type])} value={draft[type].amount} placeholder={placeholder} onChange={e => update(type, { amount: e.target.value })} /></Field>
+        {moneyLimit(type) && <Field>{t('Currency', 'کرنسی')}<select aria-label={t('Currency', 'کرنسی')} value={draft[type].currency || factory?.currency || 'PKR'} onChange={e => update(type, { currency: e.target.value })}>{currencies.map(code => <option key={code} value={code}>{code}</option>)}</select></Field>}
+      </Fragment>;
+    })}</div>
+  </fieldset>;
+}
+
 /** Admins only: who can sign in, and what each person can record. */
 export default function Team({ me, onChanged }: { me: Member; onChanged: () => Promise<void> }) {
   const { t } = useLanguage();
   const [people, setPeople] = useState<Person[] | null>(null);
   const [error, setError] = useState(''); const [open, setOpen] = useState('');
+  const { factory, error: factoryError } = useFactoryLimits();
   const load = useCallback(async () => {
     try { setPeople((await api<{ users: Person[] }>('/erp/admin/users')).users); setError(''); } catch (error) { setError(errorMessage(error)); }
   }, []);
@@ -44,15 +113,16 @@ export default function Team({ me, onChanged }: { me: Member; onChanged: () => P
   const listed = people?.filter(p => p.status !== 'pending') ?? [];
   return <>
     {error && <p className="live-error" role="alert">{t(error)}<button className="live-text-button" onClick={() => void load()}>{t('Retry', 'دوبارہ کوشش کریں')}</button></p>}
+    {factoryError && <p className="live-error" role="alert">{t(factoryError)}</p>}
     {!people && !error && <p role="status" className="live-muted">{t('Loading the team…', 'ٹیم لوڈ ہو رہی ہے…')}</p>}
     {waiting.length > 0 && <section className="live-panel" aria-labelledby="yf-waiting">
       <div className="yf-head"><h2 id="yf-waiting">{t('Waiting for you', 'آپ کی منظوری کا انتظار')}</h2><span>{t(waiting.length === 1 ? '1 request' : `${waiting.length} requests`, `${waiting.length} درخواست${waiting.length === 1 ? '' : 'یں'}`)}</span></div>
       <div className="yf-requests">{waiting.map(person => <Request key={person.id} person={person} onDone={changed} />)}</div>
     </section>}
-    {open === 'new' && <AddPerson onDone={async () => { setOpen(''); await changed(); }} onCancel={() => setOpen('')} />}
+    {open === 'new' && <AddPerson factory={factory} onDone={async () => { setOpen(''); await changed(); }} onCancel={() => setOpen('')} />}
     {people && <section className="live-panel" aria-labelledby="yf-people">
       <div className="yf-head"><h2 id="yf-people">{t('People', 'ٹیم کے لوگ')}</h2>{open !== 'new' && <button className="button" onClick={() => setOpen('new')}><UserPlus size={18} aria-hidden="true" />{t('Add a person', 'نیا فرد شامل کریں')}</button>}</div>
-      <ul className="yf-team">{listed.map(person => <Member key={person.id} person={person} self={person.id === me.user_id} open={open === person.id} onToggle={() => setOpen(open === person.id ? '' : person.id)} onDone={changed} />)}</ul>
+      <ul className="yf-team">{listed.map(person => <Member key={person.id} person={person} self={person.id === me.user_id} open={open === person.id} onToggle={() => setOpen(open === person.id ? '' : person.id)} onDone={changed} canLimits={me.admin} factory={factory} />)}</ul>
     </section>}
   </>;
 }
@@ -76,12 +146,27 @@ function Request({ person, onDone }: { person: Person; onDone: () => Promise<voi
   </article>;
 }
 
-function Member({ person, self, open, onToggle, onDone }: { person: Person; self: boolean; open: boolean; onToggle: () => void; onDone: () => Promise<void> }) {
+function Member({ person, self, open, onToggle, onDone, canLimits, factory }: { person: Person; self: boolean; open: boolean; onToggle: () => void; onDone: () => Promise<void>; canLimits: boolean; factory: Factory | null }) {
   const { language, t } = useLanguage();
   const [role, setRole] = useState<Role>(person.role ?? 'quality_inspector');
   useEffect(() => setRole(person.role ?? 'quality_inspector'), [person.role]);
   const [pin, setPin] = useState(''); const [busy, setBusy] = useState(false);
   const [error, setError] = useState(''); const [notice, setNotice] = useState<[string, string?] | null>(null);
+  const showLimits = canLimits && role === 'supervisor';
+  const [limits, setLimits] = useState<Draft>(blankDraft), [savedLimits, setSavedLimits] = useState<Draft>(blankDraft), [limitsReady, setLimitsReady] = useState(false);
+  useEffect(() => {
+    if (!open || !showLimits) return;
+    let live = true;
+    void api<{ thresholds: PersonalLimit[] }>(`/erp/admin/users/thresholds?userId=${person.id}`)
+      .then(result => { if (live) { const saved = draftFrom(result.thresholds); setSavedLimits(saved); setLimits(saved); setLimitsReady(true); } })
+      .catch(caught => { if (live) setError(errorMessage(caught)); });
+    return () => { live = false; };
+  }, [open, showLimits, person.id]);
+  async function saveLimitsNow() {
+    setBusy(true); setError(''); setNotice(null);
+    try { await saveLimitChanges(person.id, limitChanges(limits, savedLimits, factory?.currency ?? '')); setSavedLimits(limits); setNotice([`${person.name}'s approval limits are saved.`, `${person.name} کی منظوری کی حدیں محفوظ ہو گئیں۔`]); }
+    catch (caught) { setError(errorMessage(caught)); } finally { setBusy(false); }
+  }
   const dirty = role !== person.role;
   async function act(path: string, body: object, done: [string, string?] | null) {
     setBusy(true); setError(''); setNotice(null);
@@ -94,6 +179,9 @@ function Member({ person, self, open, onToggle, onDone }: { person: Person; self
     </button>
     {open && <div className="yf-member-body">
       <RolePicker value={role} onChange={setRole} disabled={busy} />
+      {showLimits && (limitsReady
+        ? <><LimitFields draft={limits} onChange={setLimits} factory={factory} disabled={busy} /><div className="live-actions"><button className="button primary" disabled={busy || !factory} onClick={() => void saveLimitsNow()}>{t('Save approval limits', 'منظوری کی حدیں محفوظ کریں')}</button></div></>
+        : <p role="status" className="live-muted">{t('Loading approval limits…', 'منظوری کی حدیں لوڈ ہو رہی ہیں…')}</p>)}
       {dirty && <div className="live-actions"><button className="button primary" disabled={busy} onClick={() => void act('/erp/admin/users/update', { id: person.id, role }, [`${person.name}'s access is saved.`, `${person.name} کے اختیارات محفوظ ہو گئے۔`])}>{t('Save access', 'اختیارات محفوظ کریں')}</button><button className="button" disabled={busy} onClick={() => { setRole(person.role ?? 'quality_inspector'); }}>{t('Undo changes', 'تبدیلیاں واپس کریں')}</button></div>}
       <form className="yf-pin-reset" onSubmit={event => { event.preventDefault(); void act('/erp/admin/users/update', { id: person.id, pin }, [`New PIN set. ${self ? 'Sign in again with it.' : `Tell ${person.name} the new PIN.`}`, `نیا پن مقرر ہو گیا۔ ${self ? 'اس سے دوبارہ سائن اِن کریں۔' : `${person.name} کو نیا پن بتا دیں۔`}`]).then(() => setPin('')); }}>
         <Field>{person.locked ? t('Locked after wrong PINs. Set a new PIN to unlock', 'غلط پن سے اکاؤنٹ مقفل ہے۔ کھولنے کے لیے نیا پن مقرر کریں') : t('Set a new PIN', 'نیا پن مقرر کریں')}<input type="password" dir="ltr" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} autoComplete="new-password" value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, ''))} required /></Field>
@@ -107,16 +195,21 @@ function Member({ person, self, open, onToggle, onDone }: { person: Person; self
   </li>;
 }
 
-function AddPerson({ onDone, onCancel }: { onDone: () => Promise<void>; onCancel: () => void }) {
+function AddPerson({ factory, onDone, onCancel }: { factory: Factory | null; onDone: () => Promise<void>; onCancel: () => void }) {
   const { t } = useLanguage();
   const [name, setName] = useState(''); const [pin, setPin] = useState('');
   const [role, setRole] = useState<Role>('supervisor'); const [again, setAgain] = useState('');
+  const [limits, setLimits] = useState<Draft>(blankDraft);
   return <AsyncForm title={t('Add a person', 'نیا فرد شامل کریں')} detail={t('They sign in with this name and PIN. Tell them the PIN yourself.', 'وہ اس نام اور پن سے سائن اِن کریں گے۔ پن آپ خود انہیں بتائیں۔')} submit={t('Add person', 'فرد شامل کریں')} note={t('PINs are stored scrambled. Nobody can read them back, not even an admin.', 'پن خفیہ شکل میں محفوظ ہوتے ہیں۔ انہیں ایڈمن بھی نہیں پڑھ سکتا۔')} onCancel={onCancel} onSubmit={async () => {
     if (pin !== again) throw new Error(t('The two PINs are different. Type the same 4 digits twice.', 'دونوں پن مختلف ہیں۔ ایک ہی چار ہندسے دو بار درج کریں۔'));
-    await api('/erp/admin/users', { name, pin, role }); await onDone();
+    // Limits are checked before the person exists, so a bad number never leaves a half-added person.
+    const changes = role === 'supervisor' ? limitChanges(limits, blankDraft(), factory?.currency ?? '') : [];
+    const created = await api<{ id: string }>('/erp/admin/users', { name, pin, role });
+    await saveLimitChanges(created.id, changes); await onDone();
   }}>
     <div className="live-fields yf-pin-fields"><Field>{t('Name', 'نام')}<input value={name} onChange={e => setName(e.target.value)} minLength={2} maxLength={40} required /></Field><Field>{t('4-digit PIN', 'چار ہندسوں کا پن')}<input type="password" dir="ltr" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} autoComplete="new-password" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} required /></Field></div>
     <Field>{t('Type it again', 'دوبارہ درج کریں')}<input type="password" dir="ltr" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} autoComplete="new-password" value={again} onChange={e => setAgain(e.target.value.replace(/\D/g, ''))} required /></Field>
     <RolePicker value={role} onChange={setRole} />
+    {role === 'supervisor' && <LimitFields draft={limits} onChange={setLimits} factory={factory} disabled={false} />}
   </AsyncForm>;
 }

@@ -364,8 +364,8 @@ export async function dispatchApi(request, env, member, path, data) {
       }
       return json({ issue: await one(db, 'SELECT * FROM stock_issues WHERE id=?', id) }, 200);
     }
-    const dispatchGate = await needsApproval(db, w, 'dispatch_stock_issue', issue.difference_grams);
-    const inventoryGate = correction ? await needsApproval(db, w, 'inventory_adjustment', Math.abs(correction)) : { required: false, threshold: null };
+    const dispatchGate = await needsApproval(db, w, 'dispatch_stock_issue', issue.difference_grams, member.user_id);
+    const inventoryGate = correction ? await needsApproval(db, w, 'inventory_adjustment', Math.abs(correction), member.user_id) : { required: false, threshold: null };
     const gate = dispatchGate.required ? dispatchGate : inventoryGate, amount = dispatchGate.required ? issue.difference_grams : Math.abs(correction);
     const payload = {
       correctionGrams: correction || null, correctionReason: correction ? why : null, intervention, lotId: issue.lot_id, stage: issue.stage,

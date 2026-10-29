@@ -39,6 +39,11 @@ export async function adminApi(request, env, member, path, data) {
       const events = rows.slice(0,100), last = events.at(-1);
       return json({ events, next: rows.length > 100 ? `${last.created_at}:${last.id}` : null });
     }
+    if (path === '/api/erp/admin/users/thresholds') {
+      const target = await one(db, 'SELECT id FROM users WHERE id=? AND workspace_id=? AND removed_at IS NULL', recordId(new URL(request.url).searchParams.get('userId')), w);
+      if (!target) fail(404, 'This person was not found.');
+      return json({ thresholds: await all(db, 'SELECT type,value,currency,updated_at FROM user_thresholds WHERE workspace_id=? AND user_id=? ORDER BY type', w, target.id) });
+    }
     if (path !== '/api/erp/admin/users') fail(404, 'API route not found.');
     const users = await all(db, 'SELECT id,name,portal_role AS role,status,deactivated_at,created_at,locked_until FROM users WHERE workspace_id=? AND removed_at IS NULL ORDER BY name COLLATE NOCASE', w);
     return json({ users: users.map(({ deactivated_at, locked_until, ...user }) => ({ ...user, status: deactivated_at === null ? user.status : 'deactivated', locked: locked_until > Date.now() })) });
@@ -73,6 +78,41 @@ export async function adminApi(request, env, member, path, data) {
     catch (error) {
       if (/Close open bids/.test(String(error))) fail(409, 'Close open bids and unaccepted quotations and settle unpaid invoices before changing currency.');
       if (/constraint failed|factory currency/i.test(String(error))) fail(409, 'This configuration changed. Refresh and try again.');
+      throw error;
+    }
+    return json({ saved: true });
+  }
+  if (path === '/api/erp/admin/users/thresholds') {
+    // A supervisor's personal limit for one type. value null clears it, so the workspace threshold applies again.
+    keys(data, ['userId','type','value','currency','interventionReason']);
+    const target = await one(db, 'SELECT id,portal_role FROM users WHERE id=? AND workspace_id=? AND removed_at IS NULL', recordId(data.userId), w);
+    if (!target) fail(404, 'This person was not found.');
+    if (target.portal_role !== 'supervisor') fail(422, 'Personal limits are set for supervisors only.');
+    if (!THRESHOLDS.includes(data.type)) fail(422, 'Choose a valid threshold.');
+    const value = data.value === null ? null : integer(data.value, 'Threshold', 0, Number.MAX_SAFE_INTEGER);
+    const money = ['purchase','claim'].includes(data.type), settings = await settingsOf(db, w), currency = money ? settings.currency : null;
+    if (data.currency !== undefined && data.currency !== currency) {
+      if (!money || !['PKR','USD','EUR','GBP'].includes(data.currency)) fail(422, 'Choose a supported currency.');
+      fail(409, 'Use the factory currency. Reload to get the current currency.');
+    }
+    const previous = await one(db, 'SELECT value,currency,updated_at FROM user_thresholds WHERE workspace_id=? AND user_id=? AND type=?', w, target.id, data.type);
+    if ((previous?.value ?? null) === value && (previous?.currency ?? null) === currency) return json({ saved: true });
+    const now = Math.max(Date.now(), (previous?.updated_at ?? 0) + 1);
+    // Same optimistic guard as the workspace thresholds: a stale snapshot aborts the whole batch.
+    const guard = query(db, `INSERT INTO user_thresholds(workspace_id,user_id,type) SELECT ?,?,? WHERE
+      (SELECT value FROM user_thresholds WHERE user_id=? AND type=?) IS NOT ?
+      OR (SELECT currency FROM user_thresholds WHERE user_id=? AND type=?) IS NOT ?`,
+      w, target.id, data.type, target.id, data.type, previous?.value ?? null, target.id, data.type, previous?.currency ?? null);
+    const write = value === null
+      ? query(db, 'DELETE FROM user_thresholds WHERE workspace_id=? AND user_id=? AND type=?', w, target.id, data.type)
+      : query(db, `INSERT INTO user_thresholds(workspace_id,user_id,type,value,currency,created_by,created_at,updated_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(user_id,type) DO UPDATE SET value=excluded.value,currency=excluded.currency,updated_by=excluded.updated_by,updated_at=excluded.updated_at`,
+        w, target.id, data.type, value, currency, member.user_id, now, member.user_id, now);
+    const history = query(db, 'INSERT INTO user_threshold_history(id,workspace_id,user_id,type,old_value,new_value,old_currency,new_currency,changed_by,changed_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
+      crypto.randomUUID(), w, target.id, data.type, previous?.value ?? null, value, previous?.currency ?? null, currency, member.user_id, now);
+    try { await db.batch([guard, write, history, audit(db, member, 'user_threshold.changed', target.id, { type: data.type, old_currency: previous?.currency ?? null, new_currency: currency }, 'staff', { before: { value: previous?.value ?? null }, after: { value } })]); }
+    catch (error) {
+      if (/constraint failed|factory currency/i.test(String(error))) fail(409, 'This limit changed. Refresh and try again.');
       throw error;
     }
     return json({ saved: true });
