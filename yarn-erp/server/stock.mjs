@@ -55,7 +55,7 @@ const adjustmentReply = async (db, a) => {
 async function draftOf(db, w, from, to) {
   const rejections = async status => {
     const list = await all(db, `SELECT i.id,i.lot_id,l.reference AS lot_reference,m.name AS product_name,l.unit,i.rejected_milli,i.rejection_status,i.rejection_reason,i.decided_at
-      FROM qc_inspections i JOIN qc_lots l ON l.id=i.lot_id JOIN products m ON m.id=l.product_id WHERE i.workspace_id=? AND i.rejection_status=? AND i.decided_at BETWEEN ? AND ? ORDER BY i.decided_at,i.id LIMIT 200`, w, status, from, to);
+      FROM qc_inspections i JOIN qc_lots l ON l.id=i.lot_id JOIN products m ON m.id=l.product_id WHERE i.workspace_id=? AND i.rejection_status=? AND i.decided_at BETWEEN ? AND ? ORDER BY i.decided_at,i.id`, w, status, from, to);
     for (const item of list) {
       item.issues = await all(db, 'SELECT id,type,severity,description,status FROM qc_issues WHERE inspection_id=? ORDER BY created_at,id', item.id);
       item.photos = (await all(db, 'SELECT id FROM qc_photos WHERE inspection_id=? OR issue_id IN (SELECT id FROM qc_issues WHERE inspection_id=?) ORDER BY created_at,id', item.id, item.id)).map(p => p.id);
@@ -64,7 +64,7 @@ async function draftOf(db, w, from, to) {
   };
   return { confirmedRejections: await rejections('confirmed'), escalations: await rejections('escalated'),
     adjustments: await all(db, `SELECT a.id,a.lot_id,l.batch,m.name AS product_name,a.stage,a.kind,a.delta_grams,a.reason,a.status,a.compensates_id,u.name AS created_by_name,a.created_at
-      FROM inventory_adjustments a JOIN lots l ON l.id=a.lot_id JOIN products m ON m.id=l.product_id JOIN users u ON u.id=a.created_by WHERE a.workspace_id=? AND a.created_at BETWEEN ? AND ? ORDER BY a.created_at,a.id LIMIT 200`, w, from, to) };
+      FROM inventory_adjustments a JOIN lots l ON l.id=a.lot_id JOIN products m ON m.id=l.product_id JOIN users u ON u.id=a.created_by WHERE a.workspace_id=? AND a.created_at BETWEEN ? AND ? ORDER BY a.created_at,a.id`, w, from, to) };
 }
 const period = params => {
   const from = Number(params.get('from')), to = Number(params.get('to'));
