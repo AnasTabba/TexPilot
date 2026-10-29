@@ -1,6 +1,6 @@
 /** Fixed interface copy only. Names, notes, model classes and ledger identifiers stay intact. */
 export const urdu: Record<string, string> = {
-  'Procurement': 'خریداری',
+  'Procurement': 'خریداری', 'Supplier directory': 'سپلائر ڈائریکٹری', 'Sales orders': 'فروخت کے آرڈر', 'Production planning': 'پروڈکشن کی منصوبہ بندی', 'Customer payments': 'گاہکوں کی ادائیگیاں',
   'QC approval is required before issuing raw stock or dispatching. Held lots cannot move.': 'خام مال پروڈکشن میں دینے یا روانہ کرنے سے پہلے کوالٹی منظوری درکار ہے۔ روکے گئے بیچ منتقل نہیں ہو سکتے۔',
   'The TexPilot scanner could not be reached. Please try again shortly.': 'TexPilot اسکینر سے رابطہ نہیں ہوسکا۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔',
   'Home': 'ہوم', 'Stock': 'اسٹاک', 'Scan': 'اسکین', 'History': 'ہسٹری', 'Team': 'ٹیم', 'Settings': 'ترتیبات', 'Help': 'مدد', 'More': 'مزید',

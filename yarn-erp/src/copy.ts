@@ -122,6 +122,13 @@ export const floor = {
   qcAgainHint: ['Not decided yet. Someone must inspect it again.', 'ابھی فیصلہ نہیں۔ دوبارہ معائنہ ضروری ہے۔'],
   qcReason: ['What did you check?', 'آپ نے کیا چیک کیا؟'],
   tapReason: ['Tap a reason, or write your own below', 'کوئی وجہ دبائیں یا نیچے خود لکھیں'],
+  // What each role is for, shown under its name in Team. Keep in step with ROLE_PERMISSIONS in server/auth.mjs.
+  role_admin: ['Everything, and manages the team', 'سب کچھ، اور ٹیم کا انتظام'],
+  role_supervisor: ['Receives, issues, returns, wastage, QC, dispatch and corrections', 'وصولی، پروڈکشن، واپسی، ضائع، کوالٹی، روانگی اور تصحیح'],
+  role_dispatch: ['Dispatches approved stock', 'منظور شدہ مال روانہ کرتا ہے'],
+  role_quality_inspector: ['Inspects batches and passes or holds them', 'بیچ کا معائنہ اور پاس یا روکنا'],
+  role_purchase_manager: ['Suppliers, purchase orders and receiving them', 'سپلائر، خریداری آرڈر اور ان کی وصولی'],
+  role_sales_manager: ['Buyers, sales and payments', 'خریدار، فروخت اور ادائیگیاں'],
   inspect: ['Add inspection', 'معائنہ درج کریں'],
   inspectNote: ['What did you see?', 'آپ نے کیا دیکھا؟'],
   pickOneBatch: ['Tap the batch you checked.', 'جو بیچ چیک کیا اسے دبائیں۔'],
