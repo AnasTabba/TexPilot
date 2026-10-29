@@ -17,7 +17,8 @@ import { stockApi, approvalHandlers as stockHandlers } from './stock.mjs';
 import { readPhoto } from './photos.mjs';
 import { analyticsApi } from './analytics.mjs';
 import { dispatchApi, approvalHandlers as dispatchHandlers } from './dispatch.mjs';
-const erp = { admin: adminApi, analytics: analyticsApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi, tracking: trackingApi, qc: qualityApi, stock: stockApi, dispatch: dispatchApi };
+import { chatApi } from './chat.mjs';
+const erp = { admin: adminApi, analytics: analyticsApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi, tracking: trackingApi, qc: qualityApi, stock: stockApi, dispatch: dispatchApi, chat: chatApi };
 erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, { ...approvalHandlers, ...qualityHandlers, ...stockHandlers, ...dispatchHandlers });
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
@@ -139,6 +140,7 @@ async function route(request, env) {
     return json({ id: inspectionId }, 201);
   }
   if (path === '/api/erp/qc/photos' && request.method === 'POST') return qualityApi(request, env, member, path, null);
+  if (path === '/api/erp/chat/photos' && request.method === 'POST') return chatApi(request, env, member, path, null);
   const data = request.method === 'POST' ? await body(request) : null;
   const w = member.workspace_id;
   if (path === '/api/erp/inbound' || path.startsWith('/api/erp/receipts')) return receiving(request, env, member, path, data);

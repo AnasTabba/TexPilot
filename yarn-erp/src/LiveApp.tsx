@@ -10,7 +10,8 @@ import { NoticeToast } from './NoticeToast';
 import Profile from './Profile';
 import AppSettings from './AppSettings';
 import { portal } from './PortalCommon';
-import { APP_SETTINGS, COMMON, NAV, PROFILE } from './roles';
+import { APP_SETTINGS, CHAT, COMMON, NAV, PROFILE } from './roles';
+import Chat from './Chat';
 import Inspections from './Inspections';
 import InspectArrival, { type Arrival } from './InspectArrival';
 import ToProduction, { type ProductionJob } from './ToProduction';
@@ -36,7 +37,7 @@ type Action = { type: FormType; lotId?: string; productId?: string };
 // Old pages that were filtered copies of the stock list (or of Home) now open Stock with that filter.
 type View = 'all' | 'quality' | 'production' | 'dispatch';
 const aliases: Record<string, [string, View]> = { tracking: ['procurement', 'all'], materials: ['inventory', 'all'], production: ['inventory', 'production'], quality: ['inventory', 'quality'], dispatch: ['inventory', 'dispatch'], overview: ['dashboard', 'all'] };
-const sections = [...new Set([...Object.values(NAV).flat(), ...COMMON, PROFILE, APP_SETTINGS])];
+const sections = [...new Set([...Object.values(NAV).flat(), CHAT, ...COMMON, PROFILE, APP_SETTINGS])];
 const tabsOf = Object.fromEntries(sections.flatMap(section => section.tabs ? [[section.id, section.tabs.map(tab => tab.id)]] : []));
 const routeFromHash = () => {
   const { section } = parseHash(location.hash, tabsOf);
@@ -223,6 +224,7 @@ export default function LiveApp() {
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
   const [exportBusy, setExportBusy] = useState(false); const [integration, setIntegration] = useState('');
   const [inbox, setInbox] = useState<Inbox>({ notifications: [], unread: 0 });
+  const [chatUnread, setChatUnread] = useState(0);
   const [toast, setToast] = useState<Notice | null>(null); const inboxSeen = useRef<number | null>(null);
   const dismissToast = useCallback(() => setToast(null), []);
   const [history, setHistory] = useState<StockMovement[]>([]); const [moreHistory, setMoreHistory] = useState(true);
@@ -275,6 +277,7 @@ export default function LiveApp() {
       void portal<Inbox>('/notifications').then(next => {
         if (sequence !== requestSequence.current || sessionLocked.current) return;
         const previous = inboxSeen.current; inboxSeen.current = next.unread; setInbox(next);
+        void portal<{ unread: number }>('/chat').then(chat => setChatUnread(chat.unread), () => {});
         if (previous !== null && next.unread > previous) { setToast(next.notifications.find(n => n.status === 'unread') ?? null); void refresh(true); }
       }, () => { /* A failed poll keeps the last inbox; the next tick retries. */ });
     };
@@ -283,6 +286,9 @@ export default function LiveApp() {
     window.addEventListener('focus', wake); document.addEventListener('visibilitychange', wake);
     return () => { clearInterval(interval); window.removeEventListener('focus', wake); document.removeEventListener('visibilitychange', wake); };
   }, [refresh]);
+  // The chat badge shows as soon as someone signs in, not only after the first 20 s poll.
+  const signedInId = state?.member.user_id;
+  useEffect(() => { if (signedInId) void portal<{ unread: number }>('/chat').then(chat => setChatUnread(chat.unread), () => {}); }, [signedInId]);
   useEffect(() => { const update = () => { menuDialog.current?.close(); const alias = aliases[location.hash.split('/')[1]]; if (alias) setView(alias[1]); setRoute(routeFromHash()); setHash(location.hash); setSelectedId(lotFromHash()); setAction(null); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
   useEffect(() => { const network = () => { setOnline(navigator.onLine); void refresh(true); }; window.addEventListener('online', network); window.addEventListener('offline', network); return () => { window.removeEventListener('online', network); window.removeEventListener('offline', network); }; }, [refresh]);
   // A form or reversal opens at its top, not wherever the page was scrolled to when it was asked for.
@@ -314,7 +320,7 @@ export default function LiveApp() {
   const workspace = state;
   const me = workspace.member;
   const allow = (permission: Permission) => can(me, permission);
-  const shown = [...NAV[me.role], ...COMMON];
+  const shown = [...NAV[me.role], CHAT, ...COMMON];
   // Profile is reachable by route and by clicking the name, but not listed in the sidebar.
   const pages = [...shown, PROFILE, APP_SETTINGS];
   const page = pages.some(section => section.id === route) ? route : 'dashboard';
@@ -389,7 +395,7 @@ export default function LiveApp() {
   const current = pages.find(section => section.id === page);
   const pageTitle = action ? t("Stock entry") : selected ? t("Batch details") : t(current?.en || 'Dashboard', current?.ur);
   // Counts that wait on the person: unread notifications, and sign-in requests for admins in Team.
-  const badge = (id: string) => id === 'notifications' && inbox.unread > 0 ? <b className="yf-nav-count" aria-label={`, ${inbox.unread} ${t('unread', 'نہ پڑھی ہوئی')}`}>{inbox.unread}</b>
+  const badge = (id: string) => id === 'chat' && chatUnread > 0 ? <b className="yf-nav-count" aria-label={`, ${chatUnread} ${t('unread', 'نہ پڑھی ہوئی')}`}>{chatUnread}</b> : id === 'notifications' && inbox.unread > 0 ? <b className="yf-nav-count" aria-label={`, ${inbox.unread} ${t('unread', 'نہ پڑھی ہوئی')}`}>{inbox.unread}</b>
     : id === 'team' && workspace.pending > 0 ? <b className="yf-nav-count" aria-label={`, ${workspace.pending} waiting`}>{workspace.pending}</b> : null;
   const brand = <a className="live-brand" href="#/dashboard"><Cone hue="#2f6fd6" size={30} />yarnflow</a>;
   const whoAmI = <div className="yf-me"><button className="yf-me-open" onClick={() => navigate('profile')} aria-label={t('Open my profile', 'میری پروفائل کھولیں')}><Avatar name={me.name} /><span><strong>{me.name}</strong><span>{t(...roleLabel[me.role])}</span></span></button><button className="live-icon-button" onClick={() => void signOut()} aria-label={`${t('Sign out')} ${me.name}`} title={t("Sign out")}><LogOut size={20} aria-hidden="true" /></button></div>;
@@ -418,6 +424,7 @@ export default function LiveApp() {
       {page==='help' && <section className="live-panel yf-help"><h2>{t("Common questions")}</h2>{[[t("How do I receive stock?"),t("The purchase manager registers an arrival, the inspector inspects it, and the supervisor accepts the report. Only then does the stock appear in the batch.")],[t("How does quality approval work?"),t("Record the care label and physical inspection. A QC decision is required before dispatch; a scan result alone never approves a batch.")],[t("How do corrections work?"),t("The supervisor adjusts or writes off stock with a reason. Large changes wait for admin approval, the original entries stay visible and stock cannot become negative.")],[t("Where is my data stored?"),t("In one shared database. Everyone who signs in sees the same stock, and every entry records who made it.")],[t("Who can do what?"),t("Everyone can view stock and use the scanner. The supervisor records finished goods and adjusts stock; materials are added by the supervisor or purchase manager.")],[t("How do new people join?"),t("Ask an admin to create your account. The admin chooses your role in Team and gives you your PIN.")],[t("Forgot your PIN?"),t("Ask an admin to set a new one in Team. Five wrong PINs lock a name for five minutes.")],[t("Phone and computer"),t("Open the same link on any phone or computer and sign in with your name and PIN. On iPhone, Share then Add to Home Screen makes it open like an app.")],[t("Camera and privacy"),t("Camera access is requested when you start a scan. The TexPilot service must be connected for model analysis.")]].map(([q,a])=><details key={q}><summary>{t(q)}</summary><p>{t(a)}</p></details>)}</section>}
       {page === 'scanner' && <><div className="live-segments yf-scan-tabs" aria-label={t("What to scan")}><button aria-pressed={scanTab === 'fabric'} onClick={() => setScanTab('fabric')}><Camera size={22} aria-hidden="true" /><span>{t("Fabric")}</span></button><button aria-pressed={scanTab === 'spec'} onClick={() => setScanTab('spec')}><Ruler size={22} aria-hidden="true" /><span>{t("Yarn count")}</span></button><button aria-pressed={scanTab === 'barcode'} onClick={() => setScanTab('barcode')}><ScanBarcode size={22} aria-hidden="true" /><span>{t("Stock label")}</span></button></div>{scanTab === 'spec' ? <SpecScan /> : scanTab === 'barcode' ? <><BarcodeScanner onFound={lookup} />{!!matches.length && <section className="live-panel"><h2>{t("Choose the batch")}</h2>{matches.map(lot => <button className="live-match" key={lot.id} onClick={() => { navigate('inventory', lot.id); }}><span>{lot.name} · {lot.batch}</span><ArrowRight size={18} /></button>)}</section>}</> : <><Scanner t={t} onInventory={() => navigate('inventory')} onResult={setLastResult} onMeasure={() => { setScanTab('spec'); scrollTo({ top: 0, behavior: 'smooth' }); }} />{lastResult && me.role !== 'quality_inspector' && <section className="live-panel"><h2>{t("Save this scan to a batch")}</h2><p>{t("Keeps the result in the batch's QC history. It does not approve the batch by itself.")}</p>{allow('inspect') ? <><button className="button primary" disabled={!workspace.lots.length} onClick={() => setAction({ type: 'inspection' })}><ClipboardCheck size={18} aria-hidden="true" />{t("Save to a batch")}</button>{!workspace.lots.length && <p>{t("Add a batch in Stock first.")}</p>}</> : <p className="live-muted">{t("Someone with “Inspections” access can save scans to a batch.")}</p>}</section>}</>}</>}
       {page === 'activity' && <section className="live-panel"><div className="live-panel-heading"><h2>{t("Stock movement register")}</h2><span>Asia/Karachi</span></div>{activityList([...workspace.movements, ...history.filter(h => !workspace.movements.some(m => m.id === h.id))])}{workspace.movements.length >= 100 && moreHistory && <button className="button" disabled={historyBusy} onClick={async () => { setHistoryBusy(true); try { const page = await api<{ movements: StockMovement[] }>('/movements?offset=' + (100 + history.length)); setHistory(previous => [...previous, ...page.movements]); setMoreHistory(page.movements.length === 100); } catch (error) { setError(errorMessage(error)); } finally { setHistoryBusy(false); } }}>{historyBusy ? t("Loading…") : t("Load earlier movements")}</button>}</section>}
+      {page === 'chat' && <Chat member={me} state={workspace} navigate={navigate} onUnread={setChatUnread} />}
       {page === 'app-settings' && <AppSettings />}
       {page === 'profile' && <Profile state={workspace} backupBusy={exportBusy} onBackup={() => void backup()} />}
       {page==='team' && <Team me={me} onChanged={() => refresh(true)} />}
@@ -431,7 +438,7 @@ export default function LiveApp() {
 
       </>}
     </main><footer className="live-sync" role="status"><CheckCheck size={17} aria-hidden="true"/><span>{t("All changes saved")}{savedAt ? ' · '+t('checked', 'چیک کیا')+' '+new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Karachi'}).format(savedAt) : ''}</span></footer></div>
-    <nav className="live-bottom-nav" aria-label={t("Phone navigation")}>{[...NAV[me.role].slice(0, 3), COMMON[0]].map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={23} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>)}<button onClick={()=>menuDialog.current?.showModal()} aria-label={workspace.pending > 0 ? `More pages, ${workspace.pending} waiting in Team` : t("More pages")}><Menu size={23} aria-hidden="true" /><span>{t("More")}</span>{workspace.pending > 0 && <b className="yf-nav-count" aria-hidden="true">{workspace.pending}</b>}</button></nav>
+    <nav className="live-bottom-nav" aria-label={t("Phone navigation")}>{[...NAV[me.role].slice(0, 2), CHAT, COMMON[0]].map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={23} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>)}<button onClick={()=>menuDialog.current?.showModal()} aria-label={workspace.pending > 0 ? `More pages, ${workspace.pending} waiting in Team` : t("More pages")}><Menu size={23} aria-hidden="true" /><span>{t("More")}</span>{workspace.pending > 0 && <b className="yf-nav-count" aria-hidden="true">{workspace.pending}</b>}</button></nav>
   <NoticeToast notice={toast} onDismiss={dismissToast} />
   </div>;
 }

@@ -1,0 +1,81 @@
+/* Team chat: conversation list, thread, composer and the sheets they open. Logical properties only, so Urdu (RTL) flips cleanly. */
+.yf-chat { display: grid; gap: 16px; min-width: 0; }
+.yf-chat-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.yf-chat-head h2 { color: var(--ink); font: 700 22px/1.25 var(--font); }
+.yf-chat-go { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.yf-chat-go::-webkit-scrollbar { display: none; }
+.yf-chat-go > span { flex: none; color: var(--ink-3); font: 600 14px var(--font); }
+.yf-chat-go .button { flex: none; min-height: 44px; padding: 0 16px; font-size: 15px; }
+
+.yf-chat-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.yf-chat-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 12px; border: 0; border-radius: var(--r-row); background: var(--ground); color: var(--ink); font: inherit; text-align: start; cursor: pointer; transition: transform 160ms var(--ease-out), background-color 150ms ease; }
+.yf-chat-row:active { transform: scale(0.98); background: var(--sunken); }
+.yf-chat-row-text { display: grid; gap: 2px; min-width: 0; }
+.yf-chat-row-text strong { overflow: hidden; color: var(--ink); font: 600 17px var(--font); text-overflow: ellipsis; white-space: nowrap; }
+.yf-chat-row-text small { overflow: hidden; color: var(--ink-3); font: 500 14px var(--font); text-overflow: ellipsis; white-space: nowrap; }
+.yf-chat-row-meta { display: grid; justify-items: end; gap: 6px; }
+.yf-chat-row-meta time { color: var(--ink-3); font: 500 13px var(--font); }
+.yf-chat-unread { min-width: 24px; height: 24px; padding: 0 7px; border-radius: var(--r-pill); background: var(--ink); color: var(--on-ink); font: 700 13px/24px var(--font); text-align: center; }
+.yf-chat-team { display: inline-grid; flex: none; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--sunken); color: var(--ink); }
+.yf-chat-note { margin: auto; padding: 24px 8px; color: var(--ink-3); text-align: center; }
+
+/* Thread */
+.yf-chat-thread { display: flex; flex-direction: column; height: calc(100dvh - 180px); min-height: 440px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-field); background: var(--panel); }
+.yf-chat-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.yf-chat-bar h2 { min-width: 0; overflow: hidden; color: var(--ink); font: 700 18px var(--font); text-overflow: ellipsis; white-space: nowrap; }
+html[dir="rtl"] .yf-chat-back svg { transform: scaleX(-1); }
+.yf-chat-log { display: flex; flex: 1; flex-direction: column; gap: 12px; min-height: 0; padding: 16px; overflow-y: auto; overscroll-behavior: contain; }
+.yf-chat-msg { display: grid; justify-items: start; gap: 4px; max-width: 82%; }
+.yf-chat-msg.is-mine { margin-inline-start: auto; justify-items: end; }
+.yf-chat-sender { padding-inline: 12px; color: var(--ink-3); font: 600 13px var(--font); }
+.yf-chat-bubble { display: grid; gap: 8px; min-width: 0; padding: 10px 14px; border-radius: 18px; border-start-start-radius: 6px; background: var(--ground); color: var(--ink); }
+.yf-chat-msg.is-mine .yf-chat-bubble { border-start-start-radius: 18px; border-start-end-radius: 6px; background: var(--ink); color: var(--on-ink); }
+.yf-chat-text { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; font: 16px/1.4 var(--font); }
+.yf-chat-msg time { padding-inline: 12px; color: var(--ink-3); font: 500 12px var(--font); }
+
+.yf-chat-photo { display: block; width: min(240px, 62vw); padding: 0; border: 0; border-radius: 12px; background: none; overflow: hidden; cursor: zoom-in; }
+.yf-chat-photo img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--sunken); }
+
+.yf-chat-batch { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-width: 220px; padding: 10px; border-radius: 12px; background: var(--panel); color: var(--ink); }
+.yf-chat-batch > svg { color: var(--ink-2); }
+.yf-chat-batch span { display: grid; min-width: 0; }
+.yf-chat-batch small { color: var(--ink-3); font: 500 12px var(--font); }
+.yf-chat-batch strong { overflow-wrap: anywhere; font: 600 15px/1.3 var(--font); }
+.yf-chat-batch .button { min-height: 44px; padding: 0 14px; font-size: 15px; }
+
+/* Composer */
+.yf-chat-composer { display: grid; gap: 10px; padding: 10px 12px 12px; border-top: 1px solid var(--line); background: var(--panel); }
+.yf-chat-quick { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.yf-chat-quick::-webkit-scrollbar { display: none; }
+.yf-chat-chip { flex: none; min-height: 44px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--sheet); color: var(--ink); font: 600 15px var(--font); cursor: pointer; }
+.yf-chat-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+.yf-chat-composer textarea { display: block; width: 100%; min-height: 48px; max-height: 140px; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: var(--r-control); background: var(--sheet); color: var(--ink); font: 16px/1.4 var(--font); resize: none; }
+.yf-chat-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.yf-chat-actions .button { min-height: 44px; font-size: 15px; }
+.yf-chat-actions .yf-chat-send { margin-inline-start: auto; }
+
+/* Sheets (people picker, batch picker, full photo) */
+.yf-chat-sheet { width: min(480px, calc(100vw - 32px)); max-height: min(78dvh, 640px); margin: auto; padding: 0; overflow: auto; border: 0; border-radius: var(--r-sheet); background: var(--sheet); color: var(--ink); }
+.yf-chat-sheet::backdrop { background: rgb(0 0 0 / 0.35); }
+.yf-chat-sheet-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 12px 10px 20px; background: var(--sheet); }
+.yf-chat-sheet-head h3 { color: var(--ink); font: 700 19px var(--font); }
+.yf-chat-sheet-body { display: grid; gap: 10px; padding: 0 16px 20px; }
+.yf-chat-search { width: 100%; min-height: 48px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: var(--r-control); background: var(--panel); color: var(--ink); font: 16px var(--font); }
+.yf-chat-lot-icon { display: inline-grid; flex: none; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--sunken); color: var(--ink); }
+.yf-chat-sheet.is-photo { width: min(960px, calc(100vw - 16px)); max-height: 92dvh; background: var(--ink); }
+.yf-chat-sheet.is-photo .yf-chat-sheet-head { background: var(--ink); color: var(--on-ink); }
+.yf-chat-sheet.is-photo .yf-chat-sheet-head h3 { color: var(--on-ink); }
+.yf-chat-error { margin: 0 12px; }
+.yf-chat-sheet.is-photo .yf-chat-sheet-body { padding: 0; }
+.yf-chat-full { display: block; width: 100%; max-height: 78dvh; object-fit: contain; }
+
+@media (max-width: 600px) {
+  .yf-chat-sheet { width: 100%; max-width: none; max-height: 82dvh; margin: auto 0 0; border-radius: var(--r-sheet) var(--r-sheet) 0 0; }
+  .yf-chat-sheet.is-photo { width: 100%; }
+  .yf-chat-msg { max-width: 90%; }
+}
+/* Phone: the bottom nav is fixed over the page, so the thread stops above it and the composer stays reachable. */
+@media (max-width: 900px) {
+  .yf-chat-thread { height: calc(100dvh - 250px - var(--safe-bottom, 0px)); min-height: 360px; }
+  .yf-chat-actions .button { padding-inline: 12px; }
+}

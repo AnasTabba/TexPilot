@@ -1,4 +1,4 @@
-import { Bell, ChartNoAxesCombined, CircleHelp, ClipboardCheck, ClipboardList, CircleUserRound, FileText, House, History, ListChecks, PackagePlus, ScanSearch, Settings, ShieldCheck, Truck, UsersRound, type LucideIcon } from 'lucide-react';
+import { Bell, ChartNoAxesCombined, MessageCircle, CircleHelp, ClipboardCheck, ClipboardList, CircleUserRound, FileText, House, History, ListChecks, PackagePlus, ScanSearch, Settings, ShieldCheck, Truck, UsersRound, type LucideIcon } from 'lucide-react';
 import { ConeIcon } from './icons';
 import type { Role } from './inventory-client';
 import { objectRoute as route } from './routes.ts';
@@ -42,6 +42,8 @@ export const COMMON: Section[] = [
   { id: 'notifications', en: 'Notifications', ur: 'اطلاعات', icon: Bell },
   { id: 'help', en: 'Help', ur: 'مدد', icon: CircleHelp },
 ];
+/** Team chat for every role: sidebar after the role's sections, and on the phone bar. */
+export const CHAT: Section = { id: 'chat', en: 'Chat', ur: 'چیٹ', icon: MessageCircle };
 /** Not in the sidebar: profile opens from your name, app settings from the top-right gear. */
 export const PROFILE: Section = { id: 'profile', en: 'My profile', ur: 'میری پروفائل', icon: CircleUserRound };
 export const APP_SETTINGS: Section = { id: 'app-settings', en: 'Settings', ur: 'ترتیبات', icon: Settings };
