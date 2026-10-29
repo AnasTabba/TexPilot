@@ -70,6 +70,15 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await page.getByRole('button', { name: 'Receive purchase order', exact: true }).click();
   await page.getByLabel('Internal receipt batch', { exact: true }).fill('ERP-RCV-001');
   await page.getByLabel('Supplier lot reference (optional)', { exact: true }).fill('SUP-LOT-001');
+  // Nothing is pre-chosen: Next with an empty form names every missing piece instead of saving a guess.
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByText('Tap the material that arrived.')).toBeVisible();
+  await page.getByRole('group', { name: 'Which material arrived?' }).getByRole('button').first().click();
+  await page.getByLabel('Cartons', { exact: true }).fill('0');
+  await page.getByLabel('Cones', { exact: true }).fill('0');
+  await page.getByLabel('Received quantity (kg)', { exact: true }).fill(await page.locator('.yf-entry-have span[dir="ltr"]').innerText().then(text => text.replace(/[^\d.]/g, '')));
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Check before saving' })).toBeVisible();
   await page.getByRole('button', { name: 'Save receipt and create QC batch', exact: true }).click();
   await page.getByRole('link', { name: 'Open batch, QC and QR label', exact: true }).click();
   await expect(page.getByText('ERP-RCV-001', { exact: false }).first()).toBeVisible();
