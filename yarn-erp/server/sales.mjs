@@ -3,7 +3,7 @@
  * for `/api/erp/sales/*` (the integration worker wires it next to the other ERP domains).
  * The buyer-facing counterpart lives in server/buyer-portal.mjs under `/api/buyer/*`.
  * Daily reminder scheduling is exported as `salesScheduled(env, now)` for the Worker cron. */
-import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, recordId, allow, audit } from './erp-utils.mjs';
+import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, recordId, allow, audit, role, reason as decisionReason } from './erp-utils.mjs';
 import { sha256 } from './auth.mjs';
 
 /** Asia/Karachi due-date arithmetic assumes Pakistan's fixed UTC+5 offset with no daylight
@@ -192,22 +192,24 @@ export async function salesApi(request, env, member, path, data) {
   }
 
   if (path === '/api/erp/sales/buyers/review') {
-    if (!member.admin) fail(403, 'Only an admin can approve or suspend buyer portal accounts.');
-    keys(data, ['id', 'status', 'reason', 'assignedManagerId', 'version']);
+    role(member, data, 'admin');
+    keys(data, ['id', 'status', 'reason', 'assignedManagerId', 'version', 'interventionReason']);
     const buyer = await one(db, 'SELECT * FROM buyers WHERE id=? AND workspace_id=?', recordId(data.id), w);
     if (!buyer) fail(404, 'Buyer not found.');
     if (!['active', 'rejected', 'suspended'].includes(data.status)) fail(422, 'Choose active, rejected or suspended.');
     const version = integer(data.version, 'Version');
     if (buyer.version !== version) fail(409, 'The buyer record changed. Reload before reviewing.');
-    const reason = multiline(data.reason, 'Review reason', 5, 1000);
+    const reason = decisionReason(data.reason, 'Review reason');
     let managerId = buyer.assigned_manager_id;
     if (data.assignedManagerId !== undefined) {
       managerId = data.assignedManagerId === null ? null : recordId(data.assignedManagerId);
       if (managerId && !(await one(db, "SELECT id FROM users WHERE id=? AND workspace_id=? AND status='active'", managerId, w))) fail(422, 'Choose an active team member as the assigned sales manager.');
     }
-    try { await db.batch([query(db, 'UPDATE buyers SET status=?,assigned_manager_id=?,version=version+1,updated_at=? WHERE id=? AND workspace_id=? AND version=?', data.status, managerId, now, buyer.id, w, version),
+    // A lost review must abort before session revocation or audit insertion.
+    const guard = query(db, 'INSERT INTO buyers(id) SELECT ? WHERE NOT EXISTS (SELECT 1 FROM buyers WHERE id=? AND workspace_id=? AND version=?)', buyer.id, buyer.id, w, version);
+    try { await db.batch([guard, query(db, 'UPDATE buyers SET status=?,assigned_manager_id=?,version=version+1,updated_at=? WHERE id=? AND workspace_id=? AND version=?', data.status, managerId, now, buyer.id, w, version),
       ...(data.status !== 'active' ? [query(db, 'DELETE FROM buyer_sessions WHERE user_id IN (SELECT id FROM buyer_users WHERE buyer_id=?)', buyer.id)] : []),
-      audit(db, member, `buyer.${data.status}`, buyer.id, { reason, managerId })]); }
+      audit(db, member, `buyer.${data.status}`, buyer.id, { reason, managerId }, 'staff', { reason, before: { status: buyer.status }, after: { status: data.status } })]); }
     catch { fail(409, 'The buyer record changed. Reload before reviewing.'); }
     return json({ saved: true });
   }

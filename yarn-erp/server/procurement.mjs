@@ -1,4 +1,4 @@
-import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, website, recordId, allow, audit } from './erp-utils.mjs';
+import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, website, recordId, allow, reason as decisionReason, role, audit } from './erp-utils.mjs';
 import { sha256 } from './auth.mjs';
 
 export const categories = db => all(db, 'SELECT * FROM supplier_categories ORDER BY sort_order');
@@ -45,19 +45,19 @@ export async function staffProcurement(request, env, member, path, data) {
       return json({ supplier: await supplierView(db, await one(db, `SELECT ${supplierFields} FROM suppliers WHERE id=?`, id)) }, 201);
     }
     if (path === '/api/erp/suppliers/review' && data) {
-      if (!member.admin) fail(403, 'Only an admin can approve or suspend supplier accounts.');
-      keys(data, ['id','status','reason','categories','version']);
+      role(member, data, 'admin');
+      keys(data, ['id','status','reason','categories','version','interventionReason']);
       const s = await one(db, 'SELECT * FROM suppliers WHERE id=? AND workspace_id=?', recordId(data.id), w);
       if (!s) fail(404, 'Supplier not found.');
       if (!['approved','rejected','suspended'].includes(data.status)) fail(422, 'Choose approved, rejected or suspended.');
       if (!['pending','approved','rejected','suspended'].includes(s.status)) fail(409, 'This directory contact has no supplier registration to review.');
-      const reason = multiline(data.reason, 'Review reason', 5, 1000); const version = integer(data.version, 'Version');
+      const reason = decisionReason(data.reason, 'Review reason'); const version = integer(data.version, 'Version');
       const ids = await categoryIds(db, data.categories ?? (await supplierView(db,s)).categories);
       if(s.version!==version) fail(409,'Supplier changed. Reload before reviewing.');
       try { await db.batch([query(db, 'UPDATE suppliers SET status=?,version=version+1,updated_at=? WHERE id=? AND workspace_id=? AND version=?', data.status,now,s.id,w,version),
         query(db,'INSERT INTO supplier_registration_reviews(id,supplier_id,version,status,reason,actor_id,created_at) VALUES(?,?,?,?,?,?,?)',crypto.randomUUID(),s.id,version+1,data.status,reason,member.user_id,now),
         ...categoryQueries(db,s.id,ids), query(db, 'DELETE FROM supplier_sessions WHERE user_id IN (SELECT id FROM supplier_users WHERE supplier_id=?)', s.id),
-        audit(db,member,`supplier.${data.status}`,s.id,{reason,categories:ids,previousStatus:s.status})]); }
+        audit(db,member,`supplier.${data.status}`,s.id,{reason,categories:ids,previousStatus:s.status},'staff',{reason,before:{status:s.status},after:{status:data.status}})]); }
       catch { fail(409,'Supplier changed. Reload before reviewing.'); }
       return json({ saved: true });
     }
@@ -98,13 +98,13 @@ export async function staffProcurement(request, env, member, path, data) {
     return json({published:true,recipients:(await one(db,'SELECT COUNT(*) AS n FROM rfq_recipients WHERE rfq_id=?',r.id)).n});
   }
   if (path === '/api/erp/bids/reject' && data) {
-    keys(data,['id','version','reason']);
+    keys(data,['id','version','reason','interventionReason']);
     const b = await one(db,'SELECT b.* FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id WHERE b.id=? AND r.workspace_id=?',recordId(data.id),w);
     if(!b) fail(404,'Bid not found.');
-    const reason=multiline(data.reason,'Rejection reason',3,1000);
-    if(b.status==='rejected'){if(b.rejection_reason!==reason||b.version!==data.version)fail(409,'This bid was already rejected.');return json({saved:true});}
+    const reason=decisionReason(data.reason,'Rejection reason');
+    if(b.status==='rejected') fail(409,'This bid was already rejected.');
     const result=await db.batch([query(db,"UPDATE supplier_bids SET status='rejected',rejection_reason=?,updated_at=? WHERE id=? AND version=? AND status='submitted' AND EXISTS(SELECT 1 FROM procurement_rfqs WHERE id=supplier_bids.rfq_id AND status='open')",reason,now,b.id,integer(data.version,'Version')),
-      query(db,"INSERT INTO erp_audit_events SELECT ?,?,?,'staff','bid.rejection_requested',?,?,? WHERE EXISTS(SELECT 1 FROM supplier_bids WHERE id=? AND status='rejected' AND rejection_reason=? AND updated_at=?)",crypto.randomUUID(),w,member.user_id,b.id,JSON.stringify({reason}),now,b.id,reason,now)]);
+      query(db,"INSERT INTO erp_audit_events(id,workspace_id,actor_id,actor_type,action,record_id,detail_json,created_at,actor_role,object_type,reason,intervention_reason,created_by,status,updated_at) SELECT ?,?,?,'staff','bid.rejected',?,?,?,?, 'bid',?,NULL,?,'recorded',? WHERE changes()>0 AND EXISTS(SELECT 1 FROM supplier_bids WHERE id=? AND status='rejected' AND rejection_reason=? AND updated_at=?)",crypto.randomUUID(),w,member.user_id,b.id,JSON.stringify({reason}),now,member.role ?? 'staff',reason,member.user_id,now,b.id,reason,now)]);
     if(!result[0].meta.changes) fail(409,'The bid or RFQ changed. Reload first.');
     return json({saved:true});
   }
@@ -120,7 +120,7 @@ export async function staffProcurement(request, env, member, path, data) {
         SELECT ?,?,?,?,?,?,?,'accepted',?,? WHERE EXISTS (SELECT 1 FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id JOIN suppliers s ON s.id=b.supplier_id WHERE b.id=? AND b.version=? AND b.status='submitted' AND b.valid_until>? AND r.status='open' AND s.status='approved')`,
         id,w,bid.rfq_id,bid.id,bid.supplier_id,reference('PO'),terms,member.user_id,now,bid.id,data.version,now),
         query(db,"UPDATE procurement_rfqs SET status='awarded' WHERE id=? AND EXISTS(SELECT 1 FROM supplier_purchase_orders WHERE id=?)",bid.rfq_id,id),
-        query(db,"INSERT INTO erp_audit_events SELECT ?,? ,?,'staff','bid.awarded',?,?,? WHERE EXISTS(SELECT 1 FROM supplier_purchase_orders WHERE id=?)",crypto.randomUUID(),w,member.user_id,bid.id,JSON.stringify({version:bid.version}),now,id)]);
+        query(db,"INSERT INTO erp_audit_events(id,workspace_id,actor_id,actor_type,action,record_id,detail_json,created_at,actor_role,object_type,reason,intervention_reason,created_by,status,updated_at) SELECT ?,?,?,'staff','bid.awarded',?,?,?,?,'bid',NULL,NULL,?,'recorded',? WHERE EXISTS(SELECT 1 FROM supplier_purchase_orders WHERE id=?)",crypto.randomUUID(),w,member.user_id,bid.id,JSON.stringify({version:bid.version}),now,member.role ?? 'staff',member.user_id,now,id)]);
     } catch {
       const raced=await one(db,'SELECT * FROM supplier_purchase_orders WHERE rfq_id=?',bid.rfq_id);
       if(raced?.bid_id===bid.id) return json({order:raced});

@@ -61,9 +61,12 @@ export function viewer(member, ...roles) {
 export function allow(member, permission) {
   if (!member.admin && !member.permissions.includes(permission)) fail(403, 'Your account does not have permission for this action. Ask an admin.');
 }
-export const audit = (db, member, action, id, detail, type = 'staff') => query(db,
-  'INSERT INTO erp_audit_events(id,workspace_id,actor_id,actor_type,action,record_id,detail_json,created_at) VALUES(?,?,?,?,?,?,?,?)',
-  crypto.randomUUID(), member.workspace_id, member.user_id, type, action, id, JSON.stringify(detail), Date.now());
+export function audit(db, member, action, id, detail = {}, type = 'staff', { objectType = action.split('.')[0], before = null, after = null, reason = null, intervention = null } = {}) {
+  const now = Date.now();
+  return query(db, 'INSERT INTO erp_audit_events(id,workspace_id,actor_id,actor_type,action,record_id,detail_json,created_at,actor_role,object_type,old_json,new_json,reason,intervention_reason,created_by,status,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    crypto.randomUUID(), member.workspace_id, member.user_id, type, action, id, JSON.stringify(detail), now, member.role ?? type, objectType,
+    before === null ? null : JSON.stringify(before), after === null ? null : JSON.stringify(after), reason, intervention, member.user_id, 'recorded', now);
+}
 export function date(value, label, future = false) {
   integer(value, label, 1, 8_640_000_000_000_000);
   if (future && value <= Date.now()) fail(422, `${label} must be in the future.`);

@@ -1,5 +1,5 @@
 import { ROLES, userRow, validPin, randomHex, pinHash } from './auth.mjs';
-import { all, one, query, json, fail, keys, text, recordId, role, viewer, audit } from './erp-utils.mjs';
+import { all, one, query, json, fail, keys, text, recordId, integer, role, viewer, audit } from './erp-utils.mjs';
 const roleOf = value => { if (!ROLES.includes(value)) fail(422, 'Choose a valid role.'); return value; };
 const pinOf = value => { if (!validPin(value)) fail(422, 'The PIN must be exactly 4 digits.'); return value; };
 
@@ -7,6 +7,29 @@ export async function adminApi(request, env, member, path, data) {
   const db = env.DB, w = member.workspace_id;
   if (request.method === 'GET') {
     viewer(member);
+    if (path === '/api/erp/admin/audit') {
+      const params = new URL(request.url).searchParams, where = ['e.workspace_id=?'], args = [w];
+      for (const [key, column] of [['actor','actor_id'],['action','action'],['objectType','object_type'],['objectId','record_id']]) {
+        if (params.has(key)) { where.push(`e.${column}=?`); args.push(text(params.get(key), key)); }
+      }
+      const timestamp = value => {
+        if (!/^\d+$/.test(value)) fail(422, 'Use an epoch millisecond timestamp.');
+        return integer(Number(value), 'Timestamp', 0, Number.MAX_SAFE_INTEGER);
+      };
+      for (const [key, operator] of [['from','>='],['to','<=']]) if (params.has(key)) { where.push(`e.created_at${operator}?`); args.push(timestamp(params.get(key))); }
+      if (params.get('interventions') === '1') where.push('e.intervention_reason IS NOT NULL');
+      if (params.has('before')) {
+        const parts = params.get('before').split(':');
+        if (parts.length !== 2) fail(422, 'Use a valid audit cursor.');
+        const at = timestamp(parts[0]), id = text(parts[1], 'Audit ID');
+        where.push('(e.created_at<? OR (e.created_at=? AND e.id<?))'); args.push(at, at, id);
+      }
+      const rows = await all(db, `SELECT e.id,e.actor_id,u.name AS actor_name,e.actor_role,e.action,e.object_type,e.record_id,e.old_json,e.new_json,e.reason,e.intervention_reason,e.detail_json,e.created_at
+        FROM erp_audit_events e LEFT JOIN users u ON u.id=e.actor_id AND u.workspace_id=e.workspace_id
+        WHERE ${where.join(' AND ')} ORDER BY e.created_at DESC,e.id DESC LIMIT 101`, ...args);
+      const events = rows.slice(0,100), last = events.at(-1);
+      return json({ events, next: rows.length > 100 ? `${last.created_at}:${last.id}` : null });
+    }
     if (path !== '/api/erp/admin/users') fail(404, 'API route not found.');
     const users = await all(db, 'SELECT id,name,portal_role AS role,status,deactivated_at,created_at,locked_until FROM users WHERE workspace_id=? ORDER BY name COLLATE NOCASE', w);
     return json({ users: users.map(({ deactivated_at, locked_until, ...user }) => ({ ...user, status: deactivated_at === null ? user.status : 'deactivated', locked: locked_until > Date.now() })) });
@@ -30,7 +53,7 @@ export async function adminApi(request, env, member, path, data) {
   const now = Date.now(), changes = [], events = [];
   if (data.role !== undefined && nextRole !== target.portal_role) {
     changes.push(query(db, "UPDATE users SET portal_role=?,role=?,permissions='[]' WHERE id=?", nextRole, nextRole === 'admin' ? 'admin' : 'member', target.id));
-    events.push(audit(db, member, 'user.role_changed', target.id, { from: target.portal_role, to: nextRole }));
+    events.push(audit(db, member, 'user.role_changed', target.id, { from: target.portal_role, to: nextRole }, 'staff', { before: { role: target.portal_role }, after: { role: nextRole } }));
   }
   if (data.active === false && target.deactivated_at === null) {
     changes.push(query(db, 'UPDATE users SET deactivated_at=?,deactivated_by=? WHERE id=?', now, member.user_id, target.id));
