@@ -21,7 +21,8 @@ const stageUrdu = { raw: 'خام مال', wip: 'زیرِ تیاری', finished: 
 /** Stock moving through the mill: one node per stage on a thread that keeps flowing toward dispatch. */
 export function StockFlow({ balances, compact = false }: { balances: StockBalance[]; compact?: boolean }) {
   const { t } = useLanguage();
-  return <ol className={`yf-flow${compact ? ' is-compact' : ''}`} aria-label={t('Stock by stage', 'ہر مرحلے کا اسٹاک')}>
+  const moving = balances.some(b => b.stage === 'wip' && b.grams > 0);
+  return <ol className={`yf-flow${compact ? ' is-compact' : ''}${moving ? ' is-moving' : ''}`} aria-label={t('Stock by stage', 'ہر مرحلے کا اسٹاک')}>
     <svg className="yf-thread is-h" aria-hidden="true" viewBox="0 0 100 2" preserveAspectRatio="none"><line x1="0" y1="1" x2="100" y2="1" /><line className="yf-run" x1="0" y1="1" x2="100" y2="1" /></svg>
     <svg className="yf-thread is-v" aria-hidden="true" viewBox="0 0 2 100" preserveAspectRatio="none"><line x1="1" y1="0" x2="1" y2="100" /><line className="yf-run" x1="1" y1="0" x2="1" y2="100" /></svg>
     {stockStages.map(stage => {

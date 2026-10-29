@@ -138,14 +138,20 @@ function LotDetail({ lot, state, onAction, onBack, onProduce, onFinish }: { lot:
   const at = (...stages: StockStage[]) => lotBalances.filter(b => stages.includes(b.stage)).reduce((sum, b) => sum + b.grams, 0);
   const inspected = lot.quality !== 'uninspected' || !!evidence?.inspections.length;
   // Where this batch is in its life, and the one step that moves it on.
-  const steps: [string, boolean][] = [
-    [t("Received"), lotMoves.some(m => m.action === 'receive') || at('raw', 'wip', 'finished') > 0],
-    [t("Inspected"), inspected],
-    [lot.quality === 'hold' ? t("On QC hold") : t("QC approved"), lot.quality === 'approved'],
-    [t("In production"), at('wip', 'finished') > 0],
-    [t("Finished"), at('finished') > 0],
-    [t("Dispatched"), lotMoves.some(m => m.action === 'dispatch')],
+  // Milestones come from the ledger, not only today's balances, so a batch that has moved on keeps its ticks.
+  const reachedStage = (stage: StockStage) => at(stage) > 0 || lotMoves.some(m => m.to_stage === stage);
+  const dispatched = lotMoves.some(m => m.action === 'dispatch');
+  const reached = [
+    lotMoves.some(m => m.action === 'receive') || at('raw', 'wip', 'finished') > 0,
+    inspected,
+    lot.quality === 'approved',
+    reachedStage('wip') || reachedStage('finished'),
+    reachedStage('finished'),
+    dispatched,
   ];
+  // A later milestone implies the earlier ones (legacy batches skipped recording some of them).
+  const steps: [string, boolean][] = [t("Received"), t("Inspected"), lot.quality === 'hold' ? t("On QC hold") : t("QC approved"), t("In production"), t("Finished"), t("Dispatched")]
+    .map((label, i) => [label, reached.slice(i).some(Boolean)]);
   const current = steps.findIndex(([, done]) => !done);
   const actions = { inspection: [t("Add inspection"), ClipboardCheck, 'inspect'], dispatch: [t("Dispatch"), Truck, 'dispatch'], adjust: [t("Adjust stock"), ArrowRightLeft, 'waste'] } as const;
   type Step = keyof typeof actions;
@@ -160,17 +166,22 @@ function LotDetail({ lot, state, onAction, onBack, onProduce, onFinish }: { lot:
     : lot.quality !== 'approved' ? [lot.quality === 'hold' ? t("On QC hold") : t("Waiting for QC approval"), t("The supervisor approves a batch by accepting its inspection report."), null]
     : !steps[3][1] ? [t("Send to production"), t("This batch passed QC. Move it into production next."), null]
     : toFinish ? [t("Finish production"), t("Record the yarn that came off the machines as finished stock."), null]
-    : [t("Dispatch finished stock"), t("Send approved stock out with its delivery reference."), 'dispatch'];
+    : at('finished') > 0 ? [t("Dispatch finished stock"), t("Send approved stock out with its delivery reference."), 'dispatch']
+    : dispatched ? [t("Dispatched"), t("This batch has left the factory. Nothing is waiting on it."), null]
+    : [t("No stock left"), t("Nothing in this batch is waiting for a step."), null];
   // QC-passed raw stock goes to production next; the button only shows for people who can start production.
   const toProduce = lot.quality === 'approved' && !steps[3][1];
   // Finishing is also offered beside the dispatch step when finished stock already exists and work in progress remains.
   const finishMore = !!onFinish && !toFinish && at('wip') > 0;
-  const NextIcon = next[2] ? actions[next[2]][1] : toProduce ? Factory : toFinish ? CheckCircle2 : ShieldCheck;
+  const NextIcon = next[2] ? actions[next[2]][1] : toProduce ? Factory : toFinish ? CheckCircle2 : dispatched ? Truck : ShieldCheck;
+  // Once a batch has been dispatched it never goes back into production; leftover stock can only be adjusted.
+  const produceMore = !!onProduce && !toProduce && !dispatched;
   // Someone without the permission for the next step still sees it, with who can do it instead of a button.
   const nextAllowed = !!next[2] && allowed(next[2]);
   const permissionName = next[2] ? permissionInfo.find(([id]) => id === actions[next[2]!][2])![1] : '';
   const whoCan = next[2] ? t(`Someone with “${permissionName}” access records this step.`, `یہ کام “${t(permissionName)}” کی اجازت رکھنے والا ممبر درج کرے گا۔`) : '';
-  const others = (Object.keys(actions) as Step[]).filter(type => type !== next[2] && allowed(type));
+  const others = (Object.keys(actions) as Step[]).filter(type => type !== next[2] && allowed(type)
+    && !(dispatched && (type === 'inspection' || (type === 'dispatch' && at('finished') <= 0))));
   const notes = [...(evidence?.inspections || []).map(i => ({ id: i.id, at: i.created_at, kind: 'inspection' as const, i })), ...(evidence?.qualityEvents || []).map(e => ({ id: e.id, at: e.created_at, kind: 'quality' as const, e }))].sort((a, b) => b.at - a.at);
   return <><button className="button yf-back" onClick={onBack}><ArrowLeft size={18} aria-hidden="true" />{t("All stock")}</button><div className="live-detail-grid">
     <section className="live-panel yf-batch"><div className="live-panel-heading"><div className="yf-batch-title"><Cone hue={materialHue(state.products, lot.product_id)} size={44} /><div><h2>{yarnName(product?.name || t("Material"))}</h2><p>{product?.sku} {t("· Batch")} {lot.batch} · {lot.supplier || t("Supplier not recorded")} {t("· since")} {when.format(lot.created_at, language)}</p></div></div></div>
@@ -178,7 +189,7 @@ function LotDetail({ lot, state, onAction, onBack, onProduce, onFinish }: { lot:
       <div className={`yf-next is-inline ${lot.quality}`}><span className="yf-next-icon"><NextIcon size={24} aria-hidden="true" /></span><div className="yf-next-text"><h3>{next[0]}</h3><p>{nextAllowed || !next[2] ? next[1] : whoCan}</p></div>{nextAllowed && <div className="yf-next-actions"><button className="button primary" onClick={() => onAction({ type: next[2]!, lotId: lot.id })}>{actions[next[2]!][0]}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toProduce && onProduce && <div className="yf-next-actions"><button className="button primary" onClick={onProduce}>{t("To production")}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toFinish && onFinish && <div className="yf-next-actions"><button className="button primary" onClick={onFinish}>{t("Mark finished")}<ArrowRight size={18} aria-hidden="true" /></button></div>}</div>
       <h3 className="live-subheading">{t("Stock in this batch")}</h3>
       <StockFlow balances={lotBalances} compact />
-      {(others.length > 0 || (onProduce && !toProduce) || finishMore) && <div className="live-actions yf-other-actions" aria-label={t("Other actions")}>{others.map(type => { const [label, Icon] = actions[type]; const blocked = type === 'dispatch' && (lot.quality !== 'approved' || at('finished') <= 0); return <button className="button" key={type} onClick={() => onAction({ type, lotId: lot.id })} disabled={blocked} title={blocked ? t("Only finished, QC-approved stock can be dispatched") : undefined}><Icon size={18} aria-hidden="true" />{label}</button>; })}{onProduce && !toProduce && <button className="button" onClick={onProduce}><Factory size={18} aria-hidden="true" />{t("To production")}</button>}{finishMore && <button className="button" onClick={onFinish}><CheckCircle2 size={18} aria-hidden="true" />{t("Mark finished")}</button>}</div>}
+      {(others.length > 0 || produceMore || finishMore) && <div className="live-actions yf-other-actions" aria-label={t("Other actions")}>{others.map(type => { const [label, Icon] = actions[type]; const blocked = type === 'dispatch' && (lot.quality !== 'approved' || at('finished') <= 0); return <button className="button" key={type} onClick={() => onAction({ type, lotId: lot.id })} disabled={blocked} title={blocked ? t("Only finished, QC-approved stock can be dispatched") : undefined}><Icon size={18} aria-hidden="true" />{label}</button>; })}{produceMore && <button className="button" onClick={onProduce}><Factory size={18} aria-hidden="true" />{t("To production")}</button>}{finishMore && <button className="button" onClick={onFinish}><CheckCircle2 size={18} aria-hidden="true" />{t("Mark finished")}</button>}</div>}
       <h3 className="live-subheading">{t("Inspection notes")}</h3>
       {evidenceError && <p className="live-error" role="alert">{t("Batch history could not be refreshed.")} {evidenceError}<button className="live-text-button" onClick={() => setEvidenceRetry(value => value + 1)}>{t("Retry history")}</button></p>}
       {!evidence && !evidenceError && <p role="status" className="live-muted">{t("Loading this batch’s inspection history…")}</p>}

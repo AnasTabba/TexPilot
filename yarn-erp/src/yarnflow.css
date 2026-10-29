@@ -344,16 +344,17 @@ input:disabled, select:disabled, textarea:disabled { background: var(--sunken); 
 .yf-home-cols { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 56px; align-items: start; }
 
 /* Stock flow: one node per stage on a thread that keeps running toward dispatch */
-.yf-flow { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 6px 0 0; padding: 0; list-style: none; }
+.yf-flow { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 6px 0 0; padding: 0; list-style: none; }
 .yf-thread { position: absolute; overflow: visible; pointer-events: none; }
-.yf-thread.is-h { left: 12.5%; right: 12.5%; top: 31px; width: 75%; height: 3px; }
+.yf-thread.is-h { left: 16.667%; right: 16.667%; top: 31px; width: 66.667%; height: 3px; }
 .yf-thread.is-v { display: none; }
 .yf-thread line { stroke: var(--line); stroke-width: 3px; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.yf-thread .yf-run { stroke: var(--kraft); stroke-dasharray: 7 13; animation: yf-thread 1.1s linear infinite; }
+.yf-thread .yf-run { stroke: var(--kraft); stroke-dasharray: 7 13; }
+/* The thread only runs while stock is in production; settled or dispatched stock stays still. */
+.yf-flow.is-moving .yf-run { animation: yf-thread 1.1s linear infinite; }
 .yf-flow li { position: relative; display: grid; justify-items: center; gap: 2px; text-align: center; animation: yf-enter 480ms var(--ease-out) backwards; }
 .yf-flow li:nth-of-type(2) { animation-delay: 80ms; }
 .yf-flow li:nth-of-type(3) { animation-delay: 160ms; }
-.yf-flow li:nth-of-type(4) { animation-delay: 240ms; }
 .yf-node { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 10px; border: 2px solid var(--line-strong); border-radius: 50%; background: var(--panel); color: var(--ink-3); }
 .yf-flow li.has-stock .yf-node { border-color: var(--ink); background: var(--ink); color: #fff; }
 .yf-stage { color: var(--ink-2); font-size: 14px; font-weight: 600; }
