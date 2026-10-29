@@ -1,0 +1,27 @@
+import { chromium } from '@playwright/test';
+const browser=await chromium.launch({headless:true});const context=await browser.newContext({viewport:{width:1440,height:900}});const page=await context.newPage();
+const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.goto('http://127.0.0.1:8788/');await page.getByLabel('Create a 4-digit PIN').fill('4826');await page.getByLabel('Confirm PIN').fill('4826');await page.getByRole('button',{name:'Save PIN and open workspace'}).click();await page.locator('.ref-dashboard').waitFor();
+await page.getByRole('button',{name:'Add material'}).first().click();
+console.log('form1',await page.locator('form').getAttribute('aria-label'));
+await page.getByLabel('Material name').fill('MVP test cotton');await page.getByLabel('SKU',{exact:true}).fill('MVP-CTN');
+await page.getByRole('button',{name:'Review entry'}).click();await page.getByRole('button',{name:'Save to workspace'}).click();
+console.log('after product',await page.getByText('Saved on this device.').count());
+await page.locator('.live-sidebar').getByRole('button',{name:'Inventory'}).click();await page.getByRole('button',{name:'Create batch'}).click();
+console.log('form2',await page.locator('form').getAttribute('aria-label'));
+await page.getByLabel('Material',{exact:true}).selectOption({label:'MVP test cotton · MVP-CTN'});await page.getByLabel('Batch / dye lot').fill('MVP-001');await page.getByRole('button',{name:'Review entry'}).click();await page.getByRole('button',{name:'Save to workspace'}).click();
+console.log('after batch route',new URL(page.url()).hash);
+
+console.log('detail',await page.getByText('MVP-001').count());
+await page.getByRole('button',{name:'Receive stock'}).click();
+console.log('form3',await page.locator('form').getAttribute('aria-label'));
+console.log('fields',await page.locator('form label').allTextContents());
+await page.getByLabel('Weight (kg)').fill('25');await page.getByLabel('Cartons').fill('1');await page.getByLabel('Cones').fill('12');await page.getByLabel('Notes').fill('First receipt');await page.getByRole('button',{name:'Review entry'}).click();await page.getByRole('button',{name:'Save to workspace'}).click();
+console.log('received',await page.getByText('25 kg',{exact:false}).count());
+await page.getByRole('button',{name:'Review quality'}).click();await page.getByLabel('Inspection reason').fill('Physical sample approved');await page.getByRole('button',{name:'Review entry'}).click();await page.getByRole('button',{name:'Save QC decision'}).click();
+console.log('quality',await page.locator('.live-quality.approved').count());
+await page.locator('#live-main').getByRole('button',{name:'Dispatch',exact:true}).click();await page.getByLabel('Weight (kg)').fill('5');await page.getByLabel('Cartons').fill('0');await page.getByLabel('Cones').fill('0');await page.getByLabel('Notes').fill('Test shipment');await page.getByRole('button',{name:'Review entry'}).click();await page.getByRole('button',{name:'Save to workspace'}).click();
+await page.locator('#live-main').getByRole('button',{name:'Dispatch',exact:true}).click();await page.getByLabel('Weight (kg)').fill('999');await page.getByLabel('Cartons').fill('0');await page.getByLabel('Cones').fill('0');await page.getByLabel('Notes').fill('Exceeds stock');await page.getByRole('button',{name:'Review entry'}).click();await page.getByRole('button',{name:'Save to workspace'}).click();console.log('blocked over-dispatch',await page.getByRole('alert').filter({hasText:'Not enough stock'}).count());await page.getByRole('button',{name:'Close form'}).click();
+await page.reload();await page.locator('.live-stock-stages').waitFor();console.log('after reload',await page.locator('.live-stock-stages').innerText());
+await page.getByRole('button',{name:'Lock workspace'}).click();await page.getByLabel('Your 4-digit PIN').fill('1111');await page.getByRole('button',{name:'Open workspace'}).click();console.log('wrong PIN',await page.getByRole('alert').innerText());await page.getByLabel('Your 4-digit PIN').fill('4826');await page.getByRole('button',{name:'Open workspace'}).click();await page.locator('.ref-dashboard').waitFor();
+console.log('errors',errors);await browser.close();

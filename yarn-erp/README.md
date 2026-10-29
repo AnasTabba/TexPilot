@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. The dashboard opens directly.
+Open `http://localhost:5174`. The dashboard opens directly.
 
 ## Inventory workflows
 
@@ -19,13 +19,14 @@ Use **Settings → Download backup** regularly. **Restore backup** replaces the 
 
 ## TexPilot scanner
 
-When TexPilot runs on the same laptop at `http://127.0.0.1:8000`, `npm run dev` forwards scanner requests to it automatically. Open **Material scanner → Fabric inspection** and check that the model is connected. For a different local port, start the app with `TEXPILOT_API_URL=http://127.0.0.1:PORT npm run dev`. Scan results use the generated outcome images included in this repository.
-
-The scanner uses `GET /api/v1/model` and `POST /api/v1/scan`; the yarn-spec scan uses `POST /api/v1/spec`. A published HTTPS app needs an HTTPS scanner URL entered under **Model connection**. Barcode lookup and manual inspection work without model inference.
+Open **Material scanner → Fabric inspection → Model connection** and enter the TexPilot API base URL, or set `VITE_SCANNER_API_URL` when building. The scanner uses `GET /api/v1/model` and `POST /api/v1/scan`; the yarn-spec scan uses `POST /api/v1/spec`. A published HTTPS app needs an HTTPS scanner URL. Barcode lookup and manual inspection work without model inference.
 
 ## Verify
 
 ```sh
 npm test
 npm run build
+node .qa/mvp-check.mjs
+node .qa/mvp-flow.mjs
+node .qa/mvp-offline-backup.mjs
 ```
