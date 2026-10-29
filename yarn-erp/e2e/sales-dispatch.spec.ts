@@ -47,16 +47,39 @@ test('a pending buyer is approved, an RFQ is quoted and accepted, then a locked 
   const overview = await page.request.get('/api/erp/sales').then(r => r.json());
   const revision = overview.revisions.find((row: { buyer_po_id: string }) => row.buyer_po_id === created.rfqId);
   await page.getByRole('button', { name: 'Send quotation', exact: true }).click();
+  await expect(page.getByText('Quotation sent to buyer.')).toBeVisible();
+  await expect(page.getByText(/30 days credit/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create quotation', exact: true })).toHaveCount(0);
   const accepted = await page.request.post('/api/integration/v1/acceptances', { headers: { Authorization: `Bearer ${token('BUYER')}` }, data: { buyerId: created.buyerId, quotationId: revision.id, version: 1, acceptedBy: 'Test Contact', note: 'Approved' } });
   expect(accepted.ok(), await accepted.text()).toBeTruthy();
   await page.reload();
   await page.getByRole('button', { name: 'Note sale and issue invoice', exact: true }).click();
+  await expect(page).toHaveURL(/#\/invoices/);
   await page.goto('/#/invoices/all');
   await expect(page.getByText('PKR 147,500.00')).toBeVisible();
   await page.getByRole('button', { name: 'Open locked invoice', exact: true }).click();
-  await expect(page.getByText('GST (18%)')).toBeVisible();
-  await expect(page.getByText(/^INV-\d{4}-\d{4}$/)).toBeVisible();
+  const facts = page.locator('.sales-invoice');
+  await expect(facts.getByText('GST (18%)')).toBeVisible();
+  await expect(facts.getByText('PKR 125,000.00', { exact: true })).toBeVisible();
+  await expect(facts.getByText('PKR 22,500.00', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^INV-\d{4}-0001$/)).toBeVisible();
   await expect(page.getByRole('button', { name: /Edit invoice|Change payment terms/ })).toHaveCount(0);
+});
+
+test('rejecting a buyer needs a reason', async ({ page }) => {
+  const created = await buyerRfq(page, false);
+  await signIn(page, 'Sana'); await page.goto('/#/buyers/pending');
+  await page.getByRole('button', { name: new RegExp(`Buyer ${created.buyerId.slice(0, 6)}`) }).click();
+  await page.getByRole('button', { name: 'Review buyer', exact: true }).click();
+  await page.getByLabel('Decision').selectOption('rejected');
+  const reason = page.getByLabel('Review reason');
+  await page.getByRole('button', { name: 'Reject buyer', exact: true }).click();
+  await expect.poll(() => reason.evaluate(el => (el as HTMLTextAreaElement).validity.valueMissing)).toBe(true);
+  const buyers = await page.request.get('/api/erp/sales').then(r => r.json());
+  expect(buyers.buyers.find((b: { id: string }) => b.id === created.buyerId).status).toBe('pending');
+  await reason.fill('Documents do not match the company name');
+  await page.getByRole('button', { name: 'Reject buyer', exact: true }).click();
+  await expect.poll(async () => (await page.request.get('/api/erp/sales').then(r => r.json())).buyers.find((b: { id: string }) => b.id === created.buyerId).status).toBe('rejected');
 });
 
 test('a sales stock query is answered by the supervisor and returns to the buyer RFQ', async ({ page, browser }) => {
@@ -66,12 +89,16 @@ test('a sales stock query is answered by the supervisor and returns to the buyer
   await page.goto(`/#/buyer-rfqs/open/${rfqId}`);
   await page.getByRole('button', { name: 'Ask supervisor', exact: true }).click();
   await page.getByRole('button', { name: 'Send to supervisor', exact: true }).click();
-  const queries = await page.request.get('/api/erp/stock/queries').then(r => r.json());
-  const query = queries.queries[0];
+  await expect(page.getByText('Stock question sent to the supervisor.')).toBeVisible();
   const { context, page: supervisor } = await signInAs(browser, 'Saima');
-  try { await apiPost(supervisor, '/erp/stock/queries/answer', { id: query.id, availableGrams: 80000, answer: '80 kg of finished stock is available.' }); }
-  finally { await context.close(); }
-  await page.reload(); await expect(page.getByText(/80 kg/)).toBeVisible();
+  try {
+    await supervisor.goto('/#/requests');
+    await supervisor.getByLabel('Available (kg)').fill('80');
+    await supervisor.getByLabel('Answer', { exact: true }).fill('80 kg of finished stock is available.');
+    await supervisor.getByRole('button', { name: 'Save answer', exact: true }).click();
+    await expect(supervisor.getByText(/80 kg of finished stock is available\./)).toBeVisible();
+  } finally { await context.close(); }
+  await page.reload(); await expect(page.getByText(/80 kg of finished stock is available\./)).toBeVisible();
   expect(productId).toBeTruthy();
 });
 
@@ -117,6 +144,7 @@ test('dispatch holds and approvals do not deduct stock until dispatch', async ({
     await dispatch.goto('/#/dispatches/on_hold'); const held = record.dispatches[0]; await dispatch.getByRole('button', { name: /Open dispatch/ }).click(); await dispatch.getByRole('button', { name: 'Re-request approval', exact: true }).click();
     await page.reload(); await page.getByRole('button', { name: 'Approve dispatch', exact: true }).click();
     await dispatch.goto('/#/dispatches/all'); await dispatch.getByRole('button', { name: 'Open dispatch' }).click(); await dispatch.getByRole('button', { name: 'Mark dispatched', exact: true }).click();
+    await expect(dispatch.getByText('Dispatch recorded; finished stock was deducted.')).toBeVisible();
     const after = await workspace(dispatch); expect(after.balances.filter((b: { lot_id: string; stage: string }) => b.lot_id === lotId && b.stage === 'finished').reduce((sum: number, b: { grams: number }) => sum + b.grams, 0)).toBe(gramsBefore - 100000);
     expect(held.id).toBeTruthy();
   } finally { await context.close(); }
@@ -130,11 +158,34 @@ test('dispatch stock issues are persisted and visible to the supervisor', async 
     lotId = (await apiPost<{ lotId: string }>(supervisor, '/erp/stock/finished', { id: crypto.randomUUID(), productId, batch: `ISSUE-${crypto.randomUUID().slice(0, 6)}`, grams: 100000 })).lotId;
     const { context, page: dispatch } = await signInAs(browser, 'Danish'); dispatchContext = context;
     const request = await apiPost<{ dispatch: { id: string } }>(dispatch, '/erp/dispatch', { id: crypto.randomUUID(), orderId: sale.order.id, lotId, quantityMilli: 100000, grams: 100000 });
-    await apiPost(dispatch, '/erp/dispatch/stock-issues', { id: crypto.randomUUID(), dispatchId: request.dispatch.id, lotId, stage: 'finished', kind: 'shortage', differenceGrams: 2000, description: 'Physical count is 2 kg below the dispatch record.' });
+    await dispatch.goto(`/#/dispatches/${request.dispatch.id}`);
+    await dispatch.getByText('Raise a stock issue', { exact: true }).click();
+    await dispatch.getByLabel('Issue type').selectOption('shortage');
+    await dispatch.getByLabel('Difference (kg)').fill('2');
+    await dispatch.getByLabel('Describe the mismatch').fill('Physical count is 2 kg below the dispatch record.');
+    await dispatch.getByRole('button', { name: 'Send issue to supervisor', exact: true }).click();
+    await expect(dispatch.getByText('Stock issue sent to the supervisor.')).toBeVisible();
     const issues = await supervisor.request.get('/api/erp/dispatch/stock-issues'); expect(issues.ok()).toBeTruthy();
     const body = await issues.json(); expect(body.issues.some((issue: { dispatch_id: string; difference_grams: number }) => issue.dispatch_id === request.dispatch.id && issue.difference_grams === 2000)).toBeTruthy();
     const inbox = await supervisor.request.get('/api/erp/notifications').then(r => r.json());
     expect(inbox.notifications.some((notification: { object_type: string; object_id: string }) => notification.object_type === 'stock_issue' && notification.object_id === body.issues[0].id)).toBeTruthy();
+    await supervisor.goto('/#/requests/stock-issues');
+    await expect(supervisor.getByText(/Physical count is 2 kg below the dispatch record\./)).toBeVisible();
     await dispatch.goto('/#/dispatches'); await expect(dispatch.getByText(/Raw stock cannot be sale-dispatched/)).toHaveCount(0);
   } finally { await supervisorContext.close(); await dispatchContext?.close(); }
+});
+
+test('raw, cops and WIP stock is refused in New dispatch', async ({ page, browser }) => {
+  await signIn(page, 'Sana'); const { rfqId } = await buyerRfq(page); await issueInvoice(page, rfqId);
+  const { context, page: dispatch } = await signInAs(browser, 'Danish');
+  try {
+    await dispatch.goto('/#/new-dispatch');
+    await expect(dispatch.getByText(/Raw stock cannot be sale-dispatched/).first()).toBeVisible();
+    const blocked = dispatch.getByRole('region', { name: 'Unavailable stock stages' });
+    await expect(blocked).toBeVisible();
+    await expect(blocked.getByText(/· raw ·/).first()).toBeVisible();
+    await expect(blocked.getByText(/· (cops|wip) ·/).first()).toBeVisible();
+    const lots = await dispatch.getByLabel('Finished goods batch').locator('option').allTextContents();
+    expect(lots.join('|')).not.toMatch(/· (raw|cops|wip) ·/);
+  } finally { await context.close(); }
 });
