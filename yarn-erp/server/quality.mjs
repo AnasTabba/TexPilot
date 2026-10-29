@@ -84,7 +84,7 @@ export async function qualityApi(request, env, member, path, data) {
     return json(await lotRow(db, id, w), 201);
   }
   if (path === base + '/inspections') {
-    const intervention = role(member, data, 'quality_inspector');
+    role(member, data, 'quality_inspector');
     keys(data, ['id', 'lotId', 'acceptedMilli', 'rejectedMilli', 'note', 'interventionReason']);
     const id = recordId(data.id), lotId = recordId(data.lotId), accepted = integer(data.acceptedMilli, 'Accepted quantity', 0), rejected = integer(data.rejectedMilli, 'Rejected quantity', 0);
     const note = multiline(data.note ?? '', 'Note', 0, 2000);

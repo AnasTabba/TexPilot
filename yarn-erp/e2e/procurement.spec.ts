@@ -71,10 +71,15 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(page.getByText('Bill of lading: TESTBOL-1001')).toBeVisible();
   await expect(page.getByText('Tracking is not connected.', { exact: false })).toBeVisible();
-  // The purchase manager attaches the B/L to the PO (admin steps in here), then registers the arrival against that shipment.
-  const inbound = await (await page.request.get('/api/erp/inbound')).json();
-  const attached = await page.request.post('/api/erp/shipments', { data: { id: crypto.randomUUID(), orderId: inbound.orders[0].id, billOfLading: 'TESTBOL-1001', interventionReason: 'Purchase manager not set up yet' }, headers: { Origin: origin } });
-  expect(attached.ok(), await attached.text()).toBeTruthy();
+  // Attach the receiving prerequisite through the same form the purchase manager uses.
+  await page.getByRole('button', { name: 'Attach bill of lading', exact: true }).click();
+  for (const control of [page.getByLabel('Bill of lading number', { exact: true }), page.getByRole('button', { name: 'Save bill of lading', exact: true })]) {
+   const box = await control.boundingBox(); expect(box).not.toBeNull(); expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  await page.getByLabel('Bill of lading number', { exact: true }).fill('TESTBOL-1001');
+  await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
+  await page.getByRole('button', { name: 'Save bill of lading', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Bill of lading attached.' })).toBeVisible();
   await page.getByRole('button', { name: 'Incoming stock', exact: true }).click();
   await page.getByRole('button', { name: 'Register arrival', exact: true }).click();
   await page.getByLabel('Lot reference', { exact: true }).fill('ERP-RCV-001');
