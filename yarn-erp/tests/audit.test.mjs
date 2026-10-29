@@ -80,10 +80,9 @@ test('legacy bid rejection survives migration 0006 and audits once', async () =>
 });
 test('supplier and buyer reviews store reasons and actual before/after statuses', async () => {
   const f=await bidFixture(), supplierId=f.sql.prepare('SELECT supplier_id FROM supplier_bids WHERE id=?').get(f.id).supplier_id;
-  const buyerId=crypto.randomUUID();
-  assert.equal((await f.call('/erp/sales/buyers',{id:buyerId,name:'Buyer Mill',contactName:'Buyer Contact',email:'buyer@test.com',phone:'+923001234567',city:'Karachi',notes:''})).status,201);
+  const buyerId=await f.insertBuyer({status:'active'});
   for(const [object,id,previous,path] of [['supplier',supplierId,'approved','/erp/suppliers/review'],['buyer',buyerId,'active','/erp/sales/buyers/review']]) {
-    const body={id,status:'suspended',version:1,reason:'Company review required',...(object==='supplier'?{categories:['cotton'],interventionReason:'Purchase manager away this week'}:{})};
+    const body={id,status:'suspended',version:1,reason:'Company review required',...(object==='supplier'?{categories:['cotton'],interventionReason:'Purchase manager away this week'}:{interventionReason:'Covering for the sales manager'})};
     assert.equal((await f.call(path,{...body,reason:'bad'})).status,422);
     assert.equal((await f.call(path,body)).status,200);
     const row=f.sql.prepare('SELECT * FROM erp_audit_events WHERE action=?').get(object+'.suspended');
@@ -93,14 +92,13 @@ test('supplier and buyer reviews store reasons and actual before/after statuses'
   }
 });
 test('a buyer review that loses a race writes no audit or status change', async () => {
-  const f=await portalFixture(), id=crypto.randomUUID();
-  assert.equal((await f.call('/erp/sales/buyers',{id,name:'Buyer Mill',contactName:'Buyer Contact',email:'buyer@test.com',phone:'+923001234567',city:'Karachi',notes:''})).status,201);
+  const f=await portalFixture(), id=await f.insertBuyer({status:'active'});
   const before=f.sql.prepare('SELECT * FROM erp_audit_events').all(), batch=f.env.DB.batch;
   f.env.DB.batch=async statements=>{
     f.sql.prepare('UPDATE buyers SET version=version+1 WHERE id=?').run(id);
     return batch(statements);
   };
-  assert.equal((await f.call('/erp/sales/buyers/review',{id,status:'suspended',version:1,reason:'Company review required'})).status,409);
+  assert.equal((await f.call('/erp/sales/buyers/review',{id,status:'suspended',version:1,reason:'Company review required',interventionReason:'Covering for the sales manager'})).status,409);
   assert.equal(f.sql.prepare('SELECT status FROM buyers WHERE id=?').get(id).status,'active');
   assert.deepEqual(f.sql.prepare('SELECT * FROM erp_audit_events').all(),before);
 });

@@ -10,7 +10,7 @@ import { buyerPortalApi } from './buyer-portal.mjs';
 import { notificationsApi } from './notify.mjs';
 import { approvalsApi } from './governance.mjs';
 const approvalHandlers = {};
-const erp = { admin: adminApi, notifications: notificationsApi };
+const erp = { admin: adminApi, notifications: notificationsApi, sales: salesApi };
 erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, approvalHandlers);
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
@@ -203,7 +203,6 @@ async function route(request, env) {
   const data = request.method === 'POST' ? await body(request) : null;
   const w = member.workspace_id;
   if (path === '/api/erp/inbound' || path.startsWith('/api/erp/receipts')) return receiving(request, env, member, path, data);
-  if (path.startsWith('/api/erp/sales')) return salesApi(request, env, member, path, data);
   if (path.startsWith('/api/erp/')) return (Object.hasOwn(erp, path.split('/')[3]) ? erp[path.split('/')[3]] : staffProcurement)(request, env, member, path, data);
   if (/^\/api\/lots\/[^/]+\/evidence$/.test(path) && request.method === 'GET') {
     const lotId = id(path.split('/')[3]);

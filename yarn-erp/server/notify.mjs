@@ -42,7 +42,10 @@ export async function notificationsApi(request, env, member, path, data) {
 }
 
 export const PENDING_SOURCES = [{ objectType: 'approval', role: 'admin', sql: "SELECT id, workspace_id, type AS label, created_at AS since FROM approval_requests WHERE status='pending' AND created_at <= ?" },
-  { objectType: 'supplier', role: 'purchase_manager', sql: "SELECT id, workspace_id, name AS label, created_at AS since FROM suppliers WHERE status='pending' AND created_at <= ?" }];
+  { objectType: 'supplier', role: 'purchase_manager', sql: "SELECT id, workspace_id, name AS label, created_at AS since FROM suppliers WHERE status='pending' AND created_at <= ?" },
+  { objectType: 'buyer', role: 'sales_manager', sql: "SELECT id, workspace_id, name AS label, created_at AS since FROM buyers WHERE status='pending' AND created_at <= ?" },
+  { objectType: 'buyer_rfq', role: 'sales_manager', sql: `SELECT p.id, p.workspace_id, p.reference AS label, p.created_at AS since FROM buyer_purchase_orders p JOIN buyers b ON b.id=p.buyer_id
+    WHERE p.status='entered' AND b.status='active' AND p.created_at <= ? AND NOT EXISTS (SELECT 1 FROM sales_quote_revisions r WHERE r.buyer_po_id=p.id AND r.status='sent')` }];
 export async function remindersScheduled(env, now = Date.now()) {
   const db = env.DB;
   let checked = 0, created = 0;

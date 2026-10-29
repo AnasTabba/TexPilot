@@ -4,7 +4,8 @@
 import { all, one, query, json, fail, text, multiline, keys, email, recordId, readJson, audit, date } from './erp-utils.mjs';
 import { randomHex, sha256 } from './auth.mjs';
 import { passwordHash } from './supplier-portal.mjs';
-import { confirmApprovedRevision, invoiceFileResponse, buyerData } from './sales.mjs';
+import { recordAcceptance, invoiceFileResponse, buyerData } from './sales.mjs';
+import { notifyRole } from './notify.mjs';
 
 const COOKIE = 'yf_buyer_session';
 const SESSION_MS = 12 * 3600_000;
@@ -29,9 +30,9 @@ async function buyerSession(db, request) {
 async function buyerWorkspace(db, buyerId, workspaceId) {
   const [pos, revisions, orders, invoices, dispatches, deliveries, corrections, receivables, payments] = await Promise.all([
     all(db, 'SELECT id,reference,specifications,quantity_milli,unit,requested_delivery_at,payment_terms,status,source,created_at FROM buyer_purchase_orders WHERE buyer_id=? AND workspace_id=? ORDER BY created_at DESC LIMIT 200', buyerId, workspaceId),
-    all(db, 'SELECT r.id,r.buyer_po_id,r.version,r.quantity_milli,r.unit,r.price_minor,r.currency,r.specifications,r.requested_delivery_at,r.payment_terms,r.note,r.status,r.created_at FROM sales_quote_revisions r JOIN buyer_purchase_orders p ON p.id=r.buyer_po_id WHERE r.buyer_id=? AND p.workspace_id=? ORDER BY r.created_at DESC LIMIT 500', buyerId, workspaceId),
+    all(db, 'SELECT r.id,r.buyer_po_id,r.version,r.quantity_milli,r.unit,r.price_minor,r.currency,r.specifications,r.requested_delivery_at,r.payment_terms,r.credit_days,r.note,r.status,r.created_at FROM sales_quote_revisions r JOIN buyer_purchase_orders p ON p.id=r.buyer_po_id WHERE r.buyer_id=? AND p.workspace_id=? ORDER BY r.created_at DESC LIMIT 500', buyerId, workspaceId),
     all(db, 'SELECT o.id,o.reference,o.buyer_po_id,o.status,o.terms_snapshot,o.created_at FROM sales_orders o WHERE o.buyer_id=? AND o.workspace_id=? ORDER BY o.created_at DESC LIMIT 200', buyerId, workspaceId),
-    all(db, 'SELECT i.id,i.number,i.sales_order_id,i.total_minor,i.currency,i.issued_at,i.lines_json FROM invoices i WHERE i.buyer_id=? AND i.workspace_id=? ORDER BY i.issued_at DESC LIMIT 200', buyerId, workspaceId),
+    all(db, 'SELECT i.id,i.number,i.sales_order_id,i.total_minor,i.subtotal_minor,i.tax_rate_bp,i.tax_minor,i.due_at,i.currency,i.issued_at,i.lines_json FROM invoices i WHERE i.buyer_id=? AND i.workspace_id=? ORDER BY i.issued_at DESC LIMIT 200', buyerId, workspaceId),
     all(db, `SELECT d.id,d.sales_order_id,d.quantity_milli,d.unit,d.carrier,d.documents_note,d.dispatched_at FROM sales_dispatches d JOIN sales_orders o ON o.id=d.sales_order_id WHERE o.buyer_id=? AND d.workspace_id=? ORDER BY d.created_at DESC LIMIT 500`, buyerId, workspaceId),
     all(db, `SELECT y.id,y.dispatch_id,y.delivery_date,y.evidence_note,y.created_at FROM sales_deliveries y JOIN sales_dispatches d ON d.id=y.dispatch_id JOIN sales_orders o ON o.id=d.sales_order_id WHERE o.buyer_id=? AND y.workspace_id=? ORDER BY y.created_at DESC LIMIT 500`, buyerId, workspaceId),
     all(db, `SELECT c.id,c.delivery_id,c.previous_date,c.corrected_date,c.due_revision,c.created_at FROM delivery_corrections c JOIN sales_deliveries y ON y.id=c.delivery_id JOIN sales_dispatches d ON d.id=y.dispatch_id JOIN sales_orders o ON o.id=d.sales_order_id WHERE o.buyer_id=? AND c.workspace_id=? ORDER BY c.created_at DESC LIMIT 500`, buyerId, workspaceId),
@@ -58,8 +59,9 @@ export async function buyerPortalApi(request, env, path) {
     const b = buyerData({ ...data, name: data.company }); const pw = password(data.password);
     if (await one(db, 'SELECT id FROM buyer_users WHERE email=?', b.email)) fail(409, 'This email is already registered. Sign in or contact the factory sales team.');
     const id = crypto.randomUUID(); const userId = crypto.randomUUID(); const salt = randomHex(16); const hash = await passwordHash(pw, salt);
-    try { await db.batch([query(db, "INSERT INTO buyers(id,workspace_id,name,contact_name,email,phone,city,notes,status,version,created_at,updated_at) VALUES(?,?,?,?,?,?,?, '','pending',1,?,?)", id, factories[0].id, b.name, b.contact, b.email, b.phone, b.city, now, now),
-      query(db, 'INSERT INTO buyer_users(id,buyer_id,email,name,password_hash,password_salt,created_at) VALUES(?,?,?,?,?,?,?)', userId, id, b.email, b.contact, hash, salt, now)]); }
+    try { await db.batch([query(db, "INSERT INTO buyers(id,workspace_id,name,contact_name,email,phone,city,notes,status,version,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?, '','pending',1,?,?,?)", id, factories[0].id, b.name, b.contact, b.email, b.phone, b.city, `buyer:${userId}`, now, now),
+      query(db, 'INSERT INTO buyer_users(id,buyer_id,email,name,password_hash,password_salt,created_at) VALUES(?,?,?,?,?,?,?)', userId, id, b.email, b.contact, hash, salt, now),
+      notifyRole(db, factories[0].id, 'sales_manager', 'buyer.pending', 'buyer', id, b.name)]); }
     catch { fail(409, 'The registration could not be saved. This email may already be registered.'); }
     return json({ pending: true, message: 'Registration saved. Sign in to check its status. The sales team must approve your company first.' }, 201);
   }
@@ -108,7 +110,8 @@ export async function buyerPortalApi(request, env, path) {
     if (previous) { if (previous.buyer_id !== buyerId || previous.request_hash !== digest) fail(409, 'This request ID was used for different PO values.'); return json({ po: previous }); }
     try { await db.batch([query(db, `INSERT INTO buyer_purchase_orders(id,workspace_id,buyer_id,reference,specifications,quantity_milli,unit,requested_delivery_at,payment_terms,status,source,request_hash,created_by,actor_type,created_at,updated_at)
       VALUES(?,?,?,?,?,?,?,?,?,'entered','buyer_portal',?,?,'buyer',?,?)`, id, w, buyerId, po.reference, po.specifications, po.quantity, po.unit, po.delivery, po.terms, digest, user.user_id, now, now),
-      audit(db, user, 'sales.po_submitted', id, { reference: po.reference }, 'buyer')]); }
+      audit(db, user, 'sales.po_submitted', id, { reference: po.reference }, 'buyer'),
+      notifyRole(db, w, 'sales_manager', 'buyer_rfq.received', 'buyer_rfq', id, po.reference)]); }
     catch { fail(409, 'This PO reference is already used. Choose another reference.'); }
     return json({ po: await one(db, 'SELECT * FROM buyer_purchase_orders WHERE id=?', id) }, 201);
   }
@@ -118,9 +121,8 @@ export async function buyerPortalApi(request, env, path) {
     if (!revision) fail(404, 'Quote not found.');
     const version = Number(data.version);
     if (!Number.isSafeInteger(version) || version !== revision.version) fail(409, 'This quote changed. Reload and approve the current revision.');
-    const buyer = await one(db, 'SELECT * FROM buyers WHERE id=?', buyerId);
-    const result = await confirmApprovedRevision(db, { workspaceId: w, revision, buyer, userId: user.user_id, note: multiline(data.note ?? '', 'Approval note', 0, 1000), now });
-    return json({ approved: true, already: result.already, order: result.order && { id: result.order.id, reference: result.order.reference, status: result.order.status }, invoice: result.invoice && { id: result.invoice.id, number: result.invoice.number, total_minor: result.invoice.total_minor, currency: result.invoice.currency } });
+    const { already } = await recordAcceptance(db, { workspaceId: w, revisionId: revision.id, version, buyerId, acceptedBy: user.user_name, note: multiline(data.note ?? '', 'Approval note', 0, 1000), now });
+    return json({ approved: true, already });
   }
   if (path.startsWith('/api/buyer/invoices/')) {
     if (request.method !== 'GET') fail(405, 'Method not allowed.');
