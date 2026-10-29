@@ -158,3 +158,19 @@ test('credit notes settle an invoice for currency changes; superseded and cancel
  assert.equal((await f.call('/erp/sales/buyers/review',{id:other,status:'rejected',version:1,reason:'Company could not be verified'},'Sales')).status,200);
  assert.equal((await changeCurrency(f)).status,200);
 });
+test('invoice payments block currency changes until fully paid or credited',async()=>{
+ for(const credit of [0,750000]){
+  const f=await portalFixture();await f.person('Sana','sales_manager');const q=await f.acceptedQuote(),{invoice}=await noteSale(f.env.DB,await f.member('Sana'),{id:crypto.randomUUID(),revisionId:q.revisionId});
+  if(credit)assert.equal((await f.call('/erp/sales/credit-notes',{id:crypto.randomUUID(),invoiceId:invoice.id,amountMinor:credit,reason:'Goods returned'},'Sana')).status,201);
+  const pay=amountMinor=>f.call('/erp/sales/payments',{id:crypto.randomUUID(),invoiceId:invoice.id,amountMinor,receivedAt:Date.now()},'Sana');
+  assert.equal((await pay(5000000)).status,201);assert.equal((await changeCurrency(f)).status,409);
+  assert.equal(rows(f,'erp_audit_events').filter(r=>r.action==='setting.changed').length,0);
+  assert.throws(()=>insert(f,'settings',{workspace_id:f.workspaceId,key:'currency',value_json:'"USD"',created_by:f.adminId,created_at:1,updated_by:f.adminId,updated_at:1}),/Close open bids/);
+  assert.equal((await pay(invoice.total_minor-credit-5000000)).status,201);assert.equal((await changeCurrency(f)).status,200);
+ }
+});
+test('currency switch losing a race to an unpaid invoice aborts its audit',async()=>{
+ const f=await portalFixture(),q=await f.acceptedQuote(),batch=f.env.DB.batch;await f.login('Anas');const member=await f.member('Anas');
+ f.env.DB.batch=async statements=>{f.env.DB.batch=batch;await noteSale(f.env.DB,member,{id:crypto.randomUUID(),revisionId:q.revisionId});return batch(statements);};
+ assert.equal((await changeCurrency(f)).status,409);assert.equal((await settingsOf(f.env.DB,f.workspaceId)).currency,'PKR');assert.equal(rows(f,'erp_audit_events').filter(r=>r.action==='setting.changed').length,0);assert.equal(rows(f,'invoices').length,1);
+});
