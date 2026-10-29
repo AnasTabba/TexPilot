@@ -14,7 +14,7 @@ import { APP_SETTINGS, CHAT, COMMON, NAV, PROFILE } from './roles';
 import Chat from './Chat';
 import Inspections from './Inspections';
 import InspectArrival, { type Arrival } from './InspectArrival';
-import ToProduction, { type ProductionJob } from './ToProduction';
+import ToProduction, { ReverseControl, type ProductionJob } from './ToProduction';
 import AdminScreens, { ADMIN_SECTIONS } from './AdminScreens';
 import { SalesScreens, SALES_SECTIONS } from './SalesScreens';
 import { DispatchScreens, DISPATCH_SECTIONS } from './DispatchScreens';
@@ -62,7 +62,9 @@ function InventoryForm({ action, state, result, onSaved, onCancel }: { action: A
   useEffect(() => { try { localStorage.setItem(key, JSON.stringify(draft)); setDraftError(false); } catch { setDraftError(true); } }, [draft, key]);
   const selected = state.lots.find(lot => lot.id === draft.lotId);
   // A lot created by the supervisor or a report decision holds one kind of stock; only raw and finished stock can be adjusted.
-  const adjustStages: StockStage[] = selected?.inventory_type ? [selected.inventory_type] : ['raw', 'finished'];
+  // Stages the batch actually holds; the server decides by balances, so a produced raw batch can also be adjusted in finished stock.
+  const heldStages = selected ? (['raw', 'finished'] as StockStage[]).filter(s => (state.balances.find(b => b.lot_id === selected.id && b.stage === s)?.grams ?? 0) > 0) : [];
+  const adjustStages: StockStage[] = heldStages.length ? heldStages : ['raw', 'finished'];
   const stage: StockStage = action.type === 'adjust' && !adjustStages.includes(draft.stage as StockStage) ? adjustStages[0] : draft.stage as StockStage;
   const available = state.balances.find(b => b.lot_id === draft.lotId && b.stage === stage);
   const stepIn = state.member.role === 'admin' ? { interventionReason: draft.intervention } : {};
@@ -106,7 +108,7 @@ function InventoryForm({ action, state, result, onSaved, onCancel }: { action: A
   </AsyncForm>;
 }
 
-function LotDetail({ lot, state, onAction, onBack, onProduce, onFinish, onDispatch }: { lot: StockLot; state: WorkspaceState; onAction: (action: Action) => void; onBack: () => void; onProduce?: () => void; onFinish?: () => void; onDispatch?: () => void }) {
+function LotDetail({ lot, state, onAction, onBack, onProduce, onFinish, onDispatch, onChanged }: { lot: StockLot; state: WorkspaceState; onAction: (action: Action) => void; onBack: () => void; onProduce?: () => void; onFinish?: () => void; onDispatch?: () => void; onChanged: (message: string) => Promise<void> }) {
   const { t, language } = useLanguage();
   const product = state.products.find(p => p.id === lot.product_id);
   const [qr, setQr] = useState(''); const [qrError, setQrError] = useState('');
@@ -191,6 +193,26 @@ function LotDetail({ lot, state, onAction, onBack, onProduce, onFinish, onDispat
       <div className={`yf-next is-inline ${lot.quality}`}><span className="yf-next-icon"><NextIcon size={24} aria-hidden="true" /></span><div className="yf-next-text"><h3>{next[0]}</h3><p>{nextAllowed || !next[2] ? next[1] : whoCan}</p></div>{nextAllowed && <div className="yf-next-actions"><button className="button primary" onClick={() => onAction({ type: next[2]!, lotId: lot.id })}>{actions[next[2]!][0]}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toProduce && onProduce && <div className="yf-next-actions"><button className="button primary" onClick={onProduce}>{t("To production")}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toFinish && onFinish && <div className="yf-next-actions"><button className="button primary" onClick={onFinish}>{t("Mark finished")}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toDispatch && onDispatch && <div className="yf-next-actions"><button className="button primary" onClick={onDispatch}>{t("Request dispatch")}<ArrowRight size={18} aria-hidden="true" /></button></div>}</div>
       <h3 className="live-subheading">{t("Stock in this batch")}</h3>
       <StockFlow balances={lotBalances} compact />
+      <h3 className="live-subheading">{t("Movements in this batch")}</h3>
+      {lotMoves.length ? <ul className="yf-undo-list">{lotMoves.map(m => {
+        // A reversal is a new entry; each movement reverses once. A batch entry reverses only while nothing else has touched the batch.
+        const reversedBy = state.movements.some(x => x.reverses === m.id), isReversal = !!m.reverses;
+        const untouched = lotMoves.every(x => x.id === m.id || !!x.reverses);
+        const reversible = !isReversal && !reversedBy && (m.action === 'transfer' || (m.action === 'receive' && m.to_stage === 'finished' && untouched));
+        const kgOf = weight(m.grams);
+        const isBatch = m.action === 'receive';
+        const stageUr: Record<string, string> = { raw: 'خام مال', wip: 'زیرِ تیاری', finished: 'تیار مال' };
+        const impact = isBatch
+          ? t(`Takes ${kgOf} kg out of Finished stock, batch ${lot.batch}.`, `بیچ ${lot.batch} سے ${kgOf} کلوگرام تیار مال سے نکل جائے گا۔`)
+          : t(`Puts ${kgOf} kg back into ${stageName[m.from_stage as StockStage] ?? ''}, batch ${lot.batch}, and takes it out of ${stageName[m.to_stage as StockStage] ?? ''}.`, `بیچ ${lot.batch} کے ${kgOf} کلوگرام واپس ${stageUr[m.from_stage ?? ''] ?? ''} میں جائیں گے اور ${stageUr[m.to_stage ?? ''] ?? ''} سے نکلیں گے۔`);
+        return <li key={m.id}><div><strong>{t(movedName[m.action] || m.action)}</strong> · {kgOf} <small>kg</small> · {when.format(m.created_at, language)}{m.note && <span className="live-muted"> · {m.note}</span>}{reversedBy && <span className="live-muted"> · {t("Reversed")}</span>}</div>
+          {reversible && <ReverseControl label={t("Reverse")} confirm={isBatch ? t("Reverse batch entry") : t("Reverse movement")} impact={impact} isAdmin={state.member.role === 'admin'}
+            run={async ({ id, reason, interventionReason }) => {
+              await api(isBatch ? '/erp/stock/batches/reverse' : '/erp/stock/transfers/reverse', { id, movementId: m.id, reason, ...(interventionReason ? { interventionReason } : {}) });
+              await onChanged(isBatch ? t("Batch entry reversed. Its finished stock is taken back out.") : t("Movement reversed. Stock is back where it was."));
+            }} />}
+        </li>;
+      })}</ul> : <p className="live-muted">{t("No movements yet.")}</p>}
       {(others.length > 0 || produceMore || finishMore) && <div className="live-actions yf-other-actions" aria-label={t("Other actions")}>{others.map(type => { const [label, Icon] = actions[type]; return <button className="button" key={type} onClick={() => onAction({ type, lotId: lot.id })}><Icon size={18} aria-hidden="true" />{label}</button>; })}{produceMore && <button className="button" onClick={onProduce}><Factory size={18} aria-hidden="true" />{t("To production")}</button>}{finishMore && <button className="button" onClick={onFinish}><CheckCircle2 size={18} aria-hidden="true" />{t("Mark finished")}</button>}</div>}
       <h3 className="live-subheading">{t("Inspection notes")}</h3>
       {evidenceError && <p className="live-error" role="alert">{t("Batch history could not be refreshed.")} {evidenceError}<button className="live-text-button" onClick={() => setEvidenceRetry(value => value + 1)}>{t("Retry history")}</button></p>}
@@ -292,7 +314,7 @@ export default function LiveApp() {
   useEffect(() => { const update = () => { menuDialog.current?.close(); const alias = aliases[location.hash.split('/')[1]]; if (alias) setView(alias[1]); setRoute(routeFromHash()); setHash(location.hash); setSelectedId(lotFromHash()); setAction(null); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
   useEffect(() => { const network = () => { setOnline(navigator.onLine); void refresh(true); }; window.addEventListener('online', network); window.addEventListener('offline', network); return () => { window.removeEventListener('online', network); window.removeEventListener('offline', network); }; }, [refresh]);
   // A form or reversal opens at its top, not wherever the page was scrolled to when it was asked for.
-  useLayoutEffect(() => { if (action) window.scrollTo(0, 0); }, [action]);
+  useLayoutEffect(() => { if (action) window.scrollTo({ top: 0, behavior: 'instant' }); }, [action]);
   // The white pill in both navs glides to the current tab (yarnflow.css reads --glide-*); segmented controls glide the same way.
   useLayoutEffect(() => {
     // Re-measure whenever a nav changes size: the window, and the web font arriving after first paint.
@@ -308,7 +330,7 @@ export default function LiveApp() {
     const flips = new MutationObserver(place); flips.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-pressed', 'class'] });
     place(); return () => { watch.disconnect(); flips.disconnect(); };
   }, []);
-  function navigate(to: string, lotId = '') { menuDialog.current?.close(); const alias = aliases[to]; if (alias) { to = alias[0]; setView(alias[1]); } else if (to === 'inventory' && !lotId) setView('all'); location.hash = '/' + to + (lotId ? '/' + lotId : ''); setRoute(to); setSelectedId(lotId); setAction(null); setMatches([]); setQuery(''); setNotice(''); window.scrollTo(0, 0); }
+  function navigate(to: string, lotId = '') { menuDialog.current?.close(); const alias = aliases[to]; if (alias) { to = alias[0]; setView(alias[1]); } else if (to === 'inventory' && !lotId) setView('all'); location.hash = '/' + to + (lotId ? '/' + lotId : ''); setRoute(to); setSelectedId(lotId); setAction(null); setMatches([]); setQuery(''); setNotice(''); window.scrollTo({ top: 0, behavior: 'instant' }); }
   async function saved(message: string, lotId?: string) { setAction(null); if (lotId) navigate('inventory', lotId); setNotice(message); await refresh(); }
   if (loading || endingSession) return <main className="live-loading" aria-busy="true"><Cone hue="#2f6fd6" size={48} /><h1>{endingSession ? t('Signing out…', 'سائن آؤٹ ہو رہا ہے…') : t("Opening inventory…")}</h1><p>{endingSession ? t('Your PIN is needed to open the workspace again.', 'ورک اسپیس دوبارہ کھولنے کے لیے پن درج کرنا ہوگا۔') : t("Loading inventory records.")}</p></main>;
   if (!state && authNeeded) return <SignIn onSignedIn={async () => {
@@ -417,7 +439,7 @@ export default function LiveApp() {
       {error && <div className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{t(error)}<button className="live-text-button" onClick={() => void refresh()}>{t("Retry connection")}</button></div>}
       {!online && <div className="live-warning" role="status"><WifiOff size={18} />{t("You are offline. Entries can be saved again once the connection is back.")}</div>}
       {notice && <div className="live-success" role="status"><CheckCheck size={19} /><span>{t(notice)}</span><button aria-label={t("Dismiss message")} className="live-icon-button" onClick={() => setNotice('')}><X size={17} /></button></div>}
-      {action ? <InventoryForm key={`${action.type}:${action.lotId || ''}`} action={action} state={workspace} result={action.type === 'inspection' ? lastResult : null} onSaved={saved} onCancel={() => setAction(null)} /> : selected ? <LotDetail key={selected.id} lot={selected} state={workspace} onAction={setAction} onBack={() => navigate('inventory')} onProduce={canProduce(selected) ? () => openProduction(selected) : undefined} onFinish={canFinish(selected) ? () => openFinish(selected) : undefined} onDispatch={me.role === 'dispatch' ? () => go('new-dispatch') : undefined} /> : <>
+      {action ? <InventoryForm key={`${action.type}:${action.lotId || ''}`} action={action} state={workspace} result={action.type === 'inspection' ? lastResult : null} onSaved={saved} onCancel={() => setAction(null)} /> : selected ? <LotDetail key={selected.id} lot={selected} state={workspace} onAction={setAction} onChanged={message => saved(message)} onBack={() => navigate('inventory')} onProduce={canProduce(selected) ? () => openProduction(selected) : undefined} onFinish={canFinish(selected) ? () => openFinish(selected) : undefined} onDispatch={me.role === 'dispatch' ? () => go('new-dispatch') : undefined} /> : <>
       {page === 'dashboard' && <Dashboard member={me} inbox={inbox} reload={reloadInbox} state={state} onChanged={() => refresh(true)} />}
       {page === 'notifications' && <Notifications member={me} inbox={inbox} reload={reloadInbox} />}
       {page === 'inventory' && <section className="yf-stock-panel" aria-label={t("Stock")}><div className="yf-views" role="group" aria-label={t("Show")}>{views.map(([id, label, Icon]) => <button key={id} aria-pressed={view === id} onClick={() => setView(id)}><Icon size={20} aria-hidden="true" /><span>{t(label)}</span><b>{workspace.lots.filter(l => inView(l, id)).length + (id === 'all' || id === 'quality' ? workspace.qcArrivals?.length ?? 0 : 0)}</b></button>)}</div><Field className="live-search-label">{t("Search")}<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder={t("Material, batch or supplier")} /></Field>{stockList()}</section>}

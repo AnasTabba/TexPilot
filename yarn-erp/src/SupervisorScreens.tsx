@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { CheckCheck, RefreshCw, TriangleAlert } from 'lucide-react';
 import './erp.css';
 import './supervisor-screens.css';
@@ -7,17 +7,18 @@ import { InterventionField, SectionTabs, StatusTag, portal } from './PortalCommo
 import { stageName, weight, type Member, type WorkspaceState } from './inventory-client';
 import { quantity } from './erp-client';
 import { useLanguage } from './i18n';
+import { ReverseControl } from './ToProduction';
 
 export const SUPERVISOR_SECTIONS = ['requests', 'report'] as const;
 export type SupervisorSection = (typeof SUPERVISOR_SECTIONS)[number];
 
-type StockQuery = { id: string; product_name: string; quantity_milli: number | null; question: string; status: string; available_grams: number | null; answer: string | null; asked_by_name: string };
+type StockQuery = { id: string; product_name: string; quantity_milli: number | null; question: string; status: string; available_grams: number | null; answer: string | null; asked_by_name: string; void_reason: string | null; voided_at: number | null };
 type StockIssue = { id: string; lot_id: string; lot_batch: string; product_name: string; stage: 'raw' | 'finished'; kind: string; difference_grams: number; description: string; status: string; decision_reason: string | null; created_at: number };
 type Threshold = { dispatchStockIssueGrams: number | null; inventoryAdjustmentGrams: number | null };
 type QcItem = { id: string; lot_reference: string; product_name: string; rejected_milli: number; unit: string; rejection_reason: string | null; issues: { type: string; severity: string; description: string }[]; photos: (string | { id: string; taken_at: number })[] };
-type Adjustment = { id: string; batch: string; product_name: string; stage: string; kind: string; delta_grams: number; reason: string; status: string; created_at: number };
+type Adjustment = { id: string; lot_id: string; batch: string; product_name: string; stage: string; kind: string; delta_grams: number; reason: string; status: string; created_at: number; compensates_id: string | null };
 type ReportDraft = { confirmedRejections: QcItem[]; escalations: QcItem[]; adjustments: Adjustment[] };
-type SavedReport = { id: string; period_from: number; period_to: number; content: ReportDraft; flagged: { objectType: string; objectId: string; note: string }[]; note: string; created_by_name: string; created_at: number };
+type SavedReport = { id: string; period_from: number; period_to: number; content: ReportDraft; flagged: { objectType: string; objectId: string; note: string }[]; note: string; created_by_name: string; created_at: number; supersedes: string | null; voided: { reason: string; at: number; by: string } | null };
 
 const kgToGrams = (value: string, { signed = false, allowZero = false } = {}) => {
   const trimmed = value.trim();
@@ -59,6 +60,8 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
   const [draft, setDraft] = useState<ReportDraft | null>(null), [savedReports, setSavedReports] = useState<SavedReport[]>([]);
   const [flags, setFlags] = useState<Record<string, { selected: boolean; note: string }>>({});
   const [reportNote, setReportNote] = useState(''), [reportId, setReportId] = useState(() => crypto.randomUUID());
+  // A correction replaces a voided report: its period and note are copied, and the submitted report names what it corrects.
+  const [correcting, setCorrecting] = useState<SavedReport | null>(null);
 
   const loadRequests = useCallback(async () => {
     const [q, i] = await Promise.all([
@@ -129,8 +132,8 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
       const bounds = periodBounds(fromDate, toDate);
       const flagged = [...draft.confirmedRejections.map(row => ({ objectType: 'inspection', objectId: row.id })), ...draft.escalations.map(row => ({ objectType: 'inspection', objectId: row.id })), ...draft.adjustments.map(row => ({ objectType: 'adjustment', objectId: row.id }))]
         .flatMap(item => { const value = flags[keyOf(item.objectType, item.objectId)]; return value?.selected ? [{ ...item, note: value.note }] : []; });
-      await portal('/stock/reports', { id: reportId, ...bounds, flagged, note: reportNote, ...stepIn });
-      setDraft(null); setFlags({}); setReportNote(''); setReportId(crypto.randomUUID()); await loadReports();
+      await portal('/stock/reports', { id: reportId, ...bounds, flagged, note: reportNote, ...(correcting ? { supersedes: correcting.id } : {}), ...stepIn });
+      setDraft(null); setFlags({}); setReportNote(''); setReportId(crypto.randomUUID()); setCorrecting(null); await loadReports();
     }, t('Report submitted and saved.', 'رپورٹ جمع اور محفوظ ہو گئی۔'));
   }
 
@@ -138,6 +141,26 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
     ? t(`${weight(amount)} kg · no approval threshold configured`, `${weight(amount)} کلوگرام · منظوری کی حد مقرر نہیں`)
     : t(`${weight(amount)} kg against ${weight(threshold)} kg · ${amount >= threshold ? 'admin approval required' : 'no admin approval'}`, `${weight(amount)} کلوگرام، حد ${weight(threshold)} کلوگرام · ${amount >= threshold ? 'ایڈمن کی منظوری درکار' : 'ایڈمن کی منظوری درکار نہیں'}`);
   const issueTab = tab === 'stock-issues';
+  const startCorrection = (report: SavedReport) => {
+    setCorrecting(report); setFromDate(dayInFactory(report.period_from)); setToDate(dayInFactory(report.period_to)); setReportNote(report.note); setDraft(null); setFlags({});
+    setNotice(t('Correcting the voided report. Preview the period, then submit the corrected report.', 'منسوخ شدہ رپورٹ کی درستگی جاری ہے۔ مدت کا جائزہ لیں، پھر درست شدہ رپورٹ جمع کریں۔'));
+  };
+  const voidReport = (report: SavedReport) => async ({ id, reason, interventionReason }: { id: string; reason: string; interventionReason?: string }) => {
+    await portal('/stock/reports/void', { id, reportId: report.id, reason, ...(interventionReason ? { interventionReason } : {}) });
+    await loadReports(); setNotice(t('Report voided. It stays on record, struck through.', 'رپورٹ منسوخ ہو گئی۔ یہ ریکارڈ میں رہے گی، لکیر کے ساتھ۔'));
+  };
+  // An applied adjustment can be reversed once; the reversal is a new adjustment that names it.
+  const reversalControl = (item: Adjustment) => {
+    if (item.status !== 'applied' || item.compensates_id || draft?.adjustments.some(other => other.compensates_id === item.id)) return null;
+    const amount = weight(Math.abs(item.delta_grams)), stage = t(stageName[item.stage as 'raw'] || item.stage, stageUr[item.stage] || item.stage);
+    return <ReverseControl label={t('Reverse adjustment', 'درستگی الٹیں')} confirm={t('Reverse adjustment', 'درستگی الٹیں')} isAdmin={member.role === 'admin'} minLength={5}
+      impact={item.delta_grams < 0 ? t(`Puts ${amount} kg back into ${stage}, batch ${item.batch}.`, `بیچ ${item.batch} کے ${amount} کلوگرام واپس ${stage} میں جائیں گے۔`) : t(`Takes ${amount} kg out of ${stage}, batch ${item.batch}.`, `بیچ ${item.batch} سے ${amount} کلوگرام ${stage} سے نکل جائیں گے۔`)}
+      run={async ({ id, reason, interventionReason }) => {
+        const result = await portal<{ pendingApproval?: boolean }>('/stock/adjustments', { id, lotId: item.lot_id, stage: item.stage, kind: item.delta_grams < 0 ? 'adjustment' : 'write_off', deltaGrams: -item.delta_grams, reason, compensatesId: item.id, ...(interventionReason ? { interventionReason } : {}) });
+        await previewReport();
+        setNotice(result.pendingApproval ? t('The reversal waits for admin approval.', 'الٹنے کا عمل ایڈمن کی منظوری کا منتظر ہے۔') : t('Adjustment reversed.', 'درستگی الٹ دی گئی۔'));
+      }} />;
+  };
   const draftCount = draft ? draft.confirmedRejections.length + draft.escalations.length + draft.adjustments.length : 0;
 
   const actions = <button className="button" type="button" disabled={busy} onClick={() => void refresh()}><RefreshCw size={18} aria-hidden="true" />{t('Refresh', 'تازہ کریں')}</button>;
@@ -154,7 +177,12 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
         {listStatus(queries.length, t('No stock queries have been raised.', 'اسٹاک کی کوئی درخواست موصول نہیں ہوئی۔'))}
         <div className="erp-records">{queries.map(query => <article className="erp-record" key={query.id} id={query.id}>
           <h3>{query.product_name}{query.quantity_milli !== null && ` · ${quantity(query.quantity_milli)} kg`}</h3><p>{query.question}</p><p>{query.asked_by_name} · <StatusTag status={query.status} /></p>
-          {query.status === 'answered' ? <p>{t('Available', 'دستیاب')}: {weight(query.available_grams || 0)} kg{query.answer ? ` · ${query.answer}` : ''}</p> : <form onSubmit={event => void answer(query, event)} aria-label={t('Answer stock query', 'اسٹاک کی درخواست کا جواب')}>
+          {query.status === 'answered' ? <>
+            <p style={query.void_reason ? { textDecoration: 'line-through' } : undefined}>{t('Available', 'دستیاب')}: {weight(query.available_grams || 0)} kg{query.answer ? ` · ${query.answer}` : ''}</p>
+            {query.void_reason ? <p className="live-error">{t('Voided', 'منسوخ')}: {query.void_reason}</p> : <ReverseControl label={t('Void answer', 'جواب منسوخ کریں')} confirm={t('Void answer', 'جواب منسوخ کریں')} isAdmin={member.role === 'admin'}
+              impact={t('The answer is struck through and kept on record. Sales can ask the question again.', 'جواب پر لکیر لگ جائے گی اور ریکارڈ میں رہے گا۔ سیلز دوبارہ سوال کر سکتی ہے۔')}
+              run={async ({ id, reason, interventionReason }) => { await portal('/stock/queries/void', { id, queryId: query.id, reason, ...(interventionReason ? { interventionReason } : {}) }); await loadRequests(); setNotice(t('Answer voided. Sales can ask again.', 'جواب منسوخ ہو گیا۔ سیلز دوبارہ پوچھ سکتی ہے۔')); }} />}
+          </> : <form onSubmit={event => void answer(query, event)} aria-label={t('Answer stock query', 'اسٹاک کی درخواست کا جواب')}>
             <Field>{t('Available (kg)', 'دستیاب مقدار (کلوگرام)')}<input value={queryDrafts[query.id]?.kg || ''} onChange={event => setQueryDrafts(old => ({ ...old, [query.id]: { ...(old[query.id] || { kg: '', answer: '' }), kg: event.target.value } }))} inputMode="decimal" placeholder="0.000" required /></Field>
             <Field>{t('Answer', 'جواب')}<textarea value={queryDrafts[query.id]?.answer || ''} onChange={event => setQueryDrafts(old => ({ ...old, [query.id]: { ...(old[query.id] || { kg: '', answer: '' }), answer: event.target.value } }))} rows={2} maxLength={1000} /></Field>
             <button className="button primary" disabled={busy}>{t('Save answer', 'جواب محفوظ کریں')}</button>
@@ -191,13 +219,14 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
       <p className="live-muted">{t('Choose a factory date period, preview its evidence, flag items that need attention, then submit an immutable snapshot.', 'فیکٹری کی تاریخیں منتخب کریں، شواہد دیکھیں، ضروری آئٹمز نشان زد کریں اور محفوظ رپورٹ جمع کریں۔')}</p>
       <div className="live-fields"><Field>{t('From (factory date)', 'سے (فیکٹری تاریخ)')}<input type="date" value={fromDate} onChange={event => setFromDate(event.target.value)} required /></Field><Field>{t('To (factory date)', 'تک (فیکٹری تاریخ)')}<input type="date" value={toDate} onChange={event => setToDate(event.target.value)} required /></Field></div>
       <button className="button" type="button" disabled={busy} onClick={() => void previewReport()}>{t('Preview period', 'مدت کا جائزہ')}</button>
+      {correcting && <p className="live-muted">{t('Correcting a voided report.', 'منسوخ شدہ رپورٹ کی درستگی جاری ہے۔')} <button className="live-text-button" type="button" onClick={() => setCorrecting(null)}>{t('Cancel correction', 'درستگی منسوخ کریں')}</button></p>}
       {draft && <form onSubmit={event => void submitReport(event)} aria-label={t('Report snapshot', 'رپورٹ کا خلاصہ')}>
         <h3 className="live-subheading">{t('Confirmed rejections', 'تصدیق شدہ مسترد مقداریں')} · {draft.confirmedRejections.length}</h3>
         {draft.confirmedRejections.map(item => <ReportItem key={item.id} type="inspection" item={item} flag={flags[keyOf('inspection', item.id)]} setFlag={value => setFlags(old => ({ ...old, [keyOf('inspection', item.id)]: value }))} />)}
         <h3 className="live-subheading">{t('Escalations', 'ایڈمن کو بھیجی گئی')} · {draft.escalations.length}</h3>
         {draft.escalations.map(item => <ReportItem key={item.id} type="inspection" item={item} flag={flags[keyOf('inspection', item.id)]} setFlag={value => setFlags(old => ({ ...old, [keyOf('inspection', item.id)]: value }))} />)}
         <h3 className="live-subheading">{t('Inventory adjustments', 'انوینٹری کی درستگیاں')} · {draft.adjustments.length}</h3>
-        {draft.adjustments.map(item => <ReportItem key={item.id} type="adjustment" item={item} flag={flags[keyOf('adjustment', item.id)]} setFlag={value => setFlags(old => ({ ...old, [keyOf('adjustment', item.id)]: value }))} />)}
+        {draft.adjustments.map(item => <ReportItem key={item.id} type="adjustment" item={item} flag={flags[keyOf('adjustment', item.id)]} setFlag={value => setFlags(old => ({ ...old, [keyOf('adjustment', item.id)]: value }))} control={reversalControl(item)} />)}
         {!draftCount && <p className="live-muted">{t('There are no report items in this period.', 'اس مدت میں رپورٹ کے لیے کوئی آئٹم نہیں۔')}</p>}
         <Field>{t('Note to admin (optional)', 'ایڈمن کے لیے نوٹ (اختیاری)')}<textarea value={reportNote} onChange={event => setReportNote(event.target.value)} rows={3} maxLength={1000} /></Field>
         <button className="button primary" disabled={busy}><CheckCheck size={18} aria-hidden="true" />{t('Submit report', 'رپورٹ جمع کریں')}</button>
@@ -205,13 +234,13 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
       <section className="yf-section">
         <h3 className="live-subheading">{t('Saved reports', 'محفوظ رپورٹس')}</h3>
         {listStatus(savedReports.length, t('No reports have been submitted.', 'ابھی کوئی رپورٹ جمع نہیں ہوئی۔'))}
-        <div className="erp-records">{savedReports.map(report => <SavedReportView key={report.id} report={report} />)}</div>
+        <div className="erp-records">{savedReports.map(report => <SavedReportView key={report.id} report={report} isAdmin={member.role === 'admin'} correcting={correcting?.id === report.id} onVoid={voidReport(report)} onCorrect={() => startCorrection(report)} />)}</div>
       </section>
     </>}
   </section>;
 }
 
-function ReportItem({ type, item, flag, setFlag }: { type: 'inspection' | 'adjustment'; item: QcItem | Adjustment; flag?: { selected: boolean; note: string }; setFlag: (value: { selected: boolean; note: string }) => void }) {
+function ReportItem({ type, item, flag, setFlag, control }: { type: 'inspection' | 'adjustment'; item: QcItem | Adjustment; flag?: { selected: boolean; note: string }; setFlag: (value: { selected: boolean; note: string }) => void; control?: ReactNode }) {
   const { t } = useLanguage(); const chosen = flag || { selected: false, note: '' };
   const flagControls = <>
     <label className="live-check"><input type="checkbox" checked={chosen.selected} onChange={event => setFlag({ ...chosen, selected: event.target.checked })} />{t('Flag for admin', 'ایڈمن کے لیے نشان زد کریں')}</label>
@@ -228,17 +257,25 @@ function ReportItem({ type, item, flag, setFlag }: { type: 'inspection' | 'adjus
   }
   const adjustment = item as Adjustment;
   return <article className="erp-record"><h4>{adjustment.product_name} · {adjustment.batch}</h4><p>{t(...pair(kindWords, adjustment.kind))} · {t(stageName[adjustment.stage as 'raw'] || adjustment.stage, stageUr[adjustment.stage] || adjustment.stage)} · {adjustment.delta_grams < 0 ? '−' : '+'}{weight(Math.abs(adjustment.delta_grams))} kg · <StatusTag status={adjustment.status} /></p><p>{adjustment.reason}</p>
+    {control}
     {flagControls}
   </article>;
 }
 
-function SavedReportView({ report }: { report: SavedReport }) {
+function SavedReportView({ report, isAdmin, correcting, onVoid, onCorrect }: { report: SavedReport; isAdmin: boolean; correcting: boolean; onVoid: (request: { id: string; reason: string; interventionReason?: string }) => Promise<void>; onCorrect: () => void }) {
   const { t } = useLanguage();
   const content = report.content;
-  return <article className="erp-record" id={report.id}><h3>{report.created_by_name} · {t('Submitted', 'جمع شدہ')} {dateTime(report.created_at)}</h3>
-    <p>{t('Period', 'مدت')}: {dateOnly(report.period_from)} – {dateOnly(report.period_to)}</p>
-    {report.note && <p>{report.note}</p>}
-    <p>{t('Snapshot', 'خلاصہ')}: {content.confirmedRejections.length} {t('confirmed rejections', 'تصدیق شدہ مسترد مقداریں')} · {content.escalations.length} {t('escalations', 'ایڈمن کو بھیجی گئی')} · {content.adjustments.length} {t('adjustments', 'درستگیاں')}</p>
-    {report.flagged.map(item => <p key={`${item.objectType}:${item.objectId}`}><strong>{t('Flagged', 'نشان زد')}: </strong>{item.objectType === 'adjustment' ? t('Adjustment', 'درستگی') : t('Inspection', 'معائنہ')} · {item.objectId} · {item.note}</p>)}
+  // A voided report stays on record with a line through it, and its reason beside it.
+  const struck = report.voided ? { textDecoration: 'line-through' } : undefined;
+  return <article className="erp-record" id={report.id}><h3 style={struck}>{report.created_by_name} · {t('Submitted', 'جمع شدہ')} {dateTime(report.created_at)}</h3>
+    {report.supersedes && <p className="live-muted">{t('Corrects an earlier voided report.', 'پہلے منسوخ شدہ رپورٹ کی درستگی۔')}</p>}
+    <p style={struck}>{t('Period', 'مدت')}: {dateOnly(report.period_from)} – {dateOnly(report.period_to)}</p>
+    {report.note && <p style={struck}>{report.note}</p>}
+    <p style={struck}>{t('Snapshot', 'خلاصہ')}: {content.confirmedRejections.length} {t('confirmed rejections', 'تصدیق شدہ مسترد مقداریں')} · {content.escalations.length} {t('escalations', 'ایڈمن کو بھیجی گئی')} · {content.adjustments.length} {t('adjustments', 'درستگیاں')}</p>
+    {report.flagged.map(item => <p key={`${item.objectType}:${item.objectId}`} style={struck}><strong>{t('Flagged', 'نشان زد')}: </strong>{item.objectType === 'adjustment' ? t('Adjustment', 'درستگی') : t('Inspection', 'معائنہ')} · {item.objectId} · {item.note}</p>)}
+    {report.voided && <p className="live-error">{t('Voided', 'منسوخ')}: {report.voided.reason} · {report.voided.by} · {dateTime(report.voided.at)}</p>}
+    {!report.voided && <ReverseControl label={t('Void report', 'رپورٹ منسوخ کریں')} confirm={t('Void report', 'رپورٹ منسوخ کریں')} isAdmin={isAdmin}
+      impact={t('The report stays on record, struck through. Its figures are not deleted.', 'رپورٹ ریکارڈ میں رہے گی، لکیر کے ساتھ۔ اس کے اعداد حذف نہیں ہوں گے۔')} run={onVoid} />}
+    {report.voided && !correcting && <button className="button" type="button" onClick={onCorrect}>{t('Submit corrected report', 'درست شدہ رپورٹ جمع کریں')}</button>}
   </article>;
 }

@@ -7,7 +7,7 @@
 import { all, audit, fail, integer, json, keys, multiline, one, query, reason as reasonOf, recordId, role, text, viewer } from './erp-utils.mjs';
 import { approvalQueries, needsApproval, thresholdOf } from './governance.mjs';
 import { notifyRole, notifyUser } from './notify.mjs';
-import { movementQueries } from './stock-ledger.mjs';
+import { movementQueries, reversalQueries } from './stock-ledger.mjs';
 import { adjustmentQueries } from './stock.mjs';
 
 const MAX_GRAMS = 9_000_000_000_000;
@@ -17,7 +17,8 @@ const REUSED = 'This request ID was already used for different values.';
 const HOLD_PENDING = 'A sales-manager hold notice is pending; acknowledge it before dispatching.';
 const RAW_ONLY = 'Raw stock cannot be sale-dispatched; only finished goods are supported.';
 const LEGACY = 'Legacy cops/WIP stock is read-only; an authorized migration is required.';
-const FINISHED_ONLY = 'This lot holds no finished stock to dispatch.';
+const FINISHED_ONLY = 'No finished stock is left in this batch.';
+const IN_PRODUCTION = 'This batch is still in production. Finish it before it can be dispatched.';
 const APPROVED_ONLY = 'Only an approved dispatch can leave the factory.';
 const SHORT_STOCK = 'Stock is short or does not match. Raise a stock issue to the supervisor.';
 const NEGATIVE = 'This would make stock negative.';
@@ -33,8 +34,10 @@ const labelOf = async (db, dispatchId) => {
   const row = await one(db, 'SELECT l.batch,p.name FROM dispatches d JOIN lots l ON l.id=d.lot_id JOIN products p ON p.id=l.product_id WHERE d.id=?', dispatchId);
   return row ? `${row.name} · ${row.batch}` : '';
 };
+// A reversed sale dispatch no longer counts against the order (its movement reverses it).
+const liveSales = `sales_dispatches d WHERE d.sales_order_id=o.id AND NOT EXISTS(SELECT 1 FROM movements rm WHERE rm.reverses=d.movement_id)`;
 const remainingOf = line => `${line}.quantity_milli
-  - COALESCE((SELECT SUM(d.quantity_milli) FROM sales_dispatches d WHERE d.sales_order_id=o.id),0)
+  - COALESCE((SELECT SUM(d.quantity_milli) FROM ${liveSales}),0)
   - COALESCE((SELECT SUM(g.quantity_milli) FROM dispatches g WHERE g.sales_order_id=o.id AND g.status IN ('pending_approval','approved','on_hold')),0)`;
 
 export async function dispatchApi(request, env, member, path, data) {
@@ -91,12 +94,15 @@ export async function dispatchApi(request, env, member, path, data) {
     const lot = await one(db, 'SELECT id,product_id,inventory_type,quality FROM lots WHERE id=? AND workspace_id=?', lotId, w);
     if (!lot) fail(404, 'This lot was not found in your workspace.');
     if (lot.quality !== 'approved') fail(409, 'A batch may be dispatched only after QC approves it.');
-    const availableFinished = await one(db, "SELECT grams FROM balances WHERE lot_id=? AND stage='finished' AND grams>0", lotId);
-    const legacyStage = await one(db, "SELECT stage FROM balances WHERE lot_id=? AND stage IN ('cops','wip') AND grams>0 LIMIT 1", lotId);
-    const rawStage = await one(db, "SELECT stage FROM balances WHERE lot_id=? AND stage='raw' AND grams>0 LIMIT 1", lotId);
-    if (lot.inventory_type === 'raw' || (rawStage && !availableFinished)) fail(422, RAW_ONLY);
-    if (['cops', 'wip'].includes(lot.inventory_type) || (legacyStage && !availableFinished)) fail(422, LEGACY);
-    if (!availableFinished) fail(422, FINISHED_ONLY);
+    // Decided by balances: a batch moves raw -> wip -> finished and keeps its origin (inventory_type) for life.
+    const held = new Set((await all(db, 'SELECT stage FROM balances WHERE lot_id=? AND grams>0', lotId)).map(b => b.stage));
+    const finishedGrams = await balanceOf(db, lotId, 'finished');
+    if (finishedGrams <= 0) {
+      if (held.has('cops') || (held.has('wip') && lot.inventory_type !== 'raw')) fail(422, LEGACY);
+      if (held.has('wip')) fail(422, IN_PRODUCTION);
+      if (held.has('raw')) fail(422, RAW_ONLY);
+      fail(422, FINISHED_ONLY);
+    }
     if (order.product_id !== null && order.product_id !== lot.product_id) fail(422, 'The batch is not the material on this sale order.');
     const requestId = crypto.randomUUID();
     const lotLabel = await one(db, 'SELECT l.batch,p.name FROM lots l JOIN products p ON p.id=l.product_id WHERE l.id=?', lotId);
@@ -261,7 +267,8 @@ export async function dispatchApi(request, env, member, path, data) {
           AND NOT EXISTS(SELECT 1 FROM dispatch_requests hr WHERE hr.dispatch_id=d.id AND hr.kind='hold_notice' AND hr.status='pending')
           AND o.status IN ('confirmed','partially_dispatched') AND l.unit='kg' AND (l.product_id IS NULL OR l.product_id=lt.product_id)
           AND EXISTS(SELECT 1 FROM balances fb WHERE fb.lot_id=d.lot_id AND fb.stage='finished' AND fb.grams>=d.grams AND fb.cartons>=d.cartons AND fb.cones>=d.cones)
-          AND l.quantity_milli>=d.quantity_milli+(SELECT COALESCE(SUM(sd.quantity_milli),0) FROM sales_dispatches sd WHERE sd.sales_order_id=o.id))`, dispatchId, w),
+          AND l.quantity_milli>=d.quantity_milli+(SELECT COALESCE(SUM(sd.quantity_milli),0) FROM sales_dispatches sd WHERE sd.sales_order_id=o.id
+            AND NOT EXISTS(SELECT 1 FROM movements rm WHERE rm.reverses=sd.movement_id)))`, dispatchId, w),
         movement,
         query(db, `INSERT INTO sales_dispatches(id,workspace_id,sales_order_id,movement_id,lot_id,from_stage,quantity_milli,unit,grams,cartons,cones,carrier,packages_json,documents_note,dispatched_at,request_hash,created_by,created_at)
           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, salesId, w, row.sales_order_id, movementId, row.lot_id, 'finished', row.quantity_milli, 'kg', row.grams, row.cartons, row.cones,
@@ -283,6 +290,45 @@ export async function dispatchApi(request, env, member, path, data) {
       fail(409, SHORT_STOCK);
     }
     return json({ dispatch: await dispatchOf(db, dispatchId, w) }, 201);
+  }
+
+  // Undo a dispatch before delivery: a compensating movement puts the grams back in the same lot's finished stock, the order is recounted, and the dispatch returns to approved.
+  if (path === base + '/dispatched/reverse' && request.method === 'POST') {
+    const intervention = role(member, data, 'dispatch');
+    keys(data, ['id', 'dispatchId', 'reason', 'interventionReason']);
+    const id = recordId(data.id), dispatchId = recordId(data.dispatchId), why = multiline(data.reason, 'Reason', 3, 500);
+    const hash = `reverse:dispatch:${dispatchId}:${why}`;
+    const previous = await one(db, 'SELECT id,request_hash FROM movements WHERE id=? AND workspace_id=?', id, w);
+    if (previous) {
+      if (previous.request_hash !== hash) fail(409, REUSED);
+      return json({ dispatch: await dispatchOf(db, dispatchId, w), reversalId: id });
+    }
+    const row = await dispatchOf(db, dispatchId, w);
+    if (!row) fail(404, 'This dispatch was not found in your workspace.');
+    if (row.status === 'delivered') fail(409, 'A delivered dispatch cannot be undone.');
+    if (row.status !== 'dispatched' || !row.sales_dispatch_id) fail(409, 'Only a dispatched batch can be undone.');
+    const sale = await one(db, 'SELECT * FROM sales_dispatches WHERE id=? AND workspace_id=?', row.sales_dispatch_id, w);
+    if (!sale) fail(404, 'The sale dispatch for this batch was not found.');
+    if (await one(db, 'SELECT id FROM movements WHERE reverses=?', sale.movement_id)) fail(409, 'This dispatch was already undone.');
+    const order = await one(db, 'SELECT reference FROM sales_orders WHERE id=? AND workspace_id=?', row.sales_order_id, w);
+    const liveTotal = `COALESCE((SELECT SUM(d.quantity_milli) FROM sales_dispatches d WHERE d.sales_order_id=sales_orders.id AND NOT EXISTS(SELECT 1 FROM movements rm WHERE rm.reverses=d.movement_id)),0)`;
+    try {
+      await db.batch([
+        guard(db, "EXISTS(SELECT 1 FROM dispatches WHERE id=? AND workspace_id=? AND status='dispatched' AND sales_dispatch_id=?)", dispatchId, w, sale.id),
+        ...reversalQueries(db, member, { id, lotId: row.lot_id, reverses: sale.movement_id, toStage: 'finished', grams: sale.grams, cartons: sale.cartons, cones: sale.cones,
+          note: `Undo dispatch ${order.reference}: ${why}`, requestHash: hash, deltas: [{ stage: 'finished', grams: sale.grams, cartons: sale.cartons, cones: sale.cones }] }, now),
+        query(db, 'INSERT INTO dispatch_reversals(id,workspace_id,dispatch_id,sales_dispatch_id,movement_id,reason,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?)', id, w, dispatchId, sale.id, id, why, member.user_id, now),
+        query(db, `UPDATE sales_orders SET status=CASE WHEN ${liveTotal}=0 THEN 'confirmed'
+          WHEN ${liveTotal}>=(SELECT l.quantity_milli FROM sales_order_lines l WHERE l.sales_order_id=sales_orders.id) THEN 'dispatched' ELSE 'partially_dispatched' END WHERE id=?`, row.sales_order_id),
+        query(db, "UPDATE dispatches SET status='approved',sales_dispatch_id=NULL,dispatched_at=NULL,updated_at=? WHERE id=? AND workspace_id=?", now, dispatchId, w),
+        audit(db, member, 'dispatch.undone', dispatchId, { order: order.reference, lot: row.lot_id, grams: sale.grams, reverses: sale.movement_id, salesDispatch: sale.id }, 'staff', { objectType: 'dispatch', reason: why, intervention }),
+      ]);
+    } catch {
+      const raced = await dispatchOf(db, dispatchId, w);
+      if (raced?.status !== 'dispatched') fail(409, 'This dispatch changed while it was being undone. Refresh and try again.');
+      fail(409, 'The dispatch could not be undone. Refresh and try again.');
+    }
+    return json({ dispatch: await dispatchOf(db, dispatchId, w), reversalId: id }, 201);
   }
 
   if (path === base + '/delivered' && request.method === 'POST') {

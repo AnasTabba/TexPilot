@@ -2,7 +2,7 @@
 import { all, audit, fail, integer, json, keys, multiline, one, query, reason as reasonOf, recordId, role, text, viewer } from './erp-utils.mjs';
 import { approvalQueries, needsApproval, thresholdOf } from './governance.mjs';
 import { notifyRole } from './notify.mjs';
-import { movementQueries } from './stock-ledger.mjs';
+import { movementQueries, reversalIntervention, reversalQueries } from './stock-ledger.mjs';
 
 const MAX_GRAMS = 9_000_000_000_000, NEGATIVE = 'This would make stock negative.';
 const LEGACY = 'Legacy cops/WIP stock is read-only; an authorized migration is required.';
@@ -76,7 +76,10 @@ const period = params => {
   if (to < from) fail(422, 'The period must end after it starts.');
   return [from, to];
 };
-const reportRow = row => ({ id: row.id, period_from: row.period_from, period_to: row.period_to, content: JSON.parse(row.content_json), flagged: JSON.parse(row.flagged_json), note: row.note, status: row.status, created_by: row.created_by, created_by_name: row.created_by_name, created_at: row.created_at });
+const reportRow = row => ({ id: row.id, period_from: row.period_from, period_to: row.period_to, content: JSON.parse(row.content_json), flagged: JSON.parse(row.flagged_json), note: row.note, status: row.status, created_by: row.created_by, created_by_name: row.created_by_name, created_at: row.created_at,
+  supersedes: row.supersedes_id ?? null, voided: row.void_reason ? { reason: row.void_reason, at: row.voided_at, by: row.voided_by_name } : null });
+const MOVED_ON = 'The stock from this step has already moved on. Reverse the later step first.';
+const REVERSED = 'This was already reversed.';
 
 export async function stockApi(request, env, member, path, data) {
   const db = env.DB, w = member.workspace_id, now = Date.now(), base = '/api/erp/stock';
@@ -93,8 +96,8 @@ export async function stockApi(request, env, member, path, data) {
     if (path === base + '/queries') {
       viewer(member, 'supervisor', 'sales_manager');
       const everyone = member.role !== 'sales_manager';
-      return json({ queries: await all(db, `SELECT q.*,p.name AS product_name,u.name AS asked_by_name FROM stock_queries q JOIN products p ON p.id=q.product_id JOIN users u ON u.id=q.created_by
-        WHERE q.workspace_id=? AND (?=1 OR q.created_by=?) ORDER BY q.created_at DESC,q.id LIMIT 200`, w, everyone ? 1 : 0, member.user_id) });
+      return json({ queries: await all(db, `SELECT q.*,p.name AS product_name,u.name AS asked_by_name,v.reason AS void_reason,v.voided_at FROM stock_queries q JOIN products p ON p.id=q.product_id JOIN users u ON u.id=q.created_by
+        LEFT JOIN stock_query_voids v ON v.query_id=q.id WHERE q.workspace_id=? AND (?=1 OR q.created_by=?) ORDER BY q.created_at DESC,q.id LIMIT 200`, w, everyone ? 1 : 0, member.user_id) });
     }
     if (path === base + '/attention') {
       viewer(member, 'supervisor');
@@ -111,13 +114,88 @@ export async function stockApi(request, env, member, path, data) {
     if (path === base + '/reports/draft') { viewer(member, 'supervisor'); return json(await draftOf(db, w, ...period(params))); }
     if (path === base + '/reports') {
       viewer(member, 'supervisor');
-      return json({ reports: (await all(db, `SELECT r.*,u.name AS created_by_name FROM supervisor_reports r JOIN users u ON u.id=r.created_by WHERE r.workspace_id=? AND (?=1 OR r.created_by=?) ORDER BY r.created_at DESC,r.id LIMIT 100`, w, member.role === 'admin' ? 1 : 0, member.user_id)).map(reportRow) });
+      return json({ reports: (await all(db, `SELECT r.*,u.name AS created_by_name,v.reason AS void_reason,v.voided_at,vu.name AS voided_by_name,c.supersedes_id FROM supervisor_reports r JOIN users u ON u.id=r.created_by
+        LEFT JOIN supervisor_report_voids v ON v.report_id=r.id LEFT JOIN users vu ON vu.id=v.voided_by LEFT JOIN supervisor_report_corrections c ON c.report_id=r.id WHERE r.workspace_id=? AND (?=1 OR r.created_by=?) ORDER BY r.created_at DESC,r.id LIMIT 100`, w, member.role === 'admin' ? 1 : 0, member.user_id)).map(reportRow) });
     }
     if (path === base + '/history') {
       viewer(member, 'supervisor');
       return json({ history: await all(db, 'SELECT id,actor_id,action,record_id,object_type,reason,intervention_reason,detail_json,created_at FROM erp_audit_events WHERE workspace_id=? AND actor_id=? ORDER BY created_at DESC,id DESC LIMIT 200', w, member.user_id) });
     }
     fail(404, 'Stock route not found.');
+  }
+
+  // A reversal is a new compensating entry (movements.reverses is unique, so each original reverses once); the replay check keys on the request id.
+  if (path === base + '/transfers/reverse' || path === base + '/batches/reverse') {
+    const intervention = reversalIntervention(member, data, 'supervisor');
+    keys(data, ['id', 'movementId', 'reason', 'interventionReason']);
+    const id = recordId(data.id), movementId = recordId(data.movementId), why = multiline(data.reason, 'Reason', 3, 500);
+    const hash = `reverse:${movementId}:${why}`;
+    const replay = async () => {
+      const previous = await one(db, 'SELECT id,lot_id,request_hash FROM movements WHERE id=? AND workspace_id=?', id, w);
+      if (!previous) return null;
+      if (previous.request_hash !== hash) fail(409, REUSED);
+      return json({ lotId: previous.lot_id, movementId: id, reverses: movementId });
+    };
+    const done = await replay(); if (done) return done;
+    const batch = path === base + '/batches/reverse';
+    // A transfer reverses from its destination back to its source; a finished batch entry comes off the finished stock it added.
+    const original = batch
+      ? await one(db, "SELECT * FROM movements WHERE id=? AND workspace_id=? AND action='receive' AND to_stage='finished' AND request_hash LIKE 'source:finished:%'", movementId, w)
+      : await one(db, "SELECT * FROM movements WHERE id=? AND workspace_id=? AND action='transfer'", movementId, w);
+    if (!original) fail(404, batch ? 'Finished batch entry not found in your workspace.' : 'Transfer not found in your workspace.');
+    if (!batch && !(original.from_stage === 'raw' && original.to_stage === 'wip') && !(original.from_stage === 'wip' && original.to_stage === 'finished')) fail(422, 'Only a production or finishing transfer can be reversed here.');
+    if (await one(db, 'SELECT id FROM movements WHERE reverses=?', movementId)) fail(409, REVERSED);
+    // A batch entry is reversed only while nothing else has touched its lot; a transfer only while its destination still holds the grams.
+    if (batch && await one(db, 'SELECT id FROM movements WHERE lot_id=? AND id!=? AND reverses IS NULL', original.lot_id, movementId)) fail(409, 'This batch has moved since it was received. Reverse the later movements first.');
+    const { grams, cartons, cones } = original;
+    const deltas = batch
+      ? [{ stage: 'finished', grams: -grams, cartons: -cartons, cones: -cones }]
+      : [{ stage: original.from_stage, grams, cartons: 0, cones: 0 }, { stage: original.to_stage, grams: -grams, cartons: 0, cones: 0 }];
+    const fromStage = batch ? 'finished' : original.to_stage, toStage = batch ? null : original.from_stage;
+    const label = `${(await one(db, 'SELECT batch FROM lots WHERE id=?', original.lot_id))?.batch ?? ''} · ${Number((grams / 1000).toFixed(3))} kg`;
+    try {
+      await db.batch([
+        query(db, "SELECT json('!') WHERE NOT EXISTS(SELECT 1 FROM balances WHERE lot_id=? AND stage=? AND grams>=? AND cartons>=? AND cones>=?)", original.lot_id, batch ? 'finished' : original.to_stage, grams, batch ? cartons : 0, batch ? cones : 0),
+        ...reversalQueries(db, member, { id, lotId: original.lot_id, reverses: movementId, fromStage, toStage, grams, cartons, cones, note: why, requestHash: hash, deltas }, now),
+        notifyRole(db, w, 'supervisor', 'stock.adjusted', 'lot', original.lot_id, label, member.user_id),
+        notifyRole(db, w, 'admin', 'stock.adjusted', 'lot', original.lot_id, label),
+        audit(db, member, batch ? 'stock.batch_reversed' : 'stock.transfer_reversed', id, { lot: original.lot_id, grams, reverses: movementId, from: fromStage, to: toStage }, 'staff', { objectType: 'inventory', reason: why, intervention }),
+      ]);
+    } catch (error) {
+      const again = await replay(); if (again) return again;
+      fail(409, /CHECK constraint|malformed JSON/i.test(String(error)) ? MOVED_ON : 'Stock changed. Refresh and try again.');
+    }
+    return json({ lotId: original.lot_id, movementId: id, reverses: movementId }, 201);
+  }
+
+  if (path === base + '/queries/void') {
+    const intervention = reversalIntervention(member, data, 'supervisor');
+    keys(data, ['id', 'queryId', 'reason', 'interventionReason']);
+    const id = recordId(data.id), queryId = recordId(data.queryId), why = multiline(data.reason, 'Reason', 3, 500);
+    const previous = await one(db, 'SELECT * FROM stock_query_voids WHERE query_id=? AND workspace_id=?', queryId, w);
+    if (previous) return previous.id === id && previous.reason === why ? json({ query: await one(db, 'SELECT * FROM stock_queries WHERE id=?', queryId) }) : fail(409, REVERSED);
+    const asked = await one(db, 'SELECT * FROM stock_queries WHERE id=? AND workspace_id=?', queryId, w);
+    if (!asked) fail(404, 'Stock query not found.');
+    if (asked.status !== 'answered') fail(409, 'Only an answered stock query can be voided.');
+    try {
+      await db.batch([query(db, 'INSERT INTO stock_query_voids(id,workspace_id,query_id,reason,voided_by,voided_at) VALUES(?,?,?,?,?,?)', id, w, queryId, why, member.user_id, now),
+        audit(db, member, 'stock_query.voided', queryId, { product: asked.product_id }, 'staff', { objectType: 'stock_query', reason: why, intervention })]);
+    } catch { fail(409, 'This answer could not be voided. Refresh and try again.'); }
+    return json({ query: await one(db, 'SELECT * FROM stock_queries WHERE id=?', queryId) }, 201);
+  }
+
+  if (path === base + '/reports/void') {
+    const intervention = reversalIntervention(member, data, 'supervisor');
+    keys(data, ['id', 'reportId', 'reason', 'interventionReason']);
+    const id = recordId(data.id), reportId = recordId(data.reportId), why = multiline(data.reason, 'Reason', 3, 500);
+    const previous = await one(db, 'SELECT * FROM supervisor_report_voids WHERE report_id=? AND workspace_id=?', reportId, w);
+    if (previous) return previous.id === id && previous.reason === why ? json({ voided: true }) : fail(409, REVERSED);
+    if (!await one(db, 'SELECT id FROM supervisor_reports WHERE id=? AND workspace_id=?', reportId, w)) fail(404, 'Report not found.');
+    try {
+      await db.batch([query(db, 'INSERT INTO supervisor_report_voids(id,workspace_id,report_id,reason,voided_by,voided_at) VALUES(?,?,?,?,?,?)', id, w, reportId, why, member.user_id, now),
+        audit(db, member, 'stock_report.voided', reportId, {}, 'staff', { objectType: 'stock_report', reason: why, intervention })]);
+    } catch { fail(409, 'This report could not be voided. Refresh and try again.'); }
+    return json({ voided: true }, 201);
   }
 
   if (path === base + '/finished') {
@@ -233,10 +311,17 @@ export async function stockApi(request, env, member, path, data) {
     const terms = { lot_id: lotId, stage: data.stage, kind: data.kind, delta_grams: deltaGrams, reason: why, compensates_id: compensatesId, created_by: member.user_id };
     const previous = await adjustmentOf(db, id, w);
     if (previous) return sameAs(previous, terms) ? adjustmentReply(db, previous) : fail(409, REUSED);
-    const lot = await one(db, 'SELECT inventory_type FROM lots WHERE id=? AND workspace_id=?', lotId, w);
-    if (!lot) fail(404, 'This lot was not found in your workspace.');
-    if (lot.inventory_type && lot.inventory_type !== data.stage) fail(422, `This lot holds ${lot.inventory_type} stock.`);
-    if (compensatesId && !await adjustmentOf(db, compensatesId, w)) fail(404, 'The adjustment to compensate was not found.');
+    // Stock decides by balances, not by the lot's origin (inventory_type): a raw batch that was produced has finished stock.
+    if (!await one(db, 'SELECT id FROM lots WHERE id=? AND workspace_id=?', lotId, w)) fail(404, 'This lot was not found in your workspace.');
+    if (deltaGrams < 0 && await balanceOf(db, lotId, data.stage) === 0) fail(422, `This batch holds no ${data.stage} stock to adjust.`);
+    const original = compensatesId ? await adjustmentOf(db, compensatesId, w) : null;
+    if (compensatesId && !original) fail(404, 'The adjustment to compensate was not found.');
+    if (original) {
+      if (original.status !== 'applied') fail(409, 'Only an applied adjustment can be reversed.');
+      if (original.lot_id !== lotId || original.stage !== data.stage) fail(422, 'A reversal must target the same batch and stage.');
+      // A full reversal happens once; partial compensations stay open.
+      if (deltaGrams === -original.delta_grams && await one(db, "SELECT id FROM inventory_adjustments WHERE compensates_id=? AND delta_grams=? AND status!='rejected'", compensatesId, deltaGrams)) fail(409, REVERSED);
+    }
     if (deltaGrams < 0 && await balanceOf(db, lotId, data.stage) + deltaGrams < 0) fail(409, NEGATIVE);
     const approval = await needsApproval(db, w, 'inventory_adjustment', Math.abs(deltaGrams), member.user_id), approvalId = crypto.randomUUID();
     const statements = approval.required
@@ -293,8 +378,9 @@ export async function stockApi(request, env, member, path, data) {
 
   if (path === base + '/reports') {
     const intervention = role(member, data, 'supervisor');
-    keys(data, ['id', 'from', 'to', 'flagged', 'note', 'interventionReason']);
+    keys(data, ['id', 'from', 'to', 'flagged', 'note', 'supersedes', 'interventionReason']);
     const id = recordId(data.id), [from, to] = period(new URLSearchParams({ from: String(data.from), to: String(data.to) })), note = data.note === undefined ? '' : text(data.note, 'Note', 0, 1000);
+    const supersedesId = data.supersedes === undefined ? null : recordId(data.supersedes);
     if (!Array.isArray(data.flagged) || data.flagged.length > 50) fail(422, 'Flag at most 50 items.');
     const content = await draftOf(db, w, from, to);
     const known = { inspection: new Set([...content.confirmedRejections, ...content.escalations].map(i => i.id)), adjustment: new Set(content.adjustments.map(a => a.id)) };
@@ -304,14 +390,17 @@ export async function stockApi(request, env, member, path, data) {
       return { objectType: item.objectType, objectId: item.objectId, note: text(item.note, 'Flag note', 3, 500) };
     });
     const flaggedJson = JSON.stringify(flagged), previous = await one(db, 'SELECT * FROM supervisor_reports WHERE id=? AND workspace_id=?', id, w);
-    const same = row => sameAs(row, { period_from: from, period_to: to, flagged_json: flaggedJson, note, created_by: member.user_id });
-    if (previous) return same(previous) ? json({ report: reportRow(previous) }) : fail(409, REUSED);
+    const same = (row, supersedes) => sameAs(row, { period_from: from, period_to: to, flagged_json: flaggedJson, note, created_by: member.user_id }) && supersedes === supersedesId;
+    if (previous) return same(previous, (await one(db, 'SELECT supersedes_id FROM supervisor_report_corrections WHERE report_id=?', id))?.supersedes_id ?? null) ? json({ report: reportRow(previous) }) : fail(409, REUSED);
+    // A correction must replace a voided report (the correction trigger also checks this, and each voided report takes one correction).
+    if (supersedesId && !await one(db, 'SELECT 1 AS n FROM supervisor_report_voids WHERE report_id=? AND workspace_id=?', supersedesId, w)) fail(422, 'Only a voided report can be corrected.');
     try {
       await db.batch([query(db, 'INSERT INTO supervisor_reports(id,workspace_id,period_from,period_to,content_json,flagged_json,note,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)', id, w, from, to, JSON.stringify(content), flaggedJson, note, member.user_id, now, now),
+        ...(supersedesId ? [query(db, 'INSERT INTO supervisor_report_corrections(report_id,workspace_id,supersedes_id,created_by,created_at) VALUES(?,?,?,?,?)', id, w, supersedesId, member.user_id, now)] : []),
         audit(db, member, 'stock_report.submitted', id, { from, to, rejections: content.confirmedRejections.length, escalations: content.escalations.length, adjustments: content.adjustments.length, flagged: flagged.length }, 'staff', { objectType: 'stock_report', intervention })]);
     } catch {
       const raced = await one(db, 'SELECT * FROM supervisor_reports WHERE id=? AND workspace_id=?', id, w);
-      if (raced && same(raced)) return json({ report: reportRow(raced) });
+      if (raced && same(raced, (await one(db, 'SELECT supersedes_id FROM supervisor_report_corrections WHERE report_id=?', id))?.supersedes_id ?? null)) return json({ report: reportRow(raced) });
       fail(409, 'This report could not be saved. Refresh and try again.');
     }
     return json({ report: reportRow(await one(db, 'SELECT r.*,u.name AS created_by_name FROM supervisor_reports r JOIN users u ON u.id=r.created_by WHERE r.id=?', id)) }, 201);

@@ -3,6 +3,7 @@ import { ArrowRight, RefreshCw, TriangleAlert, Truck } from 'lucide-react';
 import { AsyncForm, Field } from './forms';
 import { useLanguage } from './i18n';
 import { inventoryRequest, type Member, type WorkspaceState } from './inventory-client';
+import { ReverseControl } from './ToProduction';
 import { InterventionField, NextStep, ReasonField, SectionTabs, StatusTag, kg } from './PortalCommon';
 import './sales-screens.css';
 
@@ -67,6 +68,11 @@ export function DispatchScreens({ member, section, tab, id, navigate }: Props) {
     const hasFinished = own.some(item => item.stage === 'finished' && item.grams > 0);
     return lot.quality === 'approved' && hasFinished && (!selectedOrder?.product_id || selectedOrder.product_id === lot.product_id);
   });
+  // A batch is listed once some of it is finished, whatever its origin: the notes say which same-material batches are not ready yet.
+  const sameMaterial = (lot: { product_id: string }) => !selectedOrder?.product_id || selectedOrder.product_id === lot.product_id;
+  const heldIn = (lotId: string, stage: string) => balances.some(item => item.lot_id === lotId && item.stage === stage && item.grams > 0);
+  const rawBatches = lots.filter(lot => sameMaterial(lot) && heldIn(lot.id, 'raw') && !heldIn(lot.id, 'finished')).length;
+  const productionBatches = lots.filter(lot => sameMaterial(lot) && heldIn(lot.id, 'wip') && !heldIn(lot.id, 'finished')).length;
   const chooseOrder = (value: string) => {
     setOrderId(value); setLotId('');
     const order = orders.find(item => item.id === value);
@@ -93,7 +99,8 @@ export function DispatchScreens({ member, section, tab, id, navigate }: Props) {
     {orders.length ? <AsyncForm title={t('New dispatch request', 'نئی ڈسپیچ درخواست')} submit={t('Request approval', 'منظوری مانگیں')}
       onSubmit={() => call('', { id: crypto.randomUUID(), orderId, lotId, quantityMilli: Math.round(Number(quantity) * 1000), grams: Math.round(Number(quantity) * 1000), vehicle, transporter, ...adminIntervention(intervention) }, 'Dispatch approval requested.', 'dispatches')}>
       <Field>{t('Confirmed sale', 'تصدیق شدہ فروخت')}<select value={orderId} onChange={event => chooseOrder(event.target.value)} required><option value="">{t('Choose a sale', 'فروخت منتخب کریں')}</option>{orders.map(order => <option key={order.id} value={order.id}>{order.reference} · {order.buyer_name} · {kg(order.remaining_milli)} {t('remaining', 'باقی')}</option>)}</select></Field>
-      <Field>{t('Finished goods batch', 'تیار مال کا بیچ')}<select value={lotId} onChange={event => setLotId(event.target.value)} required><option value="">{t('Choose QC-approved finished goods', 'کوالٹی منظور شدہ تیار مال منتخب کریں')}</option>{availableLots.map(lot => <option key={lot.id} value={lot.id}>{lot.batch} · {productName(lot.product_id)} · {kg(balances.filter(b => b.lot_id === lot.id && b.stage === 'finished').reduce((sum, b) => sum + b.grams, 0))}</option>)}</select>
+      <Field>{t('Finished goods batch', 'تیار مال کا بیچ')}<select value={lotId} onChange={event => setLotId(event.target.value)} required><option value="">{t('Choose QC-approved finished goods', 'کوالٹی منظور شدہ تیار مال منتخب کریں')}</option>{availableLots.map(lot => <option key={lot.id} value={lot.id}>{productName(lot.product_id)} · {lot.batch} · {kg(balances.filter(b => b.lot_id === lot.id && b.stage === 'finished').reduce((sum, b) => sum + b.grams, 0))} {t('finished', 'تیار')}</option>)}</select>
+        {orderId && (rawBatches > 0 || productionBatches > 0) && <span className="live-muted">{t(`Not listed yet: ${rawBatches} still raw material, ${productionBatches} in production.`, `ابھی شامل نہیں: ${rawBatches} خام مال، ${productionBatches} پیداوار میں۔`)}</span>}
         {orderId && !availableLots.length && <span className="live-muted">{t('No matching finished goods lot is available.', 'مطابق تیار مال دستیاب نہیں۔')}</span>}</Field>
       <Field>{t('Quantity (kg)', 'مقدار (کلوگرام)')}<input type="number" min="0.001" max={(selectedOrder?.remaining_milli ?? 0) / 1000} step="0.001" value={quantity} onChange={event => setQuantity(event.target.value)} required /></Field>
       <div className="live-fields"><Field>{t('Vehicle (optional)', 'گاڑی (اختیاری)')}<input value={vehicle} onChange={event => setVehicle(event.target.value)} maxLength={100} /></Field>
@@ -130,6 +137,9 @@ export function DispatchScreens({ member, section, tab, id, navigate }: Props) {
       <Field>{t('Delivery proof (optional)', 'ترسیل کا ثبوت (اختیاری)')}<textarea value={proof} onChange={event => setProof(event.target.value)} maxLength={500} /></Field>
       <InterventionField member={member} owners={['dispatch']} value={intervention} onChange={setIntervention} />
     </AsyncForm>}
+    {row.status === 'dispatched' && <ReverseControl label={t('Undo dispatch', 'ڈسپیچ واپس لیں')} confirm={t('Undo dispatch', 'ڈسپیچ واپس لیں')} isAdmin={member.role === 'admin'}
+      impact={t(`Puts ${kg(row.grams)} back into Finished stock, batch ${row.lot_batch}, and returns this dispatch to approved.`, `بیچ ${row.lot_batch} کا ${kg(row.grams)} واپس تیار اسٹاک میں جائے گا، اور یہ ڈسپیچ منظور شدہ ہو جائے گی۔`)}
+      run={async ({ id, reason, interventionReason }) => { await call('/dispatched/reverse', { id, dispatchId: row.id, reason, ...(interventionReason ? { interventionReason } : {}) }, 'Dispatch undone. Its stock is back in finished goods.'); }} />}
     {['pending_approval', 'approved', 'on_hold'].includes(row.status) && <details className="live-panel">
       <summary><TriangleAlert size={18} aria-hidden="true" /> {t('Raise a stock issue', 'اسٹاک کا مسئلہ درج کریں')}</summary>
       <AsyncForm title={t('Stock shortage or mismatch', 'اسٹاک کی کمی یا فرق')} submit={t('Send issue to supervisor', 'سپروائزر کو بھیجیں')}

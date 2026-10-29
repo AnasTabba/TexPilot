@@ -72,3 +72,36 @@ export default function ToProduction({ lotId, batch, productName, rawGrams, mode
     </form>
   </dialog>;
 }
+
+export interface ReverseControlProps {
+  label: string; // the secondary button, already translated
+  impact: string; // what will happen, shown before anything is saved
+  confirm: string; // the save button, already translated
+  isAdmin: boolean; // an admin also gives the intervention reason
+  minLength?: number; // the server minimum: 3 for reversals, 5 for stock adjustments
+  run: (request: { id: string; reason: string; interventionReason?: string }) => Promise<void>; // throws on failure
+}
+
+/** A secondary button that opens an inline form: the reason is required and the effect is shown first. The request id changes whenever the reason changes, and stays the same when a failed save is retried, so one reversal is never applied twice. */
+export function ReverseControl({ label, impact, confirm, isAdmin, minLength = 3, run }: ReverseControlProps) {
+  const { t, language } = useLanguage();
+  const [open, setOpen] = useState(false), [why, setWhy] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const id = useRef(crypto.randomUUID());
+  const close = () => { setOpen(false); setWhy(''); setError(''); id.current = crypto.randomUUID(); };
+  async function submit(event: FormEvent) {
+    event.preventDefault(); if (busy) return;
+    const reason = why.trim();
+    if (reason.length < minLength || reason.length > 500) { setError(t(`Give a reason of ${minLength} to 500 characters.`, `${minLength} سے 500 حروف کی وجہ لکھیں۔`)); return; }
+    setBusy(true); setError('');
+    try { await run({ id: id.current, reason, ...(isAdmin ? { interventionReason: reason } : {}) }); close(); }
+    catch (caught) { setError(errorMessage(caught, language)); }
+    finally { setBusy(false); }
+  }
+  if (!open) return <button className="button" type="button" onClick={() => setOpen(true)}>{label}</button>;
+  return <form className="reverse-form live-panel" onSubmit={event => void submit(event)} aria-label={label} noValidate>
+    <p className="live-muted">{impact}</p>
+    <Field>{t('Reason for this reversal', 'اس الٹنے کی وجہ')}<textarea rows={2} maxLength={500} value={why} onChange={event => { id.current = crypto.randomUUID(); setWhy(event.target.value); }} required /></Field>
+    {error && <p className="live-error" role="alert"><TriangleAlert size={18} aria-hidden="true" />{error}</p>}
+    <div className="live-actions"><button className="button primary" disabled={busy}>{busy ? <LoaderCircle className="live-spinning" size={20} aria-hidden="true" /> : null}{busy ? t('Saving…', 'محفوظ ہو رہا ہے…') : confirm}</button><button className="button" type="button" disabled={busy} onClick={close}>{t('Cancel', 'منسوخ کریں')}</button></div>
+  </form>;
+}
