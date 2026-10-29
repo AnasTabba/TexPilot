@@ -342,12 +342,14 @@ export async function qualityApi(request, env, member, path, data) {
     if (changedAmount !== (data.reason !== undefined)) fail(422, changedAmount ? 'An adjusted amount needs a reason of at least 5 characters.' : 'A reason is recorded only with an adjusted amount.');
     const why = changedAmount ? reasonOf(data.reason, 'Adjustment reason') : null, amount = changedAmount ? adjusted : claim.calculated_minor;
     if (claim.status !== 'open') fail(409, claim.status === 'pending_approval' ? 'This claim is waiting for admin approval.' : 'This claim was already decided.');
+    // The purchase manager's notice carries the final outcome and amount, so it reads the currency before the batch.
+    const { currency } = await settingsOf(db, w), label = `${claim.lot_reference} · ${data.outcome} · ${currency} ${(amount / 100).toFixed(2)}`;
     try {
       await db.batch([
         query(db, "UPDATE claims SET status='decided',outcome=?,adjusted_minor=?,adjust_reason=?,decided_by=?,decided_at=?,updated_at=? WHERE id=? AND workspace_id=?", data.outcome, changedAmount ? adjusted : null, why, member.user_id, now, now, id, w),
         audit(db, member, 'claim.decided', id, { outcome: data.outcome, inspection: claim.inspection_id }, 'staff', { before: { amount: claim.calculated_minor }, after: { amount, outcome: data.outcome } }),
         ...(changedAmount ? [audit(db, member, 'claim.adjusted', id, { inspection: claim.inspection_id }, 'staff', { before: { amount: claim.calculated_minor }, after: { amount: adjusted }, reason: why })] : []),
-        notifyRole(db, w, 'purchase_manager', 'claim.decided', 'claim', id, claim.lot_reference)]);
+        notifyRole(db, w, 'purchase_manager', 'claim.decided', 'claim', id, label)]);
     } catch { fail(409, 'This claim was already decided.'); }
     return json({ claim: await claimView(db, id, w) });
   }

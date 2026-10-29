@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, CircleX, RefreshCw, TriangleAlert } from 'lucide-react';
+import { ArrowUpRight, Ban, Check, CheckCheck, CircleX, RefreshCw, TriangleAlert } from 'lucide-react';
 import { AsyncForm, Field, errorMessage } from './forms';
+import { SectionTabs } from './PortalCommon';
 import { inventoryRequest as api } from './inventory-client';
 import { useLanguage } from './i18n';
 import { factoryTime, quantity, rate } from './erp-client';
@@ -16,10 +17,11 @@ export default function Review() {
   const [reports, setReports] = useState<Submission[] | null>(null), [rejections, setRejections] = useState<Submission[]>([]), [currency, setCurrency] = useState('PKR');
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [form, setForm] = useState<Decision>(null), [busy, setBusy] = useState(false);
   const [reason, setReason] = useState(''), [outcome, setOutcome] = useState('re_inspect');
+  const [view, setView] = useState<'pending' | 'escalated'>('pending'), [escalated, setEscalated] = useState<Submission[] | null>(null);
   const load = useCallback(async () => {
     try {
-      const [a, b] = await Promise.all([api<{ reports: Submission[] }>('/erp/qc/reports'), api<{ rejections: Submission[]; currency: string }>('/erp/qc/rejections')]);
-      setReports(a.reports); setRejections(b.rejections); setCurrency(b.currency); setError('');
+      const [a, b, c] = await Promise.all([api<{ reports: Submission[] }>('/erp/qc/reports'), api<{ rejections: Submission[]; currency: string }>('/erp/qc/rejections'), api<{ rejections: Submission[] }>('/erp/qc/rejections?status=escalated')]);
+      setReports(a.reports); setRejections(b.rejections); setEscalated(c.rejections); setCurrency(b.currency); setError('');
     } catch (e) { setError(errorMessage(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -43,11 +45,20 @@ export default function Review() {
     <div className="erp-records">{reports?.map(i => <article className="erp-record" key={i.id}><h3>{i.lot_reference} · {i.product_name}</h3><p>{t('Accepted by the inspector', 'انسپکٹر نے قبول کیا')}: <strong>{quantity(i.accepted_milli)} {i.unit}</strong></p>{evidence({ ...i, issues: [] })}
       {form?.id === i.id && form.kind === 'report-reject' ? reasonForm(i, 'report-reject') : <div className="live-actions"><button className="button primary" disabled={busy} onClick={() => void decide('/erp/qc/reports/decide', { inspectionId: i.id, decision: 'accept' }, t('Report accepted. The stock is in the raw store.', 'رپورٹ قبول۔ اسٹاک خام اسٹور میں ہے۔'))}><Check size={18} aria-hidden="true" />{t('Accept report', 'رپورٹ قبول کریں')}</button>
         <button className="button" disabled={busy} onClick={() => { setReason(''); setForm({ kind: 'report-reject', id: i.id }); }}><CircleX size={18} aria-hidden="true" />{t('Return for re-inspection', 'دوبارہ معائنے کے لیے واپس')}</button></div>}</article>)}</div>
-    <h3 className="live-subheading">{t('Rejections to decide', 'مسترد مقداروں کے فیصلے')}</h3>
+    <h3 className="live-subheading">{view === 'pending' ? t('Rejections to decide', 'مسترد مقداروں کے فیصلے') : t('Escalated to admin', 'ایڈمن کو بھیجی گئی مسترد مقداریں')}</h3>
+    <SectionTabs tabs={[{ id: 'pending', en: 'To decide', ur: 'فیصلہ باقی' }, { id: 'escalated', en: 'Escalated to admin', ur: 'ایڈمن کو بھیجی گئی' }]} value={view} onChange={id => setView(id as 'pending' | 'escalated')} />
+    {view === 'escalated' && <>
+      {!escalated && !error && <p role="status">{t('Loading…', 'لوڈ ہو رہا ہے…')}</p>}
+      {escalated && !escalated.length && <p className="live-muted">{t('No rejections are waiting for the admin.', 'ایڈمن کے فیصلے کے منتظر کوئی مسترد مقدار نہیں۔')}</p>}
+      <div className="erp-records">{escalated?.map(i => <article className="erp-record" key={i.id}><h3>{i.lot_reference} · {i.product_name}</h3><p>{t('Rejected', 'مسترد')}: <strong>{quantity(i.rejected_milli)} {i.unit}</strong> · {t('claim if confirmed', 'تصدیق پر دعویٰ')} {rate(i.claim_minor ?? 0, currency)}</p>{evidence({ ...i, photos: i.photos.filter(p => p.issue_id) })}
+        <p className="live-muted">{t('Waiting for the admin decision.', 'ایڈمن کے فیصلے کا انتظار ہے۔')}</p></article>)}</div>
+    </>}
+    {view === 'pending' && <>
     {reports && !rejections.length && <p className="live-muted">{t('No rejections are waiting.', 'کوئی مسترد مقدار منتظر نہیں۔')}</p>}
     <div className="erp-records">{rejections.map(i => <article className="erp-record" key={i.id}><h3>{i.lot_reference} · {i.product_name}</h3><p>{t('Rejected', 'مسترد')}: <strong>{quantity(i.rejected_milli)} {i.unit}</strong> · {t('claim if confirmed', 'تصدیق پر دعویٰ')} {rate(i.claim_minor ?? 0, currency)}</p>{evidence({ ...i, photos: i.photos.filter(p => p.issue_id) })}
-      {form?.id === i.id && form.kind === 'dismiss' ? reasonForm(i, 'dismiss') : <div className="live-actions"><button className="button primary" disabled={busy} onClick={() => void decide('/erp/qc/rejections/decide', { inspectionId: i.id, decision: 'confirm' }, t('Rejection confirmed. A claim was raised.', 'مسترد کرنا تصدیق شدہ۔ دعویٰ درج ہو گیا۔'))}>{t('Confirm rejection', 'مسترد کرنا تصدیق کریں')}</button>
-        <button className="button" disabled={busy} onClick={() => { setReason(''); setOutcome('re_inspect'); setForm({ kind: 'dismiss', id: i.id }); }}>{t('Dismiss', 'خارج کریں')}</button>
-        <button className="button" disabled={busy} onClick={() => void decide('/erp/qc/rejections/decide', { inspectionId: i.id, decision: 'escalate' }, t('Sent to the admin to decide.', 'ایڈمن کو فیصلے کے لیے بھیج دیا گیا۔'))}>{t('Escalate to admin', 'ایڈمن کو بھیجیں')}</button></div>}</article>)}</div>
+      {form?.id === i.id && form.kind === 'dismiss' ? reasonForm(i, 'dismiss') : <div className="live-actions"><button className="button primary" disabled={busy} onClick={() => void decide('/erp/qc/rejections/decide', { inspectionId: i.id, decision: 'confirm' }, t('Rejection confirmed. A claim was raised.', 'مسترد کرنا تصدیق شدہ۔ دعویٰ درج ہو گیا۔'))}><CheckCheck size={18} aria-hidden="true" />{t('Confirm rejection', 'مسترد کرنا تصدیق کریں')}</button>
+        <button className="button" disabled={busy} onClick={() => { setReason(''); setOutcome('re_inspect'); setForm({ kind: 'dismiss', id: i.id }); }}><Ban size={18} aria-hidden="true" />{t('Dismiss', 'خارج کریں')}</button>
+        <button className="button" disabled={busy} onClick={() => void decide('/erp/qc/rejections/decide', { inspectionId: i.id, decision: 'escalate' }, t('Sent to the admin to decide.', 'ایڈمن کو فیصلے کے لیے بھیج دیا گیا۔'))}><ArrowUpRight size={18} aria-hidden="true" />{t('Escalate to admin', 'ایڈمن کو بھیجیں')}</button></div>}</article>)}</div>
+    </>}
   </section>;
 }

@@ -71,7 +71,8 @@ const quantityAudit = (db, member, order, quantity, total, intervention = null) 
 export function poInsertQueries(db, member, { bidId, bidVersion, termsSnapshot: t, currency, acceptedBy = member.user_id, intervention = null }, now) {
   const id = crypto.randomUUID(), w = member.workspace_id, total = orderTotal(t.price_minor, t.quantity_milli);
   return [query(db, `SELECT json('!') WHERE NOT EXISTS(SELECT 1 FROM supplier_bids b WHERE b.id=? AND b.version=? AND b.status='submitted' AND b.valid_until>=? AND b.price_minor=? AND b.currency=? AND b.payment_terms=? AND b.delivery_at=? AND b.valid_until=? AND b.note=? AND b.quantity_milli>=?
-      AND ?=COALESCE((SELECT json_extract(value_json,'$') FROM settings WHERE workspace_id=? AND key='currency'),'PKR'))`,
+      AND ?=COALESCE((SELECT json_extract(value_json,'$') FROM settings WHERE workspace_id=? AND key='currency'),'PKR')
+      AND EXISTS(SELECT 1 FROM suppliers s WHERE s.id=b.supplier_id AND s.status='approved'))`,
       bidId, bidVersion, now, t.price_minor, t.currency, t.payment_terms, t.delivery_at, t.valid_until, t.note, t.quantity_milli, currency, w),
     query(db, "INSERT INTO supplier_purchase_orders(id,workspace_id,rfq_id,bid_id,supplier_id,reference,terms_snapshot,status,accepted_by,created_at,quantity_milli,total_minor,approval_status,version,updated_at,created_by) VALUES(?,?,?,?,?,?,?,'accepted',?,?,?,?,'approved',1,?,?)",
       id, w, t.rfq_id, bidId, t.supplier_id, reference('PO'), JSON.stringify(t), acceptedBy, now, t.quantity_milli, total, now, acceptedBy),
@@ -146,7 +147,7 @@ export async function staffProcurement(request, env, member, path, data) {
       if (!['approved','rejected','suspended'].includes(data.status)) fail(422, 'Choose approved, rejected or suspended.');
       if (!LISTED.includes(s.status)) fail(409, 'This directory contact has no supplier registration to review.');
       if (!MOVES[s.status].includes(data.status)) fail(409, `This supplier cannot move from ${s.status} to ${data.status}.`);
-      const reason = ['rejected','suspended'].includes(data.status) || data.reason !== undefined ? decisionReason(data.reason, 'Review reason') : ''; const version = integer(data.version, 'Version');
+      const reason = ['rejected','suspended'].includes(data.status) || data.reason ? decisionReason(data.reason, 'Review reason') : ''; const version = integer(data.version, 'Version');
       const ids = await categoryIds(db, data.categories ?? (await supplierView(db,s)).categories);
       if(s.version!==version) fail(409,'Supplier changed. Reload before reviewing.');
       try { await db.batch([query(db, 'UPDATE suppliers SET status=?,version=version+1,updated_at=? WHERE id=? AND workspace_id=? AND version=?', data.status,now,s.id,w,version),
@@ -294,8 +295,9 @@ export async function staffProcurement(request, env, member, path, data) {
     if(!bid) fail(404,'Bid not found.');
     const previous=await one(db,'SELECT * FROM supplier_purchase_orders WHERE rfq_id=?',bid.rfq_id);
     if(previous) {if(previous.bid_id!==bid.id||JSON.parse(previous.terms_snapshot).accepted_bid_version!==data.version) fail(409,'Another bid or revision has already been accepted.'); return json({order:previous});}
-    const rfq=await one(db,'SELECT status,cancelled_at FROM procurement_rfqs WHERE id=?',bid.rfq_id), settings=await settingsOf(db,w);
+    const rfq=await one(db,'SELECT status,cancelled_at FROM procurement_rfqs WHERE id=?',bid.rfq_id), supplier=await one(db,'SELECT status FROM suppliers WHERE id=?',bid.supplier_id), settings=await settingsOf(db,w);
     if(rfq.cancelled_at||!['open','closed'].includes(rfq.status)) fail(409,'This RFQ is not open for awarding.');
+    if(supplier?.status!=='approved') fail(409,'Only an approved supplier can win an RFQ.');
     if(bid.currency!==settings.currency) fail(409,`This bid is in ${bid.currency}, but the factory currency is ${settings.currency}.`);
     if(bid.status!=='submitted'||bid.valid_until<now||bid.version!==data.version||bid.quantity_milli<bid.required_quantity) fail(409,'Use a current, valid bid covering the full requested quantity.');
     if(await one(db,"SELECT id FROM approval_requests WHERE object_type='rfq' AND object_id=? AND status='pending'",bid.rfq_id)) fail(409,'An award for this RFQ is waiting for admin approval.');

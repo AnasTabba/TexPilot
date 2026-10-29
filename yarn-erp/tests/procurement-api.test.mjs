@@ -5,6 +5,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { inventoryApi } from '../server/inventory.mjs';
 import { sqliteBinding } from '../server/sqlite.mjs';
 import { seedRows, userRow } from '../server/auth.mjs';
+import { poInsertQueries } from '../server/procurement.mjs';
 
 const origin='https://yarnflow.test',pw='A strong test password 2026';
 async function fixture() {
@@ -195,4 +196,19 @@ test('tonne lots keep the order unit and the inventory role never receives suppl
  assert.equal(lot.status,201,JSON.stringify(lot.data));assert.equal(lot.data.unit,'tonne');
  const overview=await f.request('/erp/inbound',undefined,c);assert.equal(overview.status,200);assert.equal(JSON.stringify(overview.data).includes('price_minor'),false);
  assert.equal(overview.data.orders[0].arrived_milli,500);
+});
+test('only an approved supplier can win an RFQ, including the shared PO writer, and approval needs no reason',async()=>{
+ const f=await fixture(),s=await f.active(),r=await f.rfq();
+ assert.equal((await f.staff('/erp/rfqs/publish',{id:r.id})).status,200);
+ const b=await f.request('/portal/bids',f.bid(r),s.cookie);assert.equal(b.status,201);
+ await f.approve(s,'suspended');
+ assert.equal((await f.staff('/erp/bids/award',{id:b.data.bid.id,version:1})).status,409);
+ const bidRow=f.sql.prepare('SELECT * FROM supplier_bids WHERE id=?').get(b.data.bid.id), workspaceId=f.sql.prepare('SELECT id FROM workspaces').get().id;
+ const termsSnapshot={...bidRow,rfq_id:r.id,supplier_id:s.id,title:r.title,specifications:r.specifications,unit:r.unit,accepted_bid_version:1};
+ const db=sqliteBinding(f.sql);
+ await assert.rejects(db.batch(poInsertQueries(db,{user_id:'manager',workspace_id:workspaceId},{bidId:bidRow.id,bidVersion:1,termsSnapshot,currency:'PKR'},Date.now())));
+ assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM supplier_purchase_orders').get().n,0);
+ const pending=await f.register('Gamma');const version=()=>f.sql.prepare('SELECT version FROM suppliers WHERE id=?').get(pending.id).version;
+ assert.equal((await f.request('/erp/suppliers/review',{id:pending.id,status:'rejected',version:version()},f.manager)).status,422,'rejection needs a reason');
+ assert.equal((await f.request('/erp/suppliers/review',{id:pending.id,status:'approved',version:version()},f.manager)).status,200,'approval needs no reason');
 });

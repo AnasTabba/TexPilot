@@ -391,7 +391,7 @@ test('the superseded stock writes are closed and the catalogue belongs to superv
   for (const as of ['Qasim', 'Sana', 'Danish']) assert.equal((await f.call('/products', { sku: 'C', name: 'Material C' }, as)).status, 403, as);
   assert.equal((await f.call('/products', { sku: 'D', name: 'Material D' }, 'Anas')).status, 422);
   assert.equal((await f.call('/products', { sku: 'D', name: 'Material D', interventionReason: 'Supervisor is away today' }, 'Anas')).status, 201);
-  assert.equal((await f.call('/movements', { id: uuid(), lotId, action: 'dispatch', stage: 'finished', grams: 100, cartons: 0, cones: 0, note: 'Temporary path' }, 'Danish')).status, 201, 'immediate dispatch stays until Task 14');
+  assert.equal((await f.call('/movements', { id: uuid(), lotId, action: 'dispatch', stage: 'finished', grams: 100, cartons: 0, cones: 0, note: 'Temporary path' }, 'Danish')).status, 404, 'immediate dispatch is closed; dispatch goes through the dispatch flow');
 });
 
 test('0015 applies before or after the later migrations and keeps every row', () => {

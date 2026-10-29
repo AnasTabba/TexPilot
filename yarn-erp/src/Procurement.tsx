@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Mail, Phone, Plus, RefreshCw, Ship, ShieldCheck, Star, Truck } from 'lucide-react';
+import { Ban, ClipboardList, ExternalLink, Lock, Mail, Pencil, Phone, Plus, RefreshCw, Scale, Ship, ShieldCheck, Star, Truck } from 'lucide-react';
 import { inventoryRequest as api, can, type Member } from './inventory-client';
 import { AsyncForm, Field, errorMessage } from './forms';
 import { InterventionField } from './PortalCommon';
@@ -25,7 +25,7 @@ export default function Procurement({ member, onInventoryChanged }: { member: Me
  useEffect(() => { void load(); }, [load]);
  const saved = async (message?: string) => { setOpen(''); setNotice(message ?? t('Saved.', 'محفوظ ہو گیا۔')); await load(); };
 
- const title = (id: string) => { const c = categories.find(c => c.id === id); return c ? language === 'ur' ? c.urdu_name : c.name : id; };
+ const title = (id: string) => { const c = categories.find(c => c.id === id); return c ? language === 'ur' ? c.urdu_name : c.name : t('Unknown category', 'نامعلوم قسم'); };
  return <div className="erp-workspace">
   <div className="erp-toolbar"><div className="live-segments" aria-label={t('Procurement views', 'خریداری کے حصے')}>{directoryAllowed && <button aria-pressed={view === 'suppliers'} onClick={() => { setView('suppliers'); setOpen(''); }}>{t('Suppliers', 'سپلائرز')}</button>}{buyingAllowed && <><button aria-pressed={view === 'rfqs'} onClick={() => { setView('rfqs'); setOpen(''); }}>{t('RFQs and bids', 'درخواستیں اور بولیاں')}</button><button aria-pressed={view === 'orders'} onClick={() => { setView('orders'); setOpen(''); }}>{t('Purchase orders', 'خریداری کے آرڈر')}</button><button aria-pressed={view === 'tracking'} onClick={() => { setView('tracking'); setOpen(''); }}><Ship size={18} />{t('Tracking', 'ٹریکنگ')}</button></>}</div><button className="button" onClick={() => void load()}><RefreshCw size={18} />{t('Refresh', 'تازہ کریں')}</button></div>
   {error && <p className="live-error" role="alert">{t(error)}</p>}{notice && <p className="live-success" role="status">{notice}</p>}{loading && <p role="status">{t('Loading procurement…', 'خریداری کی تفصیلات لوڈ ہو رہی ہیں…')}</p>}
@@ -39,6 +39,9 @@ export default function Procurement({ member, onInventoryChanged }: { member: Me
     <div className="erp-records">{suppliers.filter(s => (category === 'all' || s.categories.includes(category)) && [s.name, s.contact_name, s.city, s.email].join(' ').toLowerCase().includes(search.toLowerCase())).map(s => <article className="erp-record" key={s.id}><div className="erp-record-head"><div><h3>{s.name}</h3><p>{s.contact_name}{s.city ? ' · ' + s.city : ''}</p></div><span className={`erp-status is-${s.status}`}>{t(s.status, {pending:'زیرِ التوا',approved:'منظور',rejected:'مسترد',suspended:'معطل'}[s.status])}</span></div><p className="live-muted">{s.categories.map(title).join(' · ')}</p><StarSummary rating={s.rating} /><div className="live-actions"><a className="button" href={`tel:${s.phone}`}><Phone size={18} />{t('Call', 'کال کریں')} <bdi>{s.phone}</bdi></a><a className="button" href={`mailto:${encodeURIComponent(s.email)}`}><Mail size={18} />{s.email}</a>{s.website && <a className="button" href={s.website} target="_blank" rel="noreferrer">{t('Website', 'ویب سائٹ')}<ExternalLink size={16} /></a>}</div>{s.source_url && <p className="live-muted"><a href={s.source_url} target="_blank" rel="noreferrer">{t('Published contact source', 'شائع شدہ رابطے کا ذریعہ')}</a>{s.source_checked_at ? ' · ' + factoryTime(s.source_checked_at) : ''}</p>}
      {(member.role === 'purchase_manager' || member.admin) && s.status === 'approved' && (open === 'rate:' + s.id ? <RateSupplier member={member} supplier={s} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button" onClick={() => setOpen('rate:' + s.id)}><Star size={18} />{t('Rate supplier', 'سپلائر کی ریٹنگ دیں')}</button>)}
      {(member.role === 'purchase_manager' || member.admin) && SUPPLIER_MOVES[s.status].length > 0 && (open === 'review:' + s.id ? <SupplierReview supplier={s} admin={member.admin} categories={categories} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button" onClick={() => setOpen('review:' + s.id)}><ShieldCheck size={18} />{t('Review supplier access', 'سپلائر رسائی کا جائزہ لیں')}</button>)}
+     {(member.role === 'purchase_manager' || member.admin) && (open === 'profile:' + s.id ? <SupplierProfileForm member={member} supplier={s} categories={categories} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button" onClick={() => setOpen('profile:' + s.id)}><Pencil size={18} />{t('Edit profile', 'پروفائل میں ترمیم')}</button>)}
+     <button className="button" aria-expanded={open === 'detail:' + s.id} onClick={() => setOpen(open === 'detail:' + s.id ? '' : 'detail:' + s.id)}><ClipboardList size={18} />{t('Supplier details', 'سپلائر کی تفصیلات')}</button>
+     {open === 'detail:' + s.id && <SupplierDetails supplierId={s.id} />}
     </article>)}</div>
    </section>
   </>}
@@ -56,7 +59,7 @@ export default function Procurement({ member, onInventoryChanged }: { member: Me
   {view === 'orders' && buyingAllowed && <section className="live-panel"><h2>{t('Purchase orders and inbound shipments', 'خریداری کے آرڈر اور آنے والی کھیپ')}</h2>{!state.orders.length && <p className="live-muted">{t('Accept a supplier bid to create a purchase order.', 'خریداری کا آرڈر بنانے کے لیے سپلائر کی بولی منظور کریں۔')}</p>}
    <PurchaseOrders orders={state.orders} shipments={state.shipments}
     renderDetail={o => <><BidTerms bid={o.terms} unit={o.terms.unit} />{o.approval_status === 'pending_admin' && <p className="live-warning">{t('Quantity change waiting for admin approval', 'مقدار کی تبدیلی ایڈمن کی منظوری کی منتظر ہے')}</p>}</>}
-    renderActions={o => <div className="live-actions">{o.approval_status === 'approved' && o.status !== 'cancelled' && (open === 'qty:' + o.id ? <QuantityForm member={member} order={o} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button" onClick={() => setOpen('qty:' + o.id)}>{t('Change quantity', 'مقدار تبدیل کریں')}</button>)}{o.approval_status === 'approved' && ['accepted', 'dispatched'].includes(o.status) && (member.role === 'purchase_manager' || member.admin) && (open === 'bl:' + o.id ? <BillOfLadingForm member={member} order={o} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button" onClick={() => setOpen('bl:' + o.id)}><Truck size={18} />{t('Attach bill of lading')}</button>)}</div>} />
+    renderActions={o => <div className="live-actions">{o.approval_status === 'approved' && o.status !== 'cancelled' && (open === 'qty:' + o.id ? <QuantityForm member={member} order={o} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button" onClick={() => setOpen('qty:' + o.id)}><Scale size={18} />{t('Change quantity', 'مقدار تبدیل کریں')}</button>)}{o.approval_status === 'approved' && ['accepted', 'dispatched'].includes(o.status) && !o.bill_of_lading && (member.role === 'purchase_manager' || member.admin) && (open === 'bl:' + o.id ? <BillOfLadingForm member={member} order={o} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button" onClick={() => setOpen('bl:' + o.id)}><Truck size={18} />{t('Attach bill of lading')}</button>)}</div>} />
   </section>}
  </div>;
 }
@@ -65,7 +68,7 @@ const SUPPLIER_MOVES: Record<string, string[]> = { pending: ['approved', 'reject
 function SupplierReview({ supplier, admin, categories, onSaved, onCancel }: { supplier: Supplier; admin: boolean; categories: SupplierCategory[]; onSaved: () => Promise<void>; onCancel: () => void }) {
  const { t } = useLanguage(); const moves = SUPPLIER_MOVES[supplier.status]; const [status, setStatus] = useState(moves[0]), [reason, setReason] = useState(''), [intervention, setIntervention] = useState(''), [selected, setSelected] = useState(supplier.categories);
  return <AsyncForm title={t('Review supplier access', 'سپلائر رسائی کا جائزہ لیں')} detail={supplier.name} submit={t('Save decision', 'فیصلہ محفوظ کریں')} onCancel={onCancel} note={t('Access changes end existing supplier sessions. Past bids and dispatches stay in the audit history.', 'رسائی کی تبدیلی سے موجودہ سپلائر سیشن ختم ہو جائیں گے۔ پرانی بولیاں اور روانگی ہسٹری میں رہیں گی۔')} onSubmit={async () => { await api('/erp/suppliers/review', { id: supplier.id, version: supplier.version, status, reason, categories: selected, ...(admin ? { interventionReason: intervention } : {}) }); await onSaved(); }}>
-  <Field>{t('Decision', 'فیصلہ')}<select value={status} onChange={e => setStatus(e.target.value)}>{moves.map(m => <option value={m} key={m}>{m === 'approved' ? t('Approve access', 'رسائی منظور کریں') : m === 'rejected' ? t('Reject registration', 'رجسٹریشن مسترد کریں') : t('Suspend access', 'رسائی معطل کریں')}</option>)}</select></Field><CategoryPicker categories={categories} value={selected} onChange={setSelected} /><Field>{t('Verification details / reason', 'تصدیق کی تفصیلات / وجہ')}<textarea value={reason} onChange={e => setReason(e.target.value)} minLength={5} maxLength={1000} required /></Field>{admin && <Field>{t('Intervention reason', 'مداخلت کی وجہ')}<textarea value={intervention} onChange={e => setIntervention(e.target.value)} minLength={5} maxLength={1000} required /></Field>}{status === 'approved' && <label className="erp-confirm"><input type="checkbox" required />{t('I verified the company, contact and selected yarn categories.', 'میں نے کمپنی، رابطے اور منتخب اقسام کی تصدیق کی ہے۔')}</label>}
+  <Field>{t('Decision', 'فیصلہ')}<select value={status} onChange={e => setStatus(e.target.value)}>{moves.map(m => <option value={m} key={m}>{m === 'approved' ? t('Approve access', 'رسائی منظور کریں') : m === 'rejected' ? t('Reject registration', 'رجسٹریشن مسترد کریں') : t('Suspend access', 'رسائی معطل کریں')}</option>)}</select></Field><CategoryPicker categories={categories} value={selected} onChange={setSelected} /><Field>{status === 'approved' ? t('Verification details (optional)', 'تصدیق کی تفصیلات (اختیاری)') : t('Verification details / reason', 'تصدیق کی تفصیلات / وجہ')}<textarea value={reason} onChange={e => setReason(e.target.value)} minLength={5} maxLength={1000} required={status !== 'approved'} /></Field>{admin && <Field>{t('Intervention reason', 'مداخلت کی وجہ')}<textarea value={intervention} onChange={e => setIntervention(e.target.value)} minLength={5} maxLength={1000} required /></Field>}{status === 'approved' && <label className="erp-confirm"><input type="checkbox" required />{t('I verified the company, contact and selected yarn categories.', 'میں نے کمپنی، رابطے اور منتخب اقسام کی تصدیق کی ہے۔')}</label>}
  </AsyncForm>;
 }
 // Half-star precision: the number shows one decimal, the stars round to the nearest half.
@@ -102,6 +105,35 @@ function RateSupplier({ member, supplier, onSaved, onCancel }: { member: Member;
   <InterventionField member={member} owners={['purchase_manager']} value={intervention} onChange={setIntervention} />
  </AsyncForm>;
 }
+function SupplierProfileForm({ member, supplier, categories, onSaved, onCancel }: { member: Member; supplier: Supplier; categories: SupplierCategory[]; onSaved: (message?: string) => Promise<void>; onCancel: () => void }) {
+ const { t } = useLanguage(); const [contactName, setContactName] = useState(supplier.contact_name), [phone, setPhone] = useState(supplier.phone), [city, setCity] = useState(supplier.city), [website, setWebsite] = useState(supplier.website), [selected, setSelected] = useState(supplier.categories), [intervention, setIntervention] = useState('');
+ return <AsyncForm title={t('Edit supplier profile', 'سپلائر پروفائل میں ترمیم')} detail={supplier.name} submit={t('Save profile', 'پروفائل محفوظ کریں')} onCancel={onCancel} note={t('Changing the profile does not change the supplier’s access.', 'پروفائل بدلنے سے سپلائر کی رسائی نہیں بدلتی۔')} onSubmit={async () => { await api('/erp/suppliers/profile', { id: supplier.id, version: supplier.version, contactName, phone, city, website, categories: selected, ...(intervention ? { interventionReason: intervention } : {}) }); await onSaved(t('Profile saved.', 'پروفائل محفوظ ہو گیا۔')); }}>
+  <Field>{t('Contact name', 'رابطہ کار')}<input value={contactName} onChange={e => setContactName(e.target.value)} minLength={2} maxLength={80} required /></Field>
+  <Field>{t('Phone (with country code)', 'فون (ملک کے کوڈ کے ساتھ)')}<input dir="ltr" inputMode="tel" value={phone} onChange={e => setPhone(e.target.value)} required /></Field>
+  <Field>{t('City', 'شہر')}<input value={city} onChange={e => setCity(e.target.value)} maxLength={100} /></Field>
+  <Field>{t('Website', 'ویب سائٹ')}<input dir="ltr" type="url" value={website} onChange={e => setWebsite(e.target.value)} maxLength={500} /></Field>
+  <CategoryPicker categories={categories} value={selected} onChange={setSelected} />
+  <InterventionField member={member} owners={['purchase_manager']} value={intervention} onChange={setIntervention} />
+ </AsyncForm>;
+}
+interface SupplierDetail {
+ ratings: { rating: number; delivery: number | null; quality: number | null; terms: number | null; feedback: string; created_by_name: string | null; created_at: number }[];
+ performance: { qcPassRate: number | null; onTimeRate: number | null; claims: { return: number; replacement: number; claim: number } };
+}
+function SupplierDetails({ supplierId }: { supplierId: string }) {
+ const { t } = useLanguage(); const [detail, setDetail] = useState<SupplierDetail | null>(null), [error, setError] = useState('');
+ useEffect(() => { let alive = true; api<SupplierDetail>('/erp/suppliers/' + supplierId).then(d => { if (alive) setDetail(d); }).catch(e => { if (alive) setError(errorMessage(e)); }); return () => { alive = false; }; }, [supplierId]);
+ if (error) return <p className="live-error" role="alert">{t(error)}</p>;
+ if (!detail) return <p className="live-muted" role="status">{t('Loading supplier details…', 'سپلائر کی تفصیلات لوڈ ہو رہی ہیں…')}</p>;
+ const pct = (value: number | null) => value === null ? t('No data yet', 'ابھی ڈیٹا نہیں') : `${Math.round(value * 100)}%`, p = detail.performance;
+ return <div className="erp-bid">
+  <h4>{t('Performance', 'کارکردگی')}</h4>
+  <dl className="erp-facts"><div><dt>{t('QC pass rate', 'QC پاس ریٹ')}</dt><dd>{pct(p.qcPassRate)}</dd></div><div><dt>{t('On-time arrivals', 'وقت پر پہنچنے کی شرح')}</dt><dd>{pct(p.onTimeRate)}</dd></div><div><dt>{t('Returns / replacements / claims', 'واپسی / متبادل / دعوے')}</dt><dd>{p.claims.return} / {p.claims.replacement} / {p.claims.claim}</dd></div></dl>
+  <h4>{t('Ratings and feedback', 'ریٹنگز اور رائے')}</h4>
+  {!detail.ratings.length && <p className="live-muted">{t('No ratings yet', 'ابھی کوئی ریٹنگ نہیں')}</p>}
+  <ul>{detail.ratings.map((r, i) => <li key={i}><strong>{r.rating}/5</strong> · {factoryTime(r.created_at)}{r.created_by_name ? ' · ' + r.created_by_name : ''}{r.delivery !== null && <span className="live-muted"> · {t('Delivery', 'ترسیل')} {r.delivery} · {t('Quality', 'معیار')} {r.quality} · {t('Terms', 'شرائط')} {r.terms}</span>}{r.feedback && <span className="erp-multiline">{r.feedback}</span>}</li>)}</ul>
+ </div>;
+}
 function RfqForm({ member, categories, onSaved, onCancel }: { member: Member; categories: SupplierCategory[]; onSaved: () => Promise<void>; onCancel: () => void }) {
  const { language, t } = useLanguage(); const [id] = useState(crypto.randomUUID()); const [title, setTitle] = useState(''), [categoryId, setCategory] = useState(categories[0]?.id || ''), [specifications, setSpecifications] = useState(''), [qty, setQty] = useState(''), [unit, setUnit] = useState('kg'), [deliveryLocation, setLocation] = useState(''), [intervention, setIntervention] = useState('');
  const [deadline, setDeadline] = useState(localFactoryInput(Date.now() + 2 * 86400000)), [delivery, setDelivery] = useState(localFactoryInput(Date.now() + 14 * 86400000));
@@ -121,7 +153,7 @@ function BidDecision({ member, bid, rfq, accepting, onSaved, onCancel }: { membe
 // Publish, close and cancel are one small form each, so every purchasing write asks admins for the intervention reason.
 function RfqStep({ member, kind, rfq, onSaved }: { member: Member; kind: 'publish' | 'close' | 'cancel'; rfq: ProcurementRfq; onSaved: () => Promise<void> }) {
  const { t } = useLanguage(); const [shown, setShown] = useState(kind === 'publish'), [reason, setReason] = useState(''), [intervention, setIntervention] = useState('');
- if (!shown) return <button className="button" onClick={() => setShown(true)}>{kind === 'close' ? t('Close bidding', 'بولی بند کریں') : t('Cancel RFQ', 'درخواست منسوخ کریں')}</button>;
+ if (!shown) return <button className="button" onClick={() => setShown(true)}>{kind === 'close' ? <Lock size={18} aria-hidden /> : <Ban size={18} aria-hidden />}{kind === 'close' ? t('Close bidding', 'بولی بند کریں') : t('Cancel RFQ', 'درخواست منسوخ کریں')}</button>;
  const titles = { publish: t('Publish to supplier portals', 'سپلائر پورٹلز پر شائع کریں'), close: t('Close bidding now', 'بولی ابھی بند کریں'), cancel: t('Cancel this RFQ', 'یہ درخواست منسوخ کریں') };
  const submits = { publish: t('Publish RFQ', 'درخواست شائع کریں'), close: t('Close bidding', 'بولی بند کریں'), cancel: t('Confirm cancellation', 'منسوخی کی تصدیق کریں') };
  return <AsyncForm title={titles[kind]} detail={kind === 'publish' ? t('This sends the RFQ to every currently approved supplier in this category. Published requirements cannot be edited.', 'یہ درخواست اس قسم کے ہر موجودہ منظور شدہ سپلائر کو ملے گی۔ شائع شدہ ضروریات تبدیل نہیں ہو سکتیں۔') : undefined} submit={submits[kind]} onCancel={kind === 'publish' ? undefined : () => setShown(false)}

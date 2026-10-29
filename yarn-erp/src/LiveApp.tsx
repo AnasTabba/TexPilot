@@ -13,6 +13,10 @@ import { COMMON, NAV } from './roles';
 import Inspections from './Inspections';
 import InspectArrival, { type Arrival } from './InspectArrival';
 import ToProduction, { type ProductionJob } from './ToProduction';
+import AdminScreens, { ADMIN_SECTIONS } from './AdminScreens';
+import { SalesScreens, SALES_SECTIONS } from './SalesScreens';
+import { DispatchScreens, DISPATCH_SECTIONS } from './DispatchScreens';
+import { SupervisorScreens, SUPERVISOR_SECTIONS } from './SupervisorScreens';
 import Review from './Review';
 import { parseHash } from './routes.ts';
 import SignIn, { Avatar } from './SignIn';
@@ -26,11 +30,11 @@ import { Cone, materialHue } from './Cone';
 import type { ScanResult } from './scanner-client';
 import { roleLabel, can, gramsFromKg, InventoryError, inventoryRequest as api, stageName, timestamp, weight, type Permission, type Role, type StockLot, type StockMovement, type StockStage, type WorkspaceState } from './inventory-client';
 
-type FormType = 'product' | 'finished' | 'dispatch' | 'adjust' | 'inspection';
+type FormType = 'product' | 'finished' | 'adjust' | 'inspection';
 type Action = { type: FormType; lotId?: string; productId?: string };
 // Old pages that were filtered copies of the stock list (or of Home) now open Stock with that filter.
 type View = 'all' | 'quality' | 'production' | 'dispatch';
-const aliases: Record<string, [string, View]> = { tracking: ['procurement', 'all'], materials: ['inventory', 'all'], production: ['inventory', 'production'], quality: ['inventory', 'quality'], dispatch: ['inventory', 'dispatch'], reports: ['dashboard', 'all'], overview: ['dashboard', 'all'], settings: ['profile', 'all'] };
+const aliases: Record<string, [string, View]> = { tracking: ['procurement', 'all'], materials: ['inventory', 'all'], production: ['inventory', 'production'], quality: ['inventory', 'quality'], dispatch: ['inventory', 'dispatch'], overview: ['dashboard', 'all'] };
 const sections = [...new Set([...Object.values(NAV).flat(), ...COMMON])];
 const tabsOf = Object.fromEntries(sections.flatMap(section => section.tabs ? [[section.id, section.tabs.map(tab => tab.id)]] : []));
 const routeFromHash = () => {
@@ -57,10 +61,10 @@ function InventoryForm({ action, state, result, onSaved, onCancel }: { action: A
   const selected = state.lots.find(lot => lot.id === draft.lotId);
   // A lot created by the supervisor or a report decision holds one kind of stock; only raw and finished stock can be adjusted.
   const adjustStages: StockStage[] = selected?.inventory_type ? [selected.inventory_type] : ['raw', 'finished'];
-  const stage: StockStage = action.type === 'dispatch' ? 'finished' : action.type === 'adjust' && !adjustStages.includes(draft.stage as StockStage) ? adjustStages[0] : draft.stage as StockStage;
+  const stage: StockStage = action.type === 'adjust' && !adjustStages.includes(draft.stage as StockStage) ? adjustStages[0] : draft.stage as StockStage;
   const available = state.balances.find(b => b.lot_id === draft.lotId && b.stage === stage);
   const stepIn = state.member.role === 'admin' ? { interventionReason: draft.intervention } : {};
-  const titles: Record<FormType, string> = { product: t("Add a material"), finished: t("Add finished goods"), dispatch: t("Dispatch stock"), adjust: t("Adjust stock"), inspection: result ? t("Attach TexPilot evidence") : t("Record a manual inspection") };
+  const titles: Record<FormType, string> = { product: t("Add a material"), finished: t("Add finished goods"), adjust: t("Adjust stock"), inspection: result ? t("Attach TexPilot evidence") : t("Record a manual inspection") };
   async function submit() {
     let lotId = draft.lotId, pending = false;
     const counted = () => { if (!/^\d+$/.test(draft.cartons) || !/^\d+$/.test(draft.cones)) throw new Error('Cartons and cones must be whole numbers.'); return { cartons: Number(draft.cartons), cones: Number(draft.cones) }; };
@@ -74,7 +78,6 @@ function InventoryForm({ action, state, result, onSaved, onCancel }: { action: A
       await api('/inspections', { id: draft.id, lotId, labelText: draft.labelText, note: draft.note, result });
 
     }
-    else { if (!/^\d+$/.test(draft.cartons)) throw new Error('Cartons must be a whole number.'); await api('/movements', { id: draft.id, lotId, action: 'dispatch', stage, grams: gramsFromKg(draft.kg), cartons: Number(draft.cartons), cones: 0, note: draft.note }); }
     try { localStorage.removeItem(key); } catch { /* Saved inventory is not affected by draft storage. */ }
     // A new material has no batch yet: stay on Stock instead of opening whichever batch the draft defaulted to.
     await onSaved(action.type === 'inspection' ? 'Inspection saved. QC approval is still required.' : pending ? 'Sent to the admin for approval. The stock changes only after they approve.' : 'Saved. Everyone on the team sees it now.', action.type === 'product' ? undefined : lotId);
@@ -89,23 +92,19 @@ function InventoryForm({ action, state, result, onSaved, onCancel }: { action: A
     {draftError && <p className="live-error" role="alert">{t("This browser could not save the draft. Keep this form open until you finish.")}</p>}
     {action.type === 'product' && <><Field>{t("Material name")}<input value={draft.name} onChange={e => set('name', e.target.value)} minLength={2} maxLength={160} placeholder={t("e.g. Cotton combed 30/1")} required /></Field><Field>{t("SKU")}<input value={draft.sku} onChange={e => set('sku', e.target.value)} maxLength={80} autoCapitalize="characters" placeholder="e.g. COT-30" required /></Field><Field>{t("Product barcode (optional)")}<input value={draft.barcode} onChange={e => set('barcode', e.target.value)} maxLength={120} autoCapitalize="off" /></Field><p className="live-muted">{t("All weights use kg, stored as whole grams. Each batch gets its own printable QR label.")}</p></>}
     {action.type === 'finished' && <><Field>{t("Material")}<select value={draft.productId} onChange={e => set('productId', e.target.value)} required><option value="" disabled>{t("Choose a material")}</option>{state.products.map(p => <option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}</select></Field><Field>{t("Batch / dye lot")}<input value={draft.batch} onChange={e => set('batch', e.target.value)} maxLength={100} required /></Field><div className="live-fields"><Field>{t("Weight (kg)")}<input value={draft.kg} onChange={e => set('kg', e.target.value)} dir="ltr" inputMode="decimal" placeholder="0.000" required /></Field><Field>{t("Cartons")}<input value={draft.cartons} onChange={e => set('cartons', e.target.value)} dir="ltr" inputMode="numeric" pattern="[0-9]+" required /></Field><Field>{t("Cones")}<input value={draft.cones} onChange={e => set('cones', e.target.value)} dir="ltr" inputMode="numeric" pattern="[0-9]+" required /></Field></div><p className="live-muted">{t("Raw stock arrives when you accept an inspection report. Finished goods are recorded here.")}</p></>}
-    {['dispatch', 'adjust', 'inspection'].includes(action.type) && <Field>{t("Batch")}<select value={draft.lotId} onChange={e => set('lotId', e.target.value)} required><option value="" disabled>{t("Choose a batch")}</option>{(action.type === 'dispatch' ? state.lots.filter(l => l.quality === 'approved' && state.balances.some(b => b.lot_id === l.id && b.stage === 'finished' && b.grams > 0)) : state.lots).map(l => <option key={l.id} value={l.id}>{l.batch} · {state.products.find(p => p.id === l.product_id)?.name}</option>)}</select></Field>}
+    {['adjust', 'inspection'].includes(action.type) && <Field>{t("Batch")}<select value={draft.lotId} onChange={e => set('lotId', e.target.value)} required><option value="" disabled>{t("Choose a batch")}</option>{state.lots.map(l => <option key={l.id} value={l.id}>{l.batch} · {state.products.find(p => p.id === l.product_id)?.name}</option>)}</select></Field>}
     {action.type === 'adjust' && <>{adjustStages.length > 1 && <Field>{t("Stage")}<select value={stage} onChange={e => set('stage', e.target.value)}>{adjustStages.map(s => <option key={s} value={s}>{t(stageName[s])}</option>)}</select></Field>}<Field>{t("Change")}<select value={draft.change} onChange={e => set('change', e.target.value)}><option value="write_off">{t("Write off (remove stock)")}</option><option value="remove">{t("Correction: remove stock")}</option><option value="add">{t("Correction: add stock")}</option></select></Field>
       <div className="live-available">{t("Available:")} <strong>{weight(available?.grams || 0)} kg</strong></div>
       <Field>{t("Weight (kg)")}<input value={draft.kg} onChange={e => set('kg', e.target.value)} dir="ltr" inputMode="decimal" placeholder="0.000" required /></Field>
       <Field>{t("Reason")}<textarea value={draft.reason} onChange={e => set('reason', e.target.value)} minLength={5} maxLength={1000} rows={3} required placeholder={t("What happened to this stock?")} /></Field>
       <p className="live-muted">{t("Large changes wait for admin approval and take effect only once approved.")}</p></>}
-    {action.type === 'dispatch' && <>
-      <div className="live-available">{t("Finished stock left:")} <strong>{weight(available?.grams || 0)} kg</strong> · {available?.cartons || 0} {t("cartons")}</div>
-      <div className="live-fields"><Field>{t("Weight (kg)")}<input value={draft.kg} onChange={e => set('kg', e.target.value)} dir="ltr" inputMode="decimal" placeholder="0.000" required /></Field><Field>{t("Cartons")}<input value={draft.cartons} onChange={e => set('cartons', e.target.value)} dir="ltr" inputMode="numeric" pattern="[0-9]+" required /></Field></div>
-    </>}
     {action.type === 'inspection' && <><Field>{t("Care-label text (optional)")}<textarea value={draft.labelText} onChange={e => set('labelText', e.target.value)} maxLength={4000} rows={3} placeholder={t("Record what the care label actually states.")} /></Field><p className="live-muted">{result ? `Attaches scan ${result.scan_id}, model ${result.model_version}, verdict ${result.verdict}. This client-supplied evidence does not automatically approve stock.` : t("Manual evidence only. This does not create an AI prediction or release a QC hold.")}</p></>}
     {state.member.role === 'admin' && ['product', 'finished', 'adjust'].includes(action.type) && <Field>{t("Why are you stepping in?")}<textarea value={draft.intervention} onChange={e => set('intervention', e.target.value)} minLength={5} maxLength={1000} rows={2} required placeholder={t("The reason an admin does this instead of the usual role")} /></Field>}
-    {['dispatch', 'finished', 'inspection'].includes(action.type) && <Field>{t("Notes")}<textarea value={draft.note} onChange={e => set('note', e.target.value)} rows={3} maxLength={1000} minLength={action.type === 'inspection' ? 3 : undefined} required={action.type === 'inspection'} placeholder={action.type === 'dispatch' ? t("Customer, delivery reference, or order number") : t("What should the next operator know?")} /></Field>}
+    {['finished', 'inspection'].includes(action.type) && <Field>{t("Notes")}<textarea value={draft.note} onChange={e => set('note', e.target.value)} rows={3} maxLength={1000} minLength={action.type === 'inspection' ? 3 : undefined} required={action.type === 'inspection'} placeholder={t("What should the next operator know?")} /></Field>}
   </AsyncForm>;
 }
 
-function LotDetail({ lot, state, onAction, onBack, onProduce, onFinish }: { lot: StockLot; state: WorkspaceState; onAction: (action: Action) => void; onBack: () => void; onProduce?: () => void; onFinish?: () => void }) {
+function LotDetail({ lot, state, onAction, onBack, onProduce, onFinish, onDispatch }: { lot: StockLot; state: WorkspaceState; onAction: (action: Action) => void; onBack: () => void; onProduce?: () => void; onFinish?: () => void; onDispatch?: () => void }) {
   const { t, language } = useLanguage();
   const product = state.products.find(p => p.id === lot.product_id);
   const [qr, setQr] = useState(''); const [qrError, setQrError] = useState('');
@@ -153,7 +152,7 @@ function LotDetail({ lot, state, onAction, onBack, onProduce, onFinish }: { lot:
   const steps: [string, boolean][] = [t("Received"), t("Inspected"), lot.quality === 'hold' ? t("On QC hold") : t("QC approved"), t("In production"), t("Finished"), t("Dispatched")]
     .map((label, i) => [label, reached.slice(i).some(Boolean)]);
   const current = steps.findIndex(([, done]) => !done);
-  const actions = { inspection: [t("Add inspection"), ClipboardCheck, 'inspect'], dispatch: [t("Dispatch"), Truck, 'dispatch'], adjust: [t("Adjust stock"), ArrowRightLeft, 'waste'] } as const;
+  const actions = { inspection: [t("Add inspection"), ClipboardCheck, 'inspect'], adjust: [t("Adjust stock"), ArrowRightLeft, 'waste'] } as const;
   type Step = keyof typeof actions;
   // Inspectors inspect through the Inspections page, so the old inspection note is not offered to them.
   const closed: Partial<Record<Role, Step[]>> = { quality_inspector: ['inspection'] };
@@ -166,14 +165,15 @@ function LotDetail({ lot, state, onAction, onBack, onProduce, onFinish }: { lot:
     : lot.quality !== 'approved' ? [lot.quality === 'hold' ? t("On QC hold") : t("Waiting for QC approval"), t("The supervisor approves a batch by accepting its inspection report."), null]
     : !steps[3][1] ? [t("Send to production"), t("This batch passed QC. Move it into production next."), null]
     : toFinish ? [t("Finish production"), t("Record the yarn that came off the machines as finished stock."), null]
-    : at('finished') > 0 ? [t("Dispatch finished stock"), t("Send approved stock out with its delivery reference."), 'dispatch']
+    : at('finished') > 0 ? [t("Ready to dispatch"), t("Dispatch raises a request for this stock; the sales manager approves it before it leaves."), null]
     : dispatched ? [t("Dispatched"), t("This batch has left the factory. Nothing is waiting on it."), null]
     : [t("No stock left"), t("Nothing in this batch is waiting for a step."), null];
   // QC-passed raw stock goes to production next; the button only shows for people who can start production.
   const toProduce = lot.quality === 'approved' && !steps[3][1];
   // Finishing is also offered beside the dispatch step when finished stock already exists and work in progress remains.
   const finishMore = !!onFinish && !toFinish && at('wip') > 0;
-  const NextIcon = next[2] ? actions[next[2]][1] : toProduce ? Factory : toFinish ? CheckCircle2 : dispatched ? Truck : ShieldCheck;
+  const toDispatch = !toFinish && steps[3][1] && at('finished') > 0;
+  const NextIcon = next[2] ? actions[next[2]][1] : toProduce ? Factory : toFinish ? CheckCircle2 : toDispatch || dispatched ? Truck : ShieldCheck;
   // Once a batch has been dispatched it never goes back into production; leftover stock can only be adjusted.
   const produceMore = !!onProduce && !toProduce && !dispatched;
   // Someone without the permission for the next step still sees it, with who can do it instead of a button.
@@ -181,15 +181,15 @@ function LotDetail({ lot, state, onAction, onBack, onProduce, onFinish }: { lot:
   const permissionName = next[2] ? permissionInfo.find(([id]) => id === actions[next[2]!][2])![1] : '';
   const whoCan = next[2] ? t(`Someone with “${permissionName}” access records this step.`, `یہ کام “${t(permissionName)}” کی اجازت رکھنے والا ممبر درج کرے گا۔`) : '';
   const others = (Object.keys(actions) as Step[]).filter(type => type !== next[2] && allowed(type)
-    && !(dispatched && (type === 'inspection' || (type === 'dispatch' && at('finished') <= 0))));
+    && !(dispatched && type === 'inspection'));
   const notes = [...(evidence?.inspections || []).map(i => ({ id: i.id, at: i.created_at, kind: 'inspection' as const, i })), ...(evidence?.qualityEvents || []).map(e => ({ id: e.id, at: e.created_at, kind: 'quality' as const, e }))].sort((a, b) => b.at - a.at);
   return <><button className="button yf-back" onClick={onBack}><ArrowLeft size={18} aria-hidden="true" />{t("All stock")}</button><div className="live-detail-grid">
     <section className="live-panel yf-batch"><div className="live-panel-heading"><div className="yf-batch-title"><Cone hue={materialHue(state.products, lot.product_id)} size={44} /><div><h2>{yarnName(product?.name || t("Material"))}</h2><p>{product?.sku} {t("· Batch")} {lot.batch} · {lot.supplier || t("Supplier not recorded")} {t("· since")} {when.format(lot.created_at, language)}</p></div></div></div>
       <ol className="yf-steps" aria-label={t("Batch progress")}>{steps.map(([label, done], i) => <li key={label} className={done ? 'done' : i === current ? 'current' : ''} aria-current={i === current ? 'step' : undefined}><span>{done ? <Check size={14} aria-hidden="true" /> : i + 1}</span>{label}</li>)}</ol>
-      <div className={`yf-next is-inline ${lot.quality}`}><span className="yf-next-icon"><NextIcon size={24} aria-hidden="true" /></span><div className="yf-next-text"><h3>{next[0]}</h3><p>{nextAllowed || !next[2] ? next[1] : whoCan}</p></div>{nextAllowed && <div className="yf-next-actions"><button className="button primary" onClick={() => onAction({ type: next[2]!, lotId: lot.id })}>{actions[next[2]!][0]}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toProduce && onProduce && <div className="yf-next-actions"><button className="button primary" onClick={onProduce}>{t("To production")}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toFinish && onFinish && <div className="yf-next-actions"><button className="button primary" onClick={onFinish}>{t("Mark finished")}<ArrowRight size={18} aria-hidden="true" /></button></div>}</div>
+      <div className={`yf-next is-inline ${lot.quality}`}><span className="yf-next-icon"><NextIcon size={24} aria-hidden="true" /></span><div className="yf-next-text"><h3>{next[0]}</h3><p>{nextAllowed || !next[2] ? next[1] : whoCan}</p></div>{nextAllowed && <div className="yf-next-actions"><button className="button primary" onClick={() => onAction({ type: next[2]!, lotId: lot.id })}>{actions[next[2]!][0]}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toProduce && onProduce && <div className="yf-next-actions"><button className="button primary" onClick={onProduce}>{t("To production")}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toFinish && onFinish && <div className="yf-next-actions"><button className="button primary" onClick={onFinish}>{t("Mark finished")}<ArrowRight size={18} aria-hidden="true" /></button></div>}{toDispatch && onDispatch && <div className="yf-next-actions"><button className="button primary" onClick={onDispatch}>{t("Request dispatch")}<ArrowRight size={18} aria-hidden="true" /></button></div>}</div>
       <h3 className="live-subheading">{t("Stock in this batch")}</h3>
       <StockFlow balances={lotBalances} compact />
-      {(others.length > 0 || produceMore || finishMore) && <div className="live-actions yf-other-actions" aria-label={t("Other actions")}>{others.map(type => { const [label, Icon] = actions[type]; const blocked = type === 'dispatch' && (lot.quality !== 'approved' || at('finished') <= 0); return <button className="button" key={type} onClick={() => onAction({ type, lotId: lot.id })} disabled={blocked} title={blocked ? t("Only finished, QC-approved stock can be dispatched") : undefined}><Icon size={18} aria-hidden="true" />{label}</button>; })}{produceMore && <button className="button" onClick={onProduce}><Factory size={18} aria-hidden="true" />{t("To production")}</button>}{finishMore && <button className="button" onClick={onFinish}><CheckCircle2 size={18} aria-hidden="true" />{t("Mark finished")}</button>}</div>}
+      {(others.length > 0 || produceMore || finishMore) && <div className="live-actions yf-other-actions" aria-label={t("Other actions")}>{others.map(type => { const [label, Icon] = actions[type]; return <button className="button" key={type} onClick={() => onAction({ type, lotId: lot.id })}><Icon size={18} aria-hidden="true" />{label}</button>; })}{produceMore && <button className="button" onClick={onProduce}><Factory size={18} aria-hidden="true" />{t("To production")}</button>}{finishMore && <button className="button" onClick={onFinish}><CheckCircle2 size={18} aria-hidden="true" />{t("Mark finished")}</button>}</div>}
       <h3 className="live-subheading">{t("Inspection notes")}</h3>
       {evidenceError && <p className="live-error" role="alert">{t("Batch history could not be refreshed.")} {evidenceError}<button className="live-text-button" onClick={() => setEvidenceRetry(value => value + 1)}>{t("Retry history")}</button></p>}
       {!evidence && !evidenceError && <p role="status" className="live-muted">{t("Loading this batch’s inspection history…")}</p>}
@@ -211,7 +211,7 @@ export default function LiveApp() {
   const [error, setError] = useState(''); const [authNeeded, setAuthNeeded] = useState(true);
   const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
-  const [route, setRoute] = useState(routeFromHash); const [selectedId, setSelectedId] = useState(lotFromHash);
+  const [route, setRoute] = useState(routeFromHash); const [hash, setHash] = useState(location.hash); const [selectedId, setSelectedId] = useState(lotFromHash);
   const [action, setAction] = useState<Action | null>(null); const [query, setQuery] = useState('');
   const [view, setView] = useState<View>(() => aliases[location.hash.split('/')[1]]?.[1] ?? 'all');
   const [online, setOnline] = useState(navigator.onLine); const [savedAt, setSavedAt] = useState(0);
@@ -283,7 +283,7 @@ export default function LiveApp() {
     window.addEventListener('focus', wake); document.addEventListener('visibilitychange', wake);
     return () => { clearInterval(interval); window.removeEventListener('focus', wake); document.removeEventListener('visibilitychange', wake); };
   }, [refresh]);
-  useEffect(() => { const update = () => { menuDialog.current?.close(); const alias = aliases[location.hash.split('/')[1]]; if (alias) setView(alias[1]); setRoute(routeFromHash()); setSelectedId(lotFromHash()); setAction(null); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
+  useEffect(() => { const update = () => { menuDialog.current?.close(); const alias = aliases[location.hash.split('/')[1]]; if (alias) setView(alias[1]); setRoute(routeFromHash()); setHash(location.hash); setSelectedId(lotFromHash()); setAction(null); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
   useEffect(() => { const network = () => { setOnline(navigator.onLine); void refresh(true); }; window.addEventListener('online', network); window.addEventListener('offline', network); return () => { window.removeEventListener('online', network); window.removeEventListener('offline', network); }; }, [refresh]);
   useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem('yf-theme', theme); } catch { /* The theme can remain in memory. */ } }, [theme]);
   // A form or reversal opens at its top, not wherever the page was scrolled to when it was asked for.
@@ -317,6 +317,11 @@ export default function LiveApp() {
   const allow = (permission: Permission) => can(me, permission);
   const shown = [...NAV[me.role], ...COMMON];
   const page = shown.some(section => section.id === route) ? route : 'dashboard';
+  const { tab: routeTab, id: routeId } = parseHash(hash, tabsOf);
+  // Role screens navigate with paths like "buyers/pending" or "approvals/<id>".
+  const go = (path: string, id = '') => { location.hash = '/' + path + (id ? '/' + id : ''); };
+  const role = me.role, isAdmin = role === 'admin';
+  const adminSection = page === 'settings' ? (routeTab === 'invoices' ? 'settings' : 'thresholds') : page;
   const reloadInbox = async () => { setInbox(await portal<Inbox>('/notifications')); };
   const selected = workspace.lots.find(l => l.id === selectedId);
   const productName = (lotId: string) => workspace.products.find(p => p.id === workspace.lots.find(l => l.id === lotId)?.product_id)?.name || t("Material");
@@ -393,11 +398,11 @@ export default function LiveApp() {
     <dialog className="yf-mobile-menu" ref={menuDialog} onClick={e=>{if(e.target===e.currentTarget)menuDialog.current?.close();}} aria-label={t("Navigation menu")}><div>{brand}<button className="live-icon-button" onClick={()=>menuDialog.current?.close()} aria-label={t("Close navigation")}><X aria-hidden="true" /></button></div><nav aria-label={t("All pages")}>{shown.map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={22} aria-hidden="true" />{t(en, ur)}{badge(id)}</button>)}</nav>{whoAmI}</dialog>
     <div className="live-main-shell"><header className="live-topbar">{brand}{shown.some(section => section.id === 'inventory') && <button className="live-icon-button" aria-label={t("Find a batch")} onClick={()=>{navigate('inventory');setTimeout(()=>document.querySelector<HTMLInputElement>('input[type="search"]')?.focus(),0);}}><Search size={22} aria-hidden="true" /></button>}</header>
     <main id="live-main" key={`${route}:${selected?.id || ''}:${action?.type || ''}`} className="live-content" data-page={action ? 'form' : selected ? 'batch' : page} tabIndex={-1}>
-      <div className="live-page-heading"><div><h1>{pageTitle}</h1><p hidden={!!(action || selected)}>{page === 'dashboard' && !action && !selected ? `${workspace.workspace.name} · ${today}` : page === 'inventory' ? t("Your materials and their batches, from delivery to dispatch.") : page === 'scanner' ? t("Photograph a fabric, measure its yarn, or scan a stock label.") : page === 'activity' ? t("Every stock movement, oldest records kept.") : page === 'notifications' ? t('What needs your attention, newest first.', 'جن چیزوں پر توجہ چاہیے، تازہ ترین پہلے۔') : page === 'help' ? t("Answers to common questions.") : page === 'lots' ? t("Arrived lots waiting for you, and your inspection drafts.", "آپ کے منتظر آمد شدہ لاٹس اور معائنے کے مسودے۔") : page === 'team' ? t("Who can sign in, and what each person can record.") : page === 'procurement' ? t("Buying from suppliers: directory, bids, orders and incoming stock.", "سپلائرز سے خریداری: ڈائریکٹری، بولیاں، آرڈر اور آنے والا اسٹاک۔") : t("Your access, and the records everyone shares.")}</p></div></div>
+      <div className="live-page-heading"><div><h1>{pageTitle}</h1><p hidden={!!(action || selected) || !['dashboard', 'inventory', 'scanner', 'activity', 'notifications', 'help', 'lots', 'team', 'procurement', 'profile'].includes(page)}>{page === 'dashboard' && !action && !selected ? `${workspace.workspace.name} · ${today}` : page === 'inventory' ? t("Your materials and their batches, from delivery to dispatch.") : page === 'scanner' ? t("Photograph a fabric, measure its yarn, or scan a stock label.") : page === 'activity' ? t("Every stock movement, oldest records kept.") : page === 'notifications' ? t('What needs your attention, newest first.', 'جن چیزوں پر توجہ چاہیے، تازہ ترین پہلے۔') : page === 'help' ? t("Answers to common questions.") : page === 'lots' ? t("Arrived lots waiting for you, and your inspection drafts.", "آپ کے منتظر آمد شدہ لاٹس اور معائنے کے مسودے۔") : page === 'team' ? t("Who can sign in, and what each person can record.") : page === 'procurement' ? t("Buying from suppliers: directory, bids, orders and incoming stock.", "سپلائرز سے خریداری: ڈائریکٹری، بولیاں، آرڈر اور آنے والا اسٹاک۔") : page === 'profile' ? t("Your access, and the records everyone shares.") : ''}</p></div></div>
       {error && <div className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{t(error)}<button className="live-text-button" onClick={() => void refresh()}>{t("Retry connection")}</button></div>}
       {!online && <div className="live-warning" role="status"><WifiOff size={18} />{t("You are offline. Entries can be saved again once the connection is back.")}</div>}
       {notice && <div className="live-success" role="status"><CheckCheck size={19} /><span>{t(notice)}</span><button aria-label={t("Dismiss message")} className="live-icon-button" onClick={() => setNotice('')}><X size={17} /></button></div>}
-      {action ? <InventoryForm key={`${action.type}:${action.lotId || ''}`} action={action} state={workspace} result={action.type === 'inspection' ? lastResult : null} onSaved={saved} onCancel={() => setAction(null)} /> : selected ? <LotDetail key={selected.id} lot={selected} state={workspace} onAction={setAction} onBack={() => navigate('inventory')} onProduce={canProduce(selected) ? () => openProduction(selected) : undefined} onFinish={canFinish(selected) ? () => openFinish(selected) : undefined} /> : <>
+      {action ? <InventoryForm key={`${action.type}:${action.lotId || ''}`} action={action} state={workspace} result={action.type === 'inspection' ? lastResult : null} onSaved={saved} onCancel={() => setAction(null)} /> : selected ? <LotDetail key={selected.id} lot={selected} state={workspace} onAction={setAction} onBack={() => navigate('inventory')} onProduce={canProduce(selected) ? () => openProduction(selected) : undefined} onFinish={canFinish(selected) ? () => openFinish(selected) : undefined} onDispatch={me.role === 'dispatch' ? () => go('new-dispatch') : undefined} /> : <>
       {page === 'dashboard' && <Dashboard member={me} inbox={inbox} reload={reloadInbox} state={state} onChanged={() => refresh(true)} />}
       {page === 'notifications' && <Notifications member={me} inbox={inbox} reload={reloadInbox} />}
       {page === 'inventory' && <section className="yf-stock-panel" aria-label={t("Stock")}><div className="yf-views" role="group" aria-label={t("Show")}>{views.map(([id, label, Icon]) => <button key={id} aria-pressed={view === id} onClick={() => setView(id)}><Icon size={20} aria-hidden="true" /><span>{t(label)}</span><b>{workspace.lots.filter(l => inView(l, id)).length + (id === 'all' || id === 'quality' ? workspace.qcArrivals?.length ?? 0 : 0)}</b></button>)}</div><Field className="live-search-label">{t("Search")}<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder={t("Material, batch or supplier")} /></Field>{stockList()}</section>}
@@ -409,6 +414,10 @@ export default function LiveApp() {
       {page==='lots' && <Inspections />}
       {page==='reviews' && <Review />}
       {page==='procurement' && <Procurement member={me} onInventoryChanged={() => refresh(true)} />}
+      {isAdmin && page !== 'dashboard' && ADMIN_SECTIONS.includes(adminSection) && <AdminScreens member={me} section={adminSection} tab={routeTab} id={routeId} navigate={go} state={workspace} onInventoryChanged={() => refresh(true)} />}
+      {(role === 'sales_manager' || (isAdmin && page !== 'analytics')) && page !== 'dashboard' && SALES_SECTIONS.includes(page) && <SalesScreens member={me} section={page} tab={routeTab} id={routeId} navigate={go} />}
+      {role === 'dispatch' && page !== 'dashboard' && DISPATCH_SECTIONS.includes(page) && <DispatchScreens member={me} section={page} tab={routeTab} id={routeId} navigate={go} />}
+      {(role === 'supervisor' || isAdmin) && (SUPERVISOR_SECTIONS as readonly string[]).includes(page) && <SupervisorScreens section={page as 'requests' | 'report'} member={me} tab={routeTab} itemId={routeId} />}
 
       </>}
     </main><footer className="live-sync" role="status"><CheckCheck size={17} aria-hidden="true"/><span>{t("All changes saved")}{savedAt ? ' · '+t('checked', 'چیک کیا')+' '+new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Karachi'}).format(savedAt) : ''}</span></footer></div>

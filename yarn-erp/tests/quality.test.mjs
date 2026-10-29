@@ -382,3 +382,13 @@ test('without an R2 binding, inspection photos are stored in D1 and a failed-pho
   assert.equal((await submit(f, id)).status, 200);
   assert.equal((await f.call('/workspace', undefined, 'Qasim')).data.qcArrivals.some(a => a.id === lotId), false);
 });
+
+test('the purchase manager is told the claim outcome and the final amount', async () => {
+  const f = await fixture(), { id, lotId } = await submitted(f, 0, 20000);
+  assert.equal((await f.call('/erp/qc/rejections/decide', { inspectionId: id, decision: 'confirm' }, 'Saima')).status, 200);
+  const claimId = f.sql.prepare('SELECT id FROM claims WHERE inspection_id=?').get(id).id, reference = row(f, 'qc_lots', lotId).reference;
+  const decided = await f.call('/erp/qc/claims/decide', { id: claimId, outcome: 'claim', adjustedMinor: 2000000, reason: 'Supplier credited part in advance' }, 'Anas');
+  assert.equal(decided.status, 200, decided.text);
+  const labels = f.sql.prepare("SELECT label FROM notifications WHERE event='claim.decided' AND object_id=?").all(claimId).map(n => n.label);
+  assert.deepEqual(labels, [`${reference} · claim · PKR 20000.00`]);
+});

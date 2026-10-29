@@ -1,0 +1,14 @@
+/* Sales and dispatch screens: only the rules the shared erp.css, yarnflow.css and sales.css do not already carry. */
+
+/* Dispatch status history, shown on sales and dispatch detail views. */
+.yf-dispatch-thread { display:grid; gap:10px; padding-inline-start:22px; }
+.yf-dispatch-thread li { padding:8px 0; color:var(--ink-2); }
+.yf-dispatch-thread li.done { color:var(--ink); }
+.yf-dispatch-thread li[aria-current="step"] { font-weight:600; }
+
+/* Analytics tables scroll sideways on phones instead of pushing the page wider. */
+.erp-table-wrap { overflow-x:auto; max-width:100%; }
+.erp-table { width:100%; border-collapse:collapse; }
+.erp-table th, .erp-table td { padding:10px 12px; text-align:start; border-bottom:1px solid var(--line); vertical-align:top; }
+.erp-table thead th { color:var(--ink-2); font-size:14px; font-weight:600; }
+.erp-table td { white-space:nowrap; font-variant-numeric:tabular-nums; }

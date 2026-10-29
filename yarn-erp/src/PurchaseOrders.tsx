@@ -13,13 +13,15 @@ const STATUS_LABEL: Record<string, [string, string]> = {
 };
 const TONE: Record<string, string> = { accepted: 'is-accepted', dispatched: 'is-dispatched', received: 'is-received', closed: 'is-received', cancelled: 'is-cancelled' };
 const COLUMNS = 8;
+// The server row carries the order's bill of lading; the shared client type does not declare it yet.
+export type OrderRecord = PurchaseOrder & { bill_of_lading?: string };
 
 // The container list is stored as JSON text; a bad value must not break the screen.
 function containersOf(json: string): string[] {
  try { const value = JSON.parse(json); return Array.isArray(value) ? value.map(String) : []; } catch { return []; }
 }
 
-export function PurchaseOrders({ orders, shipments, renderActions, renderDetail }: { orders: PurchaseOrder[]; shipments: ProcurementState['shipments']; renderActions: (order: PurchaseOrder) => ReactNode; renderDetail?: (order: PurchaseOrder) => ReactNode }) {
+export function PurchaseOrders({ orders, shipments, renderActions, renderDetail }: { orders: OrderRecord[]; shipments: ProcurementState['shipments']; renderActions: (order: OrderRecord) => ReactNode; renderDetail?: (order: OrderRecord) => ReactNode }) {
  const { t } = useLanguage();
  const [filter, setFilter] = useState('all'), [search, setSearch] = useState(''), [sort, setSort] = useState<Sort>(null), [openId, setOpenId] = useState('');
  const statusName = (status: string) => { const label = STATUS_LABEL[status]; return label ? t(label[0], label[1]) : status; };
@@ -30,7 +32,7 @@ export function PurchaseOrders({ orders, shipments, renderActions, renderDetail 
   const list = orders.filter(o => (filter === 'all' || o.status === filter) && (!q || [o.reference, o.supplier_name, o.terms.title].some(v => (v ?? '').toLowerCase().includes(q))));
   if (!sort) return list;
   const dir = sort.dir === 'asc' ? 1 : -1;
-  const keyOf = (o: PurchaseOrder): string | number => sort.key === 'value' ? o.total_minor : sort.key === 'reference' ? o.reference : sort.key === 'supplier' ? o.supplier_name ?? '' : o.status;
+  const keyOf = (o: OrderRecord): string | number => sort.key === 'value' ? o.total_minor : sort.key === 'reference' ? o.reference : sort.key === 'supplier' ? o.supplier_name ?? '' : o.status;
   return [...list].sort((a, b) => { const x = keyOf(a), y = keyOf(b); return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))) * dir; });
  }, [orders, filter, search, sort]);
 
@@ -66,7 +68,7 @@ export function PurchaseOrders({ orders, shipments, renderActions, renderDetail 
       return <Fragment key={o.id}>
        <tr className={`po-row${isOpen ? ' is-open' : ''}`} tabIndex={0} aria-expanded={isOpen} aria-controls={detailId} onClick={() => toggle(o.id)} onKeyDown={e => onKey(e, o.id)}>
         <td className="po-ref"><span className="po-mono">{o.reference}</span></td>
-        <td data-label={t('Supplier', 'سپلائر')}>{o.supplier_name ?? o.supplier_id}</td>
+        <td data-label={t('Supplier', 'سپلائر')}>{o.supplier_name ?? t('Unknown supplier', 'نامعلوم سپلائر')}</td>
         <td className="po-item"><strong>{o.terms.title}</strong><span className="po-spec" title={o.terms.specifications}>{o.terms.specifications}</span></td>
         <td data-label={t('Quantity', 'مقدار')} className="po-num">{quantity(o.quantity_milli)} <span className="po-unit">{o.terms.unit}</span></td>
         <td data-label={t('Value', 'قیمت')} className="po-num">{rate(o.total_minor, o.terms.currency)}</td>
@@ -78,6 +80,7 @@ export function PurchaseOrders({ orders, shipments, renderActions, renderDetail 
         <td colSpan={COLUMNS}><div className="po-expand"><div className="po-expand-body">
          <div className="po-detail-grid">
           <section className="po-block"><h4>{t('Specifications', 'تفصیلات')}</h4><p className="po-specs">{o.terms.specifications}</p></section>
+           <section className="po-block"><h4>{t('Bill of lading', 'بل آف لیڈنگ')}</h4><p className="po-mono">{o.bill_of_lading || t('Not attached yet', 'ابھی منسلک نہیں')}</p></section>
           {renderDetail?.(o)}
           <section className="po-block"><h4>{t('Shipments', 'ترسیلات')}</h4>{ships.length ? ships.map(s => <div className="po-ship" key={s.id}><strong className="po-mono"><Truck size={16} aria-hidden />{s.bill_of_lading}</strong><span>{s.carrier}</span><span>{quantity(s.quantity_milli)} {o.terms.unit} · {factoryTime(s.dispatched_at)}</span><span className="po-muted">{t('Containers:', 'کنٹینر:')} {containersOf(s.containers_json).join(', ') || t('Not supplied', 'درج نہیں کیے گئے')}</span></div>) : <p className="po-muted">{t('No shipments yet', 'ابھی کوئی ترسیل نہیں')}</p>}</section>
          </div>

@@ -1,0 +1,4 @@
+/* Supervisor requests and report screens. Shared list, record and form rules live in erp.css and yarnflow.css. */
+.yf-section { min-width: 0; }
+.live-check { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.live-check input { width: 20px; height: 20px; flex: none; }

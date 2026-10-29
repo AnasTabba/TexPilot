@@ -8,7 +8,7 @@ export const ROLE_PERMISSIONS = {
   admin: legacyPermissions,
   purchase_manager: ['suppliers', 'procure', 'receive'],
   quality_inspector: ['inspect', 'qc'],
-  supervisor: ['receive', 'produce', 'catalog', 'qc', 'waste', 'reverse', 'dispatch'],
+  supervisor: ['receive', 'produce', 'catalog', 'qc', 'waste', 'reverse'],
   sales_manager: ['sales', 'payments'],
   dispatch: ['dispatch'],
 };

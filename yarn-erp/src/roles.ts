@@ -1,4 +1,4 @@
-import { Bell, CircleHelp, ClipboardCheck, CircleUserRound, House, History, PackagePlus, ScanSearch, UsersRound, type LucideIcon } from 'lucide-react';
+import { Bell, ChartNoAxesCombined, CircleHelp, ClipboardCheck, ClipboardList, CircleUserRound, FileText, House, History, ListChecks, PackagePlus, ScanSearch, Settings, ShieldCheck, Truck, UsersRound, type LucideIcon } from 'lucide-react';
 import { ConeIcon } from './icons';
 import type { Role } from './inventory-client';
 import { objectRoute as route } from './routes.ts';
@@ -14,14 +14,30 @@ const lots: Section = { id: 'lots', en: 'Inspections', ur: 'معائنے', icon:
 const reviews: Section = { id: 'reviews', en: 'Review', ur: 'جائزہ', icon: ClipboardCheck };
 const team: Section = { id: 'team', en: 'Team', ur: 'ٹیم', icon: UsersRound };
 
-// Until a role's owner task lands, its users keep the legacy screens they had; Tasks 18-21 replace these lists.
+// Admin, sales, dispatch and supervisor sections are rendered by AdminScreens, SalesScreens, DispatchScreens and SupervisorScreens.
+const approvals: Section = { id: 'approvals', en: 'Approvals', ur: 'منظوریاں', icon: ListChecks };
+const claims: Section = { id: 'claims', en: 'Claims', ur: 'دعوے', icon: ShieldCheck };
+const adminActivity: Section = { id: 'admin-activity', en: 'Activity', ur: 'سرگرمیاں', icon: History, tabs: [{ id: 'monitor', en: 'Monitor', ur: 'نگرانی' }, { id: 'audit', en: 'Audit log', ur: 'آڈٹ لاگ' }] };
+const reports: Section = { id: 'reports', en: 'Reports', ur: 'رپورٹس', icon: FileText };
+const analytics: Section = { id: 'analytics', en: 'Analytics', ur: 'تجزیات', icon: ChartNoAxesCombined };
+const settings: Section = { id: 'settings', en: 'Settings', ur: 'ترتیبات', icon: Settings, tabs: [{ id: 'thresholds', en: 'Thresholds', ur: 'حدود' }, { id: 'invoices', en: 'Invoices', ur: 'انوائس' }] };
+const buyers: Section = { id: 'buyers', en: 'Buyers', ur: 'خریدار', icon: UsersRound, tabs: [{ id: 'pending', en: 'Pending', ur: 'زیرِ التوا' }, { id: 'active', en: 'Active', ur: 'فعال' }, { id: 'all', en: 'All', ur: 'سب' }] };
+const buyerRfqs: Section = { id: 'buyer-rfqs', en: 'Buyer RFQs', ur: 'خریدار کی درخواستیں', icon: FileText, tabs: [{ id: 'open', en: 'To quote', ur: 'قیمت دینے کے لیے' }, { id: 'quoted', en: 'Quoted', ur: 'قیمت دی گئی' }, { id: 'sold', en: 'Sold', ur: 'فروخت شدہ' }, { id: 'all', en: 'All', ur: 'سب' }] };
+const invoices: Section = { id: 'invoices', en: 'Invoices', ur: 'انوائسز', icon: FileText, tabs: [{ id: 'owed', en: 'To collect', ur: 'وصولی کے لیے' }, { id: 'paid', en: 'Paid', ur: 'ادا شدہ' }, { id: 'all', en: 'All', ur: 'سب' }] };
+const dispatchRequests: Section = { id: 'dispatch-requests', en: 'Dispatch requests', ur: 'ڈسپیچ درخواستیں', icon: Truck, tabs: [{ id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'all', en: 'All', ur: 'سب' }] };
+const dispatches: Section = { id: 'dispatches', en: 'Dispatches', ur: 'ڈسپیچز', icon: Truck, tabs: [{ id: 'all', en: 'All', ur: 'سب' }, { id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'approved', en: 'Approved', ur: 'منظور شدہ' }, { id: 'on_hold', en: 'On hold', ur: 'روکی گئی' }, { id: 'dispatched', en: 'Dispatched', ur: 'روانہ' }, { id: 'delivered', en: 'Delivered', ur: 'پہنچائی گئی' }] };
+const newDispatch: Section = { id: 'new-dispatch', en: 'New dispatch', ur: 'نئی ڈسپیچ', icon: PackagePlus };
+const dispatchHistory: Section = { id: 'history', en: 'History', ur: 'ہسٹری', icon: History };
+const requests: Section = { id: 'requests', en: 'Requests', ur: 'درخواستیں', icon: ClipboardList, tabs: [{ id: 'queries', en: 'Stock queries', ur: 'اسٹاک کی درخواستیں' }, { id: 'stock-issues', en: 'Stock issues', ur: 'اسٹاک کے مسائل' }] };
+const report: Section = { id: 'report', en: 'Report', ur: 'رپورٹ', icon: FileText };
+
 export const NAV: Record<Role, Section[]> = {
-  admin: [dashboard, stock, history, procurement, team],
+  admin: [dashboard, approvals, claims, stock, procurement, adminActivity, reports, analytics, team, settings],
   purchase_manager: [dashboard, procurement],
-  sales_manager: [dashboard],
-  dispatch: [dashboard, stock, history],
+  sales_manager: [dashboard, buyers, buyerRfqs, invoices, dispatchRequests, analytics],
+  dispatch: [dashboard, dispatches, newDispatch, dispatchHistory],
   quality_inspector: [dashboard, lots, stock, history],
-  supervisor: [dashboard, reviews, stock, history],
+  supervisor: [dashboard, reviews, stock, requests, report, history],
 };
 export const COMMON: Section[] = [
   { id: 'notifications', en: 'Notifications', ur: 'اطلاعات', icon: Bell },

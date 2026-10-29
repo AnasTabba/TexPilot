@@ -3,7 +3,7 @@ import { CheckCircle2, Factory, LoaderCircle, TriangleAlert } from 'lucide-react
 import { Field, errorMessage } from './forms';
 import { useLanguage } from './i18n';
 import { ReasonField, portal } from './PortalCommon';
-import { gramsFromKg, InventoryError } from './inventory-client';
+import { gramsFromKg } from './inventory-client';
 import './inspect-arrival.css';
 import './attention-widget.css';
 
@@ -45,9 +45,7 @@ export default function ToProduction({ lotId, batch, productName, rawGrams, mode
         ? t(`${kgText(grams)} kg of batch ${batch} moved to finished stock.`, `بیچ ${batch} کے ${kgText(grams)} کلوگرام تیار اسٹاک میں منتقل ہو گئے۔`)
         : t(`${kgText(grams)} kg of batch ${batch} sent to production.`, `بیچ ${batch} کے ${kgText(grams)} کلوگرام پیداوار کے لیے بھیج دیے گئے۔`));
     } catch (caught) {
-      setError(caught instanceof InventoryError && caught.status === 404
-        ? (finishing ? t('Finishing production is not available on the server yet.', 'پیداوار مکمل کرنا ابھی سرور پر دستیاب نہیں۔') : t('Sending to production is not available on the server yet.', 'پیداوار کے لیے بھیجنا ابھی سرور پر دستیاب نہیں۔'))
-        : errorMessage(caught, language));
+      setError(errorMessage(caught, language));
     } finally { setBusy(false); }
   }
 

@@ -129,7 +129,7 @@ function Chart({ days, currency }: { days: Point[]; currency: string }) {
 
 function Latest({ data }: { data: Data }) {
   const open = () => {
-    location.hash = '#/sales';
+    location.hash = '#/invoices';
   };
   const onKey = (event: KeyboardEvent) => {
     if (event.key === 'Enter' || event.key === ' ') {

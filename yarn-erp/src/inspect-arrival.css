@@ -14,3 +14,6 @@
 .inspect-arrival .button:active:not(:disabled) { transform: scale(0.97); }
 .inspect-arrival-form input[type="file"] { min-height: 44px; }
 @media (prefers-reduced-motion: reduce) { .inspect-arrival { transition: none; } }
+.inspect-arrival-quantities { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.inspect-arrival-quantities .live-field, .inspect-arrival-issue { min-width: 0; }
+.inspect-arrival-issue { display: grid; gap: 14px; }
