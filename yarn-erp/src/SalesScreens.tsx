@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, BadgeCheck, Ban, Banknote, ChartNoAxesCombined, Download, FileText, Receipt, RefreshCw, Send, Truck } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Ban, Banknote, ChartNoAxesCombined, ClipboardList, Download, ExternalLink, FileText, Pencil, Receipt, RefreshCw, Send, Truck } from 'lucide-react';
 import { AnalyticsSection, BarList, KpiStrip, StackedBar, firstCurrency, type BarRow, type Tone } from './AnalyticsKit';
 import { AsyncForm, Field } from './forms';
 import { useLanguage } from './i18n';
@@ -14,11 +14,12 @@ type Rfq = { id: string; buyer_id: string; buyer_name: string; reference: string
 type Revision = { id: string; buyer_po_id: string; version: number; quantity_milli: number; unit: string; price_minor: number; currency: string; specifications: string; requested_delivery_at: number; payment_terms: string; credit_days: number; note: string; status: string; created_at: number };
 type Invoice = { id: string; number: string; sales_order_id: string; buyer_id: string; buyer_name?: string; order_reference?: string; subtotal_minor: number | null; tax_rate_bp: number | null; tax_minor: number | null; total_minor: number; currency: string; issued_at: number; due_at: number | null; payment_terms?: string; credit_days?: number; credited_minor: number; paid_minor: number; outstanding_minor: number; status: string; days_to_due: number | null; alerts: { id: string; kind: string; created_at: number }[] };
 type CreditNote = { id: string; invoice_id: string; number: string; amount_minor: number; reason: string; created_at: number };
-type SalesState = { buyers: Buyer[]; rfqs: Rfq[]; revisions: Revision[]; orders: { id: string; revision_id: string }[]; invoices: Invoice[]; creditNotes: CreditNote[]; products: { id: string; sku: string; name: string }[]; settings: { currency: string; tax_rate_bp: number } };
+type SalesOrder = { id: string; revision_id: string; buyer_id: string; reference: string; status: string; created_at: number };
+type SalesState = { buyers: Buyer[]; rfqs: Rfq[]; revisions: Revision[]; orders: SalesOrder[]; invoices: Invoice[]; creditNotes: CreditNote[]; products: { id: string; sku: string; name: string }[]; settings: { currency: string; tax_rate_bp: number } };
 type DispatchRecord = { id: string; sales_order_id: string; status: 'pending_approval' | 'approved' | 'on_hold' | 'dispatched' | 'delivered'; order_reference: string; buyer_name: string; product_name: string; lot_batch: string; quantity_milli: number; grams: number; hold_reason: string | null; approval_request_id: string | null; hold_notice_id: string | null; created_at: number; dispatched_at: number | null; delivered_at: number | null };
 type StockQuery = { id: string; product_id: string; product_name: string; quantity_milli: number | null; buyer_rfq_id: string | null; question: string; status: string; available_grams: number | null; answer: string | null; created_at: number };
 type Props = { member: Member; section: string; tab: string; id: string; navigate: (to: string) => void };
-type BuyerSummary = { id: string; name: string; contact_name: string; city: string; status: string; credit_limit_minor: number | null; credit_limit_currency: string | null; sold: { unit: string; quantity_milli: number }[]; invoiced: { currency: string; total_minor: number; invoices: number }[]; outstanding: { currency: string; outstanding_minor: number }[]; overdue: { currency: string; overdue_minor: number }[]; next_due_at: number | null; days_left: number | null; credit_used_minor: number | null; over_limit: boolean };
+type BuyerSummary = { id: string; name: string; contact_name: string; email: string; phone: string; city: string; notes: string; version: number; status: string; credit_limit_minor: number | null; credit_limit_currency: string | null; sold: { unit: string; quantity_milli: number }[]; invoiced: { currency: string; total_minor: number; invoices: number }[]; outstanding: { currency: string; outstanding_minor: number }[]; overdue: { currency: string; overdue_minor: number }[]; next_due_at: number | null; days_left: number | null; credit_used_minor: number | null; over_limit: boolean };
 type SalesSettings = { currency: string; tax_rate_bp: number; invoice_format: string; reminder_hours: number; credit_alert_days: number[] };
 type Analytics = { byPeriod: { period: string; currency: string; totalMinor: number }[]; byBuyer: { buyer: string; currency: string; totalMinor: number }[]; byProduct: { product: string | null; currency: string; totalMinor: number }[]; paymentStatus: Record<string, number>; overdueByCurrency: { currency: string; overdueMinor: number }[] };
 
@@ -37,6 +38,14 @@ const tabs: Record<string, { id: string; en: string; ur: string }[]> = {
   'buyer-rfqs': [{ id: 'open', en: 'To quote', ur: 'قیمت دینے کے لیے' }, { id: 'quoted', en: 'Quoted', ur: 'قیمت دی گئی' }, { id: 'sold', en: 'Sold', ur: 'فروخت شدہ' }, { id: 'all', en: 'All', ur: 'سب' }],
   invoices: [{ id: 'owed', en: 'To collect', ur: 'وصولی کے لیے' }, { id: 'paid', en: 'Paid', ur: 'ادا شدہ' }, { id: 'all', en: 'All', ur: 'سب' }],
   'dispatch-requests': [{ id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'all', en: 'All', ur: 'سب' }],
+};
+const buyerStatuses = [['all', 'All', 'سب'], ['pending', 'Pending', 'زیرِ التوا'], ['active', 'Active', 'فعال'], ['suspended', 'Suspended', 'معطل'], ['rejected', 'Rejected', 'مسترد']] as const;
+// Status moves the sales team can make, mirroring the supplier rules: pending is approved or rejected, approved can be suspended and reinstated, rejected is final.
+type BuyerMove = { en: string; ur: string; options: [string, string, string][] };
+const buyerMoves: Record<string, BuyerMove> = {
+  pending: { en: 'Review buyer', ur: 'خریدار کی جانچ', options: [['active', 'Approve', 'منظور'], ['rejected', 'Reject', 'مسترد']] },
+  active: { en: 'Suspend buyer', ur: 'خریدار معطل کریں', options: [['suspended', 'Suspend access', 'رسائی معطل کریں']] },
+  suspended: { en: 'Reactivate buyer', ur: 'خریدار دوبارہ فعال کریں', options: [['active', 'Reactivate access', 'رسائی بحال کریں']] },
 };
 const termOptions = [
   ['payment_overdue', 'Payment overdue', 'ادائیگی کی مدت گزر گئی'],
@@ -66,9 +75,9 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
       const next = await inventoryRequest<SalesState>('/erp/sales');
       setState(next);
       if (section === 'buyers') setSummaries((await inventoryRequest<{ buyers: BuyerSummary[] }>('/erp/sales/buyers/summary')).buyers);
-      if (section === 'buyers' && tab === 'settings') setSalesSettings((await inventoryRequest<{ settings: SalesSettings }>('/erp/sales/settings')).settings);
+      if (section === 'buyers' && tab === 'settings' && member.admin) setSalesSettings((await inventoryRequest<{ settings: SalesSettings }>('/erp/sales/settings')).settings);
       if (section === 'buyer-rfqs') setQueries((await inventoryRequest<{ queries: StockQuery[] }>('/erp/stock/queries')).queries);
-      if (section === 'dashboard' || section === 'dispatch-requests') setDispatches((await inventoryRequest<{ dispatches: DispatchRecord[] }>('/erp/dispatch')).dispatches);
+      if (section === 'dashboard' || section === 'dispatch-requests' || section === 'buyers') setDispatches((await inventoryRequest<{ dispatches: DispatchRecord[] }>('/erp/dispatch')).dispatches);
       if (section === 'analytics') {
         const start = dateAtStart(from), end = dateAtStart(to) + 24 * 60 * 60_000 - 1;
         if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) throw new Error('Choose a valid date range.');
@@ -77,7 +86,7 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
       setError('');
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not load sales records.'); }
     finally { setLoading(false); }
-  }, [section, tab, from, to, allowed]);
+  }, [section, tab, from, to, allowed, member.admin]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     const changed = () => setOnline(navigator.onLine);
@@ -111,7 +120,9 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
   for (const invoice of s.invoices.filter(item => item.status === 'overdue')) overdue.set(invoice.currency, (overdue.get(invoice.currency) ?? 0) + invoice.outstanding_minor);
   const selectedInvoice = s.invoices.find(invoice => invoice.id === id);
   // An unknown buyers tab (for example a stale link) falls back to the approval queue instead of an empty page.
-  const currentTab = section === 'buyers' ? (tabs.buyers.some(item => item.id === tab) ? tab : 'pending') : tab || (section === 'buyer-rfqs' ? 'open' : section === 'invoices' ? 'owed' : 'pending_approval');
+  // Settings are admin-only: a sales manager opening buyers/settings by URL lands on the approval queue.
+  const buyerTabs = member.admin ? tabs.buyers : tabs.buyers.filter(item => item.id !== 'settings');
+  const currentTab = section === 'buyers' ? (buyerTabs.some(item => item.id === tab) ? tab : 'pending') : tab || (section === 'buyer-rfqs' ? 'open' : section === 'invoices' ? 'owed' : 'pending_approval');
   const alerts = s.invoices.flatMap(invoice => invoice.alerts.map(alert => ({ invoice, alert })));
 
   const dashboardView = () => {
@@ -129,37 +140,23 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
     </div>;
   };
 
-  const buyerReview = (buyer: Buyer) => open === 'buyer:' + buyer.id && <BuyerReview buyer={buyer} member={member} onCancel={() => setOpen('')}
-    onSave={(status, reason, decisionIntervention) => act(t('Buyer review saved.', 'خریدار کی جانچ محفوظ ہوئی۔'), 'خریدار کی جانچ محفوظ ہوئی۔', () => salesPost('/buyers/review', { id: buyer.id, status, version: buyer.version, ...(reason ? { reason } : {}), ...(decisionIntervention ? { interventionReason: decisionIntervention } : {}) }))} />;
+  const saveDecision = (buyer: BuyerSummary, status: string, reason: string, intervention: string) =>
+    act(t('Buyer status saved.', 'خریدار کی حالت محفوظ ہوئی۔'), 'خریدار کی حالت محفوظ ہوئی۔', () => salesPost('/buyers/review', { id: buyer.id, status, version: buyer.version, ...(reason ? { reason } : {}), ...(intervention ? { interventionReason: intervention } : {}) }));
+  const saveProfile = (buyer: BuyerSummary, fields: { contactName: string; phone: string; city: string; notes: string }, intervention: string) =>
+    act(t('Buyer profile saved.', 'خریدار کا پروفائل محفوظ ہوا۔'), 'خریدار کا پروفائل محفوظ ہوا۔', () => salesPost('/buyers/profile', { id: buyer.id, version: buyer.version, ...fields, ...(intervention ? { interventionReason: intervention } : {}) }));
 
   const buyersView = () => {
-    if (currentTab === 'settings') return <div className="erp-workspace"><SectionTabs tabs={tabs.buyers} value={currentTab} onChange={value => navigate('buyers/' + value)} />
-      <CreditLimitForm key={summaries.length} buyers={summaries} currency={s.settings.currency} member={member}
+    if (currentTab === 'settings') return <div className="erp-workspace"><SectionTabs tabs={buyerTabs} value={currentTab} onChange={value => navigate('buyers/' + value)} />
+      <CreditLimitForm key={summaries.length} buyers={summaries} currency={s.settings.currency}
         onSave={payload => act(t('Credit limit saved.', 'ادھار کی حد محفوظ ہوئی۔'), 'ادھار کی حد محفوظ ہوئی۔', () => salesPost('/buyers/credit-limit', payload))} />
-      {salesSettings && <InvoiceSettingsForm key={JSON.stringify(salesSettings)} settings={salesSettings} member={member}
-        onSave={(changes, reason) => act(t('Settings saved.', 'ترتیبات محفوظ ہوئیں۔'), 'ترتیبات محفوظ ہوئیں۔', async () => { for (const change of changes) await salesPost('/settings', { ...change, ...(reason ? { interventionReason: reason } : {}) }); })} />}
+      {salesSettings && <InvoiceSettingsForm key={JSON.stringify(salesSettings)} settings={salesSettings}
+        onSave={changes => act(t('Settings saved.', 'ترتیبات محفوظ ہوئیں۔'), 'ترتیبات محفوظ ہوئیں۔', async () => { for (const change of changes) await salesPost('/settings', change); })} />}
     </div>;
-    if (currentTab !== 'pending') {
-      const rows = summaries.filter(row => currentTab === 'all' || row.status === currentTab);
-      return <div className="erp-workspace"><SectionTabs tabs={tabs.buyers} value={currentTab} onChange={value => navigate('buyers/' + value)} />
-        {rows.length ? <ul className="buyer-list">{rows.map(row => <BuyerPositionRow key={row.id} buyer={row} invoices={s.invoices.filter(invoice => invoice.buyer_id === row.id)}
-          expanded={open === 'invoices:' + row.id} onToggle={() => setOpen(open === 'invoices:' + row.id ? '' : 'invoices:' + row.id)} navigate={navigate} />)}</ul>
-          : <p className="live-empty">{t('No buyers in this view.', 'اس حصے میں کوئی خریدار نہیں۔')}</p>}
-      </div>;
-    }
-    const filtered = s.buyers.filter(buyer => buyer.status === currentTab);
-    const selected = filtered.find(buyer => buyer.id === id);
-    return <div className="erp-workspace"><SectionTabs tabs={tabs.buyers} value={currentTab} onChange={value => navigate('buyers/' + value)} />
-      {selected ? <section className="live-panel"><div className="live-panel-heading"><div><h2>{selected.name}</h2><p>{selected.contact_name} · {selected.email} · {selected.phone}</p></div><StatusTag status={selected.status} /></div>
-        <p>{selected.city || '—'} · {selected.notes || t('No verification note supplied.', 'تصدیق کا نوٹ درج نہیں۔')}</p>
-        {selected.status === 'pending' && <button className="button primary" onClick={() => setOpen('buyer:' + selected.id)}><BadgeCheck size={18} aria-hidden="true" />{t('Review buyer', 'خریدار کی جانچ')}</button>}
-        {buyerReview(selected)}</section>
-        : filtered.length ? <div className="erp-records">{filtered.map(buyer => <article className="erp-record" key={buyer.id}>
-          <div className="erp-record-head"><div><h2><button className="live-text-button" onClick={() => navigate('buyers/' + buyer.id)}>{buyer.name}</button></h2><p>{buyer.contact_name} · {buyer.email} · {buyer.city}</p></div><StatusTag status={buyer.status} /></div>
-          <p>{buyer.notes || t('No verification note supplied.', 'تصدیق کا نوٹ درج نہیں۔')}</p>
-          {buyer.status === 'pending' && <div className="live-actions"><button className="button primary" onClick={() => setOpen(open === 'buyer:' + buyer.id ? '' : 'buyer:' + buyer.id)}><BadgeCheck size={18} aria-hidden="true" />{t('Review buyer', 'خریدار کی جانچ')}</button></div>}
-          {buyerReview(buyer)}</article>)}</div>
-        : <p className="live-empty">{t('No buyers in this view.', 'اس حصے میں کوئی خریدار نہیں۔')}</p>}
+    // A deep link such as buyers/<id> (from the dashboard) focuses that one buyer; the tabs still show the rest.
+    const focused = id ? summaries.filter(buyer => buyer.id === id) : [];
+    return <div className="erp-workspace"><SectionTabs tabs={buyerTabs} value={currentTab} onChange={value => navigate('buyers/' + value)} />
+      <BuyerDirectory key={currentTab} buyers={focused.length ? focused : summaries} focused={focused.length > 0} defaultStatus={currentTab} sales={s} dispatches={dispatches}
+        member={member} open={open} setOpen={setOpen} navigate={navigate} onDecide={saveDecision} onProfile={saveProfile} />
     </div>;
   };
 
@@ -281,11 +278,24 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
   </div>;
 }
 
-function BuyerReview({ buyer, member, onSave, onCancel }: { buyer: Buyer; member: Member; onCancel: () => void; onSave: (status: string, reason: string, intervention: string) => Promise<void> }) {
-  const { t } = useLanguage(); const [decision, setDecision] = useState<'active' | 'rejected'>('active'), [reason, setReason] = useState(''), [intervention, setIntervention] = useState('');
-  return <AsyncForm title={t('Review buyer', 'خریدار کی جانچ')} detail={buyer.name} submit={decision === 'active' ? t('Approve buyer', 'خریدار منظور کریں') : t('Reject buyer', 'خریدار مسترد کریں')} onSubmit={() => onSave(decision, reason, intervention)} onCancel={onCancel}>
-    <Field>{t('Decision', 'فیصلہ')}<select value={decision} onChange={event => setDecision(event.target.value as typeof decision)}><option value="active">{t('Approve', 'منظور')}</option><option value="rejected">{t('Reject', 'مسترد')}</option></select></Field>
-    {decision === 'rejected' && <ReasonField label={t('Review reason', 'جانچ کی وجہ')} value={reason} onChange={setReason} />}
+function BuyerDecision({ buyer, move, member, onSave, onCancel }: { buyer: BuyerSummary; move: BuyerMove; member: Member; onCancel: () => void; onSave: (status: string, reason: string, intervention: string) => Promise<void> }) {
+  const { t } = useLanguage(); const [decision, setDecision] = useState(move.options[0][0]), [reason, setReason] = useState(''), [intervention, setIntervention] = useState('');
+  return <AsyncForm title={t(move.en, move.ur)} detail={buyer.name} submit={t('Save decision', 'فیصلہ محفوظ کریں')} onCancel={onCancel} onSubmit={() => onSave(decision, decision === 'active' ? '' : reason, intervention)}
+    note={decision === 'active' ? undefined : t('Suspending or rejecting ends the buyer’s open sessions. Past quotations and invoices stay on record.', 'معطل یا مسترد کرنے سے خریدار کے کھلے سیشن ختم ہو جاتے ہیں۔ پرانی قیمتیں اور انوائسز ریکارڈ میں رہتی ہیں۔')}>
+    {move.options.length > 1 && <Field>{t('Decision', 'فیصلہ')}<select value={decision} onChange={event => setDecision(event.target.value)}>{move.options.map(([value, en, ur]) => <option key={value} value={value}>{t(en, ur)}</option>)}</select></Field>}
+    {decision !== 'active' && <ReasonField label={t('Reason', 'وجہ')} value={reason} onChange={setReason} />}
+    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+  </AsyncForm>;
+}
+
+function BuyerProfileForm({ buyer, member, onSave, onCancel }: { buyer: BuyerSummary; member: Member; onCancel: () => void; onSave: (fields: { contactName: string; phone: string; city: string; notes: string }, intervention: string) => Promise<void> }) {
+  const { t } = useLanguage(); const [contactName, setContactName] = useState(buyer.contact_name), [phone, setPhone] = useState(buyer.phone), [city, setCity] = useState(buyer.city), [notes, setNotes] = useState(buyer.notes), [intervention, setIntervention] = useState('');
+  return <AsyncForm title={t('Edit buyer profile', 'خریدار پروفائل میں ترمیم')} detail={buyer.name} submit={t('Save profile', 'پروفائل محفوظ کریں')} onCancel={onCancel} note={t('Changing the profile does not change the buyer’s access or credit limit.', 'پروفائل بدلنے سے خریدار کی رسائی یا ادھار کی حد نہیں بدلتی۔')}
+    onSubmit={() => onSave({ contactName, phone, city, notes }, intervention)}>
+    <Field>{t('Contact name', 'رابطہ کار')}<input value={contactName} onChange={event => setContactName(event.target.value)} minLength={2} maxLength={80} required /></Field>
+    <Field>{t('Phone (with country code)', 'فون (ملک کے کوڈ کے ساتھ)')}<input dir="ltr" inputMode="tel" value={phone} onChange={event => setPhone(event.target.value)} required /></Field>
+    <Field>{t('City', 'شہر')}<input value={city} onChange={event => setCity(event.target.value)} maxLength={100} /></Field>
+    <Field>{t('Notes', 'نوٹس')}<textarea value={notes} onChange={event => setNotes(event.target.value)} maxLength={2000} /></Field>
     <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
   </AsyncForm>;
 }
@@ -379,8 +389,38 @@ function DispatchThread({ status, holdReason }: { status: DispatchRecord['status
   </div>;
 }
 
-function BuyerPositionRow({ buyer, invoices, expanded, onToggle, navigate }: { buyer: BuyerSummary; invoices: Invoice[]; expanded: boolean; onToggle: () => void; navigate: (to: string) => void }) {
+function BuyerDirectory({ buyers, focused, defaultStatus, sales, dispatches, member, open, setOpen, navigate, onDecide, onProfile }: {
+  buyers: BuyerSummary[]; focused: boolean; defaultStatus: string; sales: SalesState; dispatches: DispatchRecord[]; member: Member; open: string; setOpen: (key: string) => void; navigate: (to: string) => void;
+  onDecide: (buyer: BuyerSummary, status: string, reason: string, intervention: string) => Promise<void>;
+  onProfile: (buyer: BuyerSummary, fields: { contactName: string; phone: string; city: string; notes: string }, intervention: string) => Promise<void>;
+}) {
   const { t } = useLanguage();
+  const [status, setStatus] = useState(defaultStatus), [search, setSearch] = useState('');
+  const term = search.trim().toLowerCase();
+  const rows = focused ? buyers : buyers.filter(buyer => (status === 'all' || buyer.status === status) && [buyer.name, buyer.contact_name, buyer.city, buyer.email].join(' ').toLowerCase().includes(term));
+  const orderBuyer = new Map(sales.orders.map(order => [order.id, order.buyer_id]));
+  return <section className="live-panel">
+    <div className="yf-head"><div><h2>{t('Buyer directory', 'خریدار ڈائریکٹری')}</h2><p>{t('Registered buyers. The sales team approves them before they can order.', 'رجسٹرڈ خریدار۔ آرڈر دینے سے پہلے فروخت کی ٹیم انہیں منظور کرتی ہے۔')}</p></div></div>
+    <a className="button" href="#/buyer" target="_blank" rel="noreferrer"><ExternalLink size={18} aria-hidden="true" />{t('Open buyer registration portal', 'خریدار رجسٹریشن پورٹل کھولیں')}</a>
+    {focused ? <p className="live-muted"><button className="live-text-button" onClick={() => navigate('buyers/' + defaultStatus)}>{t('Show all buyers', 'تمام خریدار دکھائیں')}</button></p>
+      : <div className="live-fields erp-filters"><Field>{t('Status', 'حالت')}<select value={status} onChange={event => setStatus(event.target.value)}>{buyerStatuses.map(([value, en, ur]) => <option key={value} value={value}>{t(en, ur)}</option>)}</select></Field>
+        <Field>{t('Search buyers', 'خریدار تلاش کریں')}<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={t('Name, contact, city, email', 'نام، رابطہ، شہر، ای میل')} /></Field></div>}
+    {!buyers.length && <p className="live-muted">{t('Share the registration portal link with buyers.', 'خریداروں کو رجسٹریشن پورٹل کا لنک دیں۔')}</p>}
+    {rows.length ? <div className="erp-records">{rows.map(buyer => <BuyerRecord key={buyer.id} buyer={buyer} sales={sales}
+        dispatches={dispatches.filter(item => orderBuyer.get(item.sales_order_id) === buyer.id)} member={member} open={open} setOpen={setOpen} navigate={navigate}
+        onDecide={(status, reason, intervention) => onDecide(buyer, status, reason, intervention)}
+        onProfile={(fields, intervention) => onProfile(buyer, fields, intervention)} />)}</div>
+      : buyers.length ? <p className="live-empty">{t('No buyers in this view.', 'اس حصے میں کوئی خریدار نہیں۔')}</p> : null}
+  </section>;
+}
+
+function BuyerRecord({ buyer, sales, dispatches, member, open, setOpen, navigate, onDecide, onProfile }: {
+  buyer: BuyerSummary; sales: SalesState; dispatches: DispatchRecord[]; member: Member; open: string; setOpen: (key: string) => void; navigate: (to: string) => void;
+  onDecide: (status: string, reason: string, intervention: string) => Promise<void>; onProfile: (fields: { contactName: string; phone: string; city: string; notes: string }, intervention: string) => Promise<void>;
+}) {
+  const { t } = useLanguage();
+  const invoices = sales.invoices.filter(invoice => invoice.buyer_id === buyer.id), orders = sales.orders.filter(order => order.buyer_id === buyer.id);
+  const move = buyerMoves[buyer.status], decisionKey = 'buyer:' + buyer.id, profileKey = 'profile:' + buyer.id, detailKey = 'detail:' + buyer.id;
   const days = buyer.days_left;
   const dueTone = days === null ? '' : days < 0 ? 'is-bad' : days <= 7 ? 'is-warn' : '';
   const dueText = days === null ? t('Nothing due', 'کوئی واجب رقم نہیں')
@@ -390,8 +430,9 @@ function BuyerPositionRow({ buyer, invoices, expanded, onToggle, navigate }: { b
   const limit = buyer.credit_limit_minor, limitCurrency = buyer.credit_limit_currency, used = buyer.credit_used_minor ?? 0;
   const pct = !limit ? (used > 0 ? 100 : 0) : Math.min(100, (used / limit) * 100);
   const list = (values: string[]) => values.length ? values.join(' · ') : '—';
-  return <li className="buyer-row">
-    <div className="buyer-row-head"><div><h2>{buyer.name}</h2><p>{buyer.contact_name}{buyer.city ? ` · ${buyer.city}` : ''}</p></div><StatusTag status={buyer.status} /></div>
+  return <article className="erp-record">
+    <div className="erp-record-head"><div><h3>{buyer.name}</h3><p>{buyer.contact_name}{buyer.city ? ` · ${buyer.city}` : ''} · {buyer.email} · {buyer.phone}</p></div><StatusTag status={buyer.status} /></div>
+    {buyer.notes && <p className="live-muted">{buyer.notes}</p>}
     <dl className="buyer-facts">
       <div><dt>{t('Total sold', 'کل فروخت')}</dt><dd>{buyer.sold.length ? buyer.sold.map(line => `${line.quantity_milli / 1000} ${line.unit}`).join(' · ') : t('Nothing sold yet', 'ابھی کوئی فروخت نہیں')}</dd></div>
       <div><dt>{t('Invoiced', 'انوائس شدہ')}</dt><dd>{list(buyer.invoiced.map(row => money(row.total_minor, row.currency)))}</dd></div>
@@ -404,35 +445,52 @@ function BuyerPositionRow({ buyer, invoices, expanded, onToggle, navigate }: { b
         <div className="buyer-credit-head"><span>{t('Credit used', 'استعمال شدہ ادھار')}: {money(used, limitCurrency)} / {money(limit, limitCurrency)}</span>{buyer.over_limit && <span className="buyer-over">{t('Over limit', 'حد سے زیادہ')}</span>}</div>
         <div className={`buyer-meter${buyer.over_limit ? ' is-warn' : ''}`} role="img" aria-label={`${t('Credit used', 'استعمال شدہ ادھار')}: ${Math.round(pct)}%`}><span style={{ width: `${pct}%` }} /></div>
       </div>}
-    <div><button className="live-text-button" aria-expanded={expanded} onClick={onToggle}>{t('Invoices', 'انوائسز')} ({invoices.length})</button></div>
-    {expanded && <ul className="buyer-invoices">{invoices.length ? invoices.map(invoice => <li key={invoice.id}><button className="live-text-button" onClick={() => navigate('invoices/' + invoice.id)}>{invoice.number}</button>
-      <span>{money(invoice.outstanding_minor, invoice.currency)} {t('outstanding', 'بقایا')} · {dueDate(invoice.due_at)}</span></li>) : <li>{t('No invoices yet.', 'ابھی کوئی انوائس نہیں۔')}</li>}</ul>}
-  </li>;
+    {open === decisionKey && move && <BuyerDecision buyer={buyer} move={move} member={member} onCancel={() => setOpen('')} onSave={onDecide} />}
+    {open === profileKey && <BuyerProfileForm buyer={buyer} member={member} onCancel={() => setOpen('')} onSave={onProfile} />}
+    <div className="live-actions">
+      {move && open !== decisionKey && <button className="button primary" onClick={() => setOpen(decisionKey)}><BadgeCheck size={18} aria-hidden="true" />{t(move.en, move.ur)}</button>}
+      {open !== profileKey && <button className="button" onClick={() => setOpen(profileKey)}><Pencil size={18} aria-hidden="true" />{t('Edit profile', 'پروفائل میں ترمیم')}</button>}
+      <button className="button" aria-expanded={open === detailKey} onClick={() => setOpen(open === detailKey ? '' : detailKey)}><ClipboardList size={18} aria-hidden="true" />{t('Buyer details', 'خریدار کی تفصیلات')}</button>
+    </div>
+    {open === detailKey && <div className="buyer-detail">
+      <h4>{t('Invoices', 'انوائسز')}</h4>
+      {invoices.length ? <ul className="buyer-invoices">{invoices.map(invoice => <li key={invoice.id}><button className="live-text-button" onClick={() => navigate('invoices/' + invoice.id)}>{invoice.number}</button>
+        <span>{money(invoice.total_minor, invoice.currency)} · {money(invoice.outstanding_minor, invoice.currency)} {t('outstanding', 'بقایا')} · {dueDate(invoice.due_at)}</span></li>)}</ul>
+        : <p className="live-muted">{t('No invoices yet.', 'ابھی کوئی انوائس نہیں۔')}</p>}
+      <h4>{t('Sales orders', 'فروخت کے آرڈر')}</h4>
+      {orders.length ? <ul className="buyer-invoices">{orders.map(order => <li key={order.id}><span>{order.reference}</span><span>{dueDate(order.created_at)} · <StatusTag status={order.status} /></span></li>)}</ul>
+        : <p className="live-muted">{t('No sales orders yet.', 'ابھی کوئی فروخت کا آرڈر نہیں۔')}</p>}
+      <h4>{t('Dispatches', 'ڈسپیچ')}</h4>
+      {dispatches.length ? <ul className="buyer-invoices">{dispatches.map(item => <li key={item.id}><span>{item.order_reference} · {item.product_name} · {item.lot_batch} · {kg(item.grams)}</span><StatusTag status={item.status} /></li>)}</ul>
+        : <p className="live-muted">{t('No dispatches yet.', 'ابھی کوئی ڈسپیچ نہیں۔')}</p>}
+    </div>}
+  </article>;
 }
 
-function CreditLimitForm({ buyers, currency, member, onSave }: { buyers: BuyerSummary[]; currency: string; member: Member; onSave: (payload: unknown) => Promise<void> }) {
+// Admin-only (the admin assigns limits); the sales manager sees each buyer's limit read-only on the buyer record.
+function CreditLimitForm({ buyers, currency, onSave }: { buyers: BuyerSummary[]; currency: string; onSave: (payload: unknown) => Promise<void> }) {
   const { t } = useLanguage(); const first = buyers[0];
   const [buyerId, setBuyerId] = useState(first?.id ?? ''), [amount, setAmount] = useState(first?.credit_limit_minor == null ? '' : amountInput(first.credit_limit_minor)),
-    [limitCurrency, setLimitCurrency] = useState(first?.credit_limit_currency ?? currency), [clear, setClear] = useState(false), [intervention, setIntervention] = useState('');
+    [limitCurrency, setLimitCurrency] = useState(first?.credit_limit_currency ?? currency), [clear, setClear] = useState(false);
   const pick = (next: string) => {
     const buyer = buyers.find(item => item.id === next);
     setBuyerId(next); setClear(false); setAmount(buyer?.credit_limit_minor == null ? '' : amountInput(buyer.credit_limit_minor)); setLimitCurrency(buyer?.credit_limit_currency ?? currency);
   };
   if (!buyers.length) return <section className="live-panel"><h2>{t('Credit limit per buyer', 'خریدار کے مطابق ادھار کی حد')}</h2><p className="live-empty">{t('No buyers yet.', 'ابھی کوئی خریدار نہیں۔')}</p></section>;
   return <AsyncForm title={t('Credit limit per buyer', 'خریدار کے مطابق ادھار کی حد')} detail={t('A warning only. Quotations and invoices are never blocked.', 'صرف انتباہ۔ قیمتیں اور انوائسز کبھی نہیں رکتیں۔')} submit={t('Save credit limit', 'ادھار کی حد محفوظ کریں')}
-    onSubmit={() => onSave({ id: buyerId, ...(clear ? { amountMinor: null } : { amountMinor: fixedInput(amount, 2, 'Credit limit'), currency: limitCurrency }), ...(intervention ? { interventionReason: intervention } : {}) })}>
+    onSubmit={() => onSave({ id: buyerId, ...(clear ? { amountMinor: null } : { amountMinor: fixedInput(amount, 2, 'Credit limit'), currency: limitCurrency }) })}>
     <Field>{t('Buyer', 'خریدار')}<select value={buyerId} onChange={event => pick(event.target.value)}>{buyers.map(buyer => <option key={buyer.id} value={buyer.id}>{buyer.name}</option>)}</select></Field>
     <label className="buyer-clear"><input type="checkbox" checked={clear} onChange={event => setClear(event.target.checked)} /> {t('Clear the limit (no limit for this buyer)', 'حد ہٹائیں (اس خریدار کی کوئی حد نہیں)')}</label>
     <Field>{t('Credit limit', 'ادھار کی حد')}<input inputMode="decimal" value={amount} disabled={clear} required={!clear} onChange={event => setAmount(event.target.value)} /></Field>
     <Field>{t('Currency', 'کرنسی')}<select value={limitCurrency} disabled={clear} onChange={event => setLimitCurrency(event.target.value)}>{['PKR', 'USD', 'EUR', 'GBP'].map(code => <option key={code} value={code}>{code}</option>)}</select></Field>
-    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
   </AsyncForm>;
 }
 
-function InvoiceSettingsForm({ settings, member, onSave }: { settings: SalesSettings; member: Member; onSave: (changes: { key: string; value: unknown }[], reason: string) => Promise<void> }) {
+// Admin-only, like the credit limits above.
+function InvoiceSettingsForm({ settings, onSave }: { settings: SalesSettings; onSave: (changes: { key: string; value: unknown }[]) => Promise<void> }) {
   const { t } = useLanguage();
   const [currency, setCurrency] = useState(settings.currency), [gst, setGst] = useState(String(settings.tax_rate_bp / 100)), [format, setFormat] = useState(settings.invoice_format),
-    [hours, setHours] = useState(String(settings.reminder_hours)), [days, setDays] = useState(settings.credit_alert_days.join(', ')), [intervention, setIntervention] = useState('');
+    [hours, setHours] = useState(String(settings.reminder_hours)), [days, setDays] = useState(settings.credit_alert_days.join(', '));
   return <AsyncForm title={t('Invoice and factory settings', 'انوائس اور فیکٹری کی ترتیبات')} submit={t('Save settings', 'ترتیبات محفوظ کریں')} onSubmit={() => {
     // Only changed keys are sent, one at a time; the server validates each value with the admin rules.
     const changes: { key: string; value: unknown }[] = [], rate = Math.round(Number(gst) * 100), creditDays = days.split(',').map(item => item.trim()).filter(Boolean).map(Number);
@@ -441,14 +499,13 @@ function InvoiceSettingsForm({ settings, member, onSave }: { settings: SalesSett
     if (format !== settings.invoice_format) changes.push({ key: 'invoice_format', value: format });
     if (Number(hours) !== settings.reminder_hours) changes.push({ key: 'reminder_hours', value: Number(hours) });
     if (creditDays.join() !== settings.credit_alert_days.join()) changes.push({ key: 'credit_alert_days', value: creditDays });
-    return onSave(changes, intervention);
+    return onSave(changes);
   }}>
     <Field>{t('Currency', 'کرنسی')}<select value={currency} onChange={event => setCurrency(event.target.value)}>{['PKR', 'USD', 'EUR', 'GBP'].map(code => <option key={code} value={code}>{code}</option>)}</select></Field>
     <Field>{t('GST (%)', 'جی ایس ٹی (%)')}<input type="number" min="0" max="100" step="0.01" value={gst} onChange={event => setGst(event.target.value)} /></Field>
     <Field>{t('Invoice number format', 'انوائس نمبر کی ترتیب')}<input value={format} onChange={event => setFormat(event.target.value)} /></Field>
     <Field>{t('Reminder hours', 'یاددہانی کے گھنٹے')}<input type="number" min="1" max="720" value={hours} onChange={event => setHours(event.target.value)} /></Field>
     <Field>{t('Credit alert days (comma separated)', 'ادھار یاددہانی کے دن')}<input value={days} onChange={event => setDays(event.target.value)} /></Field>
-    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
   </AsyncForm>;
 }
 

@@ -246,7 +246,7 @@ async function salesOverview(db, w, now) {
 /** One row per buyer: quantities sold (sales order lines), invoiced totals, and the payment position. */
 async function buyersSummary(db, w, now) {
   const [buyers, sold, invoiced, open] = await Promise.all([
-    all(db, "SELECT id,name,contact_name,city,status,credit_limit_minor,credit_limit_currency FROM buyers WHERE workspace_id=? AND status!='archived' ORDER BY name COLLATE NOCASE LIMIT 500", w),
+    all(db, "SELECT id,name,contact_name,email,phone,city,notes,status,version,credit_limit_minor,credit_limit_currency FROM buyers WHERE workspace_id=? AND status!='archived' ORDER BY name COLLATE NOCASE LIMIT 500", w),
     all(db, 'SELECT o.buyer_id,l.unit,SUM(l.quantity_milli) AS quantity_milli FROM sales_order_lines l JOIN sales_orders o ON o.id=l.sales_order_id WHERE l.workspace_id=? GROUP BY o.buyer_id,l.unit', w),
     all(db, 'SELECT buyer_id,currency,SUM(total_minor) AS total_minor,COUNT(*) AS invoices FROM invoices WHERE workspace_id=? GROUP BY buyer_id,currency', w),
     all(db, 'SELECT buyer_id,currency,total_minor,credited_minor,paid_minor,due_at FROM invoice_balances WHERE workspace_id=? AND total_minor>credited_minor+paid_minor', w),
@@ -304,9 +304,10 @@ export async function salesApi(request, env, member, path, data) {
   }
 
   // Warn-only credit limit: stored per buyer, shown on the buyers page, never checked when quoting or invoicing.
+  // Admin-only: the admin assigns limits, so no intervention reason is asked for.
   if (path === '/api/erp/sales/buyers/credit-limit') {
-    const intervention = role(member, data, 'sales_manager');
-    keys(data, ['id', 'amountMinor', 'currency', 'interventionReason']);
+    viewer(member);
+    keys(data, ['id', 'amountMinor', 'currency']);
     const buyerId = recordId(data.id);
     const buyer = await one(db, "SELECT id,credit_limit_minor,credit_limit_currency FROM buyers WHERE id=? AND workspace_id=? AND status!='archived'", buyerId, w);
     if (!buyer) fail(404, 'Buyer not found.');
@@ -319,15 +320,15 @@ export async function salesApi(request, env, member, path, data) {
     const before = { credit_limit_minor: buyer.credit_limit_minor, credit_limit_currency: buyer.credit_limit_currency };
     await db.batch([
       query(db, 'UPDATE buyers SET credit_limit_minor=?,credit_limit_currency=?,updated_at=? WHERE id=? AND workspace_id=?', after.credit_limit_minor, after.credit_limit_currency, now, buyerId, w),
-      audit(db, member, 'buyer.credit_limit_changed', buyerId, {}, 'staff', { objectType: 'buyer', before, after, intervention }),
+      audit(db, member, 'buyer.credit_limit_changed', buyerId, {}, 'staff', { objectType: 'buyer', before, after }),
     ]);
     return json({ saved: true, ...after });
   }
 
-  // Invoice and factory settings for the sales manager. Same keys and validation as /api/erp/admin/settings.
+  // Invoice and factory settings, admin-only (the sales manager reads them via GET). Same keys and validation as /api/erp/admin/settings.
   if (path === '/api/erp/sales/settings') {
-    const intervention = role(member, data, 'sales_manager');
-    keys(data, ['key', 'value', 'interventionReason']);
+    viewer(member);
+    keys(data, ['key', 'value']);
     const value = settingValue(data.key, data.value);
     const previous = await one(db, 'SELECT value_json FROM settings WHERE workspace_id=? AND key=?', w, data.key);
     const before = previous ? JSON.parse(previous.value_json) : DEFAULT_SETTINGS[data.key];
@@ -335,13 +336,36 @@ export async function salesApi(request, env, member, path, data) {
       query(db, `INSERT INTO settings(workspace_id,key,value_json,created_by,created_at,updated_by,updated_at) VALUES(?,?,?,?,?,?,?)
         ON CONFLICT(workspace_id,key) DO UPDATE SET value_json=excluded.value_json,updated_by=excluded.updated_by,updated_at=excluded.updated_at`,
         w, data.key, JSON.stringify(value), member.user_id, now, member.user_id, now),
-      audit(db, member, 'setting.changed', data.key, {}, 'staff', { before: { value: before }, after: { value }, intervention }),
+      audit(db, member, 'setting.changed', data.key, {}, 'staff', { before: { value: before }, after: { value } }),
     ]); }
     catch (error) {
       if (/Close open bids/.test(String(error))) fail(409, 'Close open bids and unaccepted quotations and settle unpaid invoices before changing currency.');
       throw error;
     }
     return json({ saved: true });
+  }
+
+  // Contact details the sales team keeps current. Status and credit limit have their own routes.
+  if (path === '/api/erp/sales/buyers/profile') {
+    const intervention = role(member, data, 'sales_manager');
+    keys(data, ['id', 'version', 'contactName', 'phone', 'city', 'notes', 'interventionReason']);
+    const buyerId = recordId(data.id), version = integer(data.version, 'Version');
+    const edits = {};
+    if (data.contactName !== undefined) edits.contact_name = text(data.contactName, 'Contact name', 2, 80);
+    if (data.phone !== undefined) edits.phone = phone(data.phone);
+    if (data.city !== undefined) edits.city = text(data.city, 'City', 0, 100);
+    if (data.notes !== undefined) edits.notes = multiline(data.notes, 'Notes', 0, 2000);
+    if (!Object.keys(edits).length) fail(422, 'Change at least one profile field.');
+    const buyer = await one(db, "SELECT * FROM buyers WHERE id=? AND workspace_id=? AND status!='archived'", buyerId, w);
+    if (!buyer) fail(404, 'Buyer not found.');
+    if (buyer.version !== version) fail(409, 'The buyer record changed. Reload before editing.');
+    const before = Object.fromEntries(Object.keys(edits).map(k => [k, buyer[k]])), after = { ...edits };
+    // The guard aborts the batch when a concurrent edit already moved the version, so no audit row is written for a lost update.
+    try { await db.batch([guard(db, 'EXISTS(SELECT 1 FROM buyers WHERE id=? AND workspace_id=? AND version=?)', buyerId, w, version),
+      query(db, `UPDATE buyers SET ${[...Object.keys(edits).map(k => k + '=?'), 'version=version+1', 'updated_at=?'].join(',')} WHERE id=? AND workspace_id=? AND version=?`, ...Object.values(edits), now, buyerId, w, version),
+      audit(db, member, 'buyer.profile_updated', buyerId, {}, 'staff', { objectType: 'buyer', before, after, intervention })]); }
+    catch { fail(409, 'The buyer record changed. Reload before editing.'); }
+    return json({ saved: true, version: version + 1 });
   }
 
   if (path === '/api/erp/sales/buyers/review') {
@@ -352,6 +376,9 @@ export async function salesApi(request, env, member, path, data) {
     if (!['active', 'rejected', 'suspended'].includes(data.status)) fail(422, 'Choose active, rejected or suspended.');
     const version = integer(data.version, 'Version');
     if (buyer.version !== version) fail(409, 'The buyer record changed. Reload before reviewing.');
+    // Rejected is final; pending is only approved or rejected.
+    const moves = { pending: ['active', 'rejected'], active: ['suspended', 'rejected'], suspended: ['active', 'rejected'] };
+    if (!(moves[buyer.status] || []).includes(data.status)) fail(409, `A ${buyer.status} buyer cannot be moved to ${data.status}.`);
     const why = data.status === 'active' && data.reason === undefined ? null : decisionReason(data.reason, 'Review reason');
     const held = buyer.status === 'pending' && data.status === 'active'
       ? await all(db, "SELECT id,reference FROM buyer_purchase_orders WHERE buyer_id=? AND status='entered'", buyer.id) : [];

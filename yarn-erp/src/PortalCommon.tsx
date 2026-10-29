@@ -31,7 +31,7 @@ export function InterventionField({ member, owners, value, onChange }: { member:
 
 const words: Record<string, [string, string]> = {
   approved: ['Approved', 'منظور'], accepted: ['Accepted', 'قبول'], paid: ['Paid', 'ادا شدہ'], delivered: ['Delivered', 'پہنچ گیا'], settled: ['Settled', 'طے شدہ'],
-  pending: ['Pending', 'زیرِ التوا'], pending_admin: ['Waiting for admin', 'ایڈمن کا انتظار'], submitted: ['Submitted', 'جمع شدہ'], open: ['Open', 'کھلا'], unread: ['New', 'نیا'],
+  pending: ['Pending', 'زیرِ التوا'], active: ['Active', 'فعال'], pending_admin: ['Waiting for admin', 'ایڈمن کا انتظار'], submitted: ['Submitted', 'جمع شدہ'], open: ['Open', 'کھلا'], unread: ['New', 'نیا'],
   rejected: ['Rejected', 'مسترد'], held: ['Held', 'روکا گیا'], overdue: ['Overdue', 'مدت گزر گئی'], on_hold: ['On hold', 'روکا گیا'],
 };
 const tone = (status: string) => ['approved', 'accepted', 'paid', 'delivered', 'settled'].includes(status) ? 'ok' : ['rejected', 'held', 'overdue', 'on_hold'].includes(status) ? 'bad' : /^pending|^submitted$|^open$|^unread$/.test(status) ? 'warn' : 'stone';
