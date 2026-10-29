@@ -182,14 +182,17 @@ input:disabled, select:disabled, textarea:disabled { background: var(--sunken); 
   font: 600 16px var(--font);
   text-align: left;
   cursor: pointer;
-  /* Text changes colour only once the gliding pill has mostly left (or reached) the item, so a label is never
-     ink on the ink rail or paper on the paper pill while the pill is moving. */
-  transition: color 90ms ease 120ms;
+  /* The label changes colour over the same 260 ms ease as the pill's glide, so it darkens exactly as the pill
+     slides under it and lightens as the pill leaves: never ink on the rail, never paper on the pill. */
+  transition: color 260ms var(--ease-out), background-color 150ms ease;
 }
 .live-sidebar nav button svg { width: 22px; height: 22px; }
 /* The white pill glides to the current page (LiveApp measures --glide-*); the item turns paper as it lands. */
-.live-sidebar nav button.active, .live-bottom-nav button.active { background: var(--panel); color: var(--ink); transition: color 90ms ease 120ms, background-color 0s linear 260ms; }
-/* Before the first measurement there is no pill to wait for. */
+/* The item itself never paints a background while the pill is gliding: a hover colour left on the clicked item
+   used to sit on top of the arriving pill and then snap to white. The pill alone shows where you are. */
+.live-sidebar nav button.active, .live-bottom-nav button.active { background: transparent; color: var(--ink); transition: color 260ms var(--ease-out); }
+/* Before the first measurement there is no pill yet, so the current item paints its own. */
+.live-sidebar nav:not([data-glide]) button.active, .live-bottom-nav:not([data-glide]) button.active { background: var(--panel); }
 .live-sidebar nav:not([data-glide]) button, .live-bottom-nav:not([data-glide]) button { transition: none; }
 @media (hover: hover) and (pointer: fine) { .live-sidebar nav button:not(.active):hover { background: #2e281f; color: #fff; } }
 .live-sidebar nav::before, .live-bottom-nav::before {
@@ -1051,8 +1054,11 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
 
 /* ── Floor work: big buttons, big numbers, one sentence to check ─────────────────────────────────── */
 /* Daily work on Home: one tap per job, icon and word together. */
-.yf-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; margin-bottom: 32px; }
-.yf-tile { display: grid; align-content: start; justify-items: start; gap: 6px; min-height: 128px; padding: 18px; border: 1px solid var(--line); border-radius: 22px; background: var(--panel); color: var(--ink); font: inherit; text-align: start; cursor: pointer; box-shadow: 0 1px 0 rgb(29 27 25 / 4%); transition: transform 160ms var(--ease-out), border-color 150ms ease, background-color 150ms ease; touch-action: manipulation; }
+.yf-daily { margin-top: 40px; }
+/* Two equal rows by default; one row once every tile can keep about 150 px. */
+.yf-tiles { display: grid; grid-template-columns: repeat(var(--half, 4), minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 1560px) { .yf-tiles { grid-template-columns: repeat(var(--tiles, 8), minmax(0, 1fr)); } }
+.yf-tile { display: grid; align-content: start; justify-items: start; gap: 6px; min-width: 0; min-height: 128px; padding: 18px; border: 1px solid var(--line); border-radius: 22px; background: var(--panel); color: var(--ink); font: inherit; text-align: start; cursor: pointer; box-shadow: 0 1px 0 rgb(29 27 25 / 4%); transition: transform 160ms var(--ease-out), border-color 150ms ease, background-color 150ms ease; touch-action: manipulation; }
 .yf-tile:active { transform: scale(0.97); }
 .yf-tile-icon { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 4px; border-radius: 16px; background: var(--ink); color: var(--panel); }
 .yf-tile strong { font-size: 19px; line-height: 1.2; font-weight: 700; }
@@ -1198,7 +1204,7 @@ input[type="checkbox"], input[type="radio"] { width: 24px; height: 24px; min-hei
   .yf-steps li:not(.current) { font-size: 0; }
   .yf-steps li:not(.current) > span { font-size: 13px; }
   .yf-steps li.current { flex: 2.4; font-size: 15px; }
-  .yf-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .yf-tiles { grid-template-columns: repeat(min(2, var(--tiles, 2)), minmax(0, 1fr)); gap: 10px; }
   .yf-tile { min-height: 132px; padding: 14px; }
   .yf-choices:not(.cols-1) > div { grid-template-columns: 1fr; }
   .yf-big-numbers dd { font-size: 28px; }
