@@ -288,12 +288,14 @@ export default function LiveApp() {
   // One list: each material with its batches under it (a material is what you buy; a batch is one delivery of it).
   function stockList() {
     const q = query.toLowerCase();
-    const groups = workspace.products.map(p => ({ p, lots: filtered.filter(l => l.product_id === p.id) }))
-      .filter(({ p, lots }) => lots.length || (view === 'all' && [p.name, p.sku, p.barcode].join(' ').toLowerCase().includes(q)));
-    return <div className="yf-stock-groups">{groups.map(({ p, lots }) => <section className="yf-stock-group" key={p.id} aria-label={p.name}>
+    const arrivals = view === 'all' || view === 'quality' ? (workspace.qcArrivals ?? []).filter(a => [a.reference, a.supplier_name].join(' ').toLowerCase().includes(q)) : [];
+    const groups = workspace.products.map(p => ({ p, lots: filtered.filter(l => l.product_id === p.id), waiting: arrivals.filter(a => a.product_id === p.id) }))
+      .filter(({ p, lots, waiting }) => lots.length || waiting.length || (view === 'all' && [p.name, p.sku, p.barcode].join(' ').toLowerCase().includes(q)));
+    return <div className="yf-stock-groups">{groups.map(({ p, lots, waiting }) => <section className="yf-stock-group" key={p.id} aria-label={p.name}>
       <header><Cone hue={materialHue(workspace.products, p.id)} size={36} /><div><strong>{yarnName(p.name)}</strong><span>{p.sku}{p.barcode ? ' · ' + p.barcode : ''}</span></div><strong className="live-row-weight">{weight(workspace.lots.filter(l => l.product_id === p.id).reduce((sum, l) => sum + lotGrams(l.id), 0))} <small>kg</small></strong>{allow('catalog') && <button className="live-icon-button" aria-label={t(`Add finished ${p.name}`, `${p.name} کا تیار مال شامل کریں`)} title="Add finished goods" onClick={() => setAction({ type: 'finished', productId: p.id })}><Plus size={20} aria-hidden="true" /></button>}</header>
       {lots.map(lot => <button key={lot.id} className="live-lot-row" onClick={() => { navigate('inventory', lot.id); }}><span className="live-lot-name"><strong>{t("Batch")} {lot.batch}</strong><span>{lot.supplier || 'Supplier not recorded'}</span></span><QualityBadge value={lot.quality} /><strong className="live-row-weight">{weight(lotGrams(lot.id))} <small>kg</small></strong><ChevronRight size={20} aria-hidden="true" /></button>)}
-      {!lots.length && <p className="yf-stock-empty">{allow('catalog') ? 'No batches yet. Tap + to add one.' : 'No batches yet.'}</p>}
+      {waiting.map(a => <button key={a.id} className="live-lot-row" onClick={() => { location.hash = me.role === 'quality_inspector' ? '#/lots' : '#/procurement'; }}><span className="live-lot-name"><strong>{t("Arrival")} {a.reference}</strong><span>{a.supplier_name} · {t("Awaiting inspection", "معائنے کا منتظر")}</span></span><QualityBadge value="uninspected" /><strong className="live-row-weight">{weight(a.open_milli * (a.unit === 'tonne' ? 1000 : 1))} <small>kg</small></strong><ChevronRight size={20} aria-hidden="true" /></button>)}
+      {!lots.length && !waiting.length && <p className="yf-stock-empty">{allow('catalog') ? 'No batches yet. Tap + to add one.' : 'No batches yet.'}</p>}
     </section>)}{!groups.length && <div className="live-empty"><h3>{workspace.products.length ? 'Nothing matches' : 'Start with your first material'}</h3><p>{workspace.products.length ? 'Try another name, batch or filter.' : 'Add a material (for example Cotton 30/1), then add its batches.'}</p></div>}</div>;
   }
   function activityList(movements: StockMovement[]) {

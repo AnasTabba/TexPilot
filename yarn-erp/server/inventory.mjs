@@ -74,7 +74,7 @@ const movementPermission = { dispatch: ['dispatch', 'dispatch stock'] };
 
 async function snapshot(db, member) {
   const w = member.workspace_id;
-  const [workspace, products, lots, balances, movements, members, inspections, qualityEvents, photos, pending] = await Promise.all([
+  const [workspace, products, lots, balances, movements, members, inspections, qualityEvents, photos, pending, qcArrivals] = await Promise.all([
     first(db, 'SELECT * FROM workspaces WHERE id=?', w),
     rows(db, 'SELECT * FROM products WHERE workspace_id=? ORDER BY name', w),
     rows(db, 'SELECT * FROM lots WHERE workspace_id=? ORDER BY created_at DESC,id DESC', w),
@@ -86,8 +86,10 @@ async function snapshot(db, member) {
     rows(db, 'SELECT id,lot_id,content_type,size,actor_name,created_at FROM inspection_photos WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100', w),
     // Admins see how many account requests are waiting for them.
     member.admin ? first(db, "SELECT COUNT(*) AS n FROM users WHERE workspace_id=? AND status='pending' AND deactivated_at IS NULL", w).then(row => row.n) : 0,
+    // Arrivals registered from Incoming stock wait for QC before they become stock; Stock lists them under Needs QC.
+    rows(db, "SELECT l.id,l.product_id,l.reference,l.unit,l.arrived_at,o.open_milli,s.name AS supplier_name FROM qc_lots l JOIN qc_lot_open o ON o.lot_id=l.id JOIN suppliers s ON s.id=l.supplier_id WHERE l.workspace_id=? AND l.status='awaiting_inspection' ORDER BY l.arrived_at DESC LIMIT 200", w),
   ]);
-  return { workspace, member, products, lots, balances, movements, members, inspections, qualityEvents, photos, pending, serverTime: Date.now(), backend: 'Yarnflow / Cloudflare D1' };
+  return { workspace, member, products, lots, balances, movements, members, inspections, qualityEvents, photos, pending, qcArrivals, serverTime: Date.now(), backend: 'Yarnflow / Cloudflare D1' };
 }
 
 /** The temporary immediate sale dispatch (Task 14 replaces it); every other stock change goes through server/stock.mjs. */

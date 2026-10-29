@@ -153,6 +153,9 @@ test('goods receipts are closed and arrivals register QC lots without touching s
  const closed=await f.staff('/erp/receipts',d);assert.equal(closed.status,410);assert.match(closed.data.error,/QC lots/);
  const lot={id:crypto.randomUUID(),orderId:order.id,shipmentId:shipment,productId:product.id,reference:'LOT-001',quantityMilli:40000,supplierLot:'SUP-LOT-A',arrivedAt:Date.now()};
  assert.equal((await f.request('/erp/qc/lots',lot,f.manager)).status,201);
+ // The arrival shows on Stock under Needs QC until it is inspected.
+ const arrivals=(await f.request('/workspace',undefined,f.manager)).data.qcArrivals;
+ assert.deepEqual(arrivals.map(a=>[a.reference,a.product_id,a.open_milli]),[['LOT-001',product.id,40000]]);
  assert.equal((await f.request('/erp/qc/lots',{...lot,quantityMilli:45000},f.manager)).status,409);
  assert.equal((await f.request('/erp/qc/lots',{...lot,id:crypto.randomUUID(),reference:'EXCESS',quantityMilli:70000},f.manager)).status,409);
  for(const t of ['goods_receipts','lots','movements','stock_deltas'])assert.equal(f.sql.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n,0,t);
