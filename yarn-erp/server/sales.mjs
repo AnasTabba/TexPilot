@@ -54,8 +54,8 @@ export function invoiceDocument(invoice, order, buyer, factoryName) {
 <dt>Requested delivery</dt><dd>${esc(karachiDate(order.terms.requested_delivery_at))}</dd></dl>
 <table><thead><tr><th>Specification</th><th>Quantity</th><th class="price">Unit price</th><th class="amount">Amount</th></tr></thead><tbody>
 ${lines.map(line => `<tr><td>${esc(line.specifications)}</td><td>${esc(qty(line))}</td><td class="price">${esc(money(line.price_minor))}</td><td class="amount">${esc(money(line.amount_minor))}</td></tr>`).join('\n')}
-<tr><td colspan="3">Subtotal</td><td class="amount">${esc(money(invoice.subtotal_minor ?? invoice.total_minor))}</td></tr>
-<tr><td colspan="3">GST (${esc(String(invoice.tax_rate_bp / 100))}%)</td><td class="amount">${esc(money(invoice.tax_minor))}</td></tr>
+${invoice.subtotal_minor === null ? '' : `<tr><td colspan="3">Subtotal</td><td class="amount">${esc(money(invoice.subtotal_minor))}</td></tr>
+<tr><td colspan="3">GST (${esc(String(invoice.tax_rate_bp / 100))}%)</td><td class="amount">${esc(money(invoice.tax_minor))}</td></tr>`}
 <tr class="total"><td colspan="3">Total due</td><td class="amount">${esc(money(invoice.total_minor))}</td></tr>
 <tr><td colspan="3">Due date</td><td class="amount">${invoice.due_at ? esc(karachiDate(invoice.due_at)) : '–'}</td></tr>
 </tbody></table>
@@ -151,7 +151,9 @@ export async function noteSale(db, member, { id, revisionId, intervention = null
       fail(409, 'The quotation or the buyer changed while noting the sale. Reload and check again.');
     }
   }
-  return { order: await one(db, 'SELECT * FROM sales_orders WHERE id=?', id), invoice: await one(db, 'SELECT * FROM invoices WHERE id=?', invoiceId) };
+  const invoice = await one(db, 'SELECT * FROM invoices WHERE id=?', invoiceId);
+  if (!invoice) fail(409, 'The invoice could not be issued. Reload and try again.');
+  return { order: await one(db, 'SELECT * FROM sales_orders WHERE id=?', id), invoice };
 }
 
 async function salesOverview(db, w) {

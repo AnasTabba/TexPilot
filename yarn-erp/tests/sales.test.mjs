@@ -119,7 +119,7 @@ test('invoice numbers run INV-YYYY-NNNN and restart each Karachi calendar year',
   assert.equal((await note(z, Date.UTC(2027, 0, 1, 3, 0))).invoice.number, 'INV-2027-0002');
 });
 
-test('two sales noted at once never share a number', async () => {
+test('two sales noted back to back never share a number', async () => {
   const f = await setup(), db = f.env.DB, x = await f.acceptedQuote(), y = await f.acceptedQuote();
   const [a, b] = await Promise.all([x, y].map(q => noteSale(db, f.sana, { id: uuid(), revisionId: q.revisionId })));
   assert.notEqual(a.invoice.number, b.invoice.number);
@@ -271,6 +271,27 @@ test('an identical acceptance repeats safely; a different one is refused without
   await rejection(accept(f, q.buyerId, revision, { note: 'Different note' }), 409);
   await rejection(accept(f, q.buyerId, revision, { version: 2 }), 409);
   assert.equal(count(f, 'SELECT 1 FROM quotation_acceptances'), 1); assert.equal(audits(f, 'quotation.accepted').length, 1);
+  const late = await f.call(`${sales}/quotes`, quoteBody(q.rfqId), 'Sana');
+  assert.equal(late.status, 409, 'no new revision once a quotation was accepted');
+  assert.equal(count(f, 'SELECT 1 FROM sales_quote_revisions'), 1); assert.equal(audits(f, 'sales.quote_drafted').length, 0);
+});
+
+test('a skipped draft on a sold RFQ does not lock the factory currency', async () => {
+  const f = await setup(), buyerId = await f.insertBuyer({ status: 'active' }), rfqId = await f.insertBuyerRfq({ buyerId });
+  const v1 = await sentQuote(f, rfqId);
+  assert.equal((await f.call(`${sales}/quotes`, quoteBody(rfqId, { priceMinor: 130000 }), 'Sana')).status, 201, 'v2 stays a draft');
+  await accept(f, buyerId, v1);
+  const { invoice } = await noteSale(f.env.DB, f.sana, { id: uuid(), revisionId: v1.id });
+  assert.equal((await f.call(settings, { key: 'currency', value: 'USD' })).status, 409, 'the unpaid invoice blocks');
+  assert.equal((await f.call(`${sales}/credit-notes`, { id: uuid(), invoiceId: invoice.id, amountMinor: invoice.total_minor, reason: 'Settled by agreement' }, 'Sana')).status, 201);
+  assert.equal((await f.call(settings, { key: 'currency', value: 'USD' })).status, 200);
+});
+
+test('a number clash skips the clashing number once', async () => {
+  const f = await setup(), at = Date.UTC(2026, 5, 1, 6), note = async () => noteSale(f.env.DB, f.sana, { id: uuid(), revisionId: (await f.acceptedQuote()).revisionId }, at);
+  await note(); await note();
+  f.sql.exec("UPDATE document_counters SET next_number=1");
+  assert.equal((await note()).invoice.number, 'INV-2026-0003');
 });
 
 test('the buyer portal records acceptance and leaves the sale to the sales manager', async () => {
@@ -324,4 +345,31 @@ test('the 0004 audit rebuild keeps every row and admits the buyer actor', () => 
   assert.doesNotThrow(() => insert.run(uuid(), workspaceId, 'buyer-1', 'buyer', 'test.after', uuid(), '{}', Date.now()));
   assert.throws(() => insert.run(uuid(), workspaceId, 'x', 'machine', 'test.after', uuid(), '{}', Date.now()), /CHECK constraint failed/);
   assert.throws(() => sql.prepare('UPDATE erp_audit_events SET action=?').run('x'), /immutable audit/);
+});
+
+test('buyers only see and act on their own records', async () => {
+  const f = await setup(), password = 'A strong buyer password 2026';
+  const portal = async (company, email) => {
+    assert.equal((await f.call('/buyer/register', { company, contactName: `${company} Contact`, email, phone: '+923331234567', city: 'Lahore', password }, null)).status, 201);
+    const buyerId = one(f, 'SELECT buyer_id FROM buyer_users WHERE email=?', email).buyer_id;
+    assert.equal((await f.call(`${sales}/buyers/review`, { id: buyerId, status: 'active', version: 1 }, 'Sana')).status, 200);
+    const cookie = (await f.call('/buyer/login', { email, password }, null)).headers.get('set-cookie').split(';')[0];
+    return { buyerId, get: path => f.call(path, undefined, null, { Cookie: cookie }), post: (path, body) => f.call(path, body, null, { Cookie: cookie }), cookie };
+  };
+  const a = await portal('Hina Fabrics', 'hina@buyer.test'), b = await portal('Zain Textiles', 'zain@buyer.test');
+  const rfq = await a.post('/buyer/pos', { id: uuid(), reference: 'PO-A-1', specifications: 'Combed cotton single jersey, 180 GSM', quantityMilli: 100000, unit: 'kg', requestedDeliveryAt: Date.now() + 21 * DAY, paymentTerms: 'Net 30' });
+  assert.equal(rfq.status, 201);
+  const revision = await sentQuote(f, rfq.data.po.id);
+  assert.equal((await a.post('/buyer/approve', { revisionId: revision.id, version: 1 })).status, 200);
+  const { invoice } = (await f.call(`${sales}/sales`, { id: uuid(), revisionId: revision.id }, 'Sana')).data;
+  const own = (await a.get('/buyer/workspace')).data;
+  assert.deepEqual([own.pos.length, own.revisions.length, own.orders.length, own.invoices.length], [1, 1, 1, 1]);
+  assert.equal((await a.get(`/buyer/invoices/${invoice.id}`)).status, 200);
+  const other = await b.get('/buyer/workspace');
+  assert.equal(other.status, 200);
+  for (const key of ['pos', 'revisions', 'orders', 'invoices', 'dispatches', 'receivables', 'payments']) assert.deepEqual(other.data[key], [], key);
+  assert.equal((await b.get(`/buyer/invoices/${invoice.id}`)).status, 404);
+  assert.equal((await b.post('/buyer/approve', { revisionId: revision.id, version: 1 })).status, 404);
+  assert.equal((await f.call('/buyer/workspace', undefined, null)).status, 401, 'no session');
+  assert.equal(count(f, 'SELECT 1 FROM quotation_acceptances WHERE buyer_id=?', b.buyerId), 0);
 });

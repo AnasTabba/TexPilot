@@ -80,7 +80,7 @@ CREATE TRIGGER credit_notes_no_update BEFORE UPDATE ON credit_notes BEGIN SELECT
 CREATE TRIGGER credit_notes_no_delete BEFORE DELETE ON credit_notes BEGIN SELECT RAISE(ABORT,'credit notes are immutable'); END;
 
 -- Currency guards (replace 0007): an issued invoice keeps its accepted quotation's currency, a
--- superseded or cancelled quotation no longer blocks a switch, and credit notes count as settled.
+-- superseded quotation, or a draft on an RFQ that is closed or sold, no longer blocks a switch, and credit notes count as settled.
 DROP VIEW currency_change_blockers;
 CREATE VIEW currency_change_blockers AS
 SELECT r.workspace_id FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id
@@ -88,7 +88,7 @@ WHERE r.status IN ('open','closed') AND b.status='submitted'
 AND NOT EXISTS(SELECT 1 FROM supplier_purchase_orders p WHERE p.rfq_id=r.id AND p.status!='cancelled')
 UNION
 SELECT q.workspace_id FROM sales_quote_revisions q JOIN buyer_purchase_orders p ON p.id=q.buyer_po_id
-WHERE p.status!='cancelled' AND (q.status='draft' OR (q.status='sent' AND (p.sent_revision_id IS NULL OR p.sent_revision_id=q.id)))
+WHERE p.status IN ('entered','quoted') AND (q.status='draft' OR (q.status='sent' AND (p.sent_revision_id IS NULL OR p.sent_revision_id=q.id)))
 UNION
 SELECT i.workspace_id FROM invoices i WHERE i.total_minor>
 COALESCE((SELECT SUM(p.amount_minor) FROM sales_payments p WHERE p.invoice_id=i.id AND p.workspace_id=i.workspace_id AND p.currency=i.currency),0)
