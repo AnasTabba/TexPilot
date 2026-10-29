@@ -85,7 +85,7 @@ test('partial invoice payments move from partially paid to paid', async ({ page 
   await page.reload(); await page.getByRole('button', { name: 'Record payment', exact: true }).click();
   await page.getByLabel(/Amount received/).fill('97500');
   await page.getByRole('button', { name: 'Save payment', exact: true }).click();
-  await expect(page.getByText(/^paid$/i)).toBeVisible();
+  await expect(page.getByText(/^paid$/i).first()).toBeVisible();
 });
 
 test('sales analytics keeps invoice totals in separate source currency groups', async ({ page }) => {

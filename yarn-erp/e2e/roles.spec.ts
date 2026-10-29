@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { signIn } from './helpers';
 
-test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
+test.beforeEach(async ({ page, isMobile }) => { test.skip(isMobile, 'These specs drive the desktop sidebar; the phone bottom navigation is covered by purchase-mobile.spec.'); await page.request.post('/__test/reset'); });
 
 for (const [name, sections] of [
   ['Anas', ['Dashboard', 'Stock', 'History', 'Team']],

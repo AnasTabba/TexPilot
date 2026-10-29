@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { apiPost, seedQcLots, signIn } from './helpers';
 
-test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
+test.beforeEach(async ({ page, isMobile }) => { test.skip(isMobile, 'These specs drive the desktop sidebar; the phone bottom navigation is covered by purchase-mobile.spec.'); await page.request.post('/__test/reset'); });
 
 test('quality inspector gets oldest-lot dashboard and inspection-only navigation', async ({ page }, testInfo) => {
   await signIn(page, 'Qasim');
