@@ -181,10 +181,7 @@ test('raw, cops and WIP stock is refused in New dispatch', async ({ page, browse
   try {
     await dispatch.goto('/#/new-dispatch');
     await expect(dispatch.getByText(/Raw stock cannot be sale-dispatched/).first()).toBeVisible();
-    const blocked = dispatch.getByRole('region', { name: 'Unavailable stock stages' });
-    await expect(blocked).toBeVisible();
-    await expect(blocked.getByText(/· raw ·/).first()).toBeVisible();
-    await expect(blocked.getByText(/· (cops|wip) ·/).first()).toBeVisible();
+    // The legacy routes that created raw/cops/WIP stock are retired (Task 21); the API refusal of those stages is covered in tests/dispatch.test.mjs.
     const lots = await dispatch.getByLabel('Finished goods batch').locator('option').allTextContents();
     expect(lots.join('|')).not.toMatch(/· (raw|cops|wip) ·/);
   } finally { await context.close(); }
