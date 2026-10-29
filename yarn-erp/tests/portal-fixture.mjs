@@ -8,6 +8,8 @@ import { seedRows, userRow } from '../server/auth.mjs';
 import { settingsOf } from '../server/governance.mjs';
 import { recordAcceptance } from '../server/sales.mjs';
 
+// Smallest JPEG-shaped bytes the magic-byte check accepts.
+export const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9]);
 export const dir = new URL('../drizzle/', import.meta.url);
 export const legacyMigrations = ['0000_inventory.sql','0001_users.sql','0002_procurement.sql','0003_purchase_receipts.sql'];
 export function migrate(sql, names = readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {
@@ -89,12 +91,40 @@ export async function portalFixture(database) {
       .run(id, rfqId, supplierId, quantityMilli, priceMinor, currency, '30 days after delivery', now + 7 * 86400000, now + 3 * 86400000, 'Freight included', 'supplier:' + supplierId, now, now);
     return id;
   }
+  // An approved PO with one shipment, written straight to the tables (the award route has its own tests).
+  async function insertPO({ supplierId, priceMinor = 125000, quantityMilli = 100000, unit = 'kg' }) {
+    const rfqId = crypto.randomUUID(), orderId = crypto.randomUUID(), shipmentId = crypto.randomUUID(), now = Date.now(), day = 86400000;
+    sql.prepare(`INSERT INTO procurement_rfqs(id,workspace_id,reference,title,category_id,specifications,quantity_milli,unit,delivery_location,deadline_at,requested_delivery_at,status,request_hash,created_by,created_at,published_at,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?,?)`).run(rfqId, workspaceId, `RFQ-${rfqId.slice(0, 8)}`, 'Cotton combed 30/1', 'cotton', 'Ring-spun 30/1', quantityMilli, unit, 'Karachi factory', now + day, now + 7 * day, rfqId, adminId, now, now, now);
+    sql.prepare('INSERT INTO rfq_recipients(rfq_id,supplier_id,supplier_snapshot,delivered_at) VALUES(?,?,?,?)').run(rfqId, supplierId, '{}', now);
+    const bidId = insertBid({ rfqId, supplierId, priceMinor, quantityMilli });
+    const terms = { rfq_id: rfqId, supplier_id: supplierId, price_minor: priceMinor, currency: 'PKR', quantity_milli: quantityMilli, unit, title: 'Cotton combed 30/1', specifications: 'Ring-spun 30/1' };
+    sql.prepare(`INSERT INTO supplier_purchase_orders(id,workspace_id,rfq_id,bid_id,supplier_id,reference,terms_snapshot,status,accepted_by,created_at,quantity_milli,total_minor,approval_status,version,updated_at,created_by)
+      VALUES(?,?,?,?,?,?,?,'accepted',?,?,?,?,'approved',1,?,?)`).run(orderId, workspaceId, rfqId, bidId, supplierId, `PO-${orderId.slice(0, 8)}`, JSON.stringify(terms), adminId, now, quantityMilli, Math.round(priceMinor * quantityMilli / 1000), now, adminId);
+    sql.prepare("UPDATE procurement_rfqs SET status='awarded' WHERE id=?").run(rfqId);
+    sql.prepare('INSERT INTO shipments(id,workspace_id,purchase_order_id,bill_of_lading,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(shipmentId, workspaceId, orderId, `BL-${shipmentId.slice(0, 8)}`, adminId, now, now);
+    return { orderId, shipmentId };
+  }
+  async function insertProduct() {
+    const id = crypto.randomUUID();
+    sql.prepare('INSERT INTO products(id,workspace_id,sku,name,created_at) VALUES(?,?,?,?,?)').run(id, workspaceId, `SKU-${id.slice(0, 8)}`, `Cotton ${id.slice(0, 4)}`, Date.now());
+    return id;
+  }
+  // A multipart photo upload to /api/erp/qc/photos; fields become form fields.
+  async function upload(fields, as = 'Qasim', bytes = jpeg, name = 'p.jpg', type = 'image/jpeg') {
+    if (!cookies.has(as)) assert.equal((await login(as)).status, 200, `${as} signs in`);
+    const form = new FormData(); for (const [k, v] of Object.entries(fields)) form.set(k, v);
+    form.set('photo', new File([bytes], name, { type }));
+    const response = await inventoryApi(new Request('https://yarnflow.test/api/erp/qc/photos', { method: 'POST', headers: { Origin: 'https://yarnflow.test', Cookie: cookies.get(as) }, body: form }), env);
+    const body = await response.text();
+    return { status: response.status, data: response.headers.get('content-type')?.includes('json') ? JSON.parse(body) : null, text: body };
+  }
   function setThreshold(type, value) {
     const now = Date.now(), currency = ['purchase', 'claim'].includes(type) ? 'PKR' : null;
     sql.prepare('INSERT INTO thresholds(workspace_id,type,value,currency,created_by,created_at,updated_by,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(workspace_id,type) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
       .run(workspaceId, type, value, currency, adminId, now, adminId, now);
   }
-  return { sql, env, workspaceId, adminId, person, insertSupplier, insertBid, setThreshold, login, call, member: async name => (await call('/workspace', undefined, name)).data.member, insertBuyer, insertBuyerRfq, acceptedQuote };
+  return { sql, env, storage, workspaceId, adminId, person, insertSupplier, insertBid, insertPO, insertProduct, upload, setThreshold, login, call, member: async name => (await call('/workspace', undefined, name)).data.member, insertBuyer, insertBuyerRfq, acceptedQuote };
 }
 
 // Deliberately uses the pre-portal schema, including real commercial and immutable data.

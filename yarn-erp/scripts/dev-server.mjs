@@ -74,7 +74,7 @@ const server = createServer(async (incoming, outgoing) => {
       let body;
       if (incoming.method !== 'GET' && incoming.method !== 'HEAD') {
         const chunks = []; let size = 0;
-        const limit = url.pathname === '/api/photos' ? 11 * 1024 * 1024 : 65536;
+        const limit = ['/api/photos', '/api/erp/qc/photos'].includes(url.pathname) ? 11 * 1024 * 1024 : 65536;
         for await (const chunk of incoming) { size += chunk.length; if (size > limit) { outgoing.writeHead(413, { 'Content-Type': 'application/json' }); outgoing.end(JSON.stringify({ error: 'Request too large' })); return; } chunks.push(chunk); }
         body = Buffer.concat(chunks);
       }

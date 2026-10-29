@@ -38,16 +38,19 @@ export function supplierData(data) {
 }
 const reference = prefix => `${prefix}-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 const orderTotal = (priceMinor, quantityMilli) => Math.round(priceMinor * quantityMilli / 1000);
-// Quantity that has arrived against a PO and not been reversed; a PO can never drop below it.
-const ARRIVED = "(SELECT COALESCE(SUM(g.quantity_milli),0) FROM goods_receipts g WHERE g.purchase_order_id=supplier_purchase_orders.id AND NOT EXISTS(SELECT 1 FROM receipt_reversals r WHERE r.receipt_id=g.id))";
+// Registered QC lots plus legacy receipts not reversed (view po_arrived); a PO can never drop below it. Migration 0013 repeats the floor as a trigger.
+const ARRIVED = "(SELECT arrived_milli FROM po_arrived WHERE order_id=supplier_purchase_orders.id)";
 // An open RFQ past its deadline reads as closed; cancelled is a closed row with cancelled_at set.
 const rfqView = (r, now) => ({ ...r, status: r.cancelled_at ? 'cancelled' : r.status === 'open' && r.deadline_at <= now ? 'closed' : r.status });
 // A zero-row conditional write cannot guard later statements, so this aborts the whole batch when the write before it lost.
 const lostRace = db => query(db, "SELECT json('!') WHERE changes()=0");
 const closeQueries = (db, r, now) => [query(db, "UPDATE procurement_rfqs SET status='closed',closed_at=?,updated_at=? WHERE id=? AND status='open' AND cancelled_at IS NULL", now, now, r.id), lostRace(db),
   notifyRole(db, r.workspace_id, 'purchase_manager', 'bidding.closed', 'rfq', r.id, r.reference)];
-const quantityUpdate = (db, orderId, pin, quantity, total, now) => query(db, `UPDATE supplier_purchase_orders SET quantity_milli=?,total_minor=?,approval_status='approved',version=version+1,updated_at=?
-  WHERE id=? AND version=? AND quantity_milli=? AND approval_status=? AND status!='cancelled' AND ?>=${ARRIVED}`, quantity, total, now, orderId, pin.version, pin.from, pin.status, quantity);
+// A change to the arrived quantity also moves the status: covered means received, and an increase reopens a received order.
+const REOPENED = "CASE WHEN EXISTS(SELECT 1 FROM shipments s WHERE s.purchase_order_id=supplier_purchase_orders.id) OR EXISTS(SELECT 1 FROM procurement_shipments s WHERE s.purchase_order_id=supplier_purchase_orders.id) THEN 'dispatched' ELSE 'accepted' END";
+const quantityUpdate = (db, orderId, pin, quantity, total, now) => query(db, `UPDATE supplier_purchase_orders SET quantity_milli=?,total_minor=?,approval_status='approved',version=version+1,updated_at=?,
+  status=CASE WHEN ?<=${ARRIVED} THEN 'received' WHEN status='received' THEN ${REOPENED} ELSE status END
+  WHERE id=? AND version=? AND quantity_milli=? AND approval_status=? AND status!='cancelled' AND ?>=${ARRIVED}`, quantity, total, now, quantity, orderId, pin.version, pin.from, pin.status, quantity);
 const quantityAudit = (db, member, order, quantity, total, intervention = null) => audit(db, member, 'po.quantity_changed', order.id, {}, 'staff',
   { before: { quantity_milli: order.quantity_milli, total_minor: order.total_minor }, after: { quantity_milli: quantity, total_minor: total }, intervention });
 // The one writer of a PO. Guards re-read the bid in the committing transaction, so a stale, expired or edited bid aborts everything.

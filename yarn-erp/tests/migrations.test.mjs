@@ -41,3 +41,16 @@ test('roles and newly created users carry required metadata', async () => {
   const user = f.sql.prepare('SELECT * FROM users WHERE id=?').get(id);
   assert.equal(user.created_by,f.adminId); assert.equal(user.status,'active'); assert.equal(user.updated_at,user.created_at);
 });
+test('0013 counts live receipts as arrived, floors the PO quantity and accepts lots only up to what is left', () => {
+  const sql = legacy(); upgrade(sql);
+  assert.equal(sql.prepare("SELECT arrived_milli FROM po_arrived WHERE order_id='po'").get().arrived_milli, 2000);
+  assert.throws(() => sql.prepare("UPDATE supplier_purchase_orders SET quantity_milli=1999 WHERE id='po'").run(), /already arrived/);
+  sql.prepare("UPDATE supplier_purchase_orders SET quantity_milli=2000 WHERE id='po'").run();
+  sql.prepare("UPDATE supplier_purchase_orders SET quantity_milli=10000 WHERE id='po'").run();
+  sql.prepare("INSERT INTO shipments(id,workspace_id,purchase_order_id,bill_of_lading,created_by,created_at,updated_at) VALUES('s1','factory','po','BL-1','Anas',1,1)").run();
+  const lot = (id, quantity) => sql.prepare("INSERT INTO qc_lots(id,workspace_id,purchase_order_id,shipment_id,supplier_id,product_id,reference,quantity_milli,unit,arrived_at,pending_since,status,created_by,created_at,updated_at) VALUES(?,'factory','po','s1','mill','cotton',?,?,'kg',1,1,'awaiting_inspection','Anas',1,1)").run(id, id, quantity);
+  assert.throws(() => lot('l1', 8001), /purchase order quantity/);
+  lot('l2', 8000);
+  assert.equal(sql.prepare("SELECT arrived_milli FROM po_arrived WHERE order_id='po'").get().arrived_milli, 10000);
+  assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(), []);
+});

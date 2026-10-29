@@ -192,3 +192,17 @@ test.describe('Shared inventory', () => {
     await expect(page.getByText('Only the first batch has this inspection', { exact: true })).toHaveCount(0);
   });
 });
+
+test('the purchase manager and quality inspector cannot change stock through the old receive and QC writes', async ({ page }) => {
+  await page.request.post('/__test/reset');
+  const { lot } = await seededLot(await (async () => { await signIn(page, 'Qasim'); return page; })(), 'LOT-1022');
+  const before = await workspace(page);
+  const write = async (path: string, data: object) => (await page.request.post('/api' + path, { data, headers: { Origin: origin } })).status();
+  expect(await write('/quality', { lotId: lot.id, status: 'approved', note: 'Inspector approves' })).toBe(403);
+  expect(await write('/inspections', { id: crypto.randomUUID(), lotId: lot.id, labelText: '', note: 'Old-style inspection', result: null })).toBe(403);
+  await page.context().clearCookies();
+  await signIn(page, 'Pervaiz');
+  expect(await write('/movements', { id: crypto.randomUUID(), lotId: lot.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: 'Old-style receipt' })).toBe(403);
+  const after = await workspace(page);
+  expect(after.movements).toEqual(before.movements); expect(after.lots.find((l: { id: string }) => l.id === lot.id).quality).toBe(before.lots.find((l: { id: string }) => l.id === lot.id).quality);
+});

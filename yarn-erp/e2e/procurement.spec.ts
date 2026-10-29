@@ -71,16 +71,55 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(page.getByText('Bill of lading: TESTBOL-1001')).toBeVisible();
   await expect(page.getByText('Tracking is not connected.', { exact: false })).toBeVisible();
+  // The purchase manager attaches the B/L to the PO (admin steps in here), then registers the arrival against that shipment.
+  const inbound = await (await page.request.get('/api/erp/inbound')).json();
+  const attached = await page.request.post('/api/erp/shipments', { data: { id: crypto.randomUUID(), orderId: inbound.orders[0].id, billOfLading: 'TESTBOL-1001', interventionReason: 'Purchase manager not set up yet' }, headers: { Origin: origin } });
+  expect(attached.ok(), await attached.text()).toBeTruthy();
   await page.getByRole('button', { name: 'Incoming stock', exact: true }).click();
-  await page.getByRole('button', { name: 'Receive purchase order', exact: true }).click();
-  await page.getByLabel('Internal receipt batch', { exact: true }).fill('ERP-RCV-001');
+  await page.getByRole('button', { name: 'Register arrival', exact: true }).click();
+  await page.getByLabel('Lot reference', { exact: true }).fill('ERP-RCV-001');
   await page.getByLabel('Supplier lot reference (optional)', { exact: true }).fill('SUP-LOT-001');
-  await page.getByRole('button', { name: 'Save receipt and create QC batch', exact: true }).click();
-  await page.getByRole('link', { name: 'Open batch, QC and QR label', exact: true }).click();
-  await expect(page.getByText('ERP-RCV-001', { exact: false }).first()).toBeVisible();
-  await expect(page.getByRole('img', { name: 'QR code for batch ERP-RCV-001', exact: true })).toBeVisible();
-  const stock = await page.request.get('/api/workspace'); const snapshot = await stock.json();
-  expect(snapshot.lots.find((lot: { batch: string; quality: string }) => lot.batch === 'ERP-RCV-001').quality).toBe('uninspected');
+  await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
+  await page.getByRole('button', { name: 'Register arrival for inspection', exact: true }).click();
+  await expect(page.getByText('ERP-RCV-001 ·').first()).toBeVisible();
+  await expect(page.getByText('Awaiting inspection').first()).toBeVisible();
+  // Registering an arrival adds nothing to stock: the inspector's report, then the supervisor, decide that.
+  const snapshot = await (await page.request.get('/api/workspace')).json();
+  expect(snapshot.lots.some((lot: { batch: string }) => lot.batch === 'ERP-RCV-001')).toBe(false);
+  expect(snapshot.movements.some((m: { action: string; note: string }) => m.action === 'receive' && m.note.includes('PO-'))).toBe(false);
+
+  // The quality inspector counts the lot, photographs the accepted part, describes the rejected part and submits.
+  const inspectorContext = await browser.newContext({ ...(info.project.name.includes('webkit') ? devices['iPhone 13'] : devices['Desktop Chrome']), baseURL, serviceWorkers: 'block', reducedMotion: 'reduce' });
+  const inspector = await inspectorContext.newPage();
+  try {
+   await signIn(inspector, 'Qasim');
+   await inspector.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /^Inspections/ }).click();
+   await expect(inspector.getByRole('heading', { level: 1, name: 'Inspections', exact: true })).toBeVisible();
+   await expect(inspector.getByText('ERP-RCV-001 ·').first()).toBeVisible();
+   await inspector.getByRole('button', { name: 'Record inspection', exact: true }).click();
+   await inspector.getByLabel('Accepted quantity (kg)', { exact: true }).fill('8');
+   await inspector.getByLabel('Rejected quantity (kg)', { exact: true }).fill('2');
+   await inspector.getByRole('button', { name: 'Save draft', exact: true }).click();
+   await expect(inspector.getByRole('status').filter({ hasText: 'Draft saved' })).toBeVisible();
+   await inspector.getByRole('button', { name: 'Submit inspection', exact: true }).click();
+   await expect(inspector.getByRole('alert').filter({ hasText: 'Upload at least one photo of the accepted quantity.' })).toBeVisible();
+   const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9]);
+   await inspector.getByLabel('Photo of the accepted quantity').setInputFiles({ name: 'cones.jpg', mimeType: 'image/jpeg', buffer: jpeg });
+   await expect(inspector.getByRole('img', { name: /^Photo taken/ })).toBeVisible();
+   await inspector.getByRole('button', { name: 'Submit inspection', exact: true }).click();
+   await expect(inspector.getByRole('alert').filter({ hasText: 'Describe at least one issue for the rejected quantity.' })).toBeVisible();
+   await inspector.getByRole('button', { name: 'Add an issue', exact: true }).click();
+   await inspector.getByLabel('Issue type', { exact: true }).fill('Shade variation');
+   await inspector.getByLabel('Severity', { exact: true }).selectOption('major');
+   await inspector.getByLabel('Description', { exact: true }).fill('Dye lot differs from the approved sample');
+   await inspector.getByRole('button', { name: 'Save issue', exact: true }).click();
+   await inspector.getByRole('button', { name: 'Submit inspection', exact: true }).click();
+   await expect(inspector.getByRole('status').filter({ hasText: 'Inspection submitted' })).toBeVisible();
+   await expect(inspector.getByText('waiting for the supervisor').first()).toBeVisible();
+   expect(await inspector.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+   const mine = await (await inspector.request.get('/api/erp/qc/inspections?mine=1&status=submitted')).json();
+   expect(mine.inspections).toHaveLength(1); expect(mine.inspections[0].photos).toHaveLength(1);
+  } finally { await inspectorContext.close(); }
   for (const p of [page, supplier]) expect(await p.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
  } finally { await supplierContext.close(); }
 });
