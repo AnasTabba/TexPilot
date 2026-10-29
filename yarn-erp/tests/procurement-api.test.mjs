@@ -96,7 +96,7 @@ test('supplier bids are private, versioned, and awards freeze the accepted terms
  assert.equal((await f.request('/portal/bids',{...d,version:2},a.cookie)).status,409,'cannot edit awarded terms');
  assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM supplier_bid_history').get().n,2);
 });
-test('competing awards yield one PO and rejected bids cannot be silently resubmitted',async()=>{
+test('competing awards yield one PO and rejected bids go back for review once revised',async()=>{
  const f=await fixture(),a=await f.active(),b=await f.active('Beta');const r=await f.rfq();await f.staff('/erp/rfqs/publish',{id:r.id});
  const ba=(await f.request('/portal/bids',f.bid(r),a.cookie)).data.bid;
  const bb=(await f.request('/portal/bids',f.bid(r),b.cookie)).data.bid;
@@ -104,7 +104,8 @@ test('competing awards yield one PO and rejected bids cannot be silently resubmi
  assert.deepEqual(results.map(x=>x.status).sort(),[201,409]);assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM supplier_purchase_orders').get().n,1);
  const r2=await f.rfq();await f.staff('/erp/rfqs/publish',{id:r2.id});const d=f.bid(r2);await f.request('/portal/bids',d,a.cookie);
  assert.equal((await f.staff('/erp/bids/reject',{id:d.id,version:1,reason:'Delivery too late'})).status,200);
- assert.equal((await f.request('/portal/bids',{...d,version:1},a.cookie)).status,409);
+ const revised=await f.request('/portal/bids',{...d,version:1,priceMinor:d.priceMinor-1},a.cookie);assert.equal(revised.status,200,JSON.stringify(revised.data));
+ assert.deepEqual([revised.data.bid.status,revised.data.bid.version,revised.data.bid.rejection_reason],['submitted',2,null]);
 });
 test('supplier dispatch notices are scoped, quantity bounded, idempotent and never pretend tracking is live',async()=>{
  const f=await fixture(),a=await f.active(),b=await f.active('Beta');const r=await f.rfq();const {order}=await f.award(a,r);

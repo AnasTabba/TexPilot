@@ -366,12 +366,11 @@ export async function submitBid(db, supplier, actor, data, now) {
   };
   const repeated = await replay(); if (repeated) return repeated;
   if(r.status!=='open'||r.cancelled_at||r.deadline_at<=now) fail(409,'This RFQ is no longer open for bids.');
-  if(previous?.status==='rejected') fail(409,'This bid was rejected. Contact the purchase manager.');
   const { currency } = await settingsOf(db,actor.workspace_id);
   if(data.currency!==currency) fail(422,`Bid in ${currency}.`);
   if((previous?.version??0)!==version) fail(409,'This bid changed. Reload before editing.');
   date(delivery,'Delivery date',true);date(valid,'Valid until',true);
-  const write=previous ? query(db,'UPDATE supplier_bids SET quantity_milli=?,price_minor=?,currency=?,payment_terms=?,delivery_at=?,valid_until=?,note=?,version=version+1,updated_at=? WHERE id=? AND version=?',quantity,price,data.currency,payment,delivery,valid,note,now,id,version)
+  const write=previous ? query(db,'UPDATE supplier_bids SET quantity_milli=?,price_minor=?,currency=?,payment_terms=?,delivery_at=?,valid_until=?,note=?,status=\'submitted\',rejection_reason=NULL,version=version+1,updated_at=? WHERE id=? AND version=?',quantity,price,data.currency,payment,delivery,valid,note,now,id,version)
     : query(db,"INSERT INTO supplier_bids(id,rfq_id,supplier_id,quantity_milli,price_minor,currency,payment_terms,delivery_at,valid_until,note,version,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,1,'submitted',?,?,?)",id,r.id,sid,quantity,price,data.currency,payment,delivery,valid,note,'supplier:'+actor.user_id,now,now);
   try {await db.batch([
     query(db, `SELECT json('!') WHERE NOT EXISTS(SELECT 1 FROM procurement_rfqs r JOIN rfq_recipients x ON x.rfq_id=r.id JOIN suppliers s ON s.id=x.supplier_id WHERE r.id=? AND r.workspace_id=? AND s.id=? AND s.workspace_id=r.workspace_id AND s.status='approved' AND r.status='open' AND r.cancelled_at IS NULL AND r.deadline_at>? AND ?=COALESCE((SELECT json_extract(value_json,'$') FROM settings WHERE workspace_id=r.workspace_id AND key='currency'),'PKR'))`, r.id, actor.workspace_id, sid, now, data.currency),
