@@ -13,7 +13,7 @@ import { ShipmentTracking } from './ShipmentTracking';
 
 export default function Procurement({ member, onInventoryChanged }: { member: Member; onInventoryChanged: () => Promise<void> }) {
  const { language, t } = useLanguage(); const directoryAllowed = can(member, 'suppliers'), buyingAllowed = can(member, 'procure');
- const [view, setView] = useState(() => buyingAllowed && location.hash.split('/')[2] === 'tracking' ? 'tracking' : directoryAllowed ? 'suppliers' : buyingAllowed ? 'rfqs' : 'incoming'), [category, setCategory] = useState('all'), [search, setSearch] = useState('');
+ const [view, setView] = useState(() => buyingAllowed && (location.hash.split('/')[2] === 'tracking' || location.hash.startsWith('#/tracking')) ? 'tracking' : directoryAllowed ? 'suppliers' : buyingAllowed ? 'rfqs' : 'incoming'), [category, setCategory] = useState('all'), [search, setSearch] = useState('');
  const [suppliers, setSuppliers] = useState<Supplier[]>([]), [categories, setCategories] = useState<SupplierCategory[]>([]), [state, setState] = useState<ProcurementState>({ rfqs: [], bids: [], orders: [], shipments: [] });
  const [pending, setPending] = useState<PendingPurchasing>({ awards: [], changes: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [open, setOpen] = useState(''), [notice, setNotice] = useState('');
  const load = useCallback(async () => {

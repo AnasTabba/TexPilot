@@ -7,7 +7,6 @@ import { QualityBadge, StockFlow, movedName, when, yarnName } from './WorkspaceD
 import { moveIcon } from './icons';
 import { Dashboard, Notifications, type Inbox, type Notice } from './Notifications';
 import { NoticeToast } from './NoticeToast';
-import { ShipmentTracking } from './ShipmentTracking';
 import Profile from './Profile';
 import { portal } from './PortalCommon';
 import { COMMON, NAV } from './roles';
@@ -30,7 +29,7 @@ type FormType = 'product' | 'finished' | 'dispatch' | 'adjust' | 'inspection';
 type Action = { type: FormType; lotId?: string; productId?: string };
 // Old pages that were filtered copies of the stock list (or of Home) now open Stock with that filter.
 type View = 'all' | 'quality' | 'production' | 'dispatch';
-const aliases: Record<string, [string, View]> = { materials: ['inventory', 'all'], production: ['inventory', 'production'], quality: ['inventory', 'quality'], dispatch: ['inventory', 'dispatch'], reports: ['dashboard', 'all'], overview: ['dashboard', 'all'], settings: ['profile', 'all'] };
+const aliases: Record<string, [string, View]> = { tracking: ['procurement', 'all'], materials: ['inventory', 'all'], production: ['inventory', 'production'], quality: ['inventory', 'quality'], dispatch: ['inventory', 'dispatch'], reports: ['dashboard', 'all'], overview: ['dashboard', 'all'], settings: ['profile', 'all'] };
 const sections = [...new Set([...Object.values(NAV).flat(), ...COMMON])];
 const tabsOf = Object.fromEntries(sections.flatMap(section => section.tabs ? [[section.id, section.tabs.map(tab => tab.id)]] : []));
 const routeFromHash = () => {
@@ -379,7 +378,6 @@ export default function LiveApp() {
       {page==='lots' && <Inspections />}
       {page==='reviews' && <Review />}
       {page==='procurement' && <Procurement member={me} onInventoryChanged={() => refresh(true)} />}
-      {page==='tracking' && <ShipmentTracking />}
 
       </>}
     </main><footer className="live-sync" role="status"><CheckCheck size={17} aria-hidden="true"/><span>{t("All changes saved")}{savedAt ? ' · '+t('checked', 'چیک کیا')+' '+new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Karachi'}).format(savedAt) : ''}</span></footer></div>
