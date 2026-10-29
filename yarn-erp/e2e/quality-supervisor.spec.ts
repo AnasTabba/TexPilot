@@ -63,15 +63,15 @@ test('dispatch issues use both gate previews and adjustments at threshold wait f
   await apiPost(page, '/erp/admin/thresholds', { type: 'inventory_adjustment', value: 500 });
   const state = await workspace(page), lot = state.lots.find((row: { batch: string }) => row.batch === 'LOT-1024');
   expect(lot).toBeTruthy();
-  const rawBefore = state.balances.find((row: { lot_id: string; stage: string }) => row.lot_id === lot.id && row.stage === 'raw')!.grams;
+  const stockBefore = state.balances.find((row: { lot_id: string; stage: string }) => row.lot_id === lot.id && row.stage === 'finished')!.grams;
 
   const dispatchContext = await browser.newContext({ baseURL: origin, serviceWorkers: 'block' });
   try {
     const dispatch = await dispatchContext.newPage();
     await signIn(dispatch, 'Danish');
     const rejectedId = crypto.randomUUID(), gatedId = crypto.randomUUID();
-    await apiPost(dispatch, '/erp/dispatch/stock-issues', { id: rejectedId, lotId: lot.id, stage: 'raw', kind: 'mismatch', differenceGrams: 1000, description: 'The shelf count did not match the label.' });
-    await apiPost(dispatch, '/erp/dispatch/stock-issues', { id: gatedId, lotId: lot.id, stage: 'raw', kind: 'shortage', differenceGrams: 5000, description: 'The reserve is short by five kilograms.' });
+    await apiPost(dispatch, '/erp/dispatch/stock-issues', { id: rejectedId, lotId: lot.id, stage: 'finished', kind: 'mismatch', differenceGrams: 1000, description: 'The shelf count did not match the label.' });
+    await apiPost(dispatch, '/erp/dispatch/stock-issues', { id: gatedId, lotId: lot.id, stage: 'finished', kind: 'shortage', differenceGrams: 5000, description: 'The reserve is short by five kilograms.' });
 
     const supervisorContext = await browser.newContext({ baseURL: origin, serviceWorkers: 'block' });
     const supervisor = await supervisorContext.newPage();
@@ -108,7 +108,7 @@ test('dispatch issues use both gate previews and adjustments at threshold wait f
     await adjustment.getByRole('button', { name: 'Save adjustment', exact: true }).click();
     await expect(supervisor.getByRole('status').filter({ hasText: 'Sent to the admin for approval. Stock has not changed.' })).toBeVisible();
     const after = await workspace(supervisor);
-    expect(after.balances.find((row: { lot_id: string; stage: string }) => row.lot_id === lot.id && row.stage === 'raw')!.grams).toBe(rawBefore);
+    expect(after.balances.find((row: { lot_id: string; stage: string }) => row.lot_id === lot.id && row.stage === 'finished')!.grams).toBe(stockBefore);
     await supervisorContext.close();
   } finally { await dispatchContext.close(); }
 });

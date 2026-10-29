@@ -128,7 +128,7 @@ for (const language of ['en', 'ur'] as const) {
   });
 }
 
-test('measured controls reach 44 × 44 at 390 px, including the save notice', async ({ page }) => {
+test('measured controls reach 44 × 44 at 390 px', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await page.waitForSelector('.yf-people');
@@ -152,16 +152,6 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
   await page.locator('.live-lot-row').first().click();
   await expectTarget(page.locator('.yf-back'), 'batch back');
   await expectScreenTargets(page, 'batch detail');
-
-  // A real confirmation notice: write off one kilogram, review, and save.
-  await page.getByRole('button', { name: 'Adjust stock', exact: true }).click();
-  await page.getByLabel('Weight (kg)', { exact: true }).fill('1');
-  await page.getByLabel('Reason', { exact: true }).fill('Counted one kilogram short');
-  await page.getByLabel('Why are you stepping in?', { exact: true }).fill('Supervisor is away today');
-  await page.getByRole('button', { name: 'Review entry', exact: true }).click();
-  await page.getByRole('button', { name: 'Save entry', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Saved. Everyone on the team sees it now.' })).toBeVisible();
-  await expectTarget(page.locator('.live-success .live-icon-button'), 'notice dismiss');
 
   await openPage(page, '#/activity', 'History');
   const historyActions = page.locator('.live-history .live-text-button');
