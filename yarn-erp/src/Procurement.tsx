@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Mail, Phone, Plus, RefreshCw, ShieldCheck, Truck } from 'lucide-react';
+import { ClipboardList, ExternalLink, FileText, Mail, Phone, Plus, RefreshCw, ShieldCheck, Truck, Users } from 'lucide-react';
+import { Segments } from './ui';
 import { inventoryRequest as api, can, type Member } from './inventory-client';
 import { AsyncForm, Field, errorMessage } from './forms';
 import { useLanguage } from './i18n';
@@ -23,9 +24,13 @@ export default function Procurement({ member, onInventoryChanged }: { member: Me
  const saved = async () => { setOpen(''); setNotice(t('Saved.', 'محفوظ ہو گیا۔')); await load(); };
  const title = (id: string) => { const c = categories.find(c => c.id === id); return c ? language === 'ur' ? c.urdu_name : c.name : id; };
  return <div className="erp-workspace">
-  <div className="erp-toolbar"><div className="live-segments" aria-label={t('Procurement views', 'خریداری کے حصے')}>{directoryAllowed && <button aria-pressed={view === 'suppliers'} onClick={() => { setView('suppliers'); setOpen(''); }}>{t('Suppliers', 'سپلائرز')}</button>}{buyingAllowed && <><button aria-pressed={view === 'rfqs'} onClick={() => { setView('rfqs'); setOpen(''); }}>{t('RFQs and bids', 'درخواستیں اور بولیاں')}</button><button aria-pressed={view === 'orders'} onClick={() => { setView('orders'); setOpen(''); }}>{t('Purchase orders', 'خریداری کے آرڈر')}</button></>}</div><button className="button" onClick={() => void load()}><RefreshCw size={18} />{t('Refresh', 'تازہ کریں')}</button></div>
+  <div className="erp-toolbar"><Segments label={t('Procurement views', 'خریداری کے حصے')} value={view} onChange={v => { setView(v); setOpen(''); }} options={[
+   { id: 'suppliers', label: t('Suppliers', 'سپلائرز'), icon: Users, hidden: !directoryAllowed },
+   { id: 'rfqs', label: t('RFQs and bids', 'درخواستیں اور بولیاں'), icon: FileText, hidden: !buyingAllowed },
+   { id: 'orders', label: t('Purchase orders', 'خریداری کے آرڈر'), icon: ClipboardList, hidden: !buyingAllowed },
+   { id: 'incoming', label: t('Incoming stock', 'آنے والا اسٹاک'), icon: Truck, hidden: !(can(member, 'receive') || buyingAllowed) },
+  ]} /><button className="button" onClick={() => void load()}><RefreshCw size={18} aria-hidden="true" />{t('Refresh', 'تازہ کریں')}</button></div>
   {error && <p className="live-error" role="alert">{t(error)}</p>}{notice && <p className="live-success" role="status">{notice}</p>}{loading && <p role="status">{t('Loading procurement…', 'خریداری کی تفصیلات لوڈ ہو رہی ہیں…')}</p>}
-  {(can(member,'receive')||buyingAllowed)&&<button className="button" aria-pressed={view==='incoming'} onClick={()=>{setView('incoming');setOpen('');}}><Truck size={18}/>{t('Incoming stock','آنے والا اسٹاک')}</button>}
   {view==='incoming'&&<IncomingStock member={member} onInventoryChanged={onInventoryChanged}/>}
   {view === 'suppliers' && directoryAllowed && <>
    <section className="live-panel"><div className="yf-head"><div><h2>{t('Supplier directory', 'سپلائر ڈائریکٹری')}</h2><p>{t('Contacts by yarn category. Registered suppliers need admin approval before bidding.', 'دھاگے کی اقسام کے مطابق رابطے۔ رجسٹرڈ سپلائرز کو بولی سے پہلے ایڈمن کی منظوری درکار ہے۔')}</p></div><button className="button primary" onClick={() => setOpen('supplier:new')}><Plus size={18} />{t('Add supplier contact', 'سپلائر رابطہ شامل کریں')}</button></div>
