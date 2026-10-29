@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Mail, Phone, Plus, RefreshCw, ShieldCheck, Truck } from 'lucide-react';
+import { ExternalLink, Mail, Phone, Plus, RefreshCw, ShieldCheck, Star, Truck } from 'lucide-react';
 import { inventoryRequest as api, can, type Member } from './inventory-client';
 import { AsyncForm, Field, errorMessage } from './forms';
 import { InterventionField } from './PortalCommon';
 import { useLanguage } from './i18n';
 import { BidTerms, CategoryPicker, RfqSummary } from './ErpCommon';
-import { type SupplierCategory, type Supplier, type ProcurementState, type ProcurementRfq, type SupplierBid, type PendingPurchasing, type PurchaseOrder, rate, factoryTime, quantity, factoryInput, localFactoryInput, fixedInput } from './erp-client';
+import { type SupplierCategory, type Supplier, type SupplierRating, type ProcurementState, type ProcurementRfq, type SupplierBid, type PendingPurchasing, type PurchaseOrder, rate, factoryTime, quantity, factoryInput, localFactoryInput, fixedInput } from './erp-client';
 import './erp.css';
 import IncomingStock from './IncomingStock';
 
@@ -34,7 +34,8 @@ export default function Procurement({ member, onInventoryChanged }: { member: Me
     <a className="button" href="#/supplier" target="_blank" rel="noreferrer"><ExternalLink size={18} />{t('Open supplier registration portal', 'سپلائر رجسٹریشن پورٹل کھولیں')}</a>
     <div className="live-fields erp-filters"><Field>{t('Yarn category', 'دھاگے کی قسم')}<select value={category} onChange={e => setCategory(e.target.value)}><option value="all">{t('All categories', 'تمام اقسام')}</option>{categories.map(c => <option value={c.id} key={c.id}>{title(c.id)}</option>)}</select></Field><Field>{t('Search suppliers', 'سپلائر تلاش کریں')}<input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder={t('Company, contact, city', 'کمپنی، رابطہ، شہر')} /></Field></div>
     {!loading && !suppliers.length && <p className="live-muted">{t('Share the registration portal link with your suppliers.', 'اپنے سپلائرز کو رجسٹریشن پورٹل کا لنک دیں۔')}</p>}
-    <div className="erp-records">{suppliers.filter(s => (category === 'all' || s.categories.includes(category)) && [s.name, s.contact_name, s.city, s.email].join(' ').toLowerCase().includes(search.toLowerCase())).map(s => <article className="erp-record" key={s.id}><div className="erp-record-head"><div><h3>{s.name}</h3><p>{s.contact_name}{s.city ? ' · ' + s.city : ''}</p></div><span className={`erp-status is-${s.status}`}>{t(s.status, {pending:'زیرِ التوا',approved:'منظور',rejected:'مسترد',suspended:'معطل'}[s.status])}</span></div><p className="live-muted">{s.categories.map(title).join(' · ')}</p><div className="live-actions"><a className="button" href={`tel:${s.phone}`}><Phone size={18} />{t('Call', 'کال کریں')} <bdi>{s.phone}</bdi></a><a className="button" href={`mailto:${encodeURIComponent(s.email)}`}><Mail size={18} />{s.email}</a>{s.website && <a className="button" href={s.website} target="_blank" rel="noreferrer">{t('Website', 'ویب سائٹ')}<ExternalLink size={16} /></a>}</div>{s.source_url && <p className="live-muted"><a href={s.source_url} target="_blank" rel="noreferrer">{t('Published contact source', 'شائع شدہ رابطے کا ذریعہ')}</a>{s.source_checked_at ? ' · ' + factoryTime(s.source_checked_at) : ''}</p>}
+    <div className="erp-records">{suppliers.filter(s => (category === 'all' || s.categories.includes(category)) && [s.name, s.contact_name, s.city, s.email].join(' ').toLowerCase().includes(search.toLowerCase())).map(s => <article className="erp-record" key={s.id}><div className="erp-record-head"><div><h3>{s.name}</h3><p>{s.contact_name}{s.city ? ' · ' + s.city : ''}</p></div><span className={`erp-status is-${s.status}`}>{t(s.status, {pending:'زیرِ التوا',approved:'منظور',rejected:'مسترد',suspended:'معطل'}[s.status])}</span></div><p className="live-muted">{s.categories.map(title).join(' · ')}</p><StarSummary rating={s.rating} /><div className="live-actions"><a className="button" href={`tel:${s.phone}`}><Phone size={18} />{t('Call', 'کال کریں')} <bdi>{s.phone}</bdi></a><a className="button" href={`mailto:${encodeURIComponent(s.email)}`}><Mail size={18} />{s.email}</a>{s.website && <a className="button" href={s.website} target="_blank" rel="noreferrer">{t('Website', 'ویب سائٹ')}<ExternalLink size={16} /></a>}</div>{s.source_url && <p className="live-muted"><a href={s.source_url} target="_blank" rel="noreferrer">{t('Published contact source', 'شائع شدہ رابطے کا ذریعہ')}</a>{s.source_checked_at ? ' · ' + factoryTime(s.source_checked_at) : ''}</p>}
+     {(member.role === 'purchase_manager' || member.admin) && s.status === 'approved' && (open === 'rate:' + s.id ? <RateSupplier member={member} supplier={s} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button" onClick={() => setOpen('rate:' + s.id)}><Star size={18} />{t('Rate supplier', 'سپلائر کی ریٹنگ دیں')}</button>)}
      {(member.role === 'purchase_manager' || member.admin) && SUPPLIER_MOVES[s.status].length > 0 && (open === 'review:' + s.id ? <SupplierReview supplier={s} admin={member.admin} categories={categories} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button" onClick={() => setOpen('review:' + s.id)}><ShieldCheck size={18} />{t('Review supplier access', 'سپلائر رسائی کا جائزہ لیں')}</button>)}
     </article>)}</div>
    </section>
@@ -60,6 +61,40 @@ function SupplierReview({ supplier, admin, categories, onSaved, onCancel }: { su
  const { t } = useLanguage(); const moves = SUPPLIER_MOVES[supplier.status]; const [status, setStatus] = useState(moves[0]), [reason, setReason] = useState(''), [intervention, setIntervention] = useState(''), [selected, setSelected] = useState(supplier.categories);
  return <AsyncForm title={t('Review supplier access', 'سپلائر رسائی کا جائزہ لیں')} detail={supplier.name} submit={t('Save decision', 'فیصلہ محفوظ کریں')} onCancel={onCancel} note={t('Access changes end existing supplier sessions. Past bids and dispatches stay in the audit history.', 'رسائی کی تبدیلی سے موجودہ سپلائر سیشن ختم ہو جائیں گے۔ پرانی بولیاں اور روانگی ہسٹری میں رہیں گی۔')} onSubmit={async () => { await api('/erp/suppliers/review', { id: supplier.id, version: supplier.version, status, reason, categories: selected, ...(admin ? { interventionReason: intervention } : {}) }); await onSaved(); }}>
   <Field>{t('Decision', 'فیصلہ')}<select value={status} onChange={e => setStatus(e.target.value)}>{moves.map(m => <option value={m} key={m}>{m === 'approved' ? t('Approve access', 'رسائی منظور کریں') : m === 'rejected' ? t('Reject registration', 'رجسٹریشن مسترد کریں') : t('Suspend access', 'رسائی معطل کریں')}</option>)}</select></Field><CategoryPicker categories={categories} value={selected} onChange={setSelected} /><Field>{t('Verification details / reason', 'تصدیق کی تفصیلات / وجہ')}<textarea value={reason} onChange={e => setReason(e.target.value)} minLength={5} maxLength={1000} required /></Field>{admin && <Field>{t('Intervention reason', 'مداخلت کی وجہ')}<textarea value={intervention} onChange={e => setIntervention(e.target.value)} minLength={5} maxLength={1000} required /></Field>}{status === 'approved' && <label className="erp-confirm"><input type="checkbox" required />{t('I verified the company, contact and selected yarn categories.', 'میں نے کمپنی، رابطے اور منتخب اقسام کی تصدیق کی ہے۔')}</label>}
+ </AsyncForm>;
+}
+// Half-star precision: the number shows one decimal, the stars round to the nearest half.
+function StarMeter({ value, label }: { value: number; label: string }) {
+ const half = Math.round(value * 2) / 2;
+ return <span className="erp-stars" role="img" aria-label={label}>{[0, 1, 2, 3, 4].map(i => <span className="erp-star" key={i} aria-hidden="true"><Star size={18} /><span className="erp-star-fill" style={{ width: `${Math.min(1, Math.max(0, half - i)) * 100}%` }}><Star size={18} /></span></span>)}</span>;
+}
+function StarSummary({ rating }: { rating: SupplierRating | null }) {
+ const { t } = useLanguage();
+ if (!rating) return <p className="erp-rating live-muted">{t('No ratings yet', 'ابھی کوئی ریٹنگ نہیں')}</p>;
+ const label = t(`${rating.average.toFixed(1)} out of 5 from ${rating.count} ratings`, `5 میں سے ${rating.average.toFixed(1)}، ${rating.count} ریٹنگز`);
+ return <p className="erp-rating"><StarMeter value={rating.average} label={label} /><strong>{rating.average.toFixed(1)}</strong><span className="live-muted">({rating.count})</span></p>;
+}
+const CRITERIA = [
+ { key: 'delivery', en: 'Delivery (on time, as promised)', ur: 'ترسیل (وقت پر، وعدے کے مطابق)' },
+ { key: 'quality', en: 'Product quality', ur: 'مصنوعات کا معیار' },
+ { key: 'terms', en: 'Following agreed terms', ur: 'طے شدہ شرائط کی پابندی' },
+] as const;
+type Criterion = typeof CRITERIA[number]['key'];
+function RateSupplier({ member, supplier, onSaved, onCancel }: { member: Member; supplier: Supplier; onSaved: (message?: string) => Promise<void>; onCancel: () => void }) {
+ const { t } = useLanguage(); const [id] = useState(crypto.randomUUID());
+ const [scores, setScores] = useState<Record<Criterion, number>>({ delivery: 0, quality: 0, terms: 0 }), [hover, setHover] = useState<Partial<Record<Criterion, number>>>({});
+ const [comment, setComment] = useState(''), [intervention, setIntervention] = useState('');
+ return <AsyncForm title={t('Rate supplier', 'سپلائر کی ریٹنگ دیں')} detail={supplier.name} submit={t('Save rating', 'ریٹنگ محفوظ کریں')} onCancel={onCancel} note={t('Ratings stay in the supplier history and cannot be edited afterwards.', 'ریٹنگ سپلائر کی تاریخ میں محفوظ رہے گی اور بعد میں بدلی نہیں جا سکتی۔')} onSubmit={async () => {
+  if (CRITERIA.some(c => !scores[c.key])) throw new Error('Rate delivery, quality and terms before saving.');
+  await api('/erp/suppliers/ratings', { id, supplierId: supplier.id, ...scores, comment, ...(intervention ? { interventionReason: intervention } : {}) });
+  await onSaved(t('Rating saved.', 'ریٹنگ محفوظ ہو گئی۔'));
+ }}>
+  {CRITERIA.map(c => { const shown = hover[c.key] ?? scores[c.key]; return <fieldset className="erp-rating-row" key={c.key} onPointerLeave={() => setHover(h => ({ ...h, [c.key]: undefined }))}>
+   <legend>{t(c.en, c.ur)}</legend>
+   <div className="erp-rating-stars">{[1, 2, 3, 4, 5].map(n => <button type="button" key={n} className={`erp-star-button${n <= shown ? ' is-on' : ''}`} aria-label={t(`${n} of 5 stars`, `5 میں سے ${n} ستارے`)} aria-pressed={scores[c.key] === n} onPointerEnter={() => setHover(h => ({ ...h, [c.key]: n }))} onClick={() => setScores(s => ({ ...s, [c.key]: n }))}><Star size={28} /></button>)}</div>
+  </fieldset>; })}
+  <Field>{t('Comment (optional)', 'تبصرہ (اختیاری)')}<textarea value={comment} onChange={e => setComment(e.target.value)} maxLength={500} /></Field>
+  <InterventionField member={member} owners={['purchase_manager']} value={intervention} onChange={setIntervention} />
  </AsyncForm>;
 }
 function RfqForm({ member, categories, onSaved, onCancel }: { member: Member; categories: SupplierCategory[]; onSaved: () => Promise<void>; onCancel: () => void }) {

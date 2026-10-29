@@ -18,6 +18,9 @@ export async function supplierView(db, value) {
   if (!value) return null;
   return { ...value, categories: (await all(db, 'SELECT category_id FROM supplier_category_links WHERE supplier_id=? ORDER BY category_id', value.id)).map(c => c.category_id) };
 }
+// Each rating counts its three criteria; legacy single-score rows (NULL criteria) count their score for all three.
+const RATED = 'SELECT workspace_id,supplier_id,COALESCE(delivery,rating) AS d,COALESCE(quality,rating) AS q,COALESCE(terms,rating) AS t FROM supplier_ratings';
+const round1 = value => Math.round(value * 10) / 10;
 const supplierFields = 'id,workspace_id,name,contact_name,email,phone,city,website,source_url,source_checked_at,status,version,created_at,updated_at';
 const LISTED = ['pending','approved','rejected','suspended'];
 // pending→approved|rejected, approved↔suspended; everything else is final or must go through the supplier again.
@@ -25,11 +28,13 @@ const MOVES = { pending: ['approved','rejected'], approved: ['suspended'], suspe
 export async function suppliers(db, workspaceId, status, category) {
   if (status && !LISTED.includes(status)) fail(422, 'Choose pending, approved, rejected or suspended.');
   if (category) await categoryIds(db, [category]);
+  const aggregates = new Map((await all(db, `SELECT supplier_id,COUNT(*) AS count,AVG((d+q+t)/3.0) AS average,AVG(d) AS delivery,AVG(q) AS quality,AVG(t) AS terms FROM (${RATED} WHERE workspace_id=?) GROUP BY supplier_id`, workspaceId))
+    .map(r => [r.supplier_id, { average: round1(r.average), delivery: round1(r.delivery), quality: round1(r.quality), terms: round1(r.terms), count: r.count }]));
   return Promise.all((await all(db, `SELECT ${supplierFields} FROM suppliers WHERE workspace_id=? AND status IN (${LISTED.map(() => '?').join(',')}) AND (? IS NULL OR status=?) AND (? IS NULL OR id IN (SELECT supplier_id FROM supplier_category_links WHERE category_id=?)) ORDER BY name COLLATE NOCASE LIMIT 500`,
-    workspaceId, ...LISTED, status || null, status || null, category || null, category || null)).map(s => supplierView(db, s)));
+    workspaceId, ...LISTED, status || null, status || null, category || null, category || null)).map(async s => ({ ...await supplierView(db, s), rating: aggregates.get(s.id) ?? null })));
 }
 export async function supplierPerformance(db, supplierId) {
-  const { average, n } = await one(db, 'SELECT AVG(rating) AS average, COUNT(*) AS n FROM supplier_ratings WHERE supplier_id=?', supplierId);
+  const { average, n } = await one(db, `SELECT AVG((d+q+t)/3.0) AS average, COUNT(*) AS n FROM (${RATED} WHERE supplier_id=?)`, supplierId);
   // Final dispositions of settled lots only: accepted reports and deviation acceptances count as accepted, confirmed rejections as rejected.
   // Returned or re-inspect quantities count as neither, and the lot stays out until its replacement inspection settles it, so nothing is counted twice.
   const qc = await one(db, `SELECT COALESCE(SUM(CASE WHEN i.report_status='accepted' THEN i.accepted_milli END),0) + COALESCE(SUM(CASE WHEN i.rejection_status='dismissed' AND i.dismiss_outcome='accept_with_deviation' THEN i.rejected_milli END),0) AS accepted,
@@ -127,7 +132,7 @@ export async function staffProcurement(request, env, member, path, data) {
       const id = path.slice('/api/erp/suppliers/'.length);
       if (!id.includes('/')) {
         const s = await listed(recordId(id));
-        const ratings = await all(db, 'SELECT r.rating,r.feedback,u.name AS created_by_name,r.created_at FROM supplier_ratings r LEFT JOIN users u ON u.id=r.created_by WHERE r.supplier_id=? ORDER BY r.created_at DESC,r.id', s.id);
+        const ratings = await all(db, 'SELECT r.rating,r.delivery,r.quality,r.terms,r.feedback,u.name AS created_by_name,r.created_at FROM supplier_ratings r LEFT JOIN users u ON u.id=r.created_by WHERE r.supplier_id=? ORDER BY r.created_at DESC,r.id', s.id);
         return json({ supplier: await supplierView(db, s), ratings, performance: await supplierPerformance(db, s.id) });
       }
     }
@@ -172,6 +177,23 @@ export async function staffProcurement(request, env, member, path, data) {
         audit(db, member, 'supplier.profile_updated', s.id, {}, 'staff', { before, after, intervention })]); }
       catch { fail(409, 'Supplier changed. Reload before editing.'); }
       return json({ supplier: await supplierView(db, await one(db, `SELECT ${supplierFields} FROM suppliers WHERE id=?`, s.id)) });
+    }
+    if (path === '/api/erp/suppliers/ratings' && data) {
+      const intervention = role(member, data, 'purchase_manager');
+      keys(data, ['id','supplierId','delivery','quality','terms','comment','orderId','interventionReason']);
+      const id = recordId(data.id), s = await one(db, 'SELECT * FROM suppliers WHERE id=? AND workspace_id=?', recordId(data.supplierId), w);
+      if (!s) fail(404, 'Supplier not found.');
+      if (s.status !== 'approved') fail(409, 'Only an approved supplier can be rated.');
+      const delivery = integer(data.delivery, 'Delivery rating', 1, 5), quality = integer(data.quality, 'Quality rating', 1, 5), terms = integer(data.terms, 'Terms rating', 1, 5);
+      const comment = data.comment === undefined ? '' : multiline(data.comment, 'Comment', 0, 500);
+      const orderId = data.orderId == null ? null : recordId(data.orderId);
+      if (orderId && !await one(db, 'SELECT id FROM supplier_purchase_orders WHERE id=? AND supplier_id=? AND workspace_id=?', orderId, s.id, w)) fail(404, 'Purchase order not found.');
+      const rating = Math.round((delivery + quality + terms) / 3);
+      const previous = await one(db, 'SELECT * FROM supplier_ratings WHERE id=?', id);
+      if (previous) { if (previous.supplier_id !== s.id || previous.delivery !== delivery || previous.quality !== quality || previous.terms !== terms || previous.feedback !== comment || previous.order_id !== orderId) fail(409, 'This record ID was already used for a different rating.'); return json({ saved: true }); }
+      await db.batch([query(db, 'INSERT INTO supplier_ratings(id,workspace_id,supplier_id,rating,feedback,status,created_by,created_at,updated_at,delivery,quality,terms,order_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', id, w, s.id, rating, comment, 'active', member.user_id, now, now, delivery, quality, terms, orderId),
+        audit(db, member, 'supplier.rated', s.id, { delivery, quality, terms, comment, orderId }, 'staff', { intervention })]);
+      return json({ saved: true });
     }
     if (path === '/api/erp/suppliers/rate' && data) {
       const intervention = role(member, data, 'purchase_manager');

@@ -26,3 +26,18 @@
 @media(max-width:640px) {
  .erp-facts { grid-template-columns:1fr; }.erp-portal-header { gap:12px; flex-wrap:wrap; padding:12px 18px; }.erp-portal-header>span { font-size:14px; }.erp-portal-main { padding:24px 16px 48px; }.erp-bid { padding:16px; }.erp-toolbar>.live-segments { width:100%; }.erp-toolbar>.live-segments>button { flex:1; padding-inline:10px; font-size:14px; }.erp-record .button { max-width:100%; overflow-wrap:anywhere; }.erp-workspace .yf-head { align-items:flex-start; flex-wrap:wrap; }
 }
+.erp-rating { display:flex; align-items:center; gap:8px; margin-block:10px; flex-wrap:wrap; }.erp-rating strong { font-size:16px; }
+.erp-stars { display:inline-flex; gap:2px; }
+.erp-star { position:relative; display:inline-block; width:18px; height:18px; }
+.erp-star svg { display:block; fill:none; stroke:#cfc7b8; }
+.erp-star-fill { position:absolute; inset:0 auto 0 0; overflow:hidden; }
+.erp-star-fill svg { fill:#f2a541; stroke:#f2a541; }
+.erp-rating-row { border:0; padding:0; margin:18px 0; min-width:0; }
+.erp-rating-row legend { font-weight:600; padding:0 0 8px; }
+.erp-rating-stars { display:flex; gap:4px; flex-wrap:wrap; }
+.erp-star-button { display:grid; place-items:center; min-width:44px; min-height:44px; padding:0; border:0; background:transparent; cursor:pointer; transition:transform 120ms ease; }
+.erp-star-button svg { fill:none; stroke:#cfc7b8; transition:fill 120ms ease, stroke 120ms ease; }
+.erp-star-button.is-on svg { fill:#f2a541; stroke:#f2a541; }
+.erp-star-button:active { transform:scale(0.9); }
+.erp-star-button:focus-visible { outline:3px solid var(--focus); outline-offset:2px; border-radius:var(--r-row); }
+@media (prefers-reduced-motion: reduce) { .erp-star-button, .erp-star-button svg { transition:none; } }

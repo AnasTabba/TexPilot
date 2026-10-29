@@ -1,8 +1,9 @@
 export interface SupplierCategory { id: string; name: string; urdu_name: string }
 export type SupplierStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
+export interface SupplierRating { average: number; delivery: number; quality: number; terms: number; count: number }
 export interface Supplier {
  id: string; name: string; contact_name: string; email: string; phone: string; city: string; website: string;
- source_url: string; source_checked_at: number | null; status: SupplierStatus; version: number; categories: string[];
+ source_url: string; source_checked_at: number | null; status: SupplierStatus; version: number; categories: string[]; rating: SupplierRating | null;
 }
 export interface ProcurementRfq {
  id: string; reference: string; title: string; category_id: string; specifications: string;
