@@ -398,10 +398,15 @@ export async function supplierOperations(request, env, user, path, data) {
     if(dispatched>now+60000) fail(422,'Dispatch date cannot be in the future.');
     if(!Array.isArray(data.containers)||data.containers.length>100||data.containers.some(c=>typeof c!=='string'||! /^[A-Z]{4}[0-9]{7}$/.test(c))) fail(422,'Use container numbers with four capital letters and seven digits, or leave the list empty.');
     const containers=[...new Set(data.containers)]; const digest=await sha256(JSON.stringify({order:order.id,bl,carrier,qty,dispatched,note,containers}));
+    const trackedBl=bl.toUpperCase().replace(/\s+/g,'');
     const previous=await one(db,'SELECT * FROM procurement_shipments WHERE id=?',id);
     if(previous) {if(previous.supplier_id!==sid||previous.request_hash!==digest) fail(409,'This request ID was used for different values.');return json({shipment:previous});}
     try {await db.batch([query(db,'INSERT INTO procurement_shipments(id,workspace_id,purchase_order_id,supplier_id,bill_of_lading,carrier,containers_json,quantity_milli,dispatched_at,note,request_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',id,user.workspace_id,order.id,sid,bl,carrier,JSON.stringify(containers),qty,dispatched,note,digest,now),
-      query(db,"UPDATE supplier_purchase_orders SET status='dispatched' WHERE id=?",order.id),audit(db,user,'shipment.dispatched',id,{order:order.id,billOfLading:bl},'supplier')]);}
+      query(db,"UPDATE supplier_purchase_orders SET status='dispatched' WHERE id=?",order.id),
+      // The supplier's bill of lading also becomes the order's shipment, so Incoming stock can register the arrival without re-entering it.
+      query(db,'INSERT INTO shipments(id,workspace_id,purchase_order_id,bill_of_lading,created_by,created_at,updated_at) SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM shipments WHERE purchase_order_id=? AND bill_of_lading=?)',id,user.workspace_id,order.id,trackedBl,user.user_id,now,now,order.id,trackedBl),
+      query(db,"UPDATE supplier_purchase_orders SET bill_of_lading=?,updated_at=? WHERE id=? AND bill_of_lading=''",trackedBl,now,order.id),
+      audit(db,user,'shipment.dispatched',id,{order:order.id,billOfLading:bl},'supplier')]);}
     catch {fail(409,'This dispatch exceeds the order quantity or the order is no longer dispatchable. Reload first.');}
     return json({shipment:await one(db,'SELECT * FROM procurement_shipments WHERE id=?',id)},201);
   }

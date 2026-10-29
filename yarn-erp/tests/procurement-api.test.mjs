@@ -115,6 +115,10 @@ test('supplier dispatch notices are scoped, quantity bounded, idempotent and nev
  assert.equal((await f.request('/portal/dispatches',{...d,quantityMilli:50000},a.cookie)).status,409);
  assert.equal((await f.request('/portal/dispatches',{...d,id:crypto.randomUUID(),quantityMilli:50000},a.cookie)).status,409);
  assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM procurement_shipments').get().n,1);
+ // The supplier's bill of lading reaches Incoming stock as the order's shipment, once.
+ assert.deepEqual({...f.sql.prepare('SELECT purchase_order_id,bill_of_lading FROM shipments').all()[0]},{purchase_order_id:order.id,bill_of_lading:'TESTBL100'});
+ assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM shipments').get().n,1);
+ assert.equal(f.sql.prepare('SELECT bill_of_lading FROM supplier_purchase_orders WHERE id=?').get(order.id).bill_of_lading,'TESTBL100');
  const overview=await f.staff('/erp/procurement');assert.equal(overview.data.tracking.configured,false);assert.equal(overview.data.shipments.length,1);
 });
 test('expired deadlines and unsupported input cannot create operational records',async()=>{
