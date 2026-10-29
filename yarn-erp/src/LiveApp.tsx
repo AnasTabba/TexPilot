@@ -8,8 +8,9 @@ import { moveIcon } from './icons';
 import { Dashboard, Notifications, type Inbox, type Notice } from './Notifications';
 import { NoticeToast } from './NoticeToast';
 import Profile from './Profile';
+import AppSettings from './AppSettings';
 import { portal } from './PortalCommon';
-import { COMMON, NAV, PROFILE } from './roles';
+import { APP_SETTINGS, COMMON, NAV, PROFILE } from './roles';
 import Inspections from './Inspections';
 import InspectArrival, { type Arrival } from './InspectArrival';
 import ToProduction, { type ProductionJob } from './ToProduction';
@@ -35,7 +36,7 @@ type Action = { type: FormType; lotId?: string; productId?: string };
 // Old pages that were filtered copies of the stock list (or of Home) now open Stock with that filter.
 type View = 'all' | 'quality' | 'production' | 'dispatch';
 const aliases: Record<string, [string, View]> = { tracking: ['procurement', 'all'], materials: ['inventory', 'all'], production: ['inventory', 'production'], quality: ['inventory', 'quality'], dispatch: ['inventory', 'dispatch'], overview: ['dashboard', 'all'] };
-const sections = [...new Set([...Object.values(NAV).flat(), ...COMMON, PROFILE])];
+const sections = [...new Set([...Object.values(NAV).flat(), ...COMMON, PROFILE, APP_SETTINGS])];
 const tabsOf = Object.fromEntries(sections.flatMap(section => section.tabs ? [[section.id, section.tabs.map(tab => tab.id)]] : []));
 const routeFromHash = () => {
   const { section } = parseHash(location.hash, tabsOf);
@@ -226,7 +227,6 @@ export default function LiveApp() {
   const dismissToast = useCallback(() => setToast(null), []);
   const [history, setHistory] = useState<StockMovement[]>([]); const [moreHistory, setMoreHistory] = useState(true);
   const [historyBusy, setHistoryBusy] = useState(false); 
-  const theme = 'light';
   const requestSequence = useRef(0);
   const sessionLocked = useRef(false);
   const logoutRequest = useRef<Promise<void> | null>(null);
@@ -285,7 +285,6 @@ export default function LiveApp() {
   }, [refresh]);
   useEffect(() => { const update = () => { menuDialog.current?.close(); const alias = aliases[location.hash.split('/')[1]]; if (alias) setView(alias[1]); setRoute(routeFromHash()); setHash(location.hash); setSelectedId(lotFromHash()); setAction(null); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
   useEffect(() => { const network = () => { setOnline(navigator.onLine); void refresh(true); }; window.addEventListener('online', network); window.addEventListener('offline', network); return () => { window.removeEventListener('online', network); window.removeEventListener('offline', network); }; }, [refresh]);
-  useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem('yf-theme', theme); } catch { /* The theme can remain in memory. */ } }, [theme]);
   // A form or reversal opens at its top, not wherever the page was scrolled to when it was asked for.
   useLayoutEffect(() => { if (action) window.scrollTo(0, 0); }, [action]);
   // The white pill in both navs glides to the current tab (yarnflow.css reads --glide-*); segmented controls glide the same way.
@@ -317,13 +316,14 @@ export default function LiveApp() {
   const allow = (permission: Permission) => can(me, permission);
   const shown = [...NAV[me.role], ...COMMON];
   // Profile is reachable by route and by clicking the name, but not listed in the sidebar.
-  const pages = [...shown, PROFILE];
+  const pages = [...shown, PROFILE, APP_SETTINGS];
   const page = pages.some(section => section.id === route) ? route : 'dashboard';
   const { tab: routeTab, id: routeId } = parseHash(hash, tabsOf);
   // Role screens navigate with paths like "buyers/pending" or "approvals/<id>".
   const go = (path: string, id = '') => { location.hash = '/' + path + (id ? '/' + id : ''); };
   const role = me.role, isAdmin = role === 'admin';
-  const adminSection = page === 'settings' ? (routeTab === 'invoices' ? 'settings' : 'thresholds') : page;
+  // Factory-default approval limits live under Team, next to each supervisor's own limits; invoice settings moved to Buyers > Settings.
+  const adminSection = page === 'team' ? 'thresholds' : page;
   const reloadInbox = async () => { setInbox(await portal<Inbox>('/notifications')); };
   const selected = workspace.lots.find(l => l.id === selectedId);
   const productName = (lotId: string) => workspace.products.find(p => p.id === workspace.lots.find(l => l.id === lotId)?.product_id)?.name || t("Material");
@@ -394,14 +394,14 @@ export default function LiveApp() {
   const brand = <a className="live-brand" href="#/dashboard"><Cone hue="#2f6fd6" size={30} />yarnflow</a>;
   const whoAmI = <div className="yf-me"><button className="yf-me-open" onClick={() => navigate('profile')} aria-label={t('Open my profile', 'میری پروفائل کھولیں')}><Avatar name={me.name} /><span><strong>{me.name}</strong><span>{t(...roleLabel[me.role])}</span></span></button><button className="live-icon-button" onClick={() => void signOut()} aria-label={`${t('Sign out')} ${me.name}`} title={t("Sign out")}><LogOut size={20} aria-hidden="true" /></button></div>;
   // Settings is the admin screen; everyone else's settings (language) live on their profile.
-  const settingsPage = NAV[me.role].some(section => section.id === 'settings') ? 'settings' : 'profile';
+  const settingsPage = 'app-settings';
   const unread = inbox.unread;
   const actionIcons = <>
     <button className="live-icon-button" onClick={() => navigate('notifications')} aria-current={page === 'notifications' ? 'page' : undefined} aria-label={`${t('Notifications', 'اطلاعات')}${unread > 0 ? `, ${unread} ${t('unread', 'نہ پڑھی ہوئی')}` : ''}`} title={t('Notifications', 'اطلاعات')}><Bell size={22} aria-hidden="true" />{unread > 0 && <b className="yf-nav-count" aria-hidden="true">{unread}</b>}</button>
     <button className="live-icon-button" onClick={() => navigate(settingsPage)} aria-current={page === settingsPage ? 'page' : undefined} aria-label={t('Settings', 'ترتیبات')} title={t('Settings', 'ترتیبات')}><Settings size={22} aria-hidden="true" /></button>
   </>;
   return <div className="live-app"><a className="skip-link" href="#live-main" onClick={event => { event.preventDefault(); document.getElementById('live-main')?.focus(); }}>{t("Skip to content")}</a>
-    <aside className="live-sidebar">{brand}<div className="live-factory">{workspace.workspace.name}<span>{t("Shared by the whole team")}</span></div><nav aria-label={t("Main navigation")}>{shown.map(({ id, en, ur, icon: Icon }) => [id === COMMON[0].id && <span className="yf-nav-gap" key="gap" />, <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={19} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>])}</nav>{whoAmI}</aside>
+    <aside className="live-sidebar">{brand}<div className="live-factory">{workspace.workspace.name}</div><nav aria-label={t("Main navigation")}>{shown.filter(section => section.id !== 'notifications').map(({ id, en, ur, icon: Icon }) => [id === COMMON[1].id && <span className="yf-nav-gap" key="gap" />, <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={19} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>])}</nav>{whoAmI}</aside>
     {inspecting && <InspectArrival arrival={inspecting} isAdmin={me.role === 'admin'} onClose={() => setInspecting(null)} onDone={async message => { setInspecting(null); setNotice(message); await refresh(true); }} />}
     {producing && <ToProduction {...producing} isAdmin={me.role === 'admin'} onClose={() => setProducing(null)} onDone={async message => { setProducing(null); setNotice(message); await refresh(true); }} />}
     <dialog className="yf-mobile-menu" ref={menuDialog} onClick={e=>{if(e.target===e.currentTarget)menuDialog.current?.close();}} aria-label={t("Navigation menu")}><div>{brand}<button className="live-icon-button" onClick={()=>menuDialog.current?.close()} aria-label={t("Close navigation")}><X aria-hidden="true" /></button></div><nav aria-label={t("All pages")}>{shown.map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={22} aria-hidden="true" />{t(en, ur)}{badge(id)}</button>)}</nav>{whoAmI}</dialog>
@@ -418,6 +418,7 @@ export default function LiveApp() {
       {page==='help' && <section className="live-panel yf-help"><h2>{t("Common questions")}</h2>{[[t("How do I receive stock?"),t("The purchase manager registers an arrival, the inspector inspects it, and the supervisor accepts the report. Only then does the stock appear in the batch.")],[t("How does quality approval work?"),t("Record the care label and physical inspection. A QC decision is required before dispatch; a scan result alone never approves a batch.")],[t("How do corrections work?"),t("The supervisor adjusts or writes off stock with a reason. Large changes wait for admin approval, the original entries stay visible and stock cannot become negative.")],[t("Where is my data stored?"),t("In one shared database. Everyone who signs in sees the same stock, and every entry records who made it.")],[t("Who can do what?"),t("Everyone can view stock and use the scanner. The supervisor records finished goods and adjusts stock; materials are added by the supervisor or purchase manager.")],[t("How do new people join?"),t("Ask an admin to create your account. The admin chooses your role in Team and gives you your PIN.")],[t("Forgot your PIN?"),t("Ask an admin to set a new one in Team. Five wrong PINs lock a name for five minutes.")],[t("Phone and computer"),t("Open the same link on any phone or computer and sign in with your name and PIN. On iPhone, Share then Add to Home Screen makes it open like an app.")],[t("Camera and privacy"),t("Camera access is requested when you start a scan. The TexPilot service must be connected for model analysis.")]].map(([q,a])=><details key={q}><summary>{t(q)}</summary><p>{t(a)}</p></details>)}</section>}
       {page === 'scanner' && <><div className="live-segments yf-scan-tabs" aria-label={t("What to scan")}><button aria-pressed={scanTab === 'fabric'} onClick={() => setScanTab('fabric')}><Camera size={22} aria-hidden="true" /><span>{t("Fabric")}</span></button><button aria-pressed={scanTab === 'spec'} onClick={() => setScanTab('spec')}><Ruler size={22} aria-hidden="true" /><span>{t("Yarn count")}</span></button><button aria-pressed={scanTab === 'barcode'} onClick={() => setScanTab('barcode')}><ScanBarcode size={22} aria-hidden="true" /><span>{t("Stock label")}</span></button></div>{scanTab === 'spec' ? <SpecScan /> : scanTab === 'barcode' ? <><BarcodeScanner onFound={lookup} />{!!matches.length && <section className="live-panel"><h2>{t("Choose the batch")}</h2>{matches.map(lot => <button className="live-match" key={lot.id} onClick={() => { navigate('inventory', lot.id); }}><span>{lot.name} · {lot.batch}</span><ArrowRight size={18} /></button>)}</section>}</> : <><Scanner t={t} onInventory={() => navigate('inventory')} onResult={setLastResult} onMeasure={() => { setScanTab('spec'); scrollTo({ top: 0, behavior: 'smooth' }); }} />{lastResult && me.role !== 'quality_inspector' && <section className="live-panel"><h2>{t("Save this scan to a batch")}</h2><p>{t("Keeps the result in the batch's QC history. It does not approve the batch by itself.")}</p>{allow('inspect') ? <><button className="button primary" disabled={!workspace.lots.length} onClick={() => setAction({ type: 'inspection' })}><ClipboardCheck size={18} aria-hidden="true" />{t("Save to a batch")}</button>{!workspace.lots.length && <p>{t("Add a batch in Stock first.")}</p>}</> : <p className="live-muted">{t("Someone with “Inspections” access can save scans to a batch.")}</p>}</section>}</>}</>}
       {page === 'activity' && <section className="live-panel"><div className="live-panel-heading"><h2>{t("Stock movement register")}</h2><span>Asia/Karachi</span></div>{activityList([...workspace.movements, ...history.filter(h => !workspace.movements.some(m => m.id === h.id))])}{workspace.movements.length >= 100 && moreHistory && <button className="button" disabled={historyBusy} onClick={async () => { setHistoryBusy(true); try { const page = await api<{ movements: StockMovement[] }>('/movements?offset=' + (100 + history.length)); setHistory(previous => [...previous, ...page.movements]); setMoreHistory(page.movements.length === 100); } catch (error) { setError(errorMessage(error)); } finally { setHistoryBusy(false); } }}>{historyBusy ? t("Loading…") : t("Load earlier movements")}</button>}</section>}
+      {page === 'app-settings' && <AppSettings />}
       {page === 'profile' && <Profile state={workspace} backupBusy={exportBusy} onBackup={() => void backup()} />}
       {page==='team' && <Team me={me} onChanged={() => refresh(true)} />}
       {page==='lots' && <Inspections />}

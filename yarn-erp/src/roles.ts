@@ -7,6 +7,7 @@ export { eventTitle, parseHash } from './routes.ts';
 export interface Section { id: string; en: string; ur: string; icon: LucideIcon; tabs?: { id: string; en: string; ur: string }[] }
 
 const dashboard: Section = { id: 'dashboard', en: 'Dashboard', ur: 'ڈیش بورڈ', icon: House };
+const scan: Section = { id: 'scanner', en: 'Scan', ur: 'اسکین', icon: ScanSearch };
 const stock: Section = { id: 'inventory', en: 'Stock', ur: 'اسٹاک', icon: ConeIcon as LucideIcon };
 const history: Section = { id: 'activity', en: 'History', ur: 'ہسٹری', icon: History };
 const procurement: Section = { id: 'procurement', en: 'Procurement', ur: 'خریداری', icon: PackagePlus };
@@ -20,8 +21,7 @@ const claims: Section = { id: 'claims', en: 'Claims', ur: 'دعوے', icon: Shie
 const adminActivity: Section = { id: 'admin-activity', en: 'Activity', ur: 'سرگرمیاں', icon: History, tabs: [{ id: 'monitor', en: 'Monitor', ur: 'نگرانی' }, { id: 'audit', en: 'Audit log', ur: 'آڈٹ لاگ' }] };
 const reports: Section = { id: 'reports', en: 'Reports', ur: 'رپورٹس', icon: FileText };
 const analytics: Section = { id: 'analytics', en: 'Analytics', ur: 'تجزیات', icon: ChartNoAxesCombined };
-const settings: Section = { id: 'settings', en: 'Settings', ur: 'ترتیبات', icon: Settings, tabs: [{ id: 'thresholds', en: 'Thresholds', ur: 'حدود' }, { id: 'invoices', en: 'Invoices', ur: 'انوائس' }] };
-const buyers: Section = { id: 'buyers', en: 'Buyers', ur: 'خریدار', icon: UsersRound, tabs: [{ id: 'pending', en: 'Pending', ur: 'زیرِ التوا' }, { id: 'active', en: 'Active', ur: 'فعال' }, { id: 'all', en: 'All', ur: 'سب' }] };
+const buyers: Section = { id: 'buyers', en: 'Buyers', ur: 'خریدار', icon: UsersRound, tabs: [{ id: 'pending', en: 'To approve', ur: 'منظوری کے لیے' }, { id: 'active', en: 'Buyers', ur: 'خریدار' }, { id: 'all', en: 'All', ur: 'سب' }, { id: 'settings', en: 'Settings', ur: 'ترتیبات' }] };
 const buyerRfqs: Section = { id: 'buyer-rfqs', en: 'Buyer RFQs', ur: 'خریدار کی درخواستیں', icon: FileText, tabs: [{ id: 'open', en: 'To quote', ur: 'قیمت دینے کے لیے' }, { id: 'quoted', en: 'Quoted', ur: 'قیمت دی گئی' }, { id: 'sold', en: 'Sold', ur: 'فروخت شدہ' }, { id: 'all', en: 'All', ur: 'سب' }] };
 const invoices: Section = { id: 'invoices', en: 'Invoices', ur: 'انوائسز', icon: FileText, tabs: [{ id: 'owed', en: 'To collect', ur: 'وصولی کے لیے' }, { id: 'paid', en: 'Paid', ur: 'ادا شدہ' }, { id: 'all', en: 'All', ur: 'سب' }] };
 const dispatchRequests: Section = { id: 'dispatch-requests', en: 'Dispatch requests', ur: 'ڈسپیچ درخواستیں', icon: Truck, tabs: [{ id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'all', en: 'All', ur: 'سب' }] };
@@ -32,20 +32,20 @@ const requests: Section = { id: 'requests', en: 'Requests', ur: 'درخواست�
 const report: Section = { id: 'report', en: 'Report', ur: 'رپورٹ', icon: FileText };
 
 export const NAV: Record<Role, Section[]> = {
-  admin: [dashboard, approvals, claims, stock, procurement, adminActivity, reports, analytics, team, settings],
-  purchase_manager: [dashboard, procurement],
-  sales_manager: [dashboard, buyers, buyerRfqs, invoices, dispatchRequests, analytics],
-  dispatch: [dashboard, dispatches, newDispatch, dispatchHistory],
-  quality_inspector: [dashboard, lots, stock, history],
-  supervisor: [dashboard, reviews, stock, requests, report, history],
+  admin: [dashboard, scan, approvals, claims, stock, procurement, buyers, adminActivity, reports, analytics, team],
+  purchase_manager: [dashboard, scan, procurement],
+  sales_manager: [dashboard, scan, buyers, buyerRfqs, invoices, dispatchRequests, analytics],
+  dispatch: [dashboard, scan, dispatches, newDispatch, dispatchHistory],
+  quality_inspector: [dashboard, scan, lots, stock, history],
+  supervisor: [dashboard, scan, reviews, stock, requests, report, history],
 };
 export const COMMON: Section[] = [
   { id: 'notifications', en: 'Notifications', ur: 'اطلاعات', icon: Bell },
-  { id: 'scanner', en: 'Scan', ur: 'اسکین', icon: ScanSearch },
   { id: 'help', en: 'Help', ur: 'مدد', icon: CircleHelp },
 ];
-/** Not in the sidebar: opened by clicking your name, and by the settings icon for non-admins. */
+/** Not in the sidebar: profile opens from your name, app settings from the top-right gear. */
 export const PROFILE: Section = { id: 'profile', en: 'My profile', ur: 'میری پروفائل', icon: CircleUserRound };
+export const APP_SETTINGS: Section = { id: 'app-settings', en: 'Settings', ur: 'ترتیبات', icon: Settings };
 
 /** Role modules an admin can open; each owner task adds its role here when its screens exist. */
 export const INSTALLED_MODULES: Role[] = [];

@@ -102,7 +102,7 @@ test.describe("desktop", () => {
     await page.goto("/#/dashboard");
     await title(page, "Dashboard");
     const nav = page.getByRole("navigation", { name: "Main navigation" });
-    for (const [label, h1] of [["Stock", "Stock"], ["Scan", "Scan"], ["History", "History"], ["Team", "Team"], ["Notifications", "Notifications"], ["Help", "Help"], ["Dashboard", "Dashboard"]]) {
+    for (const [label, h1] of [["Stock", "Stock"], ["Scan", "Scan"], ["History", "History"], ["Team", "Team"], ["Help", "Help"], ["Dashboard", "Dashboard"]]) {
       await nav.getByRole("button", { name: label, exact: true }).click();
       await title(page, h1);
       await expect(nav.getByRole("button", { name: label, exact: true })).toHaveAttribute("aria-current", "page");

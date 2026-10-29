@@ -68,6 +68,7 @@ function Loaded<T>({ res, children }: { res: { value: T | null; error: string; r
 }
 
 export default function AdminScreens({ member, section, tab, id, navigate }: Props) {
+  const { t } = useLanguage();
   // Currency comes from settings; the screens that show money need it, the rest do not.
   const settings = useLoad<{ settings: Settings }>('/erp/admin/settings');
   const currency = settings.value?.settings.currency || 'PKR';
@@ -76,7 +77,7 @@ export default function AdminScreens({ member, section, tab, id, navigate }: Pro
   return <div className="yf-admin">
     {['approvals', 'claims', 'thresholds'].includes(section) && settings.error && <RetryError error={settings.error} reload={settings.reload} />}
     {section === 'approvals' && <Approvals member={member} id={id} currency={currency} navigate={navigate} />}
-    {section === 'thresholds' && <Thresholds currency={currency} />}
+    {section === 'thresholds' && <section className="yf-factory-limits"><h2>{t('Factory default limits', 'فیکٹری کی بنیادی حدیں')}</h2><p className="live-muted">{t('Used for anyone who has no approval limit of their own. Set a supervisor’s own limits by opening them above.', 'ان سب کے لیے جن کی اپنی منظوری کی حد نہیں۔ کسی سپروائزر کی اپنی حدیں اوپر ان کو کھول کر مقرر کریں۔')}</p><Thresholds currency={currency} /></section>}
     {section === 'claims' && <Claims member={member} id={id} currency={currency} navigate={navigate} />}
     {section === 'admin-activity' && <>
       <SectionTabs tabs={[{ id: 'monitor', en: 'Monitor', ur: 'نگرانی' }, { id: 'audit', en: 'Audit log', ur: 'آڈٹ لاگ' }]} value={activeTab} onChange={v => navigate('admin-activity', v)} />
@@ -141,7 +142,7 @@ function ApprovalDetail({ member, row, currency, navigate, reload }: { member: M
   </section>;
 }
 
-function Thresholds({ currency }: { currency: string }) {
+export function Thresholds({ currency }: { currency: string }) {
   const { t, language } = useLanguage();
   const data = useLoad<{ thresholds: Threshold[]; history: ThresholdHistory[] }>('/erp/admin/thresholds');
   const [values, setValues] = useState<Record<string, string>>({}), [error, setError] = useState('');
@@ -182,7 +183,7 @@ function Thresholds({ currency }: { currency: string }) {
   </div>;
 }
 
-function InvoiceSettings({ settings, loadError, reload }: { settings: Settings | null; loadError: string; reload: () => void }) {
+export function InvoiceSettings({ settings, loadError, reload }: { settings: Settings | null; loadError: string; reload: () => void }) {
   const { t } = useLanguage();
   const [draft, setDraft] = useState<Settings | null>(null), [creditText, setCreditText] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   useEffect(() => { if (settings) { setDraft({ ...settings }); setCreditText(settings.credit_alert_days.join(', ')); } }, [settings]);

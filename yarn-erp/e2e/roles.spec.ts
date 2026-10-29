@@ -4,17 +4,17 @@ import { signIn } from './helpers';
 test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
 
 for (const [name, sections] of [
-  ['Anas', ['Dashboard', 'Stock', 'History', 'Procurement', 'Team']],
-  ['Pervaiz', ['Dashboard', 'Procurement']],
-  ['Saima', ['Dashboard', 'Review', 'Stock', 'History']],
-  ['Sana', ['Dashboard']],
-  ['Qasim', ['Dashboard', 'Inspections', 'Stock', 'History']],
-  ['Danish', ['Dashboard', 'Stock', 'History']],
+  ['Anas', ['Dashboard', 'Scan', 'Approvals', 'Claims', 'Stock', 'Procurement', 'Buyers', 'Activity', 'Reports', 'Analytics', 'Team']],
+  ['Pervaiz', ['Dashboard', 'Scan', 'Procurement']],
+  ['Saima', ['Dashboard', 'Scan', 'Review', 'Stock', 'Requests', 'Report', 'History']],
+  ['Sana', ['Dashboard', 'Scan', 'Buyers', 'Buyer RFQs', 'Invoices', 'Dispatch requests', 'Analytics']],
+  ['Qasim', ['Dashboard', 'Scan', 'Inspections', 'Stock', 'History']],
+  ['Danish', ['Dashboard', 'Scan', 'Dispatches', 'New dispatch', 'History']],
 ] as const) test(`${name} sees only the sections of their role, plus the common ones`, async ({ page }) => {
   await signIn(page, name);
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
-  for (const label of [...sections, 'Notifications', 'Scan', 'Help']) await expect(nav.getByRole('button', { name: new RegExp(`^${label}`) })).toBeVisible();
-  await expect(nav.getByRole('button')).toHaveCount(sections.length + 3);
+  for (const label of [...sections, 'Help']) await expect(nav.getByRole('button', { name: new RegExp(`^${label}`) })).toBeVisible();
+  await expect(nav.getByRole('button')).toHaveCount(sections.length + 1);
   await expect(nav.getByRole('button', { name: /^My profile/ })).toHaveCount(0);
 });
 
@@ -29,8 +29,7 @@ test('a notification appears with its unread count and opens its item', async ({
   const made = await page.request.post('/__test/notify', { data: { role: 'purchase_manager', event: 'supplier.pending', objectType: 'supplier', objectId: crypto.randomUUID(), label: 'Noor Spinning' } });
   expect(made.ok()).toBeTruthy();
   await signIn(page, 'Pervaiz');
-  const nav = page.getByRole('navigation', { name: 'Main navigation' });
-  const bell = nav.getByRole('button', { name: /^Notifications/ });
+  const bell = page.locator('.live-page-heading').getByRole('button', { name: /^Notifications/ });
   await expect(bell.locator('.yf-nav-count')).toHaveText('1');
   await expect(page.getByRole('heading', { level: 2, name: 'Next: New supplier pending' })).toBeVisible();
   await bell.click();
