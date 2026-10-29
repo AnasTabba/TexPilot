@@ -156,6 +156,42 @@ export async function noteSale(db, member, { id, revisionId, intervention = null
   return { order: await one(db, 'SELECT * FROM sales_orders WHERE id=?', id), invoice };
 }
 
+export function paymentStatus({ total_minor, credited_minor, paid_minor, due_at }, now) {
+  if (total_minor - credited_minor - paid_minor <= 0) return 'paid';
+  if (due_at !== null && now > due_at) return 'overdue';
+  return paid_minor > 0 ? 'partially_paid' : 'unpaid';
+}
+const daysToDue = (due, now) => due === null ? null : (Date.parse(karachiDate(due)) - Date.parse(karachiDate(now))) / 86400000;
+const balanceData = (invoice, now) => ({ ...invoice, outstanding_minor: Math.max(0, invoice.total_minor - invoice.credited_minor - invoice.paid_minor), status: paymentStatus(invoice, now), days_to_due: daysToDue(invoice.due_at, now) });
+
+export async function creditAlertsScheduled(env, now = Date.now()) {
+  const db = env.DB;
+  let checked = 0, created = 0;
+  for (const workspace of await all(db, 'SELECT id FROM workspaces')) {
+    const { credit_alert_days } = await settingsOf(db, workspace.id);
+    const invoices = await all(db, 'SELECT * FROM invoice_balances WHERE workspace_id=? AND due_at IS NOT NULL AND total_minor>credited_minor+paid_minor', workspace.id);
+    checked += invoices.length;
+    for (const invoice of invoices) {
+      const d = daysToDue(invoice.due_at, now), n = [...credit_alert_days].sort((a,b) => a-b).find(n => d <= n);
+      const kind = now > invoice.due_at ? 'overdue' : d === 0 ? 'due_today' : n === undefined ? null : `before_${n}`;
+      if (!kind || await one(db, 'SELECT id FROM credit_alerts WHERE invoice_id=? AND kind=?', invoice.id, kind)) continue;
+      try {
+        await db.batch([
+          guard(db, 'EXISTS(SELECT 1 FROM invoice_balances WHERE id=? AND workspace_id=? AND total_minor>credited_minor+paid_minor)', invoice.id, workspace.id),
+          query(db, 'INSERT INTO credit_alerts(id,workspace_id,invoice_id,kind,created_at,updated_at) VALUES(?,?,?,?,?,?)', crypto.randomUUID(), workspace.id, invoice.id, kind, now, now),
+          notifyRole(db, workspace.id, 'sales_manager', kind.startsWith('before_') ? 'payment.due_soon' : `payment.${kind}`, 'invoice', invoice.id, invoice.number),
+        ]);
+        created++;
+      } catch (error) {
+        // Only a settled balance or an alert committed by another run is an expected race.
+        const current = await one(db, 'SELECT * FROM invoice_balances WHERE id=?', invoice.id);
+        if (current && current.total_minor > current.credited_minor + current.paid_minor && !await one(db, 'SELECT id FROM credit_alerts WHERE invoice_id=? AND kind=?', invoice.id, kind)) throw error;
+      }
+    }
+  }
+  return { checked, created };
+}
+
 async function salesOverview(db, w) {
   const [buyers, rfqs, revisions, acceptances, orders, invoices, creditNotes, products, settings] = await Promise.all([
     all(db, "SELECT id,name,contact_name,email,phone,city,notes,assigned_manager_id,status,version,created_at,updated_at FROM buyers WHERE workspace_id=? AND status!='archived' ORDER BY name COLLATE NOCASE LIMIT 500", w),
@@ -163,12 +199,12 @@ async function salesOverview(db, w) {
     all(db, 'SELECT r.* FROM sales_quote_revisions r WHERE r.workspace_id=? ORDER BY r.created_at DESC LIMIT 500', w),
     all(db, 'SELECT a.* FROM quotation_acceptances a WHERE a.workspace_id=? ORDER BY a.created_at DESC LIMIT 500', w),
     all(db, 'SELECT o.*,b.name AS buyer_name FROM sales_orders o JOIN buyers b ON b.id=o.buyer_id WHERE o.workspace_id=? ORDER BY o.created_at DESC LIMIT 200', w),
-    all(db, 'SELECT i.*,o.reference AS order_reference FROM invoices i JOIN sales_orders o ON o.id=i.sales_order_id WHERE i.workspace_id=? ORDER BY i.issued_at DESC LIMIT 500', w),
+    all(db, 'SELECT i.*,o.reference AS order_reference FROM invoice_balances i JOIN sales_orders o ON o.id=i.sales_order_id WHERE i.workspace_id=? ORDER BY i.issued_at DESC LIMIT 500', w),
     all(db, 'SELECT c.* FROM credit_notes c WHERE c.workspace_id=? ORDER BY c.created_at DESC LIMIT 500', w),
     all(db, 'SELECT id,sku,name FROM products WHERE workspace_id=? ORDER BY name', w),
     settingsOf(db, w),
   ]);
-  return json({ buyers, rfqs: rfqs.map(({ buyer_status, ...rfq }) => ({ ...rfq, state: rfqState(rfq.status, buyer_status) })), revisions, acceptances, orders, invoices, creditNotes, products, settings });
+  return json({ buyers, rfqs: rfqs.map(({ buyer_status, ...rfq }) => ({ ...rfq, state: rfqState(rfq.status, buyer_status) })), revisions, acceptances, orders, invoices: await Promise.all(invoices.map(async invoice => ({ ...balanceData(invoice, Date.now()), alerts: await all(db, 'SELECT * FROM credit_alerts WHERE invoice_id=? AND workspace_id=? ORDER BY created_at', invoice.id, w) }))), creditNotes, products, settings });
 }
 
 export async function salesApi(request, env, member, path, data) {
@@ -186,6 +222,33 @@ export async function salesApi(request, env, member, path, data) {
       return invoiceFileResponse(invoice, { reference: invoice.order_reference, terms: JSON.parse(invoice.terms_snapshot) }, buyer, factory.name);
     }
     fail(405, 'Method not allowed.');
+  }
+
+  if (path === '/api/erp/sales/payments' && request.method === 'POST') {
+    const intervention = role(member, data, 'sales_manager');
+    keys(data, ['id', 'invoiceId', 'amountMinor', 'receivedAt', 'note', 'interventionReason']);
+    const id = recordId(data.id), invoiceId = recordId(data.invoiceId), amount = integer(data.amountMinor, 'Payment amount'), received = date(data.receivedAt, 'Received date'), note = multiline(data.note ?? '', 'Note', 0, 2000);
+    const invoice = await one(db, 'SELECT * FROM invoice_balances WHERE id=? AND workspace_id=?', invoiceId, w);
+    if (!invoice) fail(404, 'Invoice not found.');
+    const result = async (payment, status) => json({ payment, invoice: balanceData(await one(db, 'SELECT * FROM invoice_balances WHERE id=? AND workspace_id=?', invoiceId, w), now) }, status);
+    const replay = payment => {
+      if (payment.workspace_id !== w || payment.invoice_id !== invoiceId || payment.amount_minor !== amount || payment.received_at !== received || payment.note !== note) fail(409, 'This request ID was used for different payment values.');
+      return result(payment, 200);
+    };
+    const previous = await one(db, 'SELECT * FROM invoice_payments WHERE id=?', id);
+    if (previous) return replay(previous);
+    try {
+      await db.batch([
+        query(db, 'INSERT INTO invoice_payments(id,workspace_id,invoice_id,amount_minor,received_at,note,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)', id, w, invoiceId, amount, received, note, member.user_id, now, now),
+        audit(db, member, 'payment.recorded', id, { invoice: invoiceId, amount_minor: amount }, 'staff', { objectType: 'payment', intervention }),
+      ]);
+    } catch (error) {
+      const raced = await one(db, 'SELECT * FROM invoice_payments WHERE id=?', id);
+      if (raced) return replay(raced);
+      if (String(error).includes('payment exceeds balance')) fail(409, 'This payment is more than the amount still owed.');
+      throw error;
+    }
+    return result(await one(db, 'SELECT * FROM invoice_payments WHERE id=?', id), 201);
   }
 
   if (path === '/api/erp/sales/buyers/review') {

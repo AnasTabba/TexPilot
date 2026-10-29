@@ -4,6 +4,7 @@
 // route is the shared inventory, accounts and sign-in, on the D1 database bound as DB.
 import { inventoryApi, signedIn } from './inventory.mjs';
 import { forwardToScanner } from './scanner-proxy.mjs';
+import { creditAlertsScheduled } from './sales.mjs';
 import { remindersScheduled } from './notify.mjs';
 
 export default {
@@ -20,6 +21,6 @@ export default {
     }
   },
   async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(remindersScheduled(env));
+    ctx.waitUntil(Promise.all([remindersScheduled(env), creditAlertsScheduled(env)]));
   },
 };
