@@ -57,7 +57,6 @@ export default function WorkspaceDashboard({ state, navigate, daily }: { state: 
   const others = waiting.length - 1;
   const recent = state.movements.slice(0, 5);
   return <div className="yf-home">
-    {daily}
     <section className={`yf-next ${next ? next.quality : state.products.length ? 'clear' : 'empty'}`} aria-labelledby="yf-next-title">
       <span className="yf-next-icon">{next ? next.quality === 'hold' ? <TriangleAlert size={26} aria-hidden="true" /> : <ClipboardCheck size={26} aria-hidden="true" /> : <CircleCheckBig size={26} aria-hidden="true" />}</span>
       <div className="yf-next-text">
@@ -106,5 +105,6 @@ export default function WorkspaceDashboard({ state, navigate, daily }: { state: 
         {!recent.length && <p className="yf-none">{t('Movements appear here once stock is received.', 'اسٹاک وصول ہونے کے بعد اس کی نقل و حرکت یہاں نظر آئے گی۔')}</p>}
       </section>
     </div>
+    {daily && <section className="yf-section yf-daily" aria-labelledby="yf-daily-title"><div className="yf-head"><h2 id="yf-daily-title">{t('Daily work', 'روز کا کام')}</h2></div>{daily}</section>}
   </div>;
 }

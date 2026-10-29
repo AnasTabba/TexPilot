@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, type ComponentType, type CSSProperties, type ReactNode } from 'react';
 import { Check, TriangleAlert, X } from 'lucide-react';
 
 type Icon = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean | 'true' }>;
@@ -54,7 +54,8 @@ export function ChoiceCards<V extends string>({ label, value, onChange, options,
 
 /** The big icon + word buttons on Home: one per daily task. */
 export function Tiles({ label, items }: { label: string; items: { id: string; label: string; hint?: string; icon: Icon; onClick: () => void; tone?: string }[] }) {
-  return <nav className="yf-tiles" aria-label={label}>{items.map(({ id, label, hint, icon: Icon, onClick, tone }) => <button type="button" key={id} className={`yf-tile${tone ? ' is-' + tone : ''}`} onClick={onClick}>
+  // One row when the screen is wide enough, otherwise two equal rows (the CSS reads these counts).
+  return <nav className="yf-tiles" aria-label={label} style={{ '--tiles': items.length, '--half': items.length <= 4 ? items.length : Math.ceil(items.length / 2) } as CSSProperties}>{items.map(({ id, label, hint, icon: Icon, onClick, tone }) => <button type="button" key={id} className={`yf-tile${tone ? ' is-' + tone : ''}`} onClick={onClick}>
     <span className="yf-tile-icon"><Icon size={30} aria-hidden="true" /></span><strong>{label}</strong>{hint && <small>{hint}</small>}
   </button>)}</nav>;
 }
