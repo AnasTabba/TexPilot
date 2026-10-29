@@ -83,7 +83,7 @@ test('supplier and buyer reviews store reasons and actual before/after statuses'
   const buyerId=crypto.randomUUID();
   assert.equal((await f.call('/erp/sales/buyers',{id:buyerId,name:'Buyer Mill',contactName:'Buyer Contact',email:'buyer@test.com',phone:'+923001234567',city:'Karachi',notes:''})).status,201);
   for(const [object,id,previous,path] of [['supplier',supplierId,'approved','/erp/suppliers/review'],['buyer',buyerId,'active','/erp/sales/buyers/review']]) {
-    const body={id,status:'suspended',version:1,reason:'Company review required',...(object==='supplier'?{categories:['cotton']}:{})};
+    const body={id,status:'suspended',version:1,reason:'Company review required',...(object==='supplier'?{categories:['cotton'],interventionReason:'Purchase manager away this week'}:{})};
     assert.equal((await f.call(path,{...body,reason:'bad'})).status,422);
     assert.equal((await f.call(path,body)).status,200);
     const row=f.sql.prepare('SELECT * FROM erp_audit_events WHERE action=?').get(object+'.suspended');

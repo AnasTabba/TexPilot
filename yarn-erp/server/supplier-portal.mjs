@@ -41,7 +41,7 @@ export async function supplierPortal(request,env,path) {
     if(existing)fail(409,'This email is already registered. Sign in or contact the factory admin.');
     if((await one(db,"SELECT COUNT(*) AS n FROM suppliers WHERE workspace_id=? AND status='pending'",factories[0].id)).n>=500)fail(429,'The factory must review waiting registrations before accepting more.');
     const id=crypto.randomUUID(),userId=crypto.randomUUID(),salt=randomHex(16),hash=await passwordHash(pw,salt);
-    try {await db.batch([query(db,"INSERT INTO suppliers(id,workspace_id,name,contact_name,email,phone,city,website,source_url,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'','','pending',?,?)",id,factories[0].id,s.name,s.contact,s.email,s.phone,s.city,now,now),
+    try {await db.batch([query(db,"INSERT INTO suppliers(id,workspace_id,name,contact_name,email,phone,city,website,source_url,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'','','pending',?,?,?)",id,factories[0].id,s.name,s.contact,s.email,s.phone,s.city,'supplier:'+userId,now,now),
       ...categoryQueries(db,id,ids),query(db,'INSERT INTO supplier_users(id,supplier_id,email,name,password_hash,password_salt,created_at) VALUES(?,?,?,?,?,?,?)',userId,id,s.email,s.contact,hash,salt,now),
       audit(db,{workspace_id:factories[0].id,user_id:userId},'supplier.registered',id,{categories:ids},'supplier')]);}
     catch {fail(409,'The registration could not be saved. This email may already be registered.');}

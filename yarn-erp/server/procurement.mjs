@@ -1,9 +1,9 @@
-import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, website, recordId, allow, reason as decisionReason, role, audit } from './erp-utils.mjs';
+import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, website, recordId, allow, reason as decisionReason, role, viewer, audit } from './erp-utils.mjs';
 import { sha256 } from './auth.mjs';
 
 export const categories = db => all(db, 'SELECT * FROM supplier_categories ORDER BY sort_order');
 export async function categoryIds(db, value) {
-  if (!Array.isArray(value) || !value.length || value.length > 6 || value.some(v => typeof v !== 'string')) fail(422, 'Choose at least one yarn category.');
+  if (!Array.isArray(value) || !value.length || value.length > 9 || value.some(v => typeof v !== 'string')) fail(422, 'Choose at least one yarn category.');
   const ids = [...new Set(value)]; const valid = await categories(db);
   if (ids.some(id => !valid.some(c => c.id === id))) fail(422, 'Choose valid yarn categories.');
   return ids;
@@ -15,8 +15,18 @@ export async function supplierView(db, value) {
   return { ...value, categories: (await all(db, 'SELECT category_id FROM supplier_category_links WHERE supplier_id=? ORDER BY category_id', value.id)).map(c => c.category_id) };
 }
 const supplierFields = 'id,workspace_id,name,contact_name,email,phone,city,website,source_url,source_checked_at,status,version,created_at,updated_at';
-export async function suppliers(db, workspaceId) {
-  return Promise.all((await all(db, `SELECT ${supplierFields} FROM suppliers WHERE workspace_id=? AND status!='archived' ORDER BY name COLLATE NOCASE LIMIT 500`, workspaceId)).map(s => supplierView(db, s)));
+const LISTED = ['pending','approved','rejected','suspended'];
+// pending→approved|rejected, approved↔suspended; everything else is final or must go through the supplier again.
+const MOVES = { pending: ['approved','rejected'], approved: ['suspended'], suspended: ['approved'], rejected: [] };
+export async function suppliers(db, workspaceId, status, category) {
+  if (status && !LISTED.includes(status)) fail(422, 'Choose pending, approved, rejected or suspended.');
+  if (category) await categoryIds(db, [category]);
+  return Promise.all((await all(db, `SELECT ${supplierFields} FROM suppliers WHERE workspace_id=? AND status IN (${LISTED.map(() => '?').join(',')}) AND (? IS NULL OR status=?) AND (? IS NULL OR id IN (SELECT supplier_id FROM supplier_category_links WHERE category_id=?)) ORDER BY name COLLATE NOCASE LIMIT 500`,
+    workspaceId, ...LISTED, status || null, status || null, category || null, category || null)).map(s => supplierView(db, s)));
+}
+export async function supplierPerformance(db, supplierId) {
+  const { average, n } = await one(db, 'SELECT AVG(rating) AS average, COUNT(*) AS n FROM supplier_ratings WHERE supplier_id=?', supplierId);
+  return { manualAverage: n ? Math.round(average * 100) / 100 : null, ratingCount: n };
 }
 export function supplierData(data) {
   return { name: text(data.name, 'Company', 2, 120), contact: text(data.contactName, 'Contact name', 2, 80),
@@ -27,38 +37,67 @@ export async function staffProcurement(request, env, member, path, data) {
   const db = env.DB; const w = member.workspace_id; const now = Date.now();
   if (path === '/api/erp/categories') return json({ categories: await categories(db) });
   if (path.startsWith('/api/erp/suppliers')) {
-    allow(member, 'suppliers');
-    if (path === '/api/erp/suppliers' && !data) return json({ suppliers: await suppliers(db, w) });
-    if (path === '/api/erp/suppliers' && data) {
-      keys(data, ['id','name','contactName','email','phone','city','website','sourceUrl','categories']);
-      const id = recordId(data.id); const s = supplierData(data); const ids = await categoryIds(db, data.categories);
-      const digest = await sha256(JSON.stringify({ ...s, categories: [...ids].sort() }));
-      const previous = await one(db, 'SELECT * FROM suppliers WHERE id=?', id);
-      if (previous) {
-        if (previous.workspace_id !== w) fail(409, 'This record ID is already in use.');
-        if(previous.request_hash!==digest) fail(409,'This record ID was already used for different contact details.');
-        return json({ supplier: await supplierView(db, await one(db,`SELECT ${supplierFields} FROM suppliers WHERE id=?`,id)) });
+    const listed = async id => { const s = await one(db, `SELECT ${supplierFields} FROM suppliers WHERE id=? AND workspace_id=? AND status IN ('pending','approved','rejected','suspended')`, id, w); if (!s) fail(404, 'Supplier not found.'); return s; };
+    if (!data) {
+      viewer(member, 'purchase_manager');
+      if (path === '/api/erp/suppliers') { const q = new URL(request.url).searchParams; return json({ suppliers: await suppliers(db, w, q.get('status'), q.get('category')) }); }
+      const id = path.slice('/api/erp/suppliers/'.length);
+      if (!id.includes('/')) {
+        const s = await listed(recordId(id));
+        const ratings = await all(db, 'SELECT r.rating,r.feedback,u.name AS created_by_name,r.created_at FROM supplier_ratings r LEFT JOIN users u ON u.id=r.created_by WHERE r.supplier_id=? ORDER BY r.created_at DESC,r.id', s.id);
+        return json({ supplier: await supplierView(db, s), ratings, performance: await supplierPerformance(db, s.id) });
       }
-      await db.batch([query(db, 'INSERT INTO suppliers(id,workspace_id,name,contact_name,email,phone,city,website,source_url,source_checked_at,status,request_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-        id,w,s.name,s.contact,s.email,s.phone,s.city,s.website,s.source,s.source ? now : null,'directory',digest,now,now),
-        ...categoryQueries(db,id,ids), audit(db,member,'supplier.created',id,{name:s.name,categories:ids})]);
-      return json({ supplier: await supplierView(db, await one(db, `SELECT ${supplierFields} FROM suppliers WHERE id=?`, id)) }, 201);
     }
     if (path === '/api/erp/suppliers/review' && data) {
-      role(member, data, 'admin');
+      const intervention = role(member, data, 'purchase_manager');
       keys(data, ['id','status','reason','categories','version','interventionReason']);
       const s = await one(db, 'SELECT * FROM suppliers WHERE id=? AND workspace_id=?', recordId(data.id), w);
       if (!s) fail(404, 'Supplier not found.');
       if (!['approved','rejected','suspended'].includes(data.status)) fail(422, 'Choose approved, rejected or suspended.');
-      if (!['pending','approved','rejected','suspended'].includes(s.status)) fail(409, 'This directory contact has no supplier registration to review.');
-      const reason = decisionReason(data.reason, 'Review reason'); const version = integer(data.version, 'Version');
+      if (!LISTED.includes(s.status)) fail(409, 'This directory contact has no supplier registration to review.');
+      if (!MOVES[s.status].includes(data.status)) fail(409, `This supplier cannot move from ${s.status} to ${data.status}.`);
+      const reason = ['rejected','suspended'].includes(data.status) || data.reason !== undefined ? decisionReason(data.reason, 'Review reason') : ''; const version = integer(data.version, 'Version');
       const ids = await categoryIds(db, data.categories ?? (await supplierView(db,s)).categories);
       if(s.version!==version) fail(409,'Supplier changed. Reload before reviewing.');
       try { await db.batch([query(db, 'UPDATE suppliers SET status=?,version=version+1,updated_at=? WHERE id=? AND workspace_id=? AND version=?', data.status,now,s.id,w,version),
-        query(db,'INSERT INTO supplier_registration_reviews(id,supplier_id,version,status,reason,actor_id,created_at) VALUES(?,?,?,?,?,?,?)',crypto.randomUUID(),s.id,version+1,data.status,reason,member.user_id,now),
+        query(db,'INSERT INTO supplier_registration_reviews(id,supplier_id,version,status,reason,actor_id,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',crypto.randomUUID(),s.id,version+1,data.status,reason,member.user_id,member.user_id,now,now),
         ...categoryQueries(db,s.id,ids), query(db, 'DELETE FROM supplier_sessions WHERE user_id IN (SELECT id FROM supplier_users WHERE supplier_id=?)', s.id),
-        audit(db,member,`supplier.${data.status}`,s.id,{reason,categories:ids,previousStatus:s.status},'staff',{reason,before:{status:s.status},after:{status:data.status}})]); }
+        audit(db,member,`supplier.${data.status}`,s.id,{reason,categories:ids,previousStatus:s.status},'staff',{reason,before:{status:s.status},after:{status:data.status},intervention})]); }
       catch { fail(409,'Supplier changed. Reload before reviewing.'); }
+      return json({ saved: true });
+    }
+    if (path === '/api/erp/suppliers/profile' && data) {
+      const intervention = role(member, data, 'purchase_manager');
+      keys(data, ['id','version','contactName','phone','city','website','categories','interventionReason']);
+      const s = await listed(recordId(data.id)); const version = integer(data.version, 'Version');
+      const edits = {};
+      if (data.contactName !== undefined) edits.contact_name = text(data.contactName, 'Contact name', 2, 80);
+      if (data.phone !== undefined) edits.phone = phone(data.phone);
+      if (data.city !== undefined) edits.city = text(data.city, 'City', 0, 100);
+      if (data.website !== undefined) edits.website = website(data.website);
+      const ids = data.categories === undefined ? null : await categoryIds(db, data.categories);
+      if (!Object.keys(edits).length && !ids) fail(422, 'Change at least one profile field.');
+      if (s.version !== version) fail(409, 'Supplier changed. Reload before editing.');
+      const before = Object.fromEntries(Object.keys(edits).map(k => [k, s[k]])), after = { ...edits };
+      if (ids) { before.categories = (await supplierView(db, s)).categories; after.categories = [...ids].sort(); }
+      // request_hash is free on registered suppliers, so it carries a one-time token that every later statement re-checks.
+      const token = crypto.randomUUID(), won = `EXISTS(SELECT 1 FROM suppliers WHERE id=? AND request_hash=?)`;
+      try { await db.batch([query(db, `UPDATE suppliers SET ${[...Object.keys(edits).map(k => k + '=?'), 'request_hash=?', 'version=version+1', 'updated_at=?'].join(',')} WHERE id=? AND workspace_id=? AND version=?`, ...Object.values(edits), token, now, s.id, w, version),
+        // The UPDATE lost a race: this malformed-JSON error rolls the whole batch back.
+        query(db, `SELECT json('!') WHERE NOT ${won}`, s.id, token),
+        ...(ids ? categoryQueries(db, s.id, ids) : []),
+        audit(db, member, 'supplier.profile_updated', s.id, {}, 'staff', { before, after, intervention })]); }
+      catch { fail(409, 'Supplier changed. Reload before editing.'); }
+      return json({ supplier: await supplierView(db, await one(db, `SELECT ${supplierFields} FROM suppliers WHERE id=?`, s.id)) });
+    }
+    if (path === '/api/erp/suppliers/rate' && data) {
+      const intervention = role(member, data, 'purchase_manager');
+      keys(data, ['id','supplierId','rating','feedback','interventionReason']);
+      const id = recordId(data.id), s = await listed(recordId(data.supplierId)), rating = integer(data.rating, 'Rating', 1, 5), feedback = data.feedback === undefined ? '' : multiline(data.feedback, 'Feedback', 0, 1000);
+      const previous = await one(db, 'SELECT * FROM supplier_ratings WHERE id=?', id);
+      if (previous) { if (previous.supplier_id !== s.id || previous.rating !== rating || previous.feedback !== feedback) fail(409, 'This record ID was already used for a different rating.'); return json({ saved: true }); }
+      await db.batch([query(db, 'INSERT INTO supplier_ratings(id,workspace_id,supplier_id,rating,feedback,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)', id, w, s.id, rating, feedback, 'active', member.user_id, now, now),
+        audit(db, member, 'supplier.rated', s.id, { rating, feedback }, 'staff', { intervention })]);
       return json({ saved: true });
     }
     fail(404, 'Supplier route not found.');

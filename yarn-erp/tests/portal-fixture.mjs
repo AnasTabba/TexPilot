@@ -46,7 +46,14 @@ export async function portalFixture(database) {
     const row = await userRow({ workspaceId, name, role, pin: '2468', createdBy: adminId });
     sql.prepare(row.sql).run(...row.args); return row.args[0];
   }
-  return { sql, env, workspaceId, adminId, person, login, call, member: async name => (await call('/workspace', undefined, name)).data.member };
+  async function insertSupplier({ name = 'Mill ' + crypto.randomUUID().slice(0, 6), status = 'pending', categories = ['cotton'], createdAt = Date.now() } = {}) {
+    const id = crypto.randomUUID(), now = Date.now();
+    sql.prepare('INSERT INTO suppliers(id,workspace_id,name,contact_name,email,phone,city,website,source_url,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(id, workspaceId, name, 'Contact', id.slice(0, 8) + '@mill.test', '+923001234567', 'Karachi', '', '', status, 'supplier:' + id, createdAt, now);
+    for (const category of categories) sql.prepare('INSERT INTO supplier_category_links(supplier_id,category_id) VALUES(?,?)').run(id, category);
+    return id;
+  }
+  return { sql, env, workspaceId, adminId, person, insertSupplier, login, call, member: async name => (await call('/workspace', undefined, name)).data.member };
 }
 
 // Deliberately uses the pre-portal schema, including real commercial and immutable data.

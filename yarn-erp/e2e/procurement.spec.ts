@@ -31,6 +31,7 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await page.goto('/#/procurement');
   await page.getByRole('button', { name: 'Review supplier access', exact: true }).click();
   await page.getByLabel('Verification details / reason').fill('Contacted the supplier and checked company identity');
+  await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
   await page.getByRole('checkbox', { name: 'I verified the company' }).check();
   await page.getByRole('button', { name: 'Save admin decision' }).click();
   await expect(page.locator('.erp-status').filter({ hasText: /^approved$/ })).toBeVisible();

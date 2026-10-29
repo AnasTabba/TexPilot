@@ -19,6 +19,9 @@ async function fixture() {
  }
  const admin=(await request('/auth/login',{name:'Anas',pin:'2468'})).cookie;
  const staff=(path,data)=>request(path,data,admin);
+ const workspaceId=sql.prepare('SELECT id FROM workspaces').get().id;
+ const login=async(name,role)=>{const row=await userRow({workspaceId,name,pin:'2468',role});sql.prepare(row.sql).run(...row.args);return (await request('/auth/login',{name,pin:'2468'})).cookie;};
+ const manager=await login('Pervaiz','purchase_manager');
  async function register(name='Alpha',cats=['cotton']) {
   const address=name.toLowerCase()+'@supplier.test';
   const r=await request('/portal/register',{company:name+' Mills',contactName:name+' Contact',email:address,phone:'+923001234567',city:'Karachi',password:pw,categories:cats});
@@ -28,7 +31,7 @@ async function fixture() {
  }
  async function approve(supplier,status='approved') {
   const version=sql.prepare('SELECT version FROM suppliers WHERE id=?').get(supplier.id).version;
-  const r=await staff('/erp/suppliers/review',{id:supplier.id,status,version,reason:'Company and contact checked by admin'});
+  const r=await request('/erp/suppliers/review',{id:supplier.id,status,version,reason:'Company and contact checked by the purchase manager'},manager);
   assert.equal(r.status,200,JSON.stringify(r.data));
  }
  async function active(name='Alpha',cats=['cotton']) {const s=await register(name,cats);await approve(s);s.cookie=(await s.login()).cookie;return s;}
@@ -39,7 +42,7 @@ async function fixture() {
  }
  const bid=(rfq,version=0,id=crypto.randomUUID())=>({id,rfqId:rfq.id,version,quantityMilli:rfq.quantity_milli,priceMinor:125000,currency:'PKR',paymentTerms:'30 days after confirmed delivery',deliveryAt:Date.now()+7*86400000,validUntil:Date.now()+3*86400000,note:'Freight included'});
  async function award(s,r) {assert.equal((await staff('/erp/rfqs/publish',{id:r.id})).status,200);const b=await request('/portal/bids',bid(r),s.cookie);assert.equal(b.status,201,JSON.stringify(b.data));const a=await staff('/erp/bids/award',{id:b.data.bid.id,version:1});assert.equal(a.status,201,JSON.stringify(a.data));return {order:a.data.order,bid:b.data.bid};}
- return {sql,request,staff,register,approve,active,rfq,bid,award,admin};
+ return {sql,request,staff,register,approve,active,rfq,bid,award,admin,manager,login};
 }
 
 test('supplier registration hashes passwords, requires admin approval, and cannot use staff API',async()=>{
@@ -54,19 +57,18 @@ test('supplier registration hashes passwords, requires admin approval, and canno
  await f.approve(s,'suspended');assert.equal((await f.request('/portal/workspace',undefined,approved.cookie)).status,401);
  const suspended=await s.login();assert.equal((await f.request('/portal/workspace',undefined,suspended.cookie)).status,403);
 });
-test('six categories, callable phone normalization, staff permissions and origin checks',async()=>{
- const f=await fixture();assert.equal((await f.staff('/erp/categories')).data.categories.length,6);
- const row=await userRow({workspaceId:f.sql.prepare('SELECT id FROM workspaces').get().id,name:'Purchase',pin:'2468',role:'purchase_manager'});f.sql.prepare(row.sql).run(...row.args);
- const c=(await f.request('/auth/login',{name:'Purchase',pin:'2468'})).cookie;
+test('nine categories, callable phone normalization, staff permissions and origin checks',async()=>{
+ const f=await fixture();assert.equal((await f.staff('/erp/categories')).data.categories.length,9);
+ const c=await f.login('Inspector','quality_inspector');
  const id=crypto.randomUUID();const d={id,name:'Directory Mill',contactName:'Sales desk',email:'sales@mill.test',phone:'+92 (300) 1234567',categories:['cotton'],sourceUrl:'https://mill.test/contact'};
- const r=await f.request('/erp/suppliers',d,c);assert.equal(r.status,201);assert.equal(r.data.supplier.phone,'+923001234567');assert.equal(r.data.supplier.status,'directory');
+ assert.equal((await f.request('/erp/suppliers',d,f.manager)).status,404);
  const pending=await f.register();assert.equal((await f.request('/erp/suppliers/review',{id:pending.id,status:'approved',version:1,reason:'Reviewed company'},c)).status,403);
  assert.equal((await f.request('/erp/rfqs',{},c,{Origin:'https://attacker.test'})).status,403);
  assert.equal((await f.request('/erp/suppliers')).status,401);
 });
 test('admin review is versioned and atomic with category changes and session revocation',async()=>{
  const f=await fixture();const s=await f.register();await f.approve(s);
- const r=await f.staff('/erp/suppliers/review',{id:s.id,status:'rejected',version:1,reason:'Stale review request',categories:['synthetic']});
+ const r=await f.staff('/erp/suppliers/review',{id:s.id,status:'suspended',version:1,reason:'Stale review request',categories:['synthetic'],interventionReason:'Purchase manager away this week'});
  assert.equal(r.status,409);assert.equal(f.sql.prepare('SELECT status FROM suppliers WHERE id=?').get(s.id).status,'approved');
  assert.equal(f.sql.prepare('SELECT category_id FROM supplier_category_links WHERE supplier_id=?').get(s.id).category_id,'cotton');
  assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM supplier_registration_reviews').get().n,1);
