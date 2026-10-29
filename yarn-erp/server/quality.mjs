@@ -17,6 +17,7 @@ export const lotStatusQuery = (db, lotId, now) => query(db, `UPDATE qc_lots SET
 /** Money owed for a rejected quantity: milli-units times the PO rate per whole unit. */
 export const claimAmount = (rejectedMilli, priceMinor) => Math.round(rejectedMilli * priceMinor / 1000);
 const GRAMS_PER_MILLI = { kg: 1, tonne: 1000 };
+const kilograms = (milli, unit) => Number((milli * GRAMS_PER_MILLI[unit] / 1000).toFixed(3));
 const REPORT_STATUSES = ['pending', 'accepted', 'returned'], REJECTION_STATUSES = ['pending', 'confirmed', 'dismissed', 'escalated'], OUTCOMES = ['return', 'replacement', 'claim'];
 const SIDES = { report: ['report_status', 'report_reason'], rejected: ['rejection_status', 'rejection_reason'] };
 const DECIDED = { accepted: 'inspection_report.accepted', returned: 'inspection_report.rejected', confirmed: 'rejection.confirmed', dismissed: 'rejection.dismissed', escalated: 'rejection.escalated' };
@@ -237,12 +238,15 @@ export async function qualityApi(request, env, member, path, data) {
     const id = recordId(data.id), inspection = await inspectionRow(db, id, w);
     if (!inspection) fail(404, 'Inspection not found.');
     if (inspection.status !== 'draft') fail(409, 'This inspection was already submitted.');
+    const label = (await lotRow(db, inspection.lot_id, w)).reference;
     try {
       // The UPDATE is targeted by id alone: the trigger checks the draft state, quantities and evidence and aborts the whole batch if it loses.
       await db.batch([
         query(db, "UPDATE qc_inspections SET status='submitted',submitted_at=?,updated_at=?,report_status=CASE WHEN accepted_milli>0 THEN 'pending' END,rejection_status=CASE WHEN rejected_milli>0 THEN 'pending' END WHERE id=?", now, now, id),
         lotStatusQuery(db, inspection.lot_id, now),
-        notifyRole(db, w, 'supervisor', 'inspection.submitted', 'qc_inspection', id, (await lotRow(db, inspection.lot_id, w)).reference),
+        notifyRole(db, w, 'supervisor', 'inspection.submitted', 'qc_inspection', id, label),
+        // An accepted quantity makes the report wait for the supervisor's decision; the admin is told too.
+        ...(inspection.accepted_milli > 0 ? [notifyRole(db, w, 'supervisor', 'qc.report_waiting', 'qc_inspection', id, label), notifyRole(db, w, 'admin', 'qc.report_waiting', 'qc_inspection', id, label)] : []),
         audit(db, member, 'inspection.submitted', id, { lot: inspection.lot_id, accepted_milli: inspection.accepted_milli, rejected_milli: inspection.rejected_milli }, 'staff', { objectType: 'inspection', intervention })]);
     } catch (error) {
       const message = String(error.message).match(/Upload at least one photo of the accepted quantity\.|Describe at least one issue for the rejected quantity\./)?.[0];
@@ -291,8 +295,10 @@ export async function qualityApi(request, env, member, path, data) {
     if (!inspection) fail(404, 'Inspection not found.');
     if (inspection.report_status !== 'pending') fail(409, 'This report was already decided or has nothing to accept.');
     try {
+      const lot = accept ? await one(db, 'SELECT reference,unit FROM qc_lots WHERE id=?', inspection.lot_id) : null;
       await db.batch([...await decisionQueries(db, member, { inspectionId: id, side: 'report', expectedStatus: 'pending', nextStatus: accept ? 'accepted' : 'returned', reason: why, intervention }, now),
-        ...(accept ? await receiptQueries(db, member, inspection, inspection.accepted_milli, `QC accepted lot ${await reference(db, inspection.lot_id)}`, `${id}:accepted`, now) : [])]);
+        ...(accept ? [...await receiptQueries(db, member, inspection, inspection.accepted_milli, `QC accepted lot ${lot.reference}`, `${id}:accepted`, now),
+          ...['supervisor', 'admin'].map(r => notifyRole(db, w, r, 'stock.ready_for_production', 'lot', inspection.lot_id, `${lot.reference} · ${kilograms(inspection.accepted_milli, lot.unit)} kg`, member.user_id))] : [])]);
     } catch (error) { return decisionFailed(error, db, id, 'report_status'); }
     return json(await inspectionRow(db, id, w));
   }

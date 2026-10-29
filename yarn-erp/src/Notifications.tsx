@@ -9,6 +9,7 @@ import { SalesWidget } from './SalesWidget';
 import { InventoryWidget, ProductionWidget } from './StockWidgets';
 import { NoticeWidget } from './NoticeWidget';
 import { ShipmentsWidget } from './ShipmentTracking';
+import { AttentionWidget } from './AttentionWidget';
 
 export interface Notice { id: string; event: string; object_type: string; object_id: string; label: string; status: 'unread' | 'read'; created_at: number }
 export interface Inbox { notifications: Notice[]; unread: number }
@@ -40,7 +41,7 @@ export function Notifications({ member, inbox, reload }: { member: Member; inbox
   </section>;
 }
 /** Dashboard cards sit on a 12-column grid. Each card has a toolbar strip above it (move, width, minimise); the layout persists per browser. */
-type DashKey = 'sales' | 'production' | 'notices' | 'inventory' | 'shipments';
+type DashKey = 'attention' | 'sales' | 'production' | 'notices' | 'inventory' | 'shipments';
 type DashWidth = 4 | 6 | 8 | 12;
 interface DashSlot { key: DashKey; width: DashWidth; min: boolean }
 interface DashDrop { key: DashKey; axis: 'x' | 'y'; side: 'before' | 'after' }
@@ -53,8 +54,10 @@ const DASH_TITLE: Record<DashKey, [string, string]> = {
   notices: ['Notifications', 'اطلاعات'],
   inventory: ['Inventory', 'اسٹاک'],
   shipments: ['Shipments on route', 'راستے میں شپمنٹس'],
+  attention: ['Needs attention', 'توجہ طلب'],
 };
 const DEFAULT_LAYOUT: DashSlot[] = [
+  { key: 'attention', width: 6, min: false },
   { key: 'sales', width: 12, min: false },
   { key: 'production', width: 6, min: false },
   { key: 'notices', width: 6, min: false },
@@ -75,7 +78,8 @@ function loadLayout(): DashSlot[] {
       const width = WIDTHS.find(w => w === row.width) ?? def.width;
       out.push({ key: def.key, width, min: row.min === true });
     }
-    for (const def of DEFAULT_LAYOUT) if (!out.some(s => s.key === def.key)) out.push({ ...def });
+    // A card new to this layout takes its default position (e.g. Needs attention goes first), not the end.
+    DEFAULT_LAYOUT.forEach((def, index) => { if (!out.some(s => s.key === def.key)) out.splice(Math.min(index, out.length), 0, { ...def }); });
     return out;
   } catch { return DEFAULT_LAYOUT; }
 }
@@ -129,7 +133,7 @@ function DashItem({ slot, index, total, title, dragging, drop, draggable, onMove
 }
 
 /** Every role's dashboard: the oldest unread notification as the next step, then sales, production, stock and notification widgets. */
-export function Dashboard({ member, inbox, reload, state }: { member: Member; inbox: Inbox; reload: () => Promise<void>; state: WorkspaceState }) {
+export function Dashboard({ member, inbox, reload, state, onChanged }: { member: Member; inbox: Inbox; reload: () => Promise<void>; state: WorkspaceState; onChanged?: () => Promise<void> }) {
   const { t } = useLanguage();
   const open = useOpen(member, reload);
   const oldest = [...inbox.notifications].reverse().find(notice => notice.status === 'unread');
@@ -236,6 +240,7 @@ export function Dashboard({ member, inbox, reload, state }: { member: Member; in
   const onDragEnd = () => { setDragKey(null); setDrop(null); setArmed(null); };
 
   const body: Record<DashKey, ReactNode> = {
+    attention: <AttentionWidget member={member} onChanged={onChanged} />,
     sales: <SalesWidget />,
     production: <ProductionWidget state={state} />,
     notices: <NoticeWidget member={member} inbox={inbox} reload={reload} />,

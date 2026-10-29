@@ -1,0 +1,34 @@
+.att-card { display: grid; gap: 16px; align-content: start; padding: 18px; border-radius: 20px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 1px 2px rgb(29 27 25 / 0.05), 0 10px 28px rgb(29 27 25 / 0.07); color: var(--ink); animation: att-in 260ms var(--ease-out) backwards; }
+.att-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.att-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.att-count { min-width: 24px; padding: 2px 8px; border-radius: 999px; background: #e4572e; color: #fff; font-size: 12px; font-weight: 700; text-align: center; }
+.att-reason { display: grid; gap: 6px; }
+.att-reason label, .att-reject label { font-size: 14px; font-weight: 600; }
+.att-reason small, .att-muted { color: var(--ink-2); font-size: 13px; }
+.att-input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--panel); color: var(--ink); font: inherit; }
+.att-empty { display: grid; justify-items: center; gap: 6px; padding: 20px 12px; border-radius: var(--r-row); background: var(--ground); color: var(--ink-2); text-align: center; }
+.att-empty svg { color: #0f8b8d; }
+.att-empty p { margin: 0; color: var(--ink); font-weight: 600; }
+.att-section { display: grid; gap: 8px; padding-left: 12px; border-left: 3px solid #f2a541; }
+.att-section h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; font-weight: 600; }
+.att-tally { min-width: 22px; padding: 0 7px; border-radius: 999px; background: var(--warn-bg); color: var(--warn); font-size: 12px; font-weight: 700; text-align: center; }
+.att-section ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.att-row { display: grid; gap: 10px; padding: 12px; border-radius: var(--r-row); transition: transform 160ms var(--ease-out), background-color 160ms var(--ease-out); animation: att-in 280ms var(--ease-out) backwards; animation-delay: var(--d, 0ms); }
+.att-row:active { transform: scale(0.98); }
+@media (hover: hover) and (pointer: fine) { .att-row:hover { background: var(--ground); } }
+.att-row-main { display: grid; gap: 2px; min-width: 0; }
+.att-row-main strong { font-weight: 600; overflow-wrap: anywhere; }
+.att-row-main span { color: var(--ink-2); font-size: 14px; }
+.att-row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.att-row-actions .button { min-height: 40px; }
+.att-reject { display: grid; gap: 8px; }
+@keyframes att-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .att-card, .att-row { animation: none; }
+  .att-row, .att-row:active { transition: none; transform: none; }
+}
+
+/* Stock list row action (LiveApp): the batch row keeps its look, the action sits beside it. */
+.yf-lot-line { display: flex; align-items: center; gap: 8px; }
+.yf-lot-line > .live-lot-row { flex: 1 1 auto; min-width: 0; }
+.yf-to-production { flex: none; min-height: 40px; }

@@ -7,6 +7,7 @@ import { movementQueries } from './stock-ledger.mjs';
 const MAX_GRAMS = 9_000_000_000_000, NEGATIVE = 'This would make stock negative.';
 const LEGACY = 'Legacy cops/WIP stock is read-only; an authorized migration is required.';
 const REUSED = 'This request ID was already used for different values.';
+const NOT_ENOUGH_RAW = 'There is not enough raw stock for this quantity.';
 const FLAGGABLE = ['inspection', 'adjustment'];
 const balanceOf = async (db, lotId, stage) => (await one(db, 'SELECT grams FROM balances WHERE lot_id=? AND stage=?', lotId, stage))?.grams ?? 0;
 const adjustmentOf = (db, id, workspaceId) => one(db, 'SELECT * FROM inventory_adjustments WHERE id=? AND workspace_id=?', id, workspaceId);
@@ -94,6 +95,17 @@ export async function stockApi(request, env, member, path, data) {
       return json({ queries: await all(db, `SELECT q.*,p.name AS product_name,u.name AS asked_by_name FROM stock_queries q JOIN products p ON p.id=q.product_id JOIN users u ON u.id=q.created_by
         WHERE q.workspace_id=? AND (?=1 OR q.created_by=?) ORDER BY q.created_at DESC,q.id LIMIT 200`, w, everyone ? 1 : 0, member.user_id) });
     }
+    if (path === base + '/attention') {
+      viewer(member, 'supervisor');
+      return json({
+        reports: await all(db, `SELECT i.id AS inspectionId,l.reference AS lotReference,s.name AS supplierName,i.accepted_milli AS acceptedMilli,l.unit,i.submitted_at AS submittedAt
+          FROM qc_inspections i JOIN qc_lots l ON l.id=i.lot_id JOIN suppliers s ON s.id=l.supplier_id
+          WHERE i.workspace_id=? AND i.report_status='pending' ORDER BY i.submitted_at,i.id LIMIT 100`, w),
+        readyForProduction: await all(db, `SELECT l.id AS lotId,l.batch,m.name AS productName,b.grams AS rawGrams,
+          (SELECT MAX(v.created_at) FROM movements v WHERE v.lot_id=l.id AND v.action='receive' AND v.to_stage='raw') AS approvedAt
+          FROM lots l JOIN products m ON m.id=l.product_id JOIN balances b ON b.lot_id=l.id AND b.stage='raw'
+          WHERE l.workspace_id=? AND l.quality='approved' AND b.grams>0 ORDER BY approvedAt DESC,l.id LIMIT 50`, w) });
+    }
     if (path === base + '/reports/draft') { viewer(member, 'supervisor'); return json(await draftOf(db, w, ...period(params))); }
     if (path === base + '/reports') {
       viewer(member, 'supervisor');
@@ -132,6 +144,41 @@ export async function stockApi(request, env, member, path, data) {
         notifyRole(db, w, 'admin', 'stock.received', 'inventory', id, batch, member.user_id),
         audit(db, member, 'inventory.received', id, { lot: lotId, batch, grams, cartons, cones }, 'staff', { objectType: 'inventory', intervention })]);
     } catch { return await replay() ?? fail(409, 'Another stock lot already uses this batch number, or the stock changed. Refresh and try again.'); }
+    return json({ lotId, movementId: id }, 201);
+  }
+
+  if (path === base + '/production') {
+    const intervention = role(member, data, 'supervisor');
+    keys(data, ['id', 'lotId', 'grams', 'note', 'interventionReason']);
+    const id = recordId(data.id), lotId = recordId(data.lotId), grams = integer(data.grams, 'Weight in grams', 1, MAX_GRAMS), note = text(data.note ?? '', 'Note', 0, 1000);
+    const hash = `source:production:${JSON.stringify([lotId, grams, note])}`;
+    const replay = async () => {
+      const previous = await one(db, 'SELECT id,lot_id,request_hash FROM movements WHERE id=? AND workspace_id=?', id, w);
+      if (!previous) return null;
+      if (previous.request_hash !== hash) fail(409, REUSED);
+      return json({ lotId: previous.lot_id, movementId: id });
+    };
+    const done = await replay(); if (done) return done;
+    const lot = await one(db, 'SELECT id,batch,quality FROM lots WHERE id=? AND workspace_id=?', lotId, w);
+    if (!lot) fail(404, 'This lot was not found in your workspace.');
+    if (lot.quality !== 'approved') fail(409, 'Only QC-approved stock can go to production.');
+    if (await balanceOf(db, lotId, 'raw') < grams) fail(409, NOT_ENOUGH_RAW);
+    const label = `${lot.batch} · ${Number((grams / 1000).toFixed(3))} kg`;
+    try {
+      // A transfer is one movement with two deltas; the guard and the balance CHECK keep raw stock from going negative in a race.
+      await db.batch([
+        query(db, "SELECT json('!') WHERE NOT EXISTS(SELECT 1 FROM balances WHERE lot_id=? AND stage='raw' AND grams>=?)", lotId, grams),
+        query(db, "INSERT INTO movements(id,workspace_id,lot_id,action,from_stage,to_stage,grams,cartons,cones,note,actor,actor_name,reverses,request_hash,created_at) VALUES(?,?,?,'transfer','raw','wip',?,0,0,?,?,?,NULL,?,?)",
+          id, w, lotId, grams, note, member.user_id, member.name ?? member.role, hash, now),
+        query(db, 'INSERT INTO stock_deltas(id,movement_id,lot_id,stage,grams,cartons,cones) VALUES(?,?,?,?,?,0,0)', crypto.randomUUID(), id, lotId, 'raw', -grams),
+        query(db, 'INSERT INTO stock_deltas(id,movement_id,lot_id,stage,grams,cartons,cones) VALUES(?,?,?,?,?,0,0)', crypto.randomUUID(), id, lotId, 'wip', grams),
+        notifyRole(db, w, 'supervisor', 'stock.to_production', 'lot', lotId, label, member.user_id),
+        notifyRole(db, w, 'admin', 'stock.to_production', 'lot', lotId, label),
+        audit(db, member, 'stock.to_production', id, { lot: lotId, grams, from: 'raw', to: 'wip', note }, 'staff', { objectType: 'inventory', intervention })]);
+    } catch (error) {
+      const again = await replay(); if (again) return again;
+      fail(409, /CHECK constraint|malformed JSON/i.test(String(error)) ? NOT_ENOUGH_RAW : 'Stock changed. Refresh and try again.');
+    }
     return json({ lotId, movementId: id }, 201);
   }
 
