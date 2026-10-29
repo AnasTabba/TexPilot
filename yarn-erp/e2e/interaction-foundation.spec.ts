@@ -152,7 +152,7 @@ test('measured controls reach 44 × 44 at 390 px', async ({ page }) => {
   await expectTarget(page.locator('.yf-back'), 'batch back');
   await expectScreenTargets(page, 'batch detail');
 
-  await openPage(page, '#/activity', 'History');
+  await openPage(page, '#/history', 'History');
   const historyActions = page.locator('.live-history .live-text-button');
   for (const action of await historyActions.all()) await expectTarget(action, 'History text action');
   await expectScreenTargets(page, 'History');
