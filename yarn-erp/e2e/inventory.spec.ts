@@ -79,25 +79,31 @@ test.describe('Shared inventory', () => {
     await signIn(page);
     const { lot, state } = await seededLot(page, 'LOT-1023');
     await page.goto('/#/inventory/' + lot.id);
-    await page.getByRole('button', { name: 'Dispatch', exact: true }).click();
+    await page.getByRole('button', { name: 'Adjust stock', exact: true }).click();
     const available = state.balances.find((b: { lot_id: string; stage: string; grams: number }) => b.lot_id === lot.id && b.stage === 'raw')?.grams || 0;
     await page.getByLabel('Weight (kg)', { exact: true }).fill(((available + 1000) / 1000).toFixed(3));
+    await page.getByLabel('Reason', { exact: true }).fill('Incorrect stock count');
+    await page.getByLabel('Why are you stepping in?', { exact: true }).fill('Supervisor is away today');
     await page.getByRole('button', { name: 'Review entry', exact: true }).click();
+    const rejectedSave = page.waitForResponse(response => response.url().endsWith('/api/erp/stock/adjustments'));
     await page.getByRole('button', { name: 'Save entry', exact: true }).click();
-    await page.waitForTimeout(2000);
+    expect((await rejectedSave).status()).toBe(409);
+    await expect(page.getByRole('alert')).toContainText('This would make stock negative.');
+    await page.getByRole('button', { name: 'Edit entry', exact: true }).click();
+    await expect(page.getByLabel('Weight (kg)', { exact: true })).toHaveValue(((available + 1000) / 1000).toFixed(3));
+    await expect(page.getByLabel('Reason', { exact: true })).toHaveValue('Incorrect stock count');
+    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await context.setOffline(true);
-    try {
-      await expect(page.getByRole('status').filter({ hasText: 'You are offline' })).toBeVisible({ timeout: 2000 });
-    } catch {}
-    const saveButton = page.getByRole('button', { name: 'Save entry', exact: true });
-    if (await saveButton.isVisible().catch(() => false) && await saveButton.isEnabled().catch(() => false)) {
-      await saveButton.click().catch(() => {});
-      await page.waitForTimeout(500);
-    }
+    await expect(page.getByRole('status').filter({ hasText: 'You are offline' })).toBeVisible();
+    await page.getByRole('button', { name: 'Save entry', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('Could not confirm a save. Check the connection');
+    await expect(page.getByRole('status').filter({ hasText: 'Saved. Everyone on the team sees it now.' })).toHaveCount(0);
     await context.setOffline(false);
-    await page.waitForTimeout(1000);
     const after = await workspace(page);
     expect(after.movements).toHaveLength(state.movements.length);
+    await page.getByRole('button', { name: 'Edit entry', exact: true }).click();
+    await expect(page.getByLabel('Weight (kg)', { exact: true })).toHaveValue(((available + 1000) / 1000).toFixed(3));
+    await expect(page.getByLabel('Reason', { exact: true })).toHaveValue('Incorrect stock count');
   });
 
   test('an inspection note is saved and still there after signing in again', async ({ page }) => {

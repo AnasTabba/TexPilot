@@ -162,21 +162,18 @@ test.describe("desktop", () => {
     await page.locator(".live-lot-row", { hasText: "LOT-1024" }).click();
     await title(page, "Batch details");
     await expect(page.locator(".yf-batch .live-panel-heading .live-quality")).toHaveText("QC approved");
-    await expect(page.getByRole("heading", { level: 3, name: "Dispatch finished stock" })).toBeVisible();
+    await expect(page.getByText("Request and approve a sale dispatch from the Dispatch page.")).toBeVisible();
 
     await expect(page.getByRole("button", { name: "Move stage", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Dispatch", exact: true })).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Dispatch", exact: true }).click();
-    await page.getByLabel("Weight (kg)", { exact: true }).fill("10");
-    await page.getByLabel("Notes", { exact: true }).fill("Order 77");
-    await reviewAndSave(page, "Save entry");
     // A write-off needs a reason; below the (unset) threshold it applies at once.
     await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
     await page.getByLabel("Weight (kg)", { exact: true }).fill("1");
     await page.getByLabel("Reason", { exact: true }).fill("Counted one kilogram short");
     await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
     await reviewAndSave(page, "Save entry");
-    await expect(page.locator(".yf-flow")).toContainText("6,739");
+    await expect(page.locator(".yf-flow")).toContainText("6,749");
 
     // Guarded stock workflow: at the threshold the change waits for admin approval and the stock stays put.
     await apiPost(page, "/erp/admin/thresholds", { type: "inventory_adjustment", value: 5000 });
@@ -186,12 +183,12 @@ test.describe("desktop", () => {
     await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
     await reviewAndSave(page, "Save entry");
     await expect(page.getByRole("status").filter({ hasText: "Sent to the admin for approval" })).toBeVisible();
-    await expect(page.locator(".yf-flow")).toContainText("6,739");
+    await expect(page.locator(".yf-flow")).toContainText("6,749");
     const pending = (await (await page.request.get("/api/erp/approvals?type=inventory_adjustment")).json()).approvals;
     expect(pending).toHaveLength(1);
     await apiPost(page, "/erp/approvals/decide", { id: pending[0].id, decision: "approve" });
     await page.reload();
-    await expect(page.locator(".yf-flow")).toContainText("6,733");
+    await expect(page.locator(".yf-flow")).toContainText("6,743");
 
     await page.goto("/#/inventory");
     await page.locator(".live-lot-row", { hasText: "LOT-2001" }).click();
