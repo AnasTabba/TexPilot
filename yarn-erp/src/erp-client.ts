@@ -46,4 +46,4 @@ export function localFactoryInput(time: number) {
  return new Date(time + 5 * 3600_000).toISOString().slice(0, 16);
 }
 
-export interface PendingPurchasing { awards: { approvalId: string; rfqId: string; bidId: string; bidVersion: number; amount: number }[]; changes: { approvalId: string; orderId: string; quantityMilli: number }[] }
+export interface PendingPurchasing { awards: { approvalId: string; rfqId: string; bidId: string; bidVersion: number; amount: number; currency: string }[]; changes: { approvalId: string; orderId: string; quantityMilli: number; fromQuantityMilli: number }[] }

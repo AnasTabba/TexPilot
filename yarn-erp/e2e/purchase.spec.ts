@@ -216,3 +216,12 @@ test('claim notices are read-only for the purchase manager', async ({ page }) =>
   await expect(page.getByRole('heading', { level: 1, name: 'دعوے', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 });
+
+test('an admin opening a supplier notification lands on the purchase module supplier profile', async ({ page }) => {
+  const supplierId = crypto.randomUUID();
+  expect((await page.request.post('/__test/notify', { data: { role: 'admin', event: 'supplier.pending', objectType: 'supplier', objectId: supplierId, label: 'Noor Spinning' } })).ok()).toBeTruthy();
+  await signIn(page, 'Anas');
+  await page.goto('/#/notifications');
+  await page.getByRole('button', { name: /New supplier pending/ }).click();
+  await expect(page).toHaveURL(new RegExp(`#\\/modules\\/purchase\\/suppliers\\/${supplierId}$`));
+});
