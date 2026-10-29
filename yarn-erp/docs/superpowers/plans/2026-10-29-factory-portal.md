@@ -24,7 +24,7 @@ Baseline at `4212ef5` (`npm test` 76/76, `npx tsc -b` clean). The live D1 `yarnf
 | 0.7 Tracking key | `procurement.mjs` returns `tracking:{configured:false,provider:'DataLoopLabs'}`; uncommitted fail-closed adapter `server/datalooplabs.mjs` in `/Users/anastabba/orca/workspaces/FYP/erp-tracking-dll/yarn-erp` | Copy the adapter verbatim; key in Worker secret `DATALOOPLABS_API_KEY`; cached last status per shipment | The 1,000-line budget/credit-reservation layer from that worktree is not brought over |
 | 2.1 Authority chain | Admin flag only | `role()` blocks other roles; admin acting outside admin scope must give an intervention reason; decided items are final (DB triggers) | — |
 | 2.2 Thresholds | None | `thresholds` + trigger-written `threshold_history`; at or above = pending admin approval | — |
-| 2.4/6 Notifications | Only `sales_reminders` (receivables) | One `notifications` table, per-user inbox, the 22 spec events | `sales_reminders` writes |
+| 2.4/6 Notifications | Only `sales_reminders` (receivables) | One `notifications` table, per-user inbox, the 23 notification events | `sales_reminders` writes |
 | 2.5 Reminders | Daily cron for receivables only | Hourly cron; pending items older than `reminder_hours` (default 24) remind the responsible role once | — |
 | 4.1 Suppliers | `suppliers` (directory/pending/approved/rejected/suspended/archived), 6 yarn categories, admin-only review, staff can add directory contacts | Purchase Manager reviews; dyes/chemicals/packaging categories; ratings; profile | Staff supplier creation (`POST /api/erp/suppliers`) |
 | 4.2 RFQ and bidding | `procurement_rfqs` draft/open/awarded/closed, publish to approved registered suppliers, bid reject with reason | Manual end, auto-end at deadline (cron), cancel (reason), recipients no longer need portal accounts | — |
@@ -46,21 +46,23 @@ Baseline at `4212ef5` (`npm test` 76/76, `npx tsc -b` clean). The live D1 `yarnf
 
 ## Global Constraints
 
-- Roles are exactly: `admin`, `purchase_manager`, `quality_inspector`, `supervisor`, `sales_manager`, `dispatch` (spec 1, 10). No other role, permission flag or preset.
+- Roles are exactly: `admin`, `purchase_manager`, `quality_inspector`, `supervisor`, `sales_manager`, `dispatch` (spec 1, 10). No other role, permission flag or preset in the final system. Temporary rollout exception (F1): the role-derived `ROLE_PERMISSIONS`/`allow()` shim survives only until Task 22; it never authorizes a legacy mutation that a new backend invariant has superseded.
 - "Enforce permissions on the backend (role-based access control). Hiding buttons in the UI is not enough." Every `/api/erp/*` route calls `role()` (writes) or `viewer()` (reads) from `server/erp-utils.mjs`.
 - "Every decision, approval, rejection, override and threshold change must be written to an audit log." Write the audit row in the same `db.batch` as the change.
 - "Any rejection, dismissal, override or intervention requires a reason. The system must refuse to save it without one." Use `reason()` (5–1000 characters, 422 otherwise). Holds and suspensions count as rejections.
 - Every write route's `keys()` allow-list includes `interventionReason`. When an admin calls a route owned by another role, `role()` requires it and the audit row stores it in `intervention_reason`.
 - "Keep the API key for the shipment tracking service on the server only." Secret name `DATALOOPLABS_API_KEY`; it never appears in a response, a stored row or a log line.
-- Thresholds: "Below the threshold: the acting role's decision is final. At or above it: the item stays in a 'pending admin approval' state and takes no effect until admin approves." A threshold the admin has never set is "not configured": the acting role's decision is final, exactly as before this plan, and the admin dashboard lists unset thresholds (Task 18).
+- Thresholds: "Below the threshold: the acting role's decision is final. At or above it: the item stays in a 'pending admin approval' state and takes no effect until admin approves." A threshold the admin has never set is "not configured": the acting role's decision is final, exactly as before this plan, and the admin dashboard lists unset thresholds (Task 18), per controller ruling F21. Decided records and their audit history stay immutable even for admins; a correction is a new reasoned compensating action through the owning route, linked to the original item, and subject to the usual thresholds. Owning write routes accept optional `compensatesId` for admin compensations, validate the original belongs to the workspace, require a reason and intervention reason where applicable, and store the original id in the new audit detail; compensation never updates the original decided row.
+- Legacy raw/cops/WIP/finished balances remain readable; new workflows write only raw and finished. Raw sale dispatch returns 422 with a clear explanation; cops/WIP are read-only pending an explicitly authorized migration outside this plan (F24).
 - Money is integer minor units (paisa); quantities are `quantity_milli` in a declared unit; mass is integer grams; times are epoch ms; calendar dates are Asia/Karachi via `karachiDate()`/`dueAt()` in `server/sales.mjs`.
-- Invoice defaults (decisions 2): currency `PKR`, tax 18% GST on the subtotal (`tax_rate_bp = 1800`), number format `INV-{YYYY}-{NNNN}` resetting each Karachi calendar year; all three admin-editable. The factory currency also applies to bids, quotations and thresholds.
+- Invoice defaults (decisions 2): currency `PKR`, tax 18% GST on the subtotal (`tax_rate_bp = 1800`), number format `INV-{YYYY}-{NNNN}` resetting each Karachi calendar year; all three admin-editable. The factory currency also applies to bids, quotations and monetary thresholds. Currency changes return 409 while open bids, unaccepted quotations or unpaid invoices exist; never compare unlike currencies, and group historical analytics totals by currency (F20).
 - Reminders: 24 h default, admin-configurable (`reminder_hours`). Credit alerts at 7 and 3 days before due, on the due date and when overdue; the before-due days are admin-configurable (`credit_alert_days`).
-- The live D1 (`yarnflow-db`) has `0000`–`0003` applied and holds real users, suppliers, lots and stock movements; `0004_sales.sql` is not applied yet and will be applied together with `0005` when Task 1 deploys. Every migration from `0005` on must apply cleanly on top of `0004` against those rows. Allowed: `CREATE TABLE`, `ALTER TABLE … ADD COLUMN`, `CREATE INDEX/VIEW/TRIGGER`, `INSERT` of lookup rows, `UPDATE` of newly added columns (plus the one-time role mapping in `0005`). Never edit `0000`–`0004`. Never drop a table that may hold rows; superseded tables stay and stop being written. `tests/migrations.test.mjs` (Task 1) rehearses every migration file on live-shaped data; each task that adds a migration runs it.
-- Each task is deployed to the live site after review by the controller (this plan adds no deploy steps). So every task leaves the deployed site usable: signed-in users keep working, and a route the current UI calls is removed only in the task that replaces that screen (Tasks 17–22). New workflows without a screen yet are reachable through the API only.
-- Code style: dense ESM, reuse `server/erp-utils.mjs` (`json`, `fail`, `one`, `all`, `query`, `text`, `multiline`, `integer`, `recordId`, `keys`, `date`, `email`, `phone`, `website`), idempotent writes keyed by a client UUID `id` plus `request_hash` where the existing code does so, state guards as `UPDATE … WHERE status=?` or DB triggers.
+- The live D1 (`yarnflow-db`) has `0000`–`0003` applied and holds real users, suppliers, lots and stock movements; `0004_sales.sql` is not applied yet and will be applied together with `0005` when Task 1 deploys. Every migration from `0005` on must apply cleanly on top of `0004` against those rows. Allowed: `CREATE TABLE`, `ALTER TABLE … ADD COLUMN`, `CREATE INDEX/VIEW/TRIGGER`, `INSERT` of lookup rows, `UPDATE` of newly added columns (plus the one-time role mapping in `0005`). An owning additive migration may replace a guard trigger atomically (DROP TRIGGER followed by CREATE TRIGGER in that migration) when its accounting sources change; test that the replacement preserves the invariant. Never edit `0000`–`0004`. Never drop a table that may hold rows; superseded tables stay and stop being written. `tests/migrations.test.mjs` (Task 1) rehearses every migration file on live-shaped data; each task that adds a migration runs it.
+- Each task is deployed to the live site after review by the controller (this plan adds no deploy steps). So every task leaves the deployed site usable: signed-in users keep working, and each superseded legacy mutation is disabled or delegates to the new guarded route in the same task as its backend invariant, with its current UI updated there. Final screen/route retirement is purchasing Task 19, sales/dispatch Task 20, quality/supervisor stock Task 21; the permission shim goes in Task 22. New workflows without a screen yet are reachable through the API only.
+- Code style: dense ESM, reuse `server/erp-utils.mjs` (`json`, `fail`, `one`, `all`, `query`, `text`, `multiline`, `integer`, `recordId`, `keys`, `date`, `email`, `phone`, `website`), idempotent writes keyed by a client UUID `id` plus `request_hash` where the existing code does so, state guards must abort the entire transaction when a transition loses a race; a zero-row conditional UPDATE alone cannot guard later audit, notification or stock statements.
 - UI follows `DESIGN.md` (Cone Code): sections on the sheet without cards, stone fields only for forms and records, one ink primary pill per view, status as tint + word + icon, threads for sequences, every new string bilingual through `t('English', 'اردو')`, 44 px touch targets. No lime, charcoal-on-lime or KPI-tile dashboards; no crowded screens (sub-screens go in a segmented control, not the sidebar).
 - Out of scope, never plan or build: supplier or buyer portal screens, production planning, payroll or HR, manufacturing job tracking, free-form chat, payment gateways, any role beyond the six.
+- Every test sketch in a task becomes executable setup, actions and assertions; no test may be empty.
 - Each task ends green: `npm test` reports `fail 0` and `npx tsc -b` prints nothing. Tasks that touch `src/` also run `npx playwright test --project=desktop-chromium` and update the e2e specs whose screens they change, so it passes too. Nothing is pushed by this plan.
 - Commit messages are plain sentences with no `Co-Authored-By` line and no AI attribution. The user is the sole author.
 
@@ -86,6 +88,7 @@ Baseline at `4212ef5` (`npm test` 76/76, `npx tsc -b` clean). The live D1 `yarnf
 - Modify: `src/inventory-client.ts` (`Member`), `src/Team.tsx` (role picker, deactivate), `src/SignIn.tsx` (remove the account-request step), `src/LiveApp.tsx` (role name under the user; drop the never-live `sales` tab), `src/main.tsx` (drop the never-live `#/buyer` route)
 - Modify: `tests/inventory-api.test.mjs`, `tests/procurement-api.test.mjs` (fixtures use roles)
 - Modify: `e2e/every-button.spec.ts:69-125` (replace the join-request test), `e2e/inventory.spec.ts:60` (create the second person with a role)
+- Modify: `tests/sales-api.test.mjs` (manager fixture and actor objects use `sales_manager`; keep its money/calendar and workflow assertions until Task 12).
 
 **Interfaces:**
 - Consumes: nothing new.
@@ -167,10 +170,14 @@ test('role(): owners pass, other roles get 403, admins need an intervention reas
 
 Fill the commented bodies with `f.call(...)` and `assert.equal(status, …)` exactly as stated.
 
+Additional migration proof: `test('migrations preserve stable values, not only counts and balances')` snapshots every seeded pre-existing column in the tables above (including supplier, PO terms and audit detail), ordered by primary key, before migration and deep-compares afterward. Exclude only the explicitly allowed one-time user role mapping; added columns are checked separately. Seed actual audit and commercial rows, not empty tables.
+
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `node --test tests/rbac.test.mjs tests/migrations.test.mjs`
 Expected: FAIL (`0005_roles.sql` missing, `role` not exported).
+
+Metadata contract for Tasks 1–14: each owning migration inventories its new and affected entities against spec §5 and adds any missing `status`, `created_by`, `created_at`, `updated_at`. Immutable/event entities use a fixed status and `updated_at = created_at`, with no-update/no-delete guards. Creator attribution is the authenticated staff id, external identity with actor type, or `system:reminders`/`system:credit_alerts` for scheduled events; never invent a staff id. Existing rows use additive defaults or nullable provenance explicitly labelled `legacy:unknown`, without rewriting old immutable rows. In `tests/migrations.test.mjs`, assert required metadata columns and non-null metadata on newly created entities; preserve legacy values. Task 1 covers roles/users (role lookup metadata: status=active, creator=system:seed, both timestamps set at migration); subsequent owning migrations cover their entities as itemized below.
 
 - [ ] **Step 3: Write `drizzle/0005_roles.sql`**
 
@@ -198,7 +205,7 @@ The legacy `role` and `permissions` columns stay; `userRow` keeps them consisten
 - `server/inventory.mjs` `currentMember`: also require `u.deactivated_at IS NULL AND u.portal_role IS NOT NULL`; return `role: user.portal_role`, `admin: user.portal_role === 'admin'`, `permissions: ROLE_PERMISSIONS[user.portal_role]`. Login: after the PIN check, refuse `deactivated_at` (403 `'This account is deactivated. Ask an admin.'`) and null role (403 `'An admin must assign your role first.'`). Delete the `/api/auth/signup` branch and `usersRoute`; `/api/auth/people` filters `deactivated_at IS NULL AND portal_role IS NOT NULL`. Mount `const erp = { admin: adminApi }` before the `staffProcurement` fallback; delete the `/api/users` branch.
 - `server/admin.mjs` `adminApi`: every route `role(member, data, 'admin')` / `viewer(member)` (admin only). `GET users` → `{ users: [{ id, name, role, status: 'active'|'pending'|'deactivated', created_at, locked }] }`. `POST users {name, pin, role}` (role in `ROLES`). `POST users/update {id, role?, pin?, active?}`: `active:false` sets `deactivated_at/by` and deletes the user's sessions; `active:true` clears them and sets `status='active'` (this also activates legacy pending accounts); a PIN reset deletes the user's sessions; a role change keeps sessions and applies on the next request. Keep the last-admin guard (`409 'Keep at least one admin.'`) and refuse self-deactivation (409). Audit each change with the existing `audit()`: `user.created`, `user.role_changed`, `user.deactivated`, `user.reactivated`, `user.pin_reset`.
 - `src/Team.tsx`: keep its layout; replace `PermissionPicker`, `AdminSwitch` and the presets with one `<select>` labelled `t('Role', 'کردار')` listing the six `roleLabel` entries; calls move to `/erp/admin/users*`; the remove button becomes `t('Deactivate', 'غیر فعال کریں')` / `t('Reactivate', 'دوبارہ فعال کریں')`; a waiting (legacy pending) person is approved by choosing a role. `accessSummary(role, language)` returns the role label.
-- `src/SignIn.tsx`: delete the `request`/`sent` steps and the "New here? Ask for an account" button. `src/LiveApp.tsx`: `whoAmI` shows `roleLabel[me.role]`; the Settings access list uses `accessSummary`; remove `'sales'` from `tabs` (that screen was never live because `0004` was unapplied; Task 21 replaces it). `src/main.tsx`: remove the `#/buyer` branch (never live; deleted in Task 22).
+- `src/SignIn.tsx`: delete the `request`/`sent` steps and the "New here? Ask for an account" button. `src/LiveApp.tsx`: `whoAmI` shows `roleLabel[me.role]`; the Settings access list uses `accessSummary`; remove `'sales'` from `tabs` (that screen was never live because `0004` was unapplied; Task 20 replaces it). `src/main.tsx`: remove the `#/buyer` branch (never live; its component is deleted with sales-client in Task 20).
 
 - [ ] **Step 5: Move the legacy tests to roles**
 
@@ -206,6 +213,8 @@ The legacy `role` and `permissions` columns stay; `userRow` keeps them consisten
 - `tests/procurement-api.test.mjs`: line 59 `role: 'purchase_manager'`, line 170 `role: 'supervisor'`.
 - `e2e/inventory.spec.ts:60`: `apiPost(page, '/erp/admin/users', { name: 'Nadia', pin: '1357', role: 'supervisor' })`.
 - `e2e/every-button.spec.ts`: replace the join-request test with `"an admin adds a supervisor; both see the same stock; deactivation signs them out"`: on Team, Add a person (Name `Bilal`, PIN `1357` twice, Role `Supervisor`), Bilal signs in on a second context and sees the same Stock rows, the admin presses Deactivate, Bilal's next refresh lands on the sign-in screen.
+
+- `tests/sales-api.test.mjs`: replace the old permissions-only manager fixture with `userRow({…, role: 'sales_manager'})` and give its actor objects the matching role-derived member contract. Preserve its assertions until Task 12 ports them.
 
 - [ ] **Step 6: Run all tests, the type check and e2e**
 
@@ -215,7 +224,7 @@ Expected: `fail 0`; tsc prints nothing; Playwright `passed`, none failed.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add drizzle/0005_roles.sql server/auth.mjs server/erp-utils.mjs server/admin.mjs server/inventory.mjs src/inventory-client.ts src/Team.tsx src/SignIn.tsx src/LiveApp.tsx src/main.tsx tests/portal-fixture.mjs tests/rbac.test.mjs tests/migrations.test.mjs tests/inventory-api.test.mjs tests/procurement-api.test.mjs e2e/every-button.spec.ts e2e/inventory.spec.ts
+git add drizzle/0005_roles.sql server/auth.mjs server/erp-utils.mjs server/admin.mjs server/inventory.mjs src/inventory-client.ts src/Team.tsx src/SignIn.tsx src/LiveApp.tsx src/main.tsx tests/portal-fixture.mjs tests/rbac.test.mjs tests/migrations.test.mjs tests/inventory-api.test.mjs tests/procurement-api.test.mjs e2e/every-button.spec.ts e2e/inventory.spec.ts tests/sales-api.test.mjs
 git commit -m "Replace admin/member permissions with the six factory roles and map existing users to them"
 ```
 
@@ -227,6 +236,7 @@ git commit -m "Replace admin/member permissions with the six factory roles and m
 - Modify: `server/erp-utils.mjs` (`audit`)
 - Modify: `server/admin.mjs` (audit routes; role-change audit gains before/after)
 - Modify: `server/procurement.mjs:44-57` (supplier review audit carries `reason`), `server/sales.mjs:194-213` (buyer review audit carries `reason`)
+- Modify: `server/procurement.mjs:107` (repair the conditional raw bid-rejection audit INSERT immediately after adding audit columns).
 
 **Interfaces:**
 - Consumes: Task 1 member object, `adminApi`, `portalFixture`.
@@ -263,6 +273,8 @@ test('audit rows written before this migration survive it', async () => {
 });
 ```
 
+Add `test('legacy bid rejection survives migration 0006 and audits once')`: seed a submitted bid, reject with `Price above budget` → 200 and exactly one audit row with `reason='Price above budget'`; repeat/stale version → 409 with unchanged bid history and audit count.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `node --test tests/audit.test.mjs`
@@ -286,6 +298,8 @@ The existing `erp_audit_no_update`/`erp_audit_no_delete` triggers stay as the ap
 - [ ] **Step 4: Implement `audit()` and the routes**
 
 Extend the INSERT column list in `server/erp-utils.mjs`; serialise `before`/`after` with `JSON.stringify` (null stays NULL). In `adminApi` add the `GET /api/erp/admin/audit` route (keyset paging on `(created_at, id)`, joins `users` for `actor_name`); pass `{ before: { role: old }, after: { role: new } }` on `user.role_changed`. In `procurement.mjs` supplier review and `sales.mjs` buyer review pass `{ reason, before: { status: old }, after: { status: new } }` so their `*.rejected`/`*.suspended` rows satisfy the trigger.
+
+Replace the bid-rejection `INSERT INTO erp_audit_events SELECT …` here with an explicit column list including `actor_role`, `object_type`, `reason`, `intervention_reason`. Preserve its original conditional predicate and ensure the losing bid transition emits no audit. Reason-bearing helper calls always use `audit(db,member,action,id,detail,'staff',{reason,intervention,before,after})`, never put options in `detail`. Migration 0006 also supplies fixed event status, creator attribution and updated timestamp metadata for new audit rows using additive columns/defaults; audit() and the conditional INSERT both populate created_by=actor_id, status=recorded and updated_at=created_at.
 
 - [ ] **Step 5: Run all tests**
 
@@ -314,7 +328,7 @@ git commit -m "Record role, object, old and new values and reasons in the append
   - `DEFAULT_SETTINGS = { currency: 'PKR', tax_rate_bp: 1800, invoice_format: 'INV-{YYYY}-{NNNN}', reminder_hours: 24, credit_alert_days: [7, 3] }`.
   - `thresholdOf(db, workspaceId, type) → Promise<number | null>` (null when the admin never set it).
   - `settingsOf(db, workspaceId) → Promise<typeof DEFAULT_SETTINGS>`.
-  - Routes in `adminApi`: `GET /api/erp/admin/thresholds` → `{ thresholds: [{ type, value, updated_by_name, updated_at }], history: [{ type, old_value, new_value, changed_by_name, changed_at }] }`; `POST /api/erp/admin/thresholds {type, value}`; `GET /api/erp/admin/settings` → `{ settings }`; `POST /api/erp/admin/settings {key, value}`. All admin only.
+  - Routes in `adminApi`: `GET /api/erp/admin/thresholds` → `{ thresholds: [{ type, value, currency, updated_by_name, updated_at }], history: [{ type, old_value, new_value, old_currency, new_currency, changed_by_name, changed_at }] }`; `POST /api/erp/admin/thresholds {type, value}`; `GET /api/erp/admin/settings` → `{ settings }`; `POST /api/erp/admin/settings {key, value}`. All admin only.
 
 - [ ] **Step 1: Write the failing tests** (`tests/thresholds.test.mjs`)
 
@@ -339,6 +353,8 @@ test('settings default to PKR, 18% GST, INV-YYYY-NNNN, 24 h and 7/3-day alerts; 
 });
 ```
 
+For `threshold history cannot be edited or deleted`, first set purchase=100 through the API, assert one history row, snapshot it, attempt each mutation and assert both the exception and unchanged contents. Add `test('currency changes refuse incompatible active commercial records')`: independently seed an open submitted bid, an unaccepted draft/sent quotation and an unpaid invoice; each currency change PKR→USD returns 409 with settings/history unchanged. With all three closed/accepted/paid, change succeeds; equal-currency saves are harmless. Race a new bid/quotation with the currency change: only compatible state may commit.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `node --test tests/thresholds.test.mjs`
@@ -354,6 +370,8 @@ Expected: FAIL (module `server/governance.mjs` not found).
 - [ ] **Step 4: Implement `governance.mjs` and the admin routes**
 
 Threshold writes are one `INSERT … ON CONFLICT(workspace_id,type) DO UPDATE` plus the audit row in one batch. Settings validation: `currency` ∈ `PKR,USD,EUR,GBP` (the CHECK lists in `0002`/`0004` allow only these); `tax_rate_bp` integer 0–10000; `invoice_format` 6–40 chars of `[A-Za-z0-9/-]` plus exactly one `{YYYY}` and one `{NNNN}`; `reminder_hours` integer 1–720; `credit_alert_days` 1–5 distinct integers 1–90, stored sorted descending.
+
+Currency policy: `POST settings {key:'currency',value}` atomically refuses a different currency with 409 `'Close open bids and unaccepted quotations and settle unpaid invoices before changing currency.'` Open bids include submitted bids on uncancelled open/closed unawarded RFQs or pending awards; unaccepted quotations are draft/sent revisions; unpaid means invoice total minus credits and recorded payments > 0. In Task 3 use existing 0002/0004 tables, then Tasks 12–13 extend the same database guards for acceptances/credit notes/invoice payments. Guards on currency writes and commercial inserts make the check transactional. Add `currency` to monetary threshold/history rows and API projections (null for gram thresholds). A successful currency change leaves existing monetary threshold values/history in their recorded currency; they are not configured for a different current currency. An admin setting a new-currency threshold replaces the row's value/currency and appends history with old/new currency as well as old/new value, never relabels historical amounts. `thresholdOf` reads only configured-currency rows; gram thresholds are unchanged. Migration 0007 adds metadata to settings/history, including fixed `recorded` history status, creator and both timestamps.
 
 - [ ] **Step 5: Run all tests**
 
@@ -381,13 +399,13 @@ git commit -m "Add the four admin thresholds with database-kept change history, 
   - Approval types: `'purchase_award' | 'po_change' | 'inventory_adjustment' | 'claim' | 'dispatch_stock_issue' | 'escalation'`; units `'minor' | 'grams' | 'none'`.
   - `needsApproval(db, workspaceId, thresholdType, amount) → Promise<{ required: boolean, threshold: number | null }>` (`required = threshold !== null && amount >= threshold`).
   - `approvalQueries(db, member, { id = crypto.randomUUID(), type, objectType, objectId, amount, threshold, unit, payload = {} }, now) → Statement[]` (Task 5 appends the admin notification to this array).
-  - Handler contract each domain exports as `approvalHandlers`: `{ [type]: { approve(db, member, request, { now }) → Promise<Statement[]>, reject(db, member, request, { reason, now }) → Promise<Statement[]>, describe?(db, request) → Promise<object> } }`. `request` is the `approval_requests` row with `payload` parsed.
+  - Handler contract each domain exports as `approvalHandlers`: `{ [type]: { approve(db, member, request, { now }) → Promise<Statement[]>, reject(db, member, request, { reason, now }) → Promise<Statement[]>, describe(db, request) → Promise<{ objectType, objectId, label, currency: string | null, evidence: object, proposed: object }> } }`. `request` is the `approval_requests` row with `payload` parsed.
   - `approvalsApi(request, env, member, path, data, handlers)`: `GET /api/erp/approvals?status=pending&type=` → `{ approvals }`; `GET /api/erp/approvals/<id>` → `{ approval, object }`; `POST /api/erp/approvals/decide {id, decision: 'approve'|'reject', reason?}` → `{ approval }`. Admin only.
   - `server/inventory.mjs`: `const approvalHandlers = {}` merged from domain modules (Tasks 7, 10, 11, 14 add spreads) and `erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, approvalHandlers)`.
 
 - [ ] **Step 1: Write the failing tests** (`tests/approvals.test.mjs`)
 
-The tests call `approvalsApi(new Request(url, init), f.env, await f.member(name), path, body, handlers)` directly, converting a thrown `ErpProblem` into `{ status }` as `tests/sales-api.test.mjs:23-26` does, with a test-only handler map: `sql.exec('CREATE TABLE marker(v TEXT)')` and `handlers = { escalation: { approve: async db => [query(db, "INSERT INTO marker VALUES('approved')")], reject: async () => [] } }`. Nothing extra is exported for tests.
+The tests call `approvalsApi(new Request(url, init), f.env, await f.member(name), path, body, handlers)` directly, converting a thrown `ErpProblem` into `{ status }` as `tests/sales-api.test.mjs:23-26` does, with a test-only handler map: `sql.exec('CREATE TABLE marker(v TEXT)')` and `handlers = { escalation: { approve: async db => [query(db, "INSERT INTO marker VALUES('approved')")], reject: async () => [], describe: async () => ({ objectType: 'qc_inspection', objectId: id, label: 'Test escalation', currency: null, evidence: {}, proposed: {} }) } }`. Nothing extra is exported for tests.
 
 ```js
 test('at or above the threshold waits for admin; below is final', async () => {
@@ -420,6 +438,8 @@ test('a later threshold change does not re-judge a pending request', async () =>
 test('one pending request per object', async () => { /* a second approvalQueries for the same objectType+objectId while pending → batch rejects */ });
 ```
 
+Add `test('approval details include immutable request terms and complete domain evidence')`: GET each installed handler detail → 200 with the required shape; other workspace id → 404; non-admin → 403. Test-only handler supplies `describe` too. Add `test('admin cannot rewrite a decided request')`: second decision → 409 with original audit/payload unchanged; a test-handler compensating request with payload.compensatesId has a new id and its own reason/audit; production compensation routes are specified by their domain tasks.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `node --test tests/approvals.test.mjs`
@@ -428,6 +448,8 @@ Expected: FAIL (`needsApproval` not exported).
 - [ ] **Step 3: Write `drizzle/0008_approvals.sql`**
 
 `approval_requests(id PK, workspace_id, type CHECK IN the six, object_type TEXT NOT NULL, object_id TEXT NOT NULL, amount INTEGER NOT NULL DEFAULT 0, threshold INTEGER, unit TEXT NOT NULL CHECK(unit IN ('minor','grams','none')), payload_json TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')), requested_by TEXT NOT NULL, requested_role TEXT NOT NULL, decided_by TEXT, reason TEXT, created_at, updated_at, decided_at)`; `CREATE UNIQUE INDEX approval_one_pending ON approval_requests(object_type, object_id) WHERE status='pending'`; triggers: `approval_decided_once` (BEFORE UPDATE, `OLD.status != 'pending'` → `'approval already decided'`), `approval_terms_immutable` (type, object, amount, threshold, payload, requester), `approval_reject_reason` (`NEW.status='rejected'` and reason shorter than 5 → `'reason required'`), no-delete trigger.
+
+Every one of the six handlers must implement `describe`: purchase award = pinned bid/version, supplier, RFQ and terms; PO change = old/new quantity and totals plus arrived quantity; adjustment = lot/stage/balance/delta/reason; claim = inspection/photos/rejected quantity/rate/amount; escalation = inspection/issues/photos/proposed disposition; stock issue = difference, optional correction, reason and both stored gates. Task 4 validates the common shape; owning domain tasks supply their evidence. Currency is the request-time currency, also stored immutably on monetary approval requests. Migration 0008 adds `created_by=requested_by`. Admin detail remains scoped to its workspace; missing handlers/detail produce 409, never an incomplete approval form.
 
 - [ ] **Step 4: Implement the engine**
 
@@ -485,6 +507,8 @@ test('pending items older than 24 hours remind the responsible role once', async
 test('decided items never remind', async () => { /* approved row aged 30 h → created 0 */ });
 ```
 
+Add `test('concurrent reminder runs deduplicate per recipient and pending episode')`: two simultaneous runs on one 25-hour-old approval create exactly three reminders total, one per admin; a repeat creates zero. Return a QC lot and re-pend the same id with a newer `since`, advance 25 hours and assert one additional reminder per inspector; the earlier rows remain. Assert the unique index rejects duplicate `(object_type,object_id,since,user_id)` inserts.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `node --test tests/notifications.test.mjs`
@@ -492,11 +516,11 @@ Expected: FAIL (`server/notify.mjs` not found).
 
 - [ ] **Step 3: Write `drizzle/0009_notifications.sql`**
 
-`notifications(id PK, workspace_id, user_id TEXT NOT NULL REFERENCES users(id), role TEXT NOT NULL, event TEXT NOT NULL, object_type TEXT NOT NULL, object_id TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'unread' CHECK(status IN ('unread','read')), created_by TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, read_at INTEGER)`; indexes `(user_id, status, created_at DESC)` and `(object_type, object_id, event)`.
+`notifications(id PK, workspace_id, user_id TEXT NOT NULL REFERENCES users(id), role TEXT NOT NULL, event TEXT NOT NULL, object_type TEXT NOT NULL, object_id TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'unread' CHECK(status IN ('unread','read')), created_by TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, read_at INTEGER, since INTEGER)`; indexes `(user_id, status, created_at DESC)` and `(object_type, object_id, event)`.
 
 - [ ] **Step 4: Implement `notify.mjs`, wire approvals and the cron**
 
-`notifyRole` is `INSERT INTO notifications SELECT lower(hex(randomblob(16))), ?, id, ?, ?, ?, ?, ?, 'unread', NULL, ?, ?, NULL FROM users WHERE workspace_id=? AND portal_role=? AND status='active' AND deactivated_at IS NULL`. Reminders insert the same shape with `event='reminder'` guarded by `NOT EXISTS (SELECT 1 FROM notifications WHERE event='reminder' AND object_type=? AND object_id=?)`, using each workspace's `reminder_hours`. First `PENDING_SOURCES` entry: `{ objectType: 'approval', role: 'admin', sql: "SELECT id, workspace_id, type AS label, created_at AS since FROM approval_requests WHERE status='pending' AND created_at <= ?" }`. `cloudflare.mjs` `scheduled`: `ctx.waitUntil(Promise.all([salesScheduled(env), remindersScheduled(env)]))` (Task 12 swaps `salesScheduled` out).
+`notifyRole` inserts from users filtered by workspace, portal_role, active status and deactivated_at IS NULL, using an explicit column list including `since=NULL`; ordinary generated notices use `created_by='system:notifications'` and both timestamps. `notifyUser` uses the same shape. Reminders use explicit INSERT column lists, `event='reminder'`, `created_by='system:reminders'` and the pending source's `since`. Add unique partial index `notification_reminder_episode ON notifications(object_type,object_id,since,user_id) WHERE event='reminder'`; `since` is required for reminders. Use targeted `ON CONFLICT … DO NOTHING` against that key, rechecking the source is still pending in the insert transaction; count inserted rows, not candidates. Use each workspace's `reminder_hours`. Ordinary notifications have `since=NULL`. A source changes `since` only when a new pending episode starts, not on unrelated edits. First `PENDING_SOURCES` entry: `{ objectType: 'approval', role: 'admin', sql: "SELECT id, workspace_id, type AS label, created_at AS since FROM approval_requests WHERE status='pending' AND created_at <= ?" }`. `cloudflare.mjs` `scheduled`: `ctx.waitUntil(Promise.all([salesScheduled(env), remindersScheduled(env)]))` (Task 12 swaps `salesScheduled` out).
 
 - [ ] **Step 5: Run all tests**
 
@@ -566,7 +590,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Write `drizzle/0010_suppliers.sql`**
 
-`INSERT INTO supplier_categories VALUES ('dyes','Dyes','رنگ',7),('chemicals','Chemicals','کیمیکل',8),('packaging','Packaging','پیکنگ',9)`. `supplier_ratings(id PK, workspace_id, supplier_id REFERENCES suppliers, rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), feedback TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'active' CHECK(status='active'), created_by TEXT NOT NULL, created_at, updated_at)` with no-update/no-delete triggers.
+`INSERT INTO supplier_categories(id,name,urdu_name,sort_order) VALUES ('dyes','Dyes','رنگ',7),('chemicals','Chemicals','کیمیکل',8),('packaging','Packaging','پیکنگ',9)`. `supplier_ratings(id PK, workspace_id, supplier_id REFERENCES suppliers, rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), feedback TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'active' CHECK(status='active'), created_by TEXT NOT NULL, created_at, updated_at)` with no-update/no-delete triggers. Inventory retained supplier/category/review metadata too: add missing fields under Task 1’s contract; external registration sets supplier creator to supplier identity, category seeds use `system:seed`, immutable reviews use creator=actor_id and updated_at=created_at. Use explicit INSERT columns throughout.
 
 - [ ] **Step 4: Implement**
 
@@ -592,15 +616,16 @@ git commit -m "Let the purchase manager review, profile and rate suppliers, and 
 - Modify: `server/procurement.mjs:59-187` (RFQ, bid and award routes; `approvalHandlers`; `purchasingScheduled`)
 - Modify: `server/inventory.mjs` (merge `approvalHandlers`), `server/cloudflare.mjs` (`scheduled` adds `purchasingScheduled`), `server/notify.mjs` (`PENDING_SOURCES`)
 - Modify: `tests/portal-fixture.mjs` (`insertBid`, `setThreshold`), `tests/procurement-api.test.mjs` (staff calls sign in as a purchase manager; legacy award tests leave the threshold unset, so awards stay immediate)
-- Modify: `src/Procurement.tsx` (`BidDecision`: a 202 answer shows `t('Sent to the admin for approval. The purchase order is created once approved.', 'منظوری کے لیے ایڈمن کو بھیج دیا گیا۔ منظوری کے بعد خریداری آرڈر بنے گا۔')` instead of closing as saved)
+- Modify: `src/Procurement.tsx` (local `InterventionField` for every purchasing form; `BidDecision`: a 202 answer shows `t('Sent to the admin for approval. The purchase order is created once approved.', 'منظوری کے لیے ایڈمن کو بھیج دیا گیا۔ منظوری کے بعد خریداری آرڈر بنے گا۔')` instead of closing as saved)
+- Modify: `e2e/procurement.spec.ts` (all admin purchasing forms supply intervention reasons; pending award assertions).
 
 **Interfaces:**
 - Consumes: `needsApproval`, `approvalQueries`, handler contract (Task 4), `notifyRole` (Task 5), supplier statuses (Task 6).
 - Produces:
   - RFQ API status values: `draft | open | closed | awarded | cancelled` (`cancelled` = stored `closed` with `cancelled_at` set; an `open` row past `deadline_at` is reported `closed`).
-  - `POST /api/erp/rfqs` (draft; `deliveryLocation` optional), `POST /api/erp/rfqs/publish {id}` (start bidding), `POST /api/erp/rfqs/close {id}`, `POST /api/erp/rfqs/cancel {id, reason}`, `POST /api/erp/bids/reject {id, version, reason}`, `POST /api/erp/bids/award {id, version}` → 201 `{ order }` or 202 `{ pendingApproval: true, approvalId }`, `POST /api/erp/orders/quantity {id, version, quantityMilli}` → 200 `{ order }` or 202 `{ pendingApproval: true, approvalId }`. All role `purchase_manager`; `GET /api/erp/procurement` viewer `purchase_manager`.
+  - `POST /api/erp/rfqs` (draft; `deliveryLocation` optional), `POST /api/erp/rfqs/publish {id}` (start bidding), `POST /api/erp/rfqs/close {id}`, `POST /api/erp/rfqs/cancel {id, reason}`, `POST /api/erp/bids/reject {id, version, reason}`, `POST /api/erp/bids/award {id, version}` → 201 `{ order }` or 202 `{ pendingApproval: true, approvalId }`, `POST /api/erp/orders/quantity {id, version, quantityMilli}` → 200 `{ order }` or 202 `{ pendingApproval: true, approvalId }`. All role `purchase_manager`; `GET /api/erp/procurement` viewer `purchase_manager`, with `currency: settings.currency` for form/display labels.
   - PO fields added: `quantity_milli`, `total_minor`, `approval_status ('approved'|'pending_admin')`, `bill_of_lading`, `version`, `updated_at`. `total_minor = Math.round(price_minor * quantity_milli / 1000)`.
-  - `approvalHandlers = { purchase_award, po_change }` (purchase_award payload `{ bidId, bidVersion }`, object `rfq`; po_change payload `{ quantityMilli, fromQuantityMilli }`, object `purchase_order`).
+  - `approvalHandlers = { purchase_award, po_change }` (purchase_award payload `{ bidId, bidVersion, termsSnapshot, currency }`, object `rfq`; po_change payload `{ quantityMilli, fromQuantityMilli, poVersion, currency }`, object `purchase_order`).
   - `purchasingScheduled(env, now = Date.now()) → Promise<{ closed: number }>`.
   - Fixture: `insertBid({ rfqId, supplierId, priceMinor = 125000, quantityMilli })`, `setThreshold(type, value)`.
 
@@ -638,6 +663,8 @@ test('only purchase managers run purchasing; an admin needs an intervention reas
 });
 ```
 
+Add `test('pending awards reject expired or changed bid terms atomically')`: mutate version or advance past valid_until before approval → 409, pending request and zero POs/effects; current terms succeed once. Add `test('PO quantity never falls below arrived quantity')`: before QC tables exist retain the existing goods-receipt lower bound; Task 9 extends it to QC lot quantities in the same transaction, including delayed approvals. Add `test('purchase managers read only their workspace pending awards')`: PM/admin → 200 with projection above, supervisor → 403, foreign workspace excluded. Add `test('admin legacy purchasing forms require intervention on every mutation')` in `e2e/procurement.spec.ts`, with missing reason blocked and valid reason saved/audited.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `node --test tests/purchasing.test.mjs`
@@ -649,16 +676,20 @@ Expected: FAIL.
 - `ALTER TABLE supplier_purchase_orders ADD COLUMN quantity_milli INTEGER`, `total_minor INTEGER`, `approval_status TEXT NOT NULL DEFAULT 'approved' CHECK(approval_status IN ('approved','pending_admin'))`, `bill_of_lading TEXT NOT NULL DEFAULT ''`, `version INTEGER NOT NULL DEFAULT 1`, `updated_at INTEGER`; backfill only the new columns: `quantity_milli = json_extract(terms_snapshot,'$.quantity_milli')`, `total_minor = (json_extract(terms_snapshot,'$.price_minor') * json_extract(terms_snapshot,'$.quantity_milli') + 500) / 1000`, `updated_at = created_at` (the `purchase_terms_immutable` trigger watches other columns).
 - `CREATE TRIGGER validate_purchase_order BEFORE INSERT ON supplier_purchase_orders` raising `'bid or supplier no longer valid'` unless the bid is `submitted`, its supplier `approved`, and its RFQ `open` or `closed` with `cancelled_at IS NULL` in the same workspace. The award path then uses a plain `INSERT … VALUES`, so an approval whose bid went stale fails the whole batch instead of silently creating nothing.
 
+Pin `{bidId,bidVersion,termsSnapshot,currency}` in `purchase_award` and expected PO version plus currency in `po_change`. In the committing transaction, guard bid version, exact terms, `valid_until >= now`, submitted status, supplier approval and RFQ eligibility; stale/expired terms return 409 and leave the approval pending with no PO/audit/notification. PO-change application checks the pinned poVersion and fromQuantityMilli, rejecting a stale payload atomically; monetary effects also require payload.currency to match the current factory currency before applying monetary gates (409 otherwise), preserving request-time threshold and currency for review. The immediate path uses the same guards. `poInsertQueries(db,member,{bidId,bidVersion,termsSnapshot,currency},now) → Statement[]` owns those statements. `describe` for both types returns the Task 4 evidence contract. Add `GET /api/erp/orders/pending-approvals` (viewer purchase_manager/admin) → `{awards:[{approvalId,rfqId,bidId,bidVersion,amount,currency,threshold,status:'pending',created_at}], changes:[{approvalId,orderId,quantityMilli,fromQuantityMilli,amount,currency,threshold,status:'pending',created_at}]}` scoped to workspace, with no admin decision capability.
+
 - [ ] **Step 4: Implement**
 
 - Publish drops the `supplier_users` requirement; recipients are approved suppliers linked to the category. Audit `rfq.opened`.
 - Close: `open → closed`, `closed_at=now`, notify `purchase_manager` `bidding.closed`, audit `rfq.closed`. Cancel: any state except `awarded`, `reason()`, audit `rfq.cancelled`.
-- Bid reject allowed while the RFQ is `open` or `closed`; replace the raw audit INSERT with `audit(…,'bid.rejected', …, { reason })`.
+- Bid reject allowed while the RFQ is `open` or `closed`; retain Task 2’s atomic rejection guard and use `audit(db,member,'bid.rejected',id,{},'staff',{reason,intervention})`.
 - Award: compute the total; `needsApproval(db, w, 'purchase', total)`; below → `poInsertQueries(db, member, bid, now)` (PO insert with the new columns, RFQ `awarded`, audit `po.created`); at or above → `approvalQueries` type `purchase_award` and 202. The `purchase_award` handler's `approve` returns `poInsertQueries`; `reject` returns `[]`.
 - PO quantity change: refuse while `approval_status='pending_admin'` (409). New total at or above the threshold → `approval_status='pending_admin'` plus `po_change` approval (202); else update `quantity_milli`, `total_minor`, `version` with audit `po.quantity_changed` (before/after). The handler's `approve` applies the stored payload quantity and sets `approval_status='approved'`; `reject` resets `approval_status='approved'`.
 - `supplierOperations` bid insert (Task 15 moves it into `submitBid`) adds `notifyRole(…,'purchase_manager','bid.received','bid',id,rfq.reference)`.
 - `purchasingScheduled`: close every `open` RFQ with `deadline_at <= now`, one batch per RFQ with the notification.
 - `PENDING_SOURCES`: `{ objectType: 'rfq', role: 'purchase_manager', sql: "SELECT id, workspace_id, reference AS label, COALESCE(closed_at, deadline_at) AS since FROM procurement_rfqs WHERE status='closed' AND cancelled_at IS NULL AND EXISTS(SELECT 1 FROM supplier_bids WHERE rfq_id=procurement_rfqs.id AND status='submitted') AND COALESCE(closed_at, deadline_at) <= ?" }`.
+
+Every legacy purchasing form in `src/Procurement.tsx` (RFQ create/publish/close/cancel, bid reject/award, PO quantity change) renders the same required intervention reason field for admins and sends `interventionReason`; every corresponding `keys()` allow-list accepts it. Use the local legacy `InterventionField` now; Task 17 consolidates it into `PortalCommon`. Update admin e2e setup to enter `Purchase manager not set up yet` on every affected action, and assert 202 keeps the pending award visible. The existing supplierOperations bid writer also enforces configured currency here, before Task 15 extracts it. Monetary checks use the configured currency; a bid/PO in another currency returns 409 before comparison, with no PO/request written. Migration 0011 also replaces the initial currency guard to account for cancelled RFQs and pending awards now that those columns/tables exist. It supplies missing RFQ/PO/bid/bid-history metadata, using explicit INSERT column lists; bid created_by is its authenticated supplier actor and bid-history status is fixed `recorded`, created_by=actor_id, updated_at=created_at.
 
 - [ ] **Step 5: Run all tests and e2e**
 
@@ -668,7 +699,7 @@ Expected: `fail 0`; tsc silent; Playwright `passed`, none failed.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add drizzle/0011_purchasing.sql server/procurement.mjs server/inventory.mjs server/cloudflare.mjs server/notify.mjs src/Procurement.tsx tests/purchasing.test.mjs tests/portal-fixture.mjs tests/procurement-api.test.mjs
+git add drizzle/0011_purchasing.sql server/procurement.mjs server/inventory.mjs server/cloudflare.mjs server/notify.mjs src/Procurement.tsx tests/purchasing.test.mjs tests/portal-fixture.mjs tests/procurement-api.test.mjs e2e/procurement.spec.ts
 git commit -m "Gate bid awards and PO quantity changes on the purchase threshold, and end bidding at the deadline"
 ```
 
@@ -676,7 +707,7 @@ git commit -m "Gate bid awards and PO quantity changes on the purchase threshold
 
 **Files:**
 - Create: `server/datalooplabs.mjs` (copied verbatim from `/Users/anastabba/orca/workspaces/FYP/erp-tracking-dll/yarn-erp/server/datalooplabs.mjs`, 155 lines)
-- Create: `server/tracking.mjs`
+- Create: `server/tracking.mjs` (`trackingApi`, `sanitizeTrackingPayload`)
 - Create: `drizzle/0012_shipments.sql`
 - Create: `tests/tracking.test.mjs`
 - Modify: `server/inventory.mjs` (`erp.shipments = trackingApi`), `server/procurement.mjs` (overview `tracking` field), `scripts/dev-server.mjs` (pass `DATALOOPLABS_API_KEY`, `DATALOOPLABS_CONTRACT` from `process.env`)
@@ -686,7 +717,7 @@ git commit -m "Gate bid awards and PO quantity changes on the purchase threshold
 - Produces:
   - From the copied adapter: `trackUnit(env, account, { identifier, identifier_type, carrier?, force_update? }, deps?) → Promise<{ containers, events: [{ at, title, code, location }], reference, dataAt, empty }>`; `ProviderProblem` with `kind` in `not_configured | contract_unavailable | ambiguous_timeout | network_error | rate_limited | credential_rejected | invalid_identifier | provider_unavailable | provider_rejection | garbled_response`; `credentialOf(env)`, `redact(value, env)`.
   - `accountFromEnv(env) → account | null`: parses the non-secret JSON var `DATALOOPLABS_CONTRACT` = `{ baseUrl, trackPath, request, response }` into `{ base_url, track_path, contract_json, contract_verified_at: 1 }`; null when absent or unparsable.
-  - `trackingApi`: `POST /api/erp/shipments {id, orderId, billOfLading}` (attach B/L, role `purchase_manager`, audit `po.bl_attached`); `GET /api/erp/shipments?orderId=` → `{ shipments, tracking: { configured: boolean, provider: 'DataLoopLabs' } }`; `POST /api/erp/shipments/track {id}` → always 200 `{ shipment, error?: string }`.
+  - `trackingApi`: `POST /api/erp/shipments {id, orderId, billOfLading}` (attach B/L, role `purchase_manager`, audit `po.bl_attached`); `GET /api/erp/shipments?orderId=` → `{ shipments, tracking: { configured: boolean, provider: 'DataLoopLabs' } }`; `POST /api/erp/shipments/track {id}` → 200 `{ shipment, error?: string }` for provider outcomes; authorization/validation/not-found errors retain 403/422/404.
   - Shipment row: `{ id, purchase_order_id, bill_of_lading, status: 'not_checked'|'tracked'|'error', last_status_json, last_checked_at, last_error, created_at }`.
 
 - [ ] **Step 1: Write the failing tests** (`tests/tracking.test.mjs`)
@@ -694,8 +725,11 @@ git commit -m "Gate bid awards and PO quantity changes on the purchase threshold
 Use the contract from `/Users/anastabba/orca/workspaces/FYP/erp-tracking-dll/yarn-erp/tests/tracking-api.test.mjs:168-176` as `DATALOOPLABS_CONTRACT` (with `baseUrl: 'https://provider.test/v1', trackPath: '/tracking/track'`) and key `'dll_test_key_1234567890'`. Stub `globalThis.fetch` per test and restore it after.
 
 ```js
-test('without a key or contract tracking says so and makes no provider call', async () => {
-  // track → 200, data.error matches /not configured/, fetch called 0 times; shipment.status 'not_checked'
+test('without a key tracking is not configured and makes no provider call', async () => {
+  // valid contract, no key: track → 200, error 'Tracking is not configured: API key missing.'; fetch 0; fresh shipment.status 'not_checked'
+});
+test('without a usable contract tracking is not configured and makes no provider call', async () => {
+  // valid key, missing or malformed contract: track → 200, error 'Tracking is not configured: provider contract unavailable.'; fetch 0; fresh status 'not_checked'
 });
 test('a successful lookup caches the status and the time it was checked', async () => {
   // fetch → 200 {containers:[{number:'MSCU1234567'}], events:[{eventTime:'2026-10-28T10:00:00Z', statusCode:'LOADED', statusDescription:'Loaded on vessel', location:'Karachi'}], referenceNumber:'BL123'}
@@ -714,6 +748,8 @@ test('the B/L number attaches to the PO; only purchase managers attach and track
 });
 ```
 
+Add `test('successful provider echoes cannot leak the key')`: echo the key and `Bearer <key>` in each normalized string field, including container data; response, stored shipment columns, overview and captured logs exclude both secrets, while ordinary event data remains. Add `test('tracking preserves request errors')`: wrong role → 403, unknown/foreign shipment → 404, malformed id → 422; zero provider calls and no cache writes.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `node --test tests/tracking.test.mjs`
@@ -728,7 +764,7 @@ If that worktree is gone, check `git -C /Users/anastabba/orca/workspaces/FYP/erp
 
 - [ ] **Step 4: Implement `tracking.mjs`**
 
-B/L: `text(value,'Bill of lading',3,100).toUpperCase().replace(/\s+/g,'')`. Track: `trackUnit(env, accountFromEnv(env), { identifier: bl, identifier_type: 'bol' })`. On success update `status='tracked'`, `last_status_json`, `last_checked_at`, `last_error=NULL`. On any thrown error keep `last_status_json`, set `last_error = redact(message, env)` (status `'error'` only if nothing was ever cached) and return 200 with `error` set to the redacted message. The whole handler body sits in `try/catch` so tracking can never produce a 500. Overview `tracking.configured = !!credentialOf(env) && !!accountFromEnv(env)`. Ceiling to note in code: `// ponytail: one paid provider call per Track press; add the credit budget from the erp-tracking worktree if billing matters`.
+B/L: `text(value,'Bill of lading',3,100).toUpperCase().replace(/\s+/g,'')`. Track: `trackUnit(env, accountFromEnv(env), { identifier: bl, identifier_type: 'bol' })`. Authorize, validate input and look up the workspace shipment outside the provider catch (403/422/404 remain errors). Catch only provider lookup/normalization: `not_configured` maps to 'Tracking is not configured: API key missing.' and `contract_unavailable` to 'Tracking is not configured: provider contract unavailable.'; fresh status stays `not_checked`, cached status/data stay intact. Other provider failures return 200 with redacted error, keeping cache and using `error` only without cache. Before storing or returning successful normalized data, `sanitizeTrackingPayload(payload,env) → payload` recursively redacts every string (including containers, event titles/codes/locations and reference); store only that sanitized shape with `status='tracked'`, updated check time and cleared error. Database/programming errors are outside the provider catch. Overview `tracking.configured = !!credentialOf(env) && !!accountFromEnv(env)`. Ceiling to note in code: `// ponytail: one paid provider call per Track press; add the credit budget from the erp-tracking worktree if billing matters`.
 
 - [ ] **Step 5: Run all tests**
 
@@ -748,16 +784,17 @@ git commit -m "Attach B/L numbers to POs and track shipments through DataLoopLab
 - Create: `drizzle/0013_quality.sql`
 - Create: `server/photos.mjs`, `server/quality.mjs`
 - Create: `tests/quality.test.mjs`
-- Modify: `server/inventory.mjs:148-196` (the legacy `/api/photos` POST calls `readPhoto`; mount `erp.qc = qualityApi`). The legacy goods-receipt routes (`server/receiving.mjs`) stay live until Task 19 replaces the Incoming stock screen.
+- Modify: `server/inventory.mjs:148-196` (the legacy `/api/photos` POST calls `readPhoto`; mount `erp.qc = qualityApi`). Legacy goods-receipt writes stop here: their replacement registers QC lots without inventory receipts; read-only history stays until Task 19 removes the old module.
 - Modify: `tests/portal-fixture.mjs` (`insertPO`, `insertProduct`, `jpeg` bytes), `server/notify.mjs` (`PENDING_SOURCES`)
+- Modify: `server/receiving.mjs` (reject superseded receipt writes), `server/procurement.mjs` (QC arrival lower bound for immediate/delayed PO changes), `src/IncomingStock.tsx` (register arrivals through `/erp/qc/lots`), `src/LiveApp.tsx` (replace inspector legacy QC controls with inspection/photo/issue submission), `tests/procurement-api.test.mjs`, `tests/inventory-api.test.mjs`, `e2e/procurement.spec.ts`, `e2e/inventory.spec.ts` (updated routes and regression assertions).
 
 **Interfaces:**
 - Consumes: POs and shipments (Tasks 7–8), `notifyRole`, `role`, `viewer`, `audit`.
 - Produces:
   - `readPhoto(request) → Promise<{ form: FormData, bytes: Uint8Array, type: 'image/jpeg'|'image/png'|'image/webp', digest: string }>` (11 MB stream cap, 10 MB file cap, magic-byte check; same messages as today).
   - Tables `qc_lots`, `qc_inspections`, `qc_photos`, `qc_issues`, view `qc_lot_open(lot_id, open_milli)`.
-  - `lotStatusQuery(db, lotId, now) → Statement` (sets `qc_lots.status` to `under_review` when an inspection is a draft or awaits a decision, else `awaiting_inspection` when `open_milli > 0`, else `settled`).
-  - Routes (`qualityApi`): `POST /api/erp/qc/lots {id, orderId, shipmentId, productId, reference, quantityMilli, supplierLot?, arrivedAt}` (role `purchase_manager`); `GET /api/erp/qc/lots?status=` (viewer `quality_inspector, supervisor, purchase_manager`); `POST /api/erp/qc/inspections {id, lotId, acceptedMilli, rejectedMilli, note?}`, `POST /api/erp/qc/photos` (multipart `inspectionId` or `issueId`, `photo`), `POST /api/erp/qc/issues {id, inspectionId, type, severity, description}`, `POST /api/erp/qc/inspections/submit {id}` (all role `quality_inspector`); `GET /api/erp/qc/inspections?mine=1&status=` (viewer `quality_inspector, supervisor`); `GET /api/erp/qc/photos/<id>` (viewer `quality_inspector, supervisor, purchase_manager`).
+  - `lotStatusQuery(db, lotId, now) → Statement` (sets `qc_lots.status` to `under_review` when an inspection is a draft or awaits a decision, else `awaiting_inspection` when `open_milli > 0`, else `settled`; sets `pending_since=now` only on entry/re-entry to awaiting_inspection, preserving it during the same pending episode).
+  - Routes (`qualityApi`): `POST /api/erp/qc/lots {id, orderId, shipmentId, productId, reference, quantityMilli, supplierLot?, arrivedAt}` (role `purchase_manager`); `GET /api/erp/qc/lots?status=` (viewer `quality_inspector, supervisor, purchase_manager`); `POST /api/erp/qc/inspections {id, lotId, acceptedMilli, rejectedMilli, note?}`, `POST /api/erp/qc/photos` (multipart `inspectionId` or `issueId`, `photo`, client UUID `id`), `POST /api/erp/qc/issues {id, inspectionId, type, severity, description}`, `POST /api/erp/qc/inspections/submit {id}` (all role `quality_inspector`); `GET /api/erp/qc/inspections?mine=1&status=` (viewer `quality_inspector, supervisor`); `GET /api/erp/qc/photos/<id>` (viewer `quality_inspector, supervisor, purchase_manager`).
   - Severity values: `minor | major | critical`.
   - Fixture: `insertPO({ supplierId, priceMinor = 125000, quantityMilli = 100000, unit = 'kg' }) → Promise<{ orderId, shipmentId }>`, `insertProduct() → Promise<string>`, `jpeg: Uint8Array`.
 
@@ -786,6 +823,8 @@ test('inspectors cannot add inventory or change catalogue items', async () => { 
 test('a lot awaiting inspection over 24 hours reminds inspectors', async () => { /* created_at now-25h → Qasim gets 'reminder' */ });
 ```
 
+Add `test('submitted inspection terms and transitions are immutable')`: seed a submitted 80/20 inspection; direct quantity/link/status reset writes throw, and the snapshot stays unchanged. Add `test('two submissions emit one audit and notification set')`: concurrent submit → [200,409], one submission audit and one notification per supervisor, statuses still pending. Add `test('identical photo bytes attach independently and retries are idempotent')`: two inspections and an issue on the same lot accept the same jpeg under distinct attachment ids; exact retry → 200 without extra row/blob; altered retry → 409. Add `test('QC arrival and PO reduction cannot overbook the order')`: race a 60kg arrival against reduction to 50kg; exactly one commits, including delayed approval. Assert legacy PM receive/QI qc cannot mutate inventory and the adapted arrival/submission screens work in e2e.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `node --test tests/quality.test.mjs`
@@ -793,27 +832,31 @@ Expected: FAIL.
 
 - [ ] **Step 3: Write `drizzle/0013_quality.sql`**
 
-- `qc_lots(id PK, workspace_id, purchase_order_id REFERENCES supplier_purchase_orders, shipment_id REFERENCES shipments, supplier_id REFERENCES suppliers, product_id REFERENCES products, reference TEXT NOT NULL, quantity_milli INTEGER NOT NULL CHECK(quantity_milli > 0), unit TEXT NOT NULL CHECK(unit IN ('kg','tonne')), supplier_lot TEXT NOT NULL DEFAULT '', arrived_at INTEGER NOT NULL, status TEXT NOT NULL CHECK(status IN ('awaiting_inspection','under_review','settled')), created_by, created_at, updated_at, UNIQUE(workspace_id, reference))`; trigger `validate_qc_lot` (PO in workspace with `approval_status='approved'`, shipment belongs to the PO, supplier and unit match the PO, and the sum of lot quantities including the new one ≤ PO `quantity_milli`).
+- `qc_lots(id PK, workspace_id, purchase_order_id REFERENCES supplier_purchase_orders, shipment_id REFERENCES shipments, supplier_id REFERENCES suppliers, product_id REFERENCES products, reference TEXT NOT NULL, quantity_milli INTEGER NOT NULL CHECK(quantity_milli > 0), unit TEXT NOT NULL CHECK(unit IN ('kg','tonne')), supplier_lot TEXT NOT NULL DEFAULT '', arrived_at INTEGER NOT NULL, pending_since INTEGER, status TEXT NOT NULL CHECK(status IN ('awaiting_inspection','under_review','settled')), created_by, created_at, updated_at, UNIQUE(workspace_id, reference))`; trigger `validate_qc_lot` (PO in workspace with `approval_status='approved'`, shipment belongs to the PO, supplier and unit match the PO, and the sum of lot quantities including the new one ≤ PO `quantity_milli`).
 - `qc_inspections(id PK, workspace_id, lot_id REFERENCES qc_lots, accepted_milli INTEGER NOT NULL CHECK(accepted_milli >= 0), rejected_milli INTEGER NOT NULL CHECK(rejected_milli >= 0), note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL CHECK(status IN ('draft','submitted')), report_status TEXT CHECK(report_status IS NULL OR report_status IN ('pending','accepted','returned')), rejection_status TEXT CHECK(rejection_status IS NULL OR rejection_status IN ('pending','confirmed','dismissed','escalated')), dismiss_outcome TEXT CHECK(dismiss_outcome IS NULL OR dismiss_outcome IN ('re_inspect','accept_with_deviation')), report_reason TEXT, rejection_reason TEXT, decided_by TEXT, submitted_at, decided_at, created_by, created_at, updated_at, CHECK(accepted_milli + rejected_milli > 0))`.
 - View `qc_lot_open`: `lot.quantity_milli` minus, over its inspections, `accepted_milli` when `status='draft' OR report_status IN ('pending','accepted')` and `rejected_milli` when `status='draft' OR rejection_status IN ('pending','confirmed','escalated') OR (rejection_status='dismissed' AND dismiss_outcome='accept_with_deviation')`. A returned report or a re-inspect dismissal frees its quantity for the next inspection.
 - Trigger `validate_qc_inspection` BEFORE INSERT: `NEW.accepted_milli + NEW.rejected_milli <= open_milli` (`'More than the uninspected quantity.'`).
-- Trigger `qc_decisions_final` BEFORE UPDATE: refuse changing a `report_status` that is `accepted` or `returned`, or a `rejection_status` that is `confirmed` or `dismissed`; `escalated` may move to `confirmed` or `dismissed` only.
+- Triggers enforce the full graph: inspection `draft→submitted` once; accepted side `NULL→pending` only on submission with accepted_milli>0, then `pending→accepted|returned`; rejected side `NULL→pending` only with rejected_milli>0, then `pending→confirmed|dismissed|escalated`, and `escalated→confirmed|dismissed` only via its admin approval. Zero-quantity sides remain NULL. No reverse transitions or same-state repeated decision writes. Freeze lot/workspace links and quantities on submission; draft changes recheck reserved quantity. Freeze submitted issue/photo evidence, quantities and links too; supervisor-owned issue disposition statuses may still follow the decision graph. Use an unconditional id-targeted transition UPDATE whose trigger validates OLD state and raises ABORT for a losing/repeated transition, so the entire batch and all side effects roll back; map conflicts to 409.
 - `qc_issues(id PK, workspace_id, inspection_id REFERENCES qc_inspections, type TEXT NOT NULL, severity TEXT NOT NULL CHECK(severity IN ('minor','major','critical')), description TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','confirmed','dismissed','escalated')), created_by, created_at, updated_at)`.
-- `qc_photos(id PK, workspace_id, lot_id REFERENCES qc_lots, inspection_id REFERENCES qc_inspections, issue_id REFERENCES qc_issues, object_key TEXT NOT NULL UNIQUE, content_type, content_hash, size, taken_at INTEGER NOT NULL, created_by, created_at, CHECK(inspection_id IS NOT NULL OR issue_id IS NOT NULL))` with no-update/no-delete triggers.
+- `qc_photos(id PK, workspace_id, lot_id REFERENCES qc_lots, inspection_id REFERENCES qc_inspections, issue_id REFERENCES qc_issues, object_key TEXT NOT NULL UNIQUE, content_type, content_hash, size, taken_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'attached' CHECK(status='attached'), created_by, created_at, updated_at, CHECK((inspection_id IS NOT NULL) != (issue_id IS NOT NULL)))` with no-update/no-delete triggers.
 
 - [ ] **Step 4: Implement**
 
-`readPhoto` is the body of the current `/api/photos` POST up to the digest; both that legacy route and `qualityApi` call it. Photo key `<workspace>/qc/<lotId>/<digest>`; `taken_at` is the server time. Issue `type` is `text(…,'Issue type',2,80)`, description `multiline(…,5,2000)`. Submit sets `report_status='pending'` when `accepted_milli>0` and `rejection_status='pending'` when `rejected_milli>0`, plus `lotStatusQuery`, `notifyRole(…,'supervisor','inspection.submitted',…)`, audit `inspection.submitted`. Lot registration also updates the PO `status='received'` when its lots cover `quantity_milli`, notifies `quality_inspector` `lot.ready`, audits `lot.arrived`. `PENDING_SOURCES`: `{ objectType: 'qc_lot', role: 'quality_inspector', sql: "SELECT id, workspace_id, reference AS label, updated_at AS since FROM qc_lots WHERE status='awaiting_inspection' AND updated_at <= ?" }`.
+`readPhoto` is the body of the current `/api/photos` POST up to the digest; both that legacy route and `qualityApi` call it. Photo key `<workspace>/qc/<lotId>/<inspection|issue>/<attachmentId>/<digest>` separates attachment identity from content. Multipart includes client UUID `id`; retry with the same id/target/digest returns the existing attachment (200), conflicting target/digest returns 409. Identical bytes on another inspection/issue create a distinct attachment (201). Validate workspace and draft target before blob write; transaction rechecks target state and cleans up a newly orphaned blob on failure. `taken_at` is the server time. New awaiting-inspection lots initialize `pending_since=now`. Issue `type` is `text(…,'Issue type',2,80)`, description `multiline(…,5,2000)`. Submit sets `report_status='pending'` when `accepted_milli>0` and `rejection_status='pending'` when `rejected_milli>0`, plus `lotStatusQuery`, `notifyRole(…,'supervisor','inspection.submitted',…)`, audit `inspection.submitted`. Lot registration also updates the PO `status='received'` when its lots cover `quantity_milli`, notifies `quality_inspector` `lot.ready`, audits `lot.arrived`. `PENDING_SOURCES`: `{ objectType: 'qc_lot', role: 'quality_inspector', sql: "SELECT id, workspace_id, reference AS label, pending_since AS since FROM qc_lots WHERE status='awaiting_inspection' AND pending_since <= ?" }`.
+
+Close PM `receive` and QI legacy `qc` bypasses now: `server/inventory.mjs` rejects PM `/movements` receive and QI `/quality`/legacy inspection writes with 403; legacy goods-receipt POST routes return 410 with the new QC-arrival destination. IncomingStock registers PO/shipment/product/quantity arrivals via `/erp/qc/lots`; the QI controls in LiveApp create draft inspections, attach photos/issues and submit through `/erp/qc/*`. Remove the old write buttons and adapt their tests in this task; readonly legacy evidence remains. On PO quantity updates/approval, migration 0013 adds a transactional lower-bound guard using registered QC quantities and any disjoint legacy receipt quantities (no double counting); reject reductions below arrivals with 409. Concurrent arrival versus reduction must leave a valid total. Both purchasing handlers implement this same guard. New tables all carry the Task 1 metadata contract; photos use fixed `attached` status and immutable timestamps.
 
 - [ ] **Step 5: Run all tests**
 
 Run: `npm test && npx tsc -b`
 Expected: `fail 0`; tsc silent.
 
+Also run: `npx playwright test --project=desktop-chromium`; expected all updated arrival/inspection workflows pass.
+
 - [ ] **Step 6: Commit**
 
 ```bash
-git add drizzle/0013_quality.sql server/photos.mjs server/quality.mjs server/inventory.mjs server/notify.mjs tests/quality.test.mjs tests/portal-fixture.mjs
+git add drizzle/0013_quality.sql server/photos.mjs server/quality.mjs server/inventory.mjs server/notify.mjs tests/quality.test.mjs tests/portal-fixture.mjs server/receiving.mjs server/procurement.mjs src/IncomingStock.tsx src/LiveApp.tsx tests/procurement-api.test.mjs tests/inventory-api.test.mjs e2e/procurement.spec.ts e2e/inventory.spec.ts
 git commit -m "Record lot inspections with accepted and rejected quantities, mandatory photos and issues"
 ```
 
@@ -822,19 +865,23 @@ git commit -m "Record lot inspections with accepted and rejected quantities, man
 **Files:**
 - Create: `drizzle/0014_claims.sql`
 - Create: `tests/claims.test.mjs`
-- Modify: `server/quality.mjs` (review, rejection, claim routes; `approvalHandlers`)
+- Modify: `server/quality.mjs` (review, rejection, claim routes; `decisionQueries`, `approvalHandlers`)
 - Modify: `server/procurement.mjs` (`supplierPerformance` full version)
 - Modify: `server/inventory.mjs` (merge handlers), `server/notify.mjs` (`PENDING_SOURCES`)
+- Create: `server/stock-ledger.mjs` (shared atomic movement/delta statement builder).
+- Modify: `tests/portal-fixture.mjs` (`submitted`), `src/LiveApp.tsx` (minimal supervisor review actions replace legacy QC toggles), `tests/inventory-api.test.mjs`, `e2e/inventory.spec.ts` (superseded QC/receive assertions).
 
 **Interfaces:**
 - Consumes: Task 9 tables and `lotStatusQuery`, `needsApproval`, `approvalQueries`, `notifyRole`.
 - Produces:
   - `lots` gains `inventory_type ('raw'|'finished')` and `source ('qc_lot'|'production')`. An inventory lot created from QC uses the QC lot's id as its `lots.id` and the QC `reference` as its `batch`.
-  - Routes: `GET /api/erp/qc/reports`, `GET /api/erp/qc/rejections` (viewer `supervisor`); `POST /api/erp/qc/reports/decide {inspectionId, decision: 'accept'|'reject', reason?}`; `POST /api/erp/qc/rejections/decide {inspectionId, decision: 'confirm'|'dismiss'|'escalate', dismissOutcome?: 're_inspect'|'accept_with_deviation', reason?}` (role `supervisor`); `GET /api/erp/qc/claims`, `GET /api/erp/qc/claims/<id>` (viewer `purchase_manager`, which sees only `decided` claims); `POST /api/erp/qc/claims/decide {id, outcome: 'return'|'replacement'|'claim', adjustedMinor?, reason?}` (role `admin`).
+  - Routes: `GET /api/erp/qc/reports`, `GET /api/erp/qc/rejections` (viewer `supervisor`); `POST /api/erp/qc/reports/decide {inspectionId, decision: 'accept'|'reject', reason?}`; `POST /api/erp/qc/rejections/decide {inspectionId, decision: 'confirm'|'dismiss'|'escalate', dismissOutcome?: 're_inspect'|'accept_with_deviation', reason?}` (role `supervisor`); `GET /api/erp/qc/claims`, `GET /api/erp/qc/claims/<id>` (viewer `purchase_manager`, which sees only `decided` claims; admin sees all statuses, scoped to workspace); `POST /api/erp/qc/claims/decide {id, outcome: 'return'|'replacement'|'claim', adjustedMinor?, reason?}` (role `admin`).
   - `claimAmount(rejectedMilli, priceMinor) = Math.round(rejectedMilli * priceMinor / 1000)` (exported).
   - `approvalHandlers = { claim, escalation }`.
   - `supplierPerformance(db, supplierId) → Promise<{ manualAverage, ratingCount, qcPassRate: number | null, onTimeRate: number | null, claims: { return: number, replacement: number, claim: number } }>`.
   - Fixture: `submitted({ acceptedMilli, rejectedMilli }) → Promise<{ lotId, inspectionId }>` (lot + photo + issue + submit).
+
+Additional produced helpers: `server/stock-ledger.mjs`: `movementQueries(db,member,{id,lotId,action,stage,deltaGrams,note,sourceId},now) → Statement[]` validates movement/delta agreement, creates exactly one movement and its matching delta atomically, preserving ledger immutability and non-negative balances. Domain modules own authorization, thresholds and disposition; this helper owns only movement/delta construction. `server/quality.mjs`: `decisionQueries(db,member,{inspectionId,side,expectedStatus,nextStatus,dismissOutcome?,reason?,intervention?,claim?},now) → Promise<Statement[]>` owns guarded transition plus lot status, related issue statuses, notification and audit for all direct and approval decisions.
 
 - [ ] **Step 1: Write the failing tests** (`tests/claims.test.mjs`)
 
@@ -874,6 +921,8 @@ test('claim outcomes and the QC pass rate feed the supplier profile', async () =
 });
 ```
 
+Add `test('concurrent supervisor decisions have one complete effect')`: accept versus return and confirm versus dismiss each yield [200,409], one receipt/claim at most and one decision audit/notification set. Add `test('every direct and escalated disposition updates issues and lot availability')`: assert issue status, lot status/open_milli and inspector notification for every branch, including rejected escalation reinspection. Add `test('QC pass rate uses final lot disposition once')`: wholly accepted→1, wholly rejected→0, settled 80/20→0.8, returned then re-inspected 100 accepted→1, pending-only→null. Add `test('a conflicting legacy batch cannot create a QC receipt')`: seed another lot with the reference, accept→409 and unchanged lot/stock/report/audit. Admin claims GET includes open/pending/decided; PM includes decided only.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `node --test tests/claims.test.mjs`
@@ -886,22 +935,26 @@ Expected: FAIL.
 
 - [ ] **Step 4: Implement**
 
-- Report accept batch: `INSERT OR IGNORE INTO lots(id=qc lot id, product, batch=reference, supplier name, quality 'approved', inventory_type 'raw', source 'qc_lot')`, a `receive` movement to `raw` with `grams = accepted_milli × (unit==='tonne' ? 1000 : 1)` and its `stock_deltas` row (pattern in the deleted `receiving.mjs`), `report_status='accepted'`, `lotStatusQuery`, notify `quality_inspector` `inspection.decided`, audit `inspection_report.accepted`. Reject: `reason()`, `report_status='returned'`, audit `inspection_report.rejected`.
-- Confirm: rate from `json_extract(terms_snapshot,'$.price_minor')`; `needsApproval('claim', amount)`; claim `open`, or `pending_approval` + `approvalQueries` type `claim`; either way notify `admin` and `purchase_manager` `claim.created` (spec 3.2 and 6: the purchase manager gets a notice when a claim is raised and when it is decided); issues `confirmed`; audit `rejection.confirmed`. Dismiss: `reason()` and `dismissOutcome` required; `accept_with_deviation` adds the rejected grams to raw stock with note `Accepted with deviation: <reason>`; audit `rejection.dismissed`. Escalate: `approvalQueries` type `escalation`, amount = the would-be claim, `rejection_status='escalated'`, audit `rejection.escalated`.
+- Report accept batch: resolve `lots.id=qc lot id` explicitly; if present require matching workspace, product, batch/reference and source `qc_lot`. Otherwise insert it (quality `approved`, inventory_type `raw`, source `qc_lot`) with targeted `ON CONFLICT(id) DO NOTHING` followed by a transactional identity guard. A different lot with the same batch is a 409, never ignored. Build the raw receipt through `movementQueries` with `grams = accepted_milli × (unit==='tonne' ? 1000 : 1)`, `report_status='accepted'`, `lotStatusQuery`, notify `quality_inspector` `inspection.decided`, audit `inspection_report.accepted`. Reject: `reason()`, `report_status='returned'`, audit `inspection_report.rejected`.
+- Confirm: rate and immutable currency from PO terms; require that currency to match settings before comparing a monetary claim threshold (409 `'PO currency differs from the configured factory currency.'`, no claim/decision effect otherwise); rate from `json_extract(terms_snapshot,'$.price_minor')`; `needsApproval('claim', amount)`; claim `open`, or `pending_approval` + `approvalQueries` type `claim`; either way notify `admin` and `purchase_manager` `claim.created` (spec 3.2 and 6: the purchase manager gets a notice when a claim is raised and when it is decided); issues `confirmed`; audit `rejection.confirmed`. Dismiss: `reason()` and `dismissOutcome` required; `accept_with_deviation` adds the rejected grams to raw stock with note `Accepted with deviation: <reason>`; audit `rejection.dismissed`. Escalate: `approvalQueries` type `escalation`, amount = the would-be claim, `rejection_status='escalated'`, audit `rejection.escalated`.
 - Handlers: `claim.approve` → `status='open'`; `claim.reject` → `status='rejected'` (the rejection stays confirmed, nothing is claimed); `escalation.approve` → claim `open` + `rejection_status='confirmed'`; `escalation.reject` → `rejection_status='dismissed'`, `dismiss_outcome='re_inspect'`, `rejection_reason` = the admin's reason.
 - Claim decide (admin only): outcome required; audit `claim.decided` (before `{amount: calculated}`, after `{amount, outcome}`); when adjusted, also audit `claim.adjusted` with the reason; notify `purchase_manager` `claim.decided`.
-- `supplierPerformance`: `qcPassRate` = Σ accepted ÷ Σ (accepted + rejected) over inspections whose report and rejection are decided; `onTimeRate` = share of QC lots with `arrived_at <= bid delivery_at` from the PO terms; `claims` counts decided outcomes.
+- `supplierPerformance`: `qcPassRate` = final accepted quantity ÷ (final accepted + final confirmed rejected quantity), aggregated over settled lots; pending lots are excluded, zero denominator returns null. Count accepted reports and `accept_with_deviation` as accepted, confirmed rejections as rejected, returned/re_inspect quantities as neither until their replacement inspection settles them. NULL sides with zero quantity are not applicable and do not exclude wholly accepted/rejected lots; no quantity is counted twice across reinspections; `onTimeRate` = share of QC lots with `arrived_at <= bid delivery_at` from the PO terms; `claims` counts decided outcomes.
 - `PENDING_SOURCES`: pending reports and pending rejections → `supervisor` (since `submitted_at`); `open` claims → `admin` (since `updated_at`).
+
+Every report accept/reject, rejection confirm/dismiss/escalate and escalation approve/reject calls `decisionQueries` in its single transaction. It applies Task 9's transition guard first, updates related issues (confirmed/dismissed/escalated), calls `lotStatusQuery`, emits one `inspection.decided` notification per inspector and a reasoned domain audit. Returned/re_inspect quantities make the lot awaiting_inspection when no other review remains, otherwise under_review; all consumed quantities make it settled. Receipts for both accepted reports and deviation acceptance call `movementQueries`; no copied ledger INSERT variants. Claim/escalation `describe` supplies Task 4 evidence. Close all remaining legacy raw-receive and `/quality` mutations here (410 with replacement route), including admin calls: raw can enter only via guarded report decisions. LiveApp replaces supervisor QC toggles with report Accept/Reject and rejection Confirm/Dismiss/Escalate, including reason/intervention fields; inventory tests/e2e use these flows. Claims and new lot metadata follow Task 1. Admin corrections never edit decided inspections: a reasoned new stock adjustment through Task 11’s owning route records the compensation and original inspection/claim id, with no reopening or recounting of settled inspection quantities; no reused decision or hidden history rewrite.
 
 - [ ] **Step 5: Run all tests**
 
 Run: `npm test && npx tsc -b`
 Expected: `fail 0`; tsc silent.
 
+Also run: `npx playwright test --project=desktop-chromium`; expected supervisor replacement controls pass.
+
 - [ ] **Step 6: Commit**
 
 ```bash
-git add drizzle/0014_claims.sql server/quality.mjs server/procurement.mjs server/inventory.mjs server/notify.mjs tests/claims.test.mjs tests/portal-fixture.mjs
+git add drizzle/0014_claims.sql server/quality.mjs server/procurement.mjs server/inventory.mjs server/notify.mjs tests/claims.test.mjs tests/portal-fixture.mjs server/stock-ledger.mjs src/LiveApp.tsx tests/inventory-api.test.mjs e2e/inventory.spec.ts
 git commit -m "Add supervisor review, escalation and partial claims decided by the admin"
 ```
 
@@ -911,16 +964,17 @@ git commit -m "Add supervisor review, escalation and partial claims decided by t
 - Create: `drizzle/0015_stock.sql`
 - Create: `server/stock.mjs`
 - Create: `tests/stock.test.mjs`
-- Modify: `server/inventory.mjs` (`/api/products` uses `role(member, data, 'supervisor', 'purchase_manager')`; mount `erp.stock`; merge handlers). The legacy stock routes (`/api/movements` POST, `/api/reversals`, `/api/quality`, `/api/inspections`, `/api/lots` POST, `/api/photos` POST) stay live until Task 20 replaces the Stock screen.
+- Modify: `server/inventory.mjs` (`/api/products` uses `role(member, data, 'supervisor', 'purchase_manager')`; mount `erp.stock`; merge handlers). Legacy stock route stubs/read history remain until Task 21; superseded mutation bypasses are closed now or in Tasks 9–10, with dispatch closure owned by Task 14.
 - Modify: `server/notify.mjs` (`PENDING_SOURCES`)
+- Modify: `tests/portal-fixture.mjs` (`addFinished`), `src/LiveApp.tsx` (legacy stock forms delegate to supervisor finished/adjustment APIs; all stages remain visible), `tests/inventory-api.test.mjs`, `e2e/inventory.spec.ts`, `e2e/every-button.spec.ts` (guarded stock workflow).
 
 **Interfaces:**
 - Consumes: `lots.inventory_type/source` (Task 10), movement ledger triggers, `needsApproval`, `approvalQueries`, `notifyRole`.
 - Produces:
-  - `GET /api/erp/stock` → `{ lots: [{ id, batch, product_name, inventory_type, source, quality, raw_grams, finished_grams }] }` (viewer `supervisor`).
+  - `GET /api/erp/stock` → `{ lots: [{ id, batch, product_name, inventory_type, source, quality, raw_grams, cops_grams, wip_grams, finished_grams, legacyReadOnly: boolean }] , adjustmentThreshold: {value: number | null, unit: 'grams'} }` (viewer `supervisor`).
   - `POST /api/erp/stock/finished {id, productId, batch, grams, cartons?, cones?, note?}` (role `supervisor`).
-  - `adjustmentQueries(db, member, { id, lotId, stage, deltaGrams, reason, source }, now) → Statement[]` (exported; writes the movement — `waste` from the stage when negative, `receive` into it when positive — its `stock_deltas` row and sets the adjustment `applied`).
-  - `POST /api/erp/stock/adjustments {id, lotId, stage: 'raw'|'finished', kind: 'adjustment'|'write_off', deltaGrams, reason}` → 201 `{ adjustment }` or 202 `{ pendingApproval: true, approvalId }` (role `supervisor`).
+  - `adjustmentQueries(db, member, { id, lotId, stage, deltaGrams, reason, source }, now) → Statement[]` (exported; calls Task 10 `movementQueries` — `waste` when negative, `receive` when positive — and sets the adjustment `applied` with its movement id).
+  - `POST /api/erp/stock/adjustments {id, lotId, stage: 'raw'|'finished', kind: 'adjustment'|'write_off', deltaGrams, reason, compensatesId?}` → 201 `{ adjustment }` or 202 `{ pendingApproval: true, approvalId }` (role `supervisor`).
   - `GET /api/erp/stock/queries`, `POST /api/erp/stock/queries {id, productId, quantityMilli?, buyerRfqId?, question}` (role `sales_manager`), `POST /api/erp/stock/queries/answer {id, availableGrams, answer?}` (role `supervisor`).
   - `GET /api/erp/stock/reports/draft?from=&to=` → `{ confirmedRejections, escalations, adjustments }`; `POST /api/erp/stock/reports {id, from, to, flagged: [{objectType, objectId, note}], note?}`; `GET /api/erp/stock/reports` (viewer `supervisor`, admin sees all); `GET /api/erp/stock/history` (the caller's own audit rows).
   - `approvalHandlers = { inventory_adjustment }`.
@@ -956,6 +1010,8 @@ test('the stock ledger stays immutable', async () => {
 });
 ```
 
+Add `test('all legacy stage balances remain readable but new writes use raw or finished')`: seed balances raw=1000,cops=2000,WIP=3000,finished=4000; assert all four exact API values, unsupported stage mutation→422 and all balances unchanged. Add `test('supervisors read threshold previews without admin settings access')`: stock response includes value=10000/unit=grams (or null when unset); supervisor admin-threshold GET→403, dispatch stock GET→403. Add `test('reasoned admin compensation preserves the original decision')`: new linked adjustment without reason→422; with reason/intervention below threshold→201, original record/audit unchanged, distinct compensating audit. Seed a movement and delta before ledger immutability attempts; snapshot and assert unchanged after each error. Seed the report before its UPDATE attempt and assert unchanged contents.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `node --test tests/stock.test.mjs`
@@ -963,7 +1019,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Write `drizzle/0015_stock.sql`**
 
-- `inventory_adjustments(id PK, workspace_id, lot_id REFERENCES lots, stage TEXT NOT NULL CHECK(stage IN ('raw','finished')), kind TEXT NOT NULL CHECK(kind IN ('adjustment','write_off')), delta_grams INTEGER NOT NULL CHECK(delta_grams != 0), reason TEXT NOT NULL CHECK(length(trim(reason)) >= 5), status TEXT NOT NULL CHECK(status IN ('pending_approval','applied','rejected')), source TEXT NOT NULL DEFAULT 'supervisor' CHECK(source IN ('supervisor','stock_issue')), movement_id TEXT REFERENCES movements(id), created_by, created_at, updated_at, decided_by, decided_at, CHECK(kind = 'adjustment' OR delta_grams < 0))`; trigger: no update once `applied` or `rejected`.
+- `inventory_adjustments(id PK, workspace_id, lot_id REFERENCES lots, stage TEXT NOT NULL CHECK(stage IN ('raw','finished')), kind TEXT NOT NULL CHECK(kind IN ('adjustment','write_off')), delta_grams INTEGER NOT NULL CHECK(delta_grams != 0), reason TEXT NOT NULL CHECK(length(trim(reason)) >= 5), status TEXT NOT NULL CHECK(status IN ('pending_approval','applied','rejected')), source TEXT NOT NULL DEFAULT 'supervisor' CHECK(source IN ('supervisor','stock_issue')), compensates_id TEXT, movement_id TEXT REFERENCES movements(id), created_by, created_at, updated_at, decided_by, decided_at, CHECK(kind = 'adjustment' OR delta_grams < 0))`; trigger: no update once `applied` or `rejected`.
 - `stock_queries(id PK, workspace_id, product_id REFERENCES products, quantity_milli INTEGER, buyer_rfq_id TEXT REFERENCES buyer_purchase_orders(id), question TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('open','answered')), available_grams INTEGER CHECK(available_grams IS NULL OR available_grams >= 0), answer TEXT, answered_by, answered_at, created_by, created_at, updated_at)`.
 - `supervisor_reports(id PK, workspace_id, period_from INTEGER NOT NULL, period_to INTEGER NOT NULL, content_json TEXT NOT NULL, flagged_json TEXT NOT NULL DEFAULT '[]', note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'submitted' CHECK(status='submitted'), created_by, created_at, updated_at)` with no-update/no-delete triggers raising `'immutable report'`.
 
@@ -971,15 +1027,19 @@ Expected: FAIL.
 
 Adjustment amount for the threshold is `Math.abs(deltaGrams)`. A batch failing on the `balances` CHECK maps to 409 `'This would make stock negative.'`. The draft report assembles: inspections with `rejection_status='confirmed'` in range (with `rejection_reason`, issue rows and `qc_photos` ids), `rejection_status='escalated'` rows, and `inventory_adjustments` in range; the POST stores that snapshot plus `flagged` (each `note` 3–500 chars, at most 50 items). `PENDING_SOURCES`: open stock queries → `supervisor`; pending adjustments are already covered by approvals.
 
+Consume `movementQueries` from `server/stock-ledger.mjs` for finished receipts and all adjustments; ledger construction has one owner. Close legacy general receive/produce/transfer/waste/reversal/lot-create writes (410), retaining only the explicitly temporary immediate dispatch path until Task 14. LiveApp offers supervisor finished-goods entry and threshold-gated adjustments through `/erp/stock/*` with reasons, instead of legacy stock mutation forms; catalogue roles stay as specified. Keep all raw/cops/WIP/finished balances readable (map the legacy WIP stage key to `wip_grams`); cops/WIP have no new mutation controls and any attempted new workflow write returns 422 `'Legacy cops/WIP stock is read-only; an authorized migration is required.'` No automatic conversion or data deletion. `inventory_adjustment.describe` supplies lot, stage, current balance, proposed delta/reason and threshold. `GET /erp/stock` returns the scoped adjustment-threshold preview to supervisor/admin only; other roles get 403. `GET /stock/queries` permits supervisor/admin to see workspace queries and sales_manager to see only their own; writes remain role guarded. Admin compensation uses `/stock/adjustments` with a new id, `compensatesId`, reason and interventionReason, retaining original movement/decision and auditing the link; normal thresholds still apply.
+
 - [ ] **Step 5: Run all tests**
 
 Run: `npm test && npx tsc -b`
 Expected: `fail 0`; tsc silent.
 
+Also run: `npx playwright test --project=desktop-chromium`; expected the revised legacy stock forms pass.
+
 - [ ] **Step 6: Commit**
 
 ```bash
-git add drizzle/0015_stock.sql server/stock.mjs server/inventory.mjs server/notify.mjs tests/stock.test.mjs
+git add drizzle/0015_stock.sql server/stock.mjs server/inventory.mjs server/notify.mjs tests/stock.test.mjs tests/portal-fixture.mjs src/LiveApp.tsx tests/inventory-api.test.mjs e2e/inventory.spec.ts e2e/every-button.spec.ts
 git commit -m "Give the supervisor sole control of inventory with threshold-gated adjustments, stock queries and reports"
 ```
 
@@ -994,6 +1054,7 @@ The sales tables arrive on the live D1 with `0004` at Task 1's deploy and the le
 - Modify: `server/sales.mjs` (buyer review, quotes, `recordAcceptance`, `noteSale`, invoice document, credit notes; delete staff buyer creation, staff RFQ entry, `confirmApprovedRevision`, outbox, dispatch/delivery/correction/payment routes and `salesScheduled`)
 - Modify: `server/buyer-portal.mjs` (`/api/buyer/approve` calls `recordAcceptance`), `server/cloudflare.mjs` (drop `salesScheduled`), `server/inventory.mjs` (mount `erp.sales = salesApi` in the `erp` map), `server/notify.mjs` (`PENDING_SOURCES`)
 - Modify: `tests/portal-fixture.mjs` (`insertBuyer`, `insertBuyerRfq`, `acceptedQuote`)
+- Modify: `server/governance.mjs`, `server/admin.mjs`, `tests/thresholds.test.mjs` (extend currency-change guards to new sales accounting).
 
 **Interfaces:**
 - Consumes: `settingsOf`, `notifyRole`, `role`, `viewer`, `reason`, `audit`, `karachiDate`, `dueAt` (existing in `server/sales.mjs`).
@@ -1031,13 +1092,14 @@ test('a sale is noted only after the buyer accepts, and its invoice carries 18% 
   // invoice.number === `INV-${karachiDate(now).slice(0,4)}-0001`; due_at === dueAt(issued_at, 30); audit 'sale.noted' and 'invoice.issued'
 });
 test('invoice numbers run INV-YYYY-NNNN and restart each Karachi calendar year', async () => {
-  // noteSale(..., Date.UTC(2026,11,31,18,0)) → 'INV-2026-0001'; Date.UTC(2026,11,31,18,30) (00:30 PKT on 1 Jan) → 'INV-2027-0001'; next → 'INV-2027-0002'
+  // noteSale(..., Date.UTC(2026,11,31,18,0)) → 'INV-2026-0001'; Date.UTC(2026,11,31,19,30) (00:30 PKT on 1 Jan) → 'INV-2027-0001'; next → 'INV-2027-0002'
 });
 test('two sales noted at once never share a number', async () => {
   const [a, b] = await Promise.all([noteSale(db, sana, x), noteSale(db, sana, y)]);
   assert.notEqual(a.invoice.number, b.invoice.number);
 });
-test('admin-edited format, tax rate and currency apply to the next invoice', async () => {
+test('admin-edited format and tax rate apply to the next invoice; currency follows its accepted quotation', async () => {
+  // with no currency blockers, choose USD before creating/sending/accepting the next quote; invoice remains USD even if settings later change.
   // settings invoice_format 'FAZ-{YYYY}-{NNNN}', tax_rate_bp 1700 → next number 'FAZ-2026-000N' pattern /^FAZ-\d{4}-\d{4}$/, tax_minor 2125000
 });
 test('issued invoices are locked; corrections are credit notes with a reason', async () => {
@@ -1050,9 +1112,11 @@ test('only sales managers quote and note sales; dispatch cannot change invoices,
 });
 test('staff cannot create buyers or enter buyer RFQs', async () => { /* POST /erp/sales/buyers → 404; /erp/sales/pos → 404 */ });
 test('due dates are the Karachi date plus the credit days, across month and year ends', () => {
-  // port of the old test: dueAt(Date.UTC(2026,0,31,20,0), 30) === Date.UTC(2026,2,2,23,59,59,999) - 5*3600_000, and the Dec→Jan case
+  // port of the old test: dueAt(Date.UTC(2026,0,31,20,0), 30) === Date.UTC(2026,2,3,18,59,59,999) /* 2026-03-03T18:59:59.999Z */, and the Dec→Jan case
 });
 ```
+
+Add `test('accepted credit days and buyer eligibility are guarded atomically')`: seed/send/accept 30-day quote, UPDATE credit_days→throws and unchanged 30; suspended or foreign buyer acceptance→409/404, no acceptance/audit; suspend after acceptance then note sale→409 without order/invoice. Add `test('accept versus resend cannot accept superseded terms')`: race acceptance of sent v1 with publication of v2; one wins, the other 409; if v2 wins no v1 acceptance, if acceptance wins v2 is not sent. Existing immutability test first notes a real sale, snapshots the invoice, attempts UPDATE and verifies unchanged row. Assert the January due-date value is exactly `2026-03-03T18:59:59.999Z`; preserve existing `dueAt` semantics.
 
 - [ ] **Step 2: Run to verify failure**
 
@@ -1063,14 +1127,16 @@ Expected: FAIL.
 
 - `ALTER TABLE sales_quote_revisions ADD COLUMN credit_days INTEGER NOT NULL DEFAULT 30 CHECK(credit_days BETWEEN 0 AND 365)`.
 - `ALTER TABLE invoices ADD COLUMN` `subtotal_minor INTEGER`, `tax_rate_bp INTEGER NOT NULL DEFAULT 0`, `tax_minor INTEGER NOT NULL DEFAULT 0`, `due_at INTEGER`, `payment_terms TEXT NOT NULL DEFAULT ''`, `credit_days INTEGER`, `locked INTEGER NOT NULL DEFAULT 1 CHECK(locked = 1)` (spec 5's locked flag; `invoices_immutable_update` is what enforces it). No backfill: `invoices_immutable_update` forbids it, and no invoice exists on the live D1.
-- `quotation_acceptances(id PK, workspace_id, revision_id TEXT NOT NULL UNIQUE REFERENCES sales_quote_revisions(id), buyer_id REFERENCES buyers, version INTEGER NOT NULL, accepted_by TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'accepted' CHECK(status='accepted'), created_at, updated_at)` with no-update/no-delete triggers. (`buyer_approvals.user_id` requires a portal account, which the integration API does not have.)
+- `quotation_acceptances(id PK, workspace_id, revision_id TEXT NOT NULL UNIQUE REFERENCES sales_quote_revisions(id), buyer_id REFERENCES buyers, version INTEGER NOT NULL, accepted_by TEXT NOT NULL, created_by TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'accepted' CHECK(status='accepted'), created_at, updated_at)` with no-update/no-delete triggers. (`buyer_approvals.user_id` requires a portal account, which the integration API does not have.)
 - `credit_notes(id PK, workspace_id, invoice_id REFERENCES invoices, number TEXT NOT NULL, amount_minor INTEGER NOT NULL CHECK(amount_minor > 0), reason TEXT NOT NULL CHECK(length(trim(reason)) >= 5), status TEXT NOT NULL DEFAULT 'issued' CHECK(status='issued'), created_by, created_at, updated_at, UNIQUE(workspace_id, number))`; trigger `validate_credit_note` (amount ≤ invoice total − earlier credit notes); no-update/no-delete triggers.
+
+Migration 0016 adds a `credit_days` immutability trigger covering every saved revision, matching existing quoted-term immutability; draft/sent/approved terms cannot be rewritten. Add a transactionally guarded current sent revision/version on the owning buyer RFQ (or extend its existing version guard): publishing advances that pointer only while unaccepted; acceptance requires the exact current sent id/version and active buyer in the same workspace whose id owns the RFQ. Once accepted, a competing resend cannot replace it. Note sale rechecks buyer status/identity and accepted current revision in its committing transaction. Currency for the invoice remains the accepted revision currency; a later factory currency change cannot relabel agreed terms. Recheck configured-currency compatibility when sending a still-unaccepted quotation. Replace the old Task 3 currency guard triggers in migration 0016 with guards using new acceptance/credit-note accounting; unpaid invoice balance still blocks a switch. `quotation_acceptances.created_by` is the authenticated buyer identity (acceptedBy is a display claim, not actor identity); add retained invoice creator/status/updated timestamp columns where absent with additive legacy defaults, populated for new notes without rewriting immutable rows. Buyer/RFQ/revision entities also satisfy Task 1 metadata.
 
 - [ ] **Step 4: Implement**
 
 - Buyer review: role `sales_manager`; `reason()` for `rejected`/`suspended`; on `rejected` also `UPDATE buyer_purchase_orders SET status='cancelled' WHERE buyer_id=? AND status IN ('entered','quoted')`; on `pending → active` one `notifyRole(…,'sales_manager','buyer_rfq.received','buyer_rfq',rfqId,reference)` per held RFQ; audit `buyer.approved` / `buyer.rejected` / `buyer.suspended`.
 - Quotes: keys without `currency`; currency from `settingsOf`; pre-check the buyer is `active` (409 above); keep the revision and send logic, minus the outbox inserts.
-- `recordAcceptance`: the revision must be `sent` and the latest version (409 `'This quotation was replaced. Accept the latest revision.'`); insert the acceptance, move the revision to `approved` (the existing trigger allows `sent → approved`), audit `quotation.accepted` with actor type `buyer`; a repeat for the same revision returns `already: true`.
+- `recordAcceptance`: the revision must belong to the active buyer and be `sent` and the current version, enforced inside the batch (409 `'This quotation was replaced. Accept the latest revision.'`); insert the acceptance, move the revision to `approved` (the existing trigger allows `sent → approved`), audit `quotation.accepted` with actor type `buyer`; an identical repeat for the same buyer/revision/version/note returns `already: true`; mismatched replay returns 409 without duplicate audit.
 - `noteSale`: refuse without an acceptance (409 above); one batch: `sales_orders` + `sales_order_lines` (as `confirmApprovedRevision` did), `document_counters` upsert for period `karachiDate(now).slice(0,4)`, `invoices` insert whose number is `replace(replace(?, '{YYYY}', ?), '{NNNN}', printf('%04d', (SELECT next_number …)))` with `settings.invoice_format`, the buyer RFQ `confirmed`, audits `sale.noted` and `invoice.issued`. On a UNIQUE clash, retry once.
 - `invoiceDocument`: rows for subtotal, `GST (18%)` (from `tax_rate_bp`), total and due date; drop the "Taxes are not shown" note.
 - `PENDING_SOURCES`: pending buyers → `sales_manager`; buyer RFQs in state `open` without a sent quotation → `sales_manager`.
@@ -1083,7 +1149,7 @@ Expected: `fail 0`; tsc silent.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add drizzle/0016_sales_portal.sql server/sales.mjs server/buyer-portal.mjs server/cloudflare.mjs server/inventory.mjs server/notify.mjs tests/sales.test.mjs tests/portal-fixture.mjs
+git add drizzle/0016_sales_portal.sql server/sales.mjs server/buyer-portal.mjs server/cloudflare.mjs server/inventory.mjs server/notify.mjs tests/sales.test.mjs tests/portal-fixture.mjs server/governance.mjs server/admin.mjs tests/thresholds.test.mjs
 git rm tests/sales-api.test.mjs
 git commit -m "Note sales after buyer acceptance and issue locked invoices with 18% GST, yearly INV numbers and credit notes"
 ```
@@ -1095,6 +1161,7 @@ git commit -m "Note sales after buyer acceptance and issue locked invoices with 
 - Create: `tests/payments.test.mjs`
 - Modify: `server/sales.mjs` (payments route, `paymentStatus`, `creditAlertsScheduled`, overview balances)
 - Modify: `server/cloudflare.mjs` (`scheduled` adds `creditAlertsScheduled`)
+- Modify: `server/governance.mjs`, `server/admin.mjs` (currency-change eligibility uses invoice payments/credit notes), `tests/thresholds.test.mjs` (paid/unpaid currency-switch regressions).
 
 **Interfaces:**
 - Consumes: invoices with `due_at` (Task 12), `settingsOf().credit_alert_days`, `notifyRole`.
@@ -1138,11 +1205,13 @@ Expected: FAIL.
 - [ ] **Step 3: Write `drizzle/0017_payments.sql`**
 
 - `invoice_payments(id PK, workspace_id, invoice_id REFERENCES invoices, amount_minor INTEGER NOT NULL CHECK(amount_minor > 0), received_at INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'recorded' CHECK(status='recorded'), created_by, created_at, updated_at)`; trigger `validate_invoice_payment` (`due_at IS NOT NULL` and amount ≤ total − credit notes − earlier payments; message `'payment exceeds balance'`); no-update/no-delete triggers raising `'immutable payment'`.
-- `credit_alerts(id PK, workspace_id, invoice_id REFERENCES invoices, kind TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'sent' CHECK(status='sent'), created_at, updated_at, UNIQUE(invoice_id, kind))`.
+- `credit_alerts(id PK, workspace_id, invoice_id REFERENCES invoices, kind TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'sent' CHECK(status='sent'), created_by TEXT NOT NULL DEFAULT 'system:credit_alerts', created_at, updated_at, UNIQUE(invoice_id, kind))`.
 
 - [ ] **Step 4: Implement**
 
 Days to due `d` = whole days between `karachiDate(now)` and `karachiDate(due_at)`. For an invoice with a positive balance: `now > due_at` → `overdue`; `d === 0` → `due_today`; otherwise the smallest configured `n` with `d <= n` → `before_<n>`; nothing when `d` exceeds every `n`. Insert the alert and the notification in one batch only when the `(invoice_id, kind)` row does not exist yet. Payment errors containing `payment exceeds balance` map to the 409 above.
+
+Replace the prior currency guard triggers in migration 0017 with guards using invoice total minus credit notes minus invoice_payments (plus any preserved legacy payment accounting). A partially paid invoice blocks PKR→USD with 409; fully paid/credited does not, provided other blockers are absent. Repeat those assertions in `tests/thresholds.test.mjs`. New payments and credit alerts satisfy Task 1 metadata; alert creator is `system:credit_alerts`.
 
 - [ ] **Step 5: Run all tests**
 
@@ -1152,7 +1221,7 @@ Expected: `fail 0`; tsc silent.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add drizzle/0017_payments.sql server/sales.mjs server/cloudflare.mjs tests/payments.test.mjs
+git add drizzle/0017_payments.sql server/sales.mjs server/cloudflare.mjs tests/payments.test.mjs server/governance.mjs server/admin.mjs tests/thresholds.test.mjs
 git commit -m "Track invoice payments with partial and overdue states and alert the sales manager before and after due dates"
 ```
 
@@ -1163,13 +1232,14 @@ git commit -m "Track invoice payments with partial and overdue states and alert 
 - Create: `server/dispatch.mjs`
 - Create: `tests/dispatch.test.mjs`
 - Modify: `server/inventory.mjs` (`erp.dispatch`, merge handlers), `server/notify.mjs` (`PENDING_SOURCES`)
+- Modify: `src/LiveApp.tsx` (replace immediate dispatch with request/approve/hold/dispatched controls), `tests/inventory-api.test.mjs`, `e2e/inventory.spec.ts` (no immediate deduction path).
 
 **Interfaces:**
 - Consumes: sales orders (Task 12), `adjustmentQueries` and `addFinished` (Task 11), `needsApproval`, `approvalQueries`, `notifyRole`.
 - Produces:
   - Dispatch statuses: `pending_approval | approved | on_hold | dispatched | delivered`. Hold terms: `payment_overdue | terms_not_met | other`.
   - Routes (`dispatchApi`): `GET /api/erp/dispatch?status=` (viewer `dispatch, sales_manager`); `POST /api/erp/dispatch {id, orderId, lotId, quantityMilli, grams?, cartons?, cones?, vehicle?, transporter?}` (create and request approval); `POST /api/erp/dispatch/request {dispatchId}` (re-request for an `on_hold` dispatch); `POST /api/erp/dispatch/hold {dispatchId, noticeId, reason}`; `POST /api/erp/dispatch/dispatched {dispatchId, vehicle?, transporter?}`; `POST /api/erp/dispatch/delivered {dispatchId, deliveryProof?}`; `POST /api/erp/dispatch/stock-issues {id, dispatchId?, lotId, stage, kind: 'shortage'|'mismatch', differenceGrams, description}` (all role `dispatch`); `POST /api/erp/dispatch/requests/decide {requestId, decision: 'approve'|'hold', term?, reason?}` and `POST /api/erp/dispatch/hold-notices {dispatchId, term, message}` (role `sales_manager`); `POST /api/erp/dispatch/stock-issues/decide {id, decision: 'accept'|'reject', reason?, correctionGrams?}` (role `supervisor`).
-  - `approvalHandlers = { dispatch_stock_issue }` (payload `{ correctionGrams, lotId, stage }`).
+  - `approvalHandlers = { dispatch_stock_issue }` (payload `{ correctionGrams, correctionReason, lotId, stage, adjustmentId, gates: { dispatch: {amount,threshold,required}, inventory: {amount,threshold,required} | null } }`). `GET /api/erp/dispatch/stock-issues?status=` (viewer supervisor/admin; scoped workspace) → `{issues:[{id,dispatch_id,lot_id,stage,kind,difference_grams,description,status,decision_reason,correction_grams,adjustment_id,created_at}], thresholds:{dispatchStockIssueGrams:number|null,inventoryAdjustmentGrams:number|null}}`.
 
 - [ ] **Step 1: Write the failing tests** (`tests/dispatch.test.mjs`)
 
@@ -1199,7 +1269,7 @@ test('short stock never dispatches and the status stays approved', async () => {
 });
 test('stock issues go to the supervisor; at or above the threshold the correction waits for admin', async () => {
   // Danish raises shortage 2000 g → supervisors have 'stock_issue.raised'
-  // setThreshold('dispatch_stock_issue', 1000); Saima accept {correctionGrams:-2000} → issue 'pending_approval', grams unchanged
+  // setThreshold('dispatch_stock_issue', 1000); Saima accept {correctionGrams:-2000,reason:'Verified shortage after recount'} → issue 'pending_approval', grams unchanged
   // admin approves → grams lower by 2000, inventory_adjustments row source 'stock_issue' applied
   // another issue: reject without reason → 422, with reason → 'rejected'
 });
@@ -1209,6 +1279,8 @@ test('vehicle, transport and delivery proof are optional', async () => {
 });
 ```
 
+Add `test('stock issue approval gates apply with and without corrections')`: difference=2000, dispatch threshold=1000, no correction→202 and zero stock effect until approval; difference=100, dispatch threshold=1000, correction=-2000, inventory threshold=1000→202; both thresholds=1000 and difference/correction=2000→one approval and one adjustment only; exact thresholds gate. Missing correction reason→422. Concurrent approval→[200,409] and one delta. Add `test('supervisors read the scoped stock issue queue')`: supervisor/admin→200 with shape above; sales/dispatch→403, foreign rows absent. Add `test('raw and legacy stages cannot sale-dispatch')`: raw/cops/WIP attempts→422, balances and dispatch count unchanged; finished succeeds after approval. Assert old immediate dispatch returns 410 with no movement.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `node --test tests/dispatch.test.mjs`
@@ -1217,25 +1289,29 @@ Expected: FAIL.
 - [ ] **Step 3: Write `drizzle/0018_dispatch.sql`**
 
 - `dispatches(id PK, workspace_id, sales_order_id REFERENCES sales_orders, lot_id REFERENCES lots, quantity_milli INTEGER NOT NULL CHECK(quantity_milli > 0), grams INTEGER NOT NULL CHECK(grams > 0), cartons INTEGER NOT NULL DEFAULT 0, cones INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL CHECK(status IN ('pending_approval','approved','on_hold','dispatched','delivered')), hold_reason TEXT, vehicle TEXT NOT NULL DEFAULT '', transporter TEXT NOT NULL DEFAULT '', delivery_proof TEXT NOT NULL DEFAULT '', sales_dispatch_id TEXT REFERENCES sales_dispatches(id), version INTEGER NOT NULL DEFAULT 1, created_by, created_at, updated_at, dispatched_at, delivered_at, CHECK(status != 'on_hold' OR length(trim(COALESCE(hold_reason,''))) >= 5))`; trigger `dispatch_status_flow` allowing only `pending_approval→approved|on_hold`, `approved→on_hold|dispatched`, `on_hold→pending_approval`, `dispatched→delivered`.
-- `dispatch_requests(id PK, workspace_id, dispatch_id REFERENCES dispatches, kind TEXT NOT NULL CHECK(kind IN ('approval','hold_notice')), status TEXT NOT NULL CHECK(status IN ('pending','approved','held','acknowledged')), term TEXT CHECK(term IS NULL OR term IN ('payment_overdue','terms_not_met','other')), message TEXT NOT NULL DEFAULT '', reason TEXT, requested_by, decided_by, created_at, updated_at, decided_at)`; `CREATE UNIQUE INDEX dispatch_one_pending ON dispatch_requests(dispatch_id, kind) WHERE status='pending'`.
+- `dispatch_requests(id PK, workspace_id, dispatch_id REFERENCES dispatches, kind TEXT NOT NULL CHECK(kind IN ('approval','hold_notice')), status TEXT NOT NULL CHECK(status IN ('pending','approved','held','acknowledged')), term TEXT CHECK(term IS NULL OR term IN ('payment_overdue','terms_not_met','other')), message TEXT NOT NULL DEFAULT '', reason TEXT, requested_by, created_by, decided_by, created_at, updated_at, decided_at)`; `CREATE UNIQUE INDEX dispatch_one_pending ON dispatch_requests(dispatch_id, kind) WHERE status='pending'`.
 - `stock_issues(id PK, workspace_id, dispatch_id REFERENCES dispatches, lot_id REFERENCES lots, stage TEXT NOT NULL CHECK(stage IN ('raw','finished')), kind TEXT NOT NULL CHECK(kind IN ('shortage','mismatch')), difference_grams INTEGER NOT NULL CHECK(difference_grams >= 0), description TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('open','pending_approval','accepted','rejected')), decision_reason TEXT, correction_grams INTEGER, adjustment_id TEXT REFERENCES inventory_adjustments(id), created_by, created_at, updated_at, decided_by, decided_at)`.
 
 - [ ] **Step 4: Implement**
 
-- "Dispatched": one batch with the `movements` (`dispatch`, from the lot's stage), `sales_dispatches` and `stock_deltas` inserts and the `sales_orders` status update, copied from the removed `/api/erp/sales/dispatches` route (Task 12 deleted it; recover it with `git show 4212ef5:yarn-erp/server/sales.mjs`, lines 287-328), with `carrier = transporter || 'Factory transport'`, then `dispatches.status='dispatched'`, `sales_dispatch_id`, `dispatched_at`. Any trigger failure maps to the 409 above.
+- "Dispatched": one batch using Task 10 `movementQueries` (`dispatch`, finished stage) plus `sales_dispatches` inserts and the `sales_orders` status update, copied from the removed `/api/erp/sales/dispatches` route (Task 12 deleted it; recover it with `git show 4212ef5:yarn-erp/server/sales.mjs`, lines 287-328), with `carrier = transporter || 'Factory transport'`, then `dispatches.status='dispatched'`, `sales_dispatch_id`, `dispatched_at`. Any trigger failure maps to the 409 above.
 - Requests decide: `approve` sets request `approved` and dispatch `approved`; `hold` needs `term` and `reason()`, sets request `held`, dispatch `on_hold` with `hold_reason`. Audit `dispatch.approved` / `dispatch.held`. Dispatch's own hold needs a `pending` `hold_notice` for that dispatch and `reason()`; it sets the notice `acknowledged`.
-- Stock issue decide: the threshold amount is the issue's `difference_grams`; `accept` with a non-zero `correctionGrams` either applies `adjustmentQueries(…, { source: 'stock_issue' })` now or raises a `dispatch_stock_issue` approval and sets `pending_approval`; `accept` without a correction is final; `reject` needs `reason()`. Audit `stock_issue.accepted` / `stock_issue.rejected`.
+- Stock issue accept independently checks dispatch_stock_issue against `difference_grams` even with no correction, and inventory_adjustment against `abs(correctionGrams)` when non-zero. A correction requires `reason()` and a validated raw/finished stage; pass it to the required adjustment reason field. If either gate requires approval, raise one `dispatch_stock_issue` request with both request-time gate snapshots, and leave issue/adjustment pending without stock effects. `approval_requests.amount/threshold` summarize the dispatch gate when required, otherwise the inventory gate; complete gates remain in immutable payload and `describe`. One admin approval satisfies both gates in one batch, guards the issue transition, calls `adjustmentQueries` once if needed and sets accepted; rejection marks both issue and unapplied adjustment rejected. With neither gate required, the same effect builder applies immediately. Reject always requires reason. Audit `stock_issue.accepted` / `stock_issue.rejected`; do not raise a second independent adjustment approval.
 - `PENDING_SOURCES`: pending approval requests → `sales_manager`; open stock issues → `supervisor`; pending hold notices → `dispatch`.
+
+Close the final legacy immediate dispatch bypass in `/api/movements` and any alternate inventory dispatch writer with 410; LiveApp's current dispatch control uses the new request→sales approval→dispatched flow with hold/reason/intervention fields. Keep stock read visibility; new sale dispatch accepts only finished stock. Raw stock returns 422 `'Raw stock cannot be sale-dispatched; only finished goods are supported.'`; cops/WIP return the Task 11 read-only migration explanation, before any movement or request is written. Retained legacy stock cannot be silently converted. `dispatch_stock_issue.describe` includes both gates, evidence and correction reason. New entities carry all metadata; dispatch request created_by equals requested_by. Admin corrections to decided issues use a new inventory adjustment through `/erp/stock/adjustments` linked by compensatesId to the original issue, with reason/intervention and normal thresholds; original history remains immutable.
 
 - [ ] **Step 5: Run all tests**
 
 Run: `npm test && npx tsc -b`
 Expected: `fail 0`; tsc silent.
 
+Also run: `npx playwright test --project=desktop-chromium`; expected the adapted dispatch controls pass.
+
 - [ ] **Step 6: Commit**
 
 ```bash
-git add drizzle/0018_dispatch.sql server/dispatch.mjs server/inventory.mjs server/notify.mjs tests/dispatch.test.mjs
+git add drizzle/0018_dispatch.sql server/dispatch.mjs server/inventory.mjs server/notify.mjs tests/dispatch.test.mjs src/LiveApp.tsx tests/inventory-api.test.mjs e2e/inventory.spec.ts
 git commit -m "Add dispatch approval, holds and stock issues, deducting stock only when goods leave"
 ```
 
@@ -1247,15 +1323,16 @@ The live supplier portal screen keeps working until Task 22 removes it; this tas
 - Create: `server/integration.mjs`
 - Create: `tests/integration.test.mjs`
 - Modify: `server/procurement.mjs` (extract `submitBid` from `supplierOperations`), `server/inventory.mjs` (route `/api/integration/v1/*` before the Origin check), `scripts/dev-server.mjs` (pass `SUPPLIER_PORTAL_TOKEN`, `BUYER_PORTAL_TOKEN` from `process.env`)
+- Modify: `server/sales.mjs` (export/reuse `buyerData`, `invoiceFileResponse` and acceptance actor contract).
 
 **Interfaces:**
 - Consumes: `supplierData`, `categoryIds`, `categoryQueries` (procurement), `buyerData`, `recordAcceptance`, `invoiceFileResponse`, `paymentStatus` (sales), `settingsOf`, `notifyRole`, `audit`.
 - Produces:
   - Auth: `Authorization: Bearer <token>`; supplier routes need Worker secret `SUPPLIER_PORTAL_TOKEN`, buyer routes `BUYER_PORTAL_TOKEN` (each ≥ 32 chars); unset → 503 `'The <supplier|buyer> portal connection is not configured.'`; wrong or missing → 401. Compared in constant time. The factory workspace is the single workspace (503 when there are several, as today).
-  - `submitBid(db, supplier: { id, workspace_id, status }, data, now) → Promise<{ bid, created: boolean }>` (moved logic; the currency must equal `settingsOf().currency`, else 422 `` `Bid in ${currency}.` `` (`'Bid in PKR.'` by default); notifies `bid.received`).
+  - `submitBid(db, supplier: { id, workspace_id, status }, actor: { user_id, workspace_id, role: 'supplier' }, data, now) → Promise<{ bid, created: boolean }>` (moved logic; the currency must equal `settingsOf().currency`, else 422 `` `Bid in ${currency}.` `` (`'Bid in PKR.'` by default); notifies `bid.received`).
   - Supplier routes: `POST /api/integration/v1/suppliers {id, company, contactName, email, phone, city?, website?, categories}`; `GET /api/integration/v1/suppliers/<id>`; `GET /api/integration/v1/suppliers/<id>/rfqs`; `POST /api/integration/v1/bids {id, supplierId, rfqId, version, quantityMilli, priceMinor, currency, paymentTerms, deliveryAt, validUntil, note?}`; `GET /api/integration/v1/suppliers/<id>/bid-results` → `{ results: [{ bidId, rfqId, status: 'submitted'|'rejected'|'pending_award'|'awarded'|'not_awarded', rejectionReason, purchaseOrder: { reference, quantityMilli, totalMinor } | null }] }`.
   - Buyer routes: `POST /api/integration/v1/buyers {id, company, contactName, email, phone, city?}`; `GET /api/integration/v1/buyers/<id>`; `POST /api/integration/v1/buyer-rfqs {id, buyerId, reference, specifications, quantityMilli, unit, requestedDeliveryAt, paymentTerms}` → `{ rfq: { id, state } }`; `GET /api/integration/v1/buyers/<id>/quotations`; `POST /api/integration/v1/acceptances {buyerId, quotationId, version, acceptedBy, note?}`; `GET /api/integration/v1/buyers/<id>/invoices`; `GET /api/integration/v1/buyers/<id>/invoices/<invoiceId>` (HTML).
-  - Intake writes audit with actor type `supplier` or `buyer` and are idempotent on `id` with `request_hash`.
+  - Registrations and buyer RFQs use their existing `id` + `request_hash` idempotency. Bids reuse immutable version/snapshot history (no new hash column/migration); acceptances use the buyer/revision/version and identical-body contract from Task 12. Intake audits have actor type/role `supplier` or `buyer` and the authenticated external identity id, never a missing staff user id.
 
 - [ ] **Step 1: Write the failing tests** (`tests/integration.test.mjs`)
 
@@ -1288,6 +1365,8 @@ test('quotations and invoices go out only to their own buyer', async () => {
 test('server-to-server calls need no Origin header', async () => { /* POST /suppliers without Origin → 201 */ });
 ```
 
+Add `test('bid replay and actor attribution are explicit across both transports')`: integration create version=0→201, exact retry→200, conflicting retry→409; history/audit actor_id=supplier.id and actor_role/type=supplier; exactly one `bid.received` per PM. Legacy portal create uses its supplier-user id and one notification; concurrent identical retries create one revision. Buyer acceptance audit and quotation_acceptances.created_by equal buyer identity, not caller-provided acceptedBy. Verify wrong supplier/workspace replay cannot read a bid.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `node --test tests/integration.test.mjs`
@@ -1295,7 +1374,9 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement `integration.mjs` and `submitBid`**
 
-`submitBid` is the body of the `/api/portal/bids` branch in `supplierOperations` plus the currency check and notification; `supplierOperations` now calls it. Buyer RFQ intake reuses the `/api/buyer/pos` validation; it accepts `pending` and `active` buyers, refuses others with 403, and notifies `sales_manager` `buyer_rfq.received` only for `active` buyers. Supplier and buyer registration notify `supplier.pending` / `buyer.pending`. Bid result `status`: `rejected` from the bid; `awarded` when a PO references the bid; `pending_award` while a pending `purchase_award` approval names it; `not_awarded` when the RFQ is awarded to another bid or cancelled; else `submitted`.
+`submitBid` moves the existing `/api/portal/bids` body, including the single Task 7 notification, and adds the currency check; `supplierOperations` delegates with no extra audit/notification. Integration actor is `{user_id:supplier.id,workspace_id:supplier.workspace_id,role:'supplier'}`; the legacy portal passes its authenticated supplier-user id and the same workspace/type. Bid history actor_id and audit actor_id come from that explicit actor. Buyer intake/acceptance analogously uses buyer.id as actor_id (portal requests may retain their authenticated buyer-user identity); acceptedBy remains display text. Buyer RFQ intake reuses the `/api/buyer/pos` validation; it accepts `pending` and `active` buyers, refuses others with 403, and notifies `sales_manager` `buyer_rfq.received` only for `active` buyers. Supplier and buyer registration notify `supplier.pending` / `buyer.pending`. Bid result `status`: `rejected` from the bid; `awarded` when a PO references the bid; `pending_award` while a pending `purchase_award` approval names it; `not_awarded` when the RFQ is awarded to another bid or cancelled; else `submitted`.
+
+Bid idempotency: preserve the existing expected-version contract (`version:0` creates revision 1). Normalize the bid terms and compare to the immutable `supplier_bid_history.snapshot` for the resulting version: identical retry returns `{created:false}` and 200 without any history/audit/notification; different terms with the same expected version return 409. An intentional revision supplies the current expected version and creates exactly one next snapshot, audit and `bid.received`. Check supplier/RFQ/workspace ownership on every retry; concurrent identical submissions converge to one committed revision. Currency compatibility is checked transactionally with Task 3's currency-change guard. Export the sales validators/document helper used by integration, leaving their authorization at the calling boundary.
 
 - [ ] **Step 4: Run all tests**
 
@@ -1305,7 +1386,7 @@ Expected: `fail 0`; tsc silent.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add server/integration.mjs server/procurement.mjs server/inventory.mjs scripts/dev-server.mjs tests/integration.test.mjs
+git add server/integration.mjs server/procurement.mjs server/inventory.mjs scripts/dev-server.mjs tests/integration.test.mjs server/sales.mjs
 git commit -m "Add token-authenticated integration endpoints for the separate supplier and buyer portals"
 ```
 
@@ -1319,8 +1400,8 @@ git commit -m "Add token-authenticated integration endpoints for the separate su
 **Interfaces:**
 - Consumes: tables from Tasks 6–14, `paymentStatus`, `supplierPerformance`.
 - Produces:
-  - `GET /api/erp/analytics/admin?from=&to=` (admin) → `{ purchasing: { rfqs: Record<status, number>, awards, poTotalMinor }, quality: { inspectedMilli, acceptedMilli, rejectedMilli, passRate, claims: Record<outcome, number>, claimMinor }, inventory: { rawGrams, finishedGrams, adjustments, adjustedGrams }, sales: <sales block>, payments: { outstandingMinor, overdueMinor }, dispatch: Record<status, number>, users: [{ name, role, actions }] }`.
-  - `GET /api/erp/analytics/sales?from=&to=` (viewer `sales_manager`) → `{ byPeriod: [{ period: 'YYYY-MM', totalMinor }], byBuyer: [{ buyer, totalMinor }], byProduct: [{ product, totalMinor }], paymentStatus: { unpaid, partially_paid, paid, overdue }, overdueMinor }`.
+  - `GET /api/erp/analytics/admin?from=&to=` (admin) → `{ purchasing: { rfqs: Record<status, number>, awards, totalsByCurrency: [{currency,poTotalMinor}] }, quality: { inspectedMilli, acceptedMilli, rejectedMilli, passRate, claims: Record<outcome, number>, totalsByCurrency: [{currency,claimMinor}] }, inventory: { rawGrams, copsGrams, wipGrams, finishedGrams, adjustments, adjustedGrams }, sales: <sales block>, payments: { byCurrency: [{currency,outstandingMinor,overdueMinor}] }, dispatch: Record<status, number>, users: [{ name, role, actions }] }`.
+  - `GET /api/erp/analytics/sales?from=&to=` (viewer `sales_manager`) → `{ byPeriod: [{ period: 'YYYY-MM', currency, totalMinor }], byBuyer: [{ buyer, currency, totalMinor }], byProduct: [{ product, currency, totalMinor }], paymentStatus: { unpaid, partially_paid, paid, overdue }, overdueByCurrency: [{currency,overdueMinor}] }`.
   - `GET /api/erp/analytics/purchase?from=&to=` (viewer `purchase_manager`) → `{ suppliers: [{ id, name, ...supplierPerformance }], bidding: { rfqs, bids, averageBidsPerRfq, awarded, cancelled } }`.
   - Periods are Karachi calendar months: `strftime('%Y-%m', (issued_at + 18000000) / 1000, 'unixepoch')`.
 
@@ -1329,7 +1410,7 @@ git commit -m "Add token-authenticated integration endpoints for the separate su
 ```js
 test('sales analytics group by Karachi month, buyer and product, with payment status and overdue amount', async () => {
   // invoice issued Date.UTC(2026,9,31,20,0) (1 Nov 01:00 PKT) → period '2026-11'; two buyers → byBuyer sums exact;
-  // one overdue invoice of 14750000 → overdueMinor 14750000, paymentStatus.overdue 1
+  // one overdue invoice of 14750000 → overdueByCurrency [{currency:'PKR',overdueMinor:14750000}], paymentStatus.overdue 1
 });
 test('purchase analytics give supplier performance and a bidding summary', async () => {
   // 2 RFQs, 3 bids, 1 awarded → averageBidsPerRfq 1.5, awarded 1; supplier qcPassRate 0.8
@@ -1342,6 +1423,8 @@ test('each role sees only its analytics', async () => {
 });
 ```
 
+Add `test('analytics never sum unlike currencies')`: historical PKR invoice total=14750000 and USD invoice total=20000 produce separate labelled groups for period, buyer, product, outstanding/overdue and admin totals; no scalar 14770000. PO and claim totals likewise stay in their source currency after a settings change.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `node --test tests/analytics.test.mjs`
@@ -1350,6 +1433,8 @@ Expected: FAIL.
 - [ ] **Step 3: Implement `analytics.mjs`**
 
 Plain aggregate SQL per block; sales totals use invoice `total_minor` minus credit notes; the sales block of the admin endpoint is the same function the sales endpoint returns.
+
+Every monetary SUM groups by the source record's immutable currency (PO/claim terms or invoice), including payment/outstanding/overdue, buyer/product/month and admin totals. Never expose a combined unlike-currency total; counts may combine. QC aggregates reuse Task 10 final lot disposition semantics, not repeated inspection totals. Inventory summaries preserve legacy cops/WIP visibility alongside raw/finished.
 
 - [ ] **Step 4: Run all tests**
 
@@ -1371,11 +1456,12 @@ git commit -m "Add admin, sales and purchasing analytics endpoints"
 - Modify: `src/LiveApp.tsx` (navigation from `NAV`, hash routes `#/<section>/<tab>/<id>`, Settings content moves to My profile)
 - Modify: `scripts/dev-server.mjs` (test mode seeds one user per role), `playwright.config.ts` (portal tokens in the web server command)
 - Modify: `e2e/helpers.ts` (`signIn` waits for the `Dashboard` heading), and the tab-label expectations in `e2e/every-button.spec.ts`, `e2e/interaction-foundation.spec.ts`, `e2e/language-layout.spec.ts`, `e2e/session-lifecycle.spec.ts`, `e2e/inventory.spec.ts`
+- Modify: `src/Procurement.tsx` (replace its Task 7 local intervention field with the shared `PortalCommon.InterventionField`).
 
 **Interfaces:**
 - Consumes: `Member.role`, `roleLabel` (Task 1), `/api/erp/notifications*` (Task 5).
 - Produces:
-  - `src/roles.ts`: `interface Section { id: string; en: string; ur: string; icon: LucideIcon; tabs?: { id: string; en: string; ur: string }[] }`; `NAV: Record<Role, Section[]>` (role sections, grown by Tasks 18–21); `COMMON: Section[]` = `notifications` (Notifications / اطلاعات, Bell, unread badge), `profile` (My profile / میری پروفائل, CircleUserRound), `scanner` (Scan), `help` (Help); `eventTitle: Record<string, [string, string]>` for every event in Task 5; `objectRoute(objectType: string, objectId: string) → string` (hash), falling back to `#/notifications`.
+  - `src/roles.ts`: `interface Section { id: string; en: string; ur: string; icon: LucideIcon; tabs?: { id: string; en: string; ur: string }[] }`; `NAV: Record<Role, Section[]>` (role sections, grown by Tasks 18–21); `COMMON: Section[]` = `notifications` (Notifications / اطلاعات, Bell, unread badge), `profile` (My profile / میری پروفائل, CircleUserRound), `scanner` (Scan), `help` (Help); `eventTitle: Record<string, [string, string]>` for every event in Task 5; `objectRoute(objectType: string, objectId: string, context: {role: Role, module?: Role, installedModules: Role[]}) → string` (hash); resolves an accessible role section or admin module route and otherwise `#/notifications`, never an inaccessible section that falls back to dashboard.
   - Target navigation (each row's owner task adds it; spec §8 item numbers in brackets). Sub-screens are segmented tabs inside a section, so no sidebar exceeds 8 role items:
 
 | Role | Section id: tabs | Spec | Task |
@@ -1400,6 +1486,8 @@ for (const [name, sections] of [
   ['Pervaiz', ['Dashboard', 'Procurement']],
   ['Saima', ['Dashboard', 'Stock', 'History']],
   ['Sana', ['Dashboard']],
+  ['Qasim', ['Dashboard', 'Stock', 'History']],
+  ['Danish', ['Dashboard', 'Stock', 'History']],
 ] as const) test(`${name} sees only the sections of their role, plus the common ones`, async ({ page }) => {
   await signIn(page, name);
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
@@ -1420,6 +1508,8 @@ test('My profile shows the role and switches language', async ({ page }) => {
 Run: `npx playwright test e2e/roles.spec.ts --project=desktop-chromium`
 Expected: FAIL (no `Dashboard` heading).
 
+Define admin module hashes as `#/modules/<module>/<section>/<tab>/<id>`; role routes remain `#/<section>/<tab>/<id>` with optional segments parsed explicitly. `objectRoute` maps supplier/rfq/bid/purchase_order/shipment→purchase, qc_lot/qc_inspection→quality or supervisor review as appropriate, stock_query/stock_issue/inventory_adjustment→supervisor, buyer/buyer_rfq/quotation/invoice→sales, dispatch→dispatch (sales request destination for sales_manager); approval/claim/supervisor_report use admin approvals/claims/reports; user→admin settings/users, threshold→settings/thresholds, setting→settings/invoices. Payment/credit-note events resolve their invoice destination; a destination screen may resolve related ids using its authorized read API. Bid and shipment detail may resolve their parent RFQ/PO via the owning screen. Admin links select the installed module and preserve object id; module renderers keep the actual admin member for intervention checks. Unbuilt modules return notifications until their owner task installs them. All notifications/audit links supply this context. Consolidate Task 7's intervention field into PortalCommon and update its import.
+
 - [ ] **Step 3: Implement the shell**
 
 `LiveApp.tsx` builds the sidebar, phone bottom nav (first three role sections, Notifications, More) and menu sheet from `[...NAV[me.role], ...COMMON]`; Scan and Help sit at the sidebar foot as today. The unread count comes from `/erp/notifications` on the same 10-second refresh as the workspace. A hash for a section the role lacks falls back to `dashboard`. Keep the glide measurement, skip link, offline and save banners. `Profile.tsx` holds what Settings held (language, role, admin backup and InvenTree check). All new copy is bilingual.
@@ -1432,7 +1522,7 @@ Expected: tsc silent; `fail 0`; Playwright `passed`, none failed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/roles.ts src/PortalCommon.tsx src/Notifications.tsx src/Profile.tsx src/LiveApp.tsx scripts/dev-server.mjs playwright.config.ts e2e
+git add src/roles.ts src/PortalCommon.tsx src/Notifications.tsx src/Profile.tsx src/LiveApp.tsx scripts/dev-server.mjs playwright.config.ts e2e src/Procurement.tsx
 git commit -m "Drive navigation from the signed-in role and add Notifications and My profile"
 ```
 
@@ -1442,10 +1532,12 @@ git commit -m "Drive navigation from the signed-in role and add Notifications an
 - Create: `src/AdminScreens.tsx`, `e2e/admin.spec.ts`
 - Modify: `src/roles.ts` (admin `NAV`), `src/LiveApp.tsx` (mount), `src/erp.css` (only classes the new screens need)
 - Delete: `src/Team.tsx` (its people list moves to `settings › users`; e2e references to `Team` move to `Settings`)
+- Create: `src/ModuleViews.tsx` (sole owner of `MODULES`, role-component imports and shared module props).
+- Modify: `src/Profile.tsx` (remove Team imports), `e2e/roles.spec.ts`, `e2e/every-button.spec.ts`, `e2e/inventory.spec.ts` (admin NAV/users expectations).
 
 **Interfaces:**
 - Consumes: `/erp/approvals*`, `/erp/qc/claims*`, `/erp/admin/{users,thresholds,settings,audit}`, `/erp/stock/reports`, `/erp/analytics/admin`, `PortalCommon`.
-- Produces: `AdminScreens({ member, section, tab, id, navigate })`; `ModuleViews` registry `MODULES: Partial<Record<Role, (props) => JSX.Element>>` that Tasks 19–21 fill, rendered under `modules` with the acting member (so `InterventionField` appears on every action).
+- Produces: `AdminScreens({ member, section, tab, id, navigate })`; `src/ModuleViews.tsx` exports `MODULES: Partial<Record<Role, (props: ModuleProps) => JSX.Element>>` with explicit screen imports added by Tasks 19–21, rendered under `modules` with the acting member (so `InterventionField` appears on every action).
 
 - [ ] **Step 1: Write the failing e2e spec** (`e2e/admin.spec.ts`)
 
@@ -1463,6 +1555,8 @@ test('the audit log shows old and new values and the activity monitor opens the 
 test('users: add a person with a role, deactivate and reactivate them', async ({ page }) => { /* replaces the Team test from Task 1 */ });
 ```
 
+Add `test('admin activity links open the correct module item with admin authority')`: once a module is installed, objectRoute opens its detail and required Intervention reason is visible; uninstalled targets remain in Notifications. Add `test('currency labels follow settings and active records block a switch')`: clean factory PKR→USD shows Purchase threshold (USD); with an open bid a change returns/display 409, retaining the old label. Check Profile renders role after Team removal.
+
 - [ ] **Step 2: Run to verify failure**
 
 Run: `npx playwright test e2e/admin.spec.ts --project=desktop-chromium`
@@ -1473,10 +1567,12 @@ Expected: FAIL.
 - `dashboard` (8.1.1): `NextStep` for the oldest pending approval (warn) or all clear (ok); pending counts by approval group; "Thresholds not set" list when any `thresholdOf` is null; key figures from `/erp/analytics/admin` as a plain fact list, not tiles.
 - `approvals` (8.1.2–8.1.3): `SectionTabs` filter by group (Purchase awards = `purchase_award`+`po_change`, Inventory adjustments, Claims, Dispatch stock issues, Escalations); rows show requester, amount with unit, age; detail `#/approvals/<id>` shows `describe()` output, threshold at request time, Approve and Reject (`ReasonField` required for Reject).
 - `claims` (8.1.4): list with status tags; detail shows rejected qty, PO rate, calculated amount, outcome choice (Return / Replacement / Claim), optional adjusted amount that makes `ReasonField` required when it differs.
-- `settings › thresholds` (8.1.5): four inputs (Purchase and Claim in PKR, Inventory adjustment and Dispatch stock issue in kg), each with its history list; `settings › invoices`: currency, GST %, number format, reminder hours, alert days; `settings › users` (8.1.10): add, role select, PIN reset, deactivate/reactivate.
+- `settings › thresholds` (8.1.5): four inputs (Purchase and Claim labelled with `settings.currency`, Inventory adjustment and Dispatch stock issue in kg), each with its history list; `settings › invoices`: currency, GST %, number format, reminder hours, alert days; `settings › users` (8.1.10): add, role select, PIN reset, deactivate/reactivate.
 - `activity › monitor` (8.1.6): newest audit rows on a day-grouped thread; each row links to its item via `objectRoute`, where the admin acts with `InterventionField`. `activity › audit` (8.1.7): filters (person, action, object, dates), old → new values, reason and intervention reason, "Load older" paging.
 - `reports` (8.1.8): supervisor reports list and detail (sections and flagged items). `analytics` (8.1.9): tables per module from `/erp/analytics/admin`.
 - `modules` (8.1.11): `SectionTabs` over the five roles rendering `MODULES[role]`; until a role's task lands its tab shows that role's legacy screen.
+
+Before deleting Team, move `accessSummary(role,language)` to `src/roles.ts` and have Profile/LiveApp import it there. Remove `permissionInfo` display/imports in favor of roleLabel; retain no Team dependency. `AdminScreens` imports MODULES from ModuleViews; roles.ts owns navigation/helpers only and never imports screen implementations. ModuleViews declares `ModuleProps={member,section,tab,id,navigate}`; register only installed screens, render the adapted legacy screen for uninstalled role modules. Update `e2e/roles.spec.ts` admin expected sections to Dashboard, Approvals, Claims, Activity, Reports, Analytics, Settings, Modules (+ common four), replacing Stock/History/Procurement/Team now. User-management tests navigate Settings › Users. Monetary settings/history labels use their recorded currency, not hard-coded PKR; analytics render separate currency groups.
 
 - [ ] **Step 4: Run e2e, unit tests and the type check**
 
@@ -1486,7 +1582,7 @@ Expected: tsc silent; `fail 0`; Playwright `passed`, none failed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/AdminScreens.tsx src/roles.ts src/LiveApp.tsx src/erp.css e2e
+git add src/AdminScreens.tsx src/roles.ts src/LiveApp.tsx src/erp.css e2e src/ModuleViews.tsx src/Profile.tsx
 git rm src/Team.tsx
 git commit -m "Add the admin dashboard, approvals queue, claims, thresholds, activity, audit, reports, analytics and users screens"
 ```
@@ -1495,12 +1591,13 @@ git commit -m "Add the admin dashboard, approvals queue, claims, thresholds, act
 
 **Files:**
 - Create: `src/PurchaseScreens.tsx`, `e2e/purchase.spec.ts`
-- Modify: `src/roles.ts` (purchase_manager `NAV`; `MODULES.purchase_manager`), `src/LiveApp.tsx`, `src/ErpCommon.tsx` (keep `CategoryPicker`, `RfqSummary`, `BidTerms`)
+- Modify: `src/roles.ts` (purchase_manager `NAV`), `src/ModuleViews.tsx` (import/register `PurchaseScreens` as `MODULES.purchase_manager`), `src/LiveApp.tsx`, `src/ErpCommon.tsx` (keep `CategoryPicker`, `RfqSummary`, `BidTerms`)
 - Delete: `src/Procurement.tsx`, `src/IncomingStock.tsx`, `server/receiving.mjs`; remove its routing in `server/inventory.mjs` and the three receipt tests in `tests/procurement-api.test.mjs:132-176`
 - Modify: `e2e/procurement.spec.ts` (its staff half uses the new screens; the supplier-portal half stays until Task 22)
+- Modify: `server/inventory.mjs`, `tests/procurement-api.test.mjs` (final receipt-route removal), `e2e/roles.spec.ts` (purchase NAV and notification links).
 
 **Interfaces:**
-- Consumes: `/erp/suppliers*`, `/erp/rfqs*`, `/erp/bids/*`, `/erp/procurement`, `/erp/orders/quantity`, `/erp/shipments*`, `/erp/qc/lots` (PM registers arrivals), `/erp/qc/claims`, `/erp/analytics/purchase`.
+- Consumes: `/erp/suppliers*`, `/erp/rfqs*`, `/erp/bids/*`, `/erp/procurement`, `/erp/orders/quantity`, `/erp/orders/pending-approvals`, `/erp/shipments*`, `/erp/qc/lots` (PM registers arrivals), `/erp/qc/claims`, `/erp/analytics/purchase`.
 - Produces: `PurchaseScreens({ member, section, tab, id, navigate })`.
 
 - [ ] **Step 1: Write the failing e2e spec** (`e2e/purchase.spec.ts`)
@@ -1526,7 +1623,9 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement the sections** (spec 8.2.1–8.2.13)
 
-Dashboard (pending suppliers, open RFQs closing soonest, awards waiting for admin as a `NextStep`); Suppliers list with status and category filters; Pending suppliers with Approve and Reject (`ReasonField`); Supplier profile (details, categories, ratings and feedback, QC pass rate, on-time rate, claim outcomes, a Rate form 1–5 with feedback); Create RFQ; RFQ list and detail with Start bidding, End bidding, Cancel (`ReasonField`); Bid comparison table sorted by total with Accept and Reject (`ReasonField`); Awards pending admin approval; PO list and detail (quantity change, B/L entry, Record arrived lot, its lots); Shipment tracking (B/L lookup with cached status, last checked time, error banner); Claim notices (read-only); Supplier performance analytics. Every action form carries `InterventionField owners={['purchase_manager']}`. Register `MODULES.purchase_manager`.
+Dashboard (pending suppliers, open RFQs closing soonest, awards waiting for admin as a `NextStep`); Suppliers list with status and category filters; Pending suppliers with Approve and Reject (`ReasonField`); Supplier profile (details, categories, ratings and feedback, QC pass rate, on-time rate, claim outcomes, a Rate form 1–5 with feedback); Create RFQ; RFQ list and detail with Start bidding, End bidding, Cancel (`ReasonField`); Bid comparison table sorted by total with Accept and Reject (`ReasonField`); Awards pending admin approval; PO list and detail (quantity change, B/L entry, Record arrived lot, its lots); Shipment tracking (B/L lookup with cached status, last checked time, error banner); Claim notices (read-only); Supplier performance analytics. Every action form carries `InterventionField owners={['purchase_manager']}`. Register `MODULES.purchase_manager` in `src/ModuleViews.tsx`; consume `/erp/orders/pending-approvals` for the PM awards view, never the admin-only approvals API. Display amounts in the response currency.
+
+Update `e2e/roles.spec.ts` Pervaiz sections to Dashboard, Suppliers, RFQs, Orders, Claims, Analytics (+ common four); supplier notification now opens its profile instead of Notifications. Test the same supplier notification as admin opens `#/modules/purchase/suppliers/.../<id>` with the actual admin member. Final retirement here removes only the now-disabled goods-receipt write stubs/history routes and adapted IncomingStock screen, whose arrival behavior moves into PurchaseScreens.
 
 - [ ] **Step 4: Run e2e, unit tests and the type check**
 
@@ -1536,7 +1635,7 @@ Expected: tsc silent; `fail 0`; Playwright `passed`, none failed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/PurchaseScreens.tsx src/roles.ts src/LiveApp.tsx src/ErpCommon.tsx server/inventory.mjs tests/procurement-api.test.mjs e2e
+git add src/PurchaseScreens.tsx src/roles.ts src/LiveApp.tsx src/ErpCommon.tsx server/inventory.mjs tests/procurement-api.test.mjs e2e src/ModuleViews.tsx
 git rm src/Procurement.tsx src/IncomingStock.tsx server/receiving.mjs
 git commit -m "Add the purchase manager screens and retire the old procurement and goods-receipt screens"
 ```
@@ -1545,8 +1644,8 @@ git commit -m "Add the purchase manager screens and retire the old procurement a
 
 **Files:**
 - Create: `src/SalesScreens.tsx`, `src/DispatchScreens.tsx`, `e2e/sales-dispatch.spec.ts`
-- Modify: `src/roles.ts` (sales_manager and dispatch `NAV`; their `MODULES`), `src/LiveApp.tsx`
-- Delete: `src/Sales.tsx`, `src/sales-client.ts`, `src/sales.css` (move any class still used into `src/erp.css`)
+- Modify: `src/roles.ts` (sales_manager and dispatch `NAV`), `src/ModuleViews.tsx` (import/register SalesScreens and DispatchScreens), `src/LiveApp.tsx`, `src/erp.css` (retained sales styles), `e2e/roles.spec.ts` (sales/dispatch NAV and links)
+- Delete: `src/Sales.tsx`, `src/BuyerPortal.tsx`, `src/sales-client.ts`, `src/sales.css` (move any class still used into `src/erp.css`)
 
 **Interfaces:**
 - Consumes: `/erp/sales*`, `/erp/stock/queries`, `/erp/dispatch*`, `/erp/analytics/sales`.
@@ -1579,6 +1678,8 @@ Expected: FAIL.
 Sales (8.5.1–8.5.12): dashboard (`NextStep` for the oldest pending buyer, RFQ or dispatch request; overdue total); buyer list with status filter; pending buyers with verification details, Approve and Reject (`ReasonField`); buyer RFQ list and detail (respond only when the buyer is approved; held RFQs say why); stock availability query; quotation form (rate, specifications, payment terms, credit days; currency shown, not chosen); Note sale; invoice list and detail (locked; subtotal, GST, total, due date, credit notes with `ReasonField`; download); payment tracking (due dates, partial payments, status tags, record payment); credit alerts list; dispatch approval requests (Approve, Hold with term and `ReasonField`, hold notice on an approved dispatch); sales analytics tables.
 Dispatch (8.6.1–8.6.7): dashboard; dispatch list by status tabs; detail with a status thread (Pending approval → Approved → Dispatched → Delivered, hold branch), optional vehicle, transporter and delivery proof; Request dispatch approval; Hold dispatch (needs a sales-manager notice and `ReasonField`); Raise stock issue; Dispatch history (delivered). No control edits invoices, prices or terms. Register both `MODULES`.
 
+Delete BuyerPortal together with sales-client so TypeScript has no dangling import; its hash route already went in Task 1. Register both components in ModuleViews. Update `e2e/roles.spec.ts`: Sana sections Dashboard, Buyers, Buyer RFQs, Invoices, Dispatch requests, Analytics; Danish Dashboard, Dispatches, New dispatch, History (+ common four each). Dispatch loses legacy Stock here. Test invoice and dispatch notifications for owner roles and admin module destinations. Sales analytics/overdue displays label each currency group. New dispatch selection visibly rejects raw and legacy cops/WIP with the Task 14 explanation.
+
 - [ ] **Step 4: Run e2e, unit tests and the type check**
 
 Run: `npx tsc -b && npm test && npx playwright test --project=desktop-chromium`
@@ -1587,8 +1688,8 @@ Expected: tsc silent; `fail 0`; Playwright `passed`, none failed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/SalesScreens.tsx src/DispatchScreens.tsx src/roles.ts src/LiveApp.tsx src/erp.css e2e
-git rm src/Sales.tsx src/sales-client.ts src/sales.css
+git add src/SalesScreens.tsx src/DispatchScreens.tsx src/roles.ts src/LiveApp.tsx src/erp.css e2e src/ModuleViews.tsx
+git rm src/Sales.tsx src/BuyerPortal.tsx src/sales-client.ts src/sales.css
 git commit -m "Add the sales manager and dispatch screens"
 ```
 
@@ -1596,10 +1697,11 @@ git commit -m "Add the sales manager and dispatch screens"
 
 **Files:**
 - Create: `src/QualityScreens.tsx`, `src/SupervisorScreens.tsx`, `e2e/quality-supervisor.spec.ts`
-- Modify: `src/roles.ts` (quality_inspector and supervisor `NAV`; their `MODULES`; admin and dispatch lose the legacy `Stock`/`History` sections, which become `supervisor › inventory` and `history`), `src/LiveApp.tsx` (delete `InventoryForm` and the movement, QC and reversal actions; `LotDetail` keeps the batch facts, QR label and evidence), `src/WorkspaceDashboard.tsx` (supervisor dashboard reuses `StockFlow`)
+- Modify: `src/roles.ts` (quality_inspector and supervisor `NAV`), `src/ModuleViews.tsx` (import/register QualityScreens and SupervisorScreens; admin legacy sections were removed in Task 18 and Dispatch Stock in Task 20), `src/LiveApp.tsx` (delete `InventoryForm` and the movement, QC and reversal actions; `LotDetail` keeps the batch facts, QR label and evidence), `src/WorkspaceDashboard.tsx` (supervisor dashboard reuses `StockFlow`)
 - Modify: `server/inventory.mjs` (delete `saveMovement`, `POST /api/movements`, `/api/reversals`, `/api/quality`, `/api/inspections`, `POST /api/lots`, `POST /api/photos`)
 - Modify: `tests/inventory-api.test.mjs` (keep only the PIN sign-in, two-devices, isolation and cross-origin tests; their setup adds stock through `/erp/stock/finished`), `tests/stock.test.mjs` (add the legacy-route test below), `scripts/demo-stock.mjs` (four finished lots through `/products` and `/erp/stock/finished`, signed in as `Saima`)
 - Modify: `e2e/inventory.spec.ts`, `e2e/every-button.spec.ts` (stock tests follow the supervisor screens; delete steps for removed receive, transfer, QC and reversal forms)
+- Modify: `e2e/roles.spec.ts` (quality/supervisor NAV and role-aware notification links).
 
 **Interfaces:**
 - Consumes: `/erp/qc/*`, `/erp/stock/*`, `/erp/dispatch/stock-issues*`, `/erp/stock/history`.
@@ -1626,7 +1728,13 @@ test('an inspector inspects a lot with photos and an issue; the supervisor accep
 });
 test('a returned report shows its reason under Returned items', async ({ browser }) => { /* Saima rejects with reason → Qasim › Returned shows it */ });
 test('a write-off needs a reason and, at the threshold, waits for admin', async ({ page }) => { /* adjust form; 'Sent to the admin for approval' */ });
-test('the supervisor answers a stock query and files the report to admin with a flagged item', async ({ page }) => {});
+test('the supervisor answers a stock query and files the report to admin with a flagged item', async ({ page }) => {
+  // Setup: Sana creates a stock query for a seeded product via API; seed one confirmed rejection in the report period.
+  // Saima: Requests › Queries → answer 80 kg and 'Available in bay 3'; Save. Sana GET queries asserts available_grams=80000 and the exact answer.
+  // Saima: Report → select the period, flag that rejection with 'Review shade evidence before reorder', Submit → saved report id.
+  // Anas: Reports → open that id; assert supervisor Saima, confirmed rejection id, photo evidence, flagged note and submitted period are visible.
+  // Refresh and assert the report and flag persist; no duplicate report is created.
+});
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -1637,7 +1745,9 @@ Expected: FAIL.
 - [ ] **Step 3: Implement the sections and remove the legacy entries**
 
 Quality Inspector (8.3.1–8.3.7): dashboard (`NextStep` for the oldest lot awaiting inspection); lot list (PO, supplier, quantity, status); inspection form (accepted and rejected quantity with the open quantity shown); photo upload (`<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment">`, thumbnails with time taken; required before Submit when accepted > 0); raise issue form (type, severity Minor/Major/Critical, description, optional photos); my submissions with report and rejection status tags; returned items with the supervisor's reason. The inspector has no inventory or decision controls.
-Supervisor (8.4.1–8.4.10): dashboard (`NextStep` for the oldest report or issue, then `StockFlow`); inspector reports queue (Accept, Reject with `ReasonField`, photos); issues queue (Confirm, Dismiss with `ReasonField` and outcome Re-inspect / Accept with deviation, Escalate); add inventory (finished goods as production output; raw explained as arriving through accepted reports); inventory list and detail (type, source, raw and finished kg); adjustment and write-off form (`ReasonField`, shows when admin approval will be needed); stock queries (answer with available kg); dispatch stock issues (Accept with optional correction, Reject with `ReasonField`); report to admin (draft preview of confirmed rejections with reasons and photos, escalations, adjustments; flag items with notes; Submit); decision history.
+Supervisor (8.4.1–8.4.10): dashboard (`NextStep` for the oldest report or issue, then `StockFlow`); inspector reports queue (Accept, Reject with `ReasonField`, photos); issues queue (Confirm, Dismiss with `ReasonField` and outcome Re-inspect / Accept with deviation, Escalate); add inventory (finished goods as production output; raw explained as arriving through accepted reports); inventory list and detail (type, source and raw/cops/WIP/finished kg; legacy cops/WIP explicitly read-only); adjustment and write-off form (`ReasonField`, shows when admin approval will be needed); stock queries (answer with available kg); dispatch stock issues (Accept with optional correction requiring `ReasonField` when non-zero, preview both approval gates; Reject with `ReasonField`); report to admin (draft preview of confirmed rejections with reasons and photos, escalations, adjustments; flag items with notes; Submit); decision history.
+
+Use Task 11 `/erp/stock` adjustmentThreshold for preview and Task 14 `/erp/dispatch/stock-issues` for the supervisor queue and both gate values; no supervisor call to admin-only settings/approvals. Register QualityScreens/SupervisorScreens in ModuleViews. Update `e2e/roles.spec.ts` Qasim sections Dashboard, Lots, Submissions; Saima Dashboard, Reviews, Inventory, Requests, Report, History (+ common four). Assert QC/stock issue notification links open their role's exact item and admin module equivalents. Preserve legacy-stage read visibility after deleting the legacy Stock UI; final removal of write stubs is here, not Task 20.
 
 - [ ] **Step 4: Run all tests, the type check and e2e**
 
@@ -1647,17 +1757,18 @@ Expected: `fail 0`; tsc silent; Playwright `passed`, none failed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/QualityScreens.tsx src/SupervisorScreens.tsx src/roles.ts src/LiveApp.tsx src/WorkspaceDashboard.tsx server/inventory.mjs tests/inventory-api.test.mjs tests/stock.test.mjs scripts/demo-stock.mjs e2e
+git add src/QualityScreens.tsx src/SupervisorScreens.tsx src/roles.ts src/LiveApp.tsx src/WorkspaceDashboard.tsx server/inventory.mjs tests/inventory-api.test.mjs tests/stock.test.mjs scripts/demo-stock.mjs e2e src/ModuleViews.tsx
 git commit -m "Add the inspector and supervisor screens and retire the old free-form stock entries"
 ```
 
 ### Task 22: Remove the supplier and buyer portal screens and the transitional permission layer
 
 **Files:**
-- Delete: `src/SupplierPortal.tsx`, `src/BuyerPortal.tsx`, `server/supplier-portal.mjs`, `server/buyer-portal.mjs`, `tests/procurement-api.test.mjs`, `e2e/procurement.spec.ts`
+- Delete: `src/SupplierPortal.tsx`, `server/supplier-portal.mjs`, `server/buyer-portal.mjs`, `tests/procurement-api.test.mjs`, `e2e/procurement.spec.ts`
 - Modify: `src/main.tsx` (render `LiveApp` only), `src/ErpCommon.tsx` (delete `BidForm`, `DispatchNotice`), `src/inventory-client.ts` (delete `Permission`, `can`, `Member.permissions`), `src/roles.ts`/screens (no `can()` left)
-- Modify: `server/inventory.mjs` (delete the `/api/portal/*` and `/api/buyer/*` branches), `server/procurement.mjs` (delete `supplierOperations`), `server/auth.mjs` (delete `ROLE_PERMISSIONS`), `server/erp-utils.mjs` (delete `allow`)
+- Modify: `server/inventory.mjs` (delete the `/api/portal/*` and `/api/buyer/*` branches, its separate local `allow` helper and all remaining call sites; currentMember stops returning permissions), `server/procurement.mjs` (delete `supplierOperations`), `server/auth.mjs` (delete `ROLE_PERMISSIONS`), `server/erp-utils.mjs` (delete `allow`)
 - Modify: `tests/integration.test.mjs` (add the test below)
+- Modify: `tests/rbac.test.mjs` (replace temporary permissions assertion with effective six-role access and no permissions property), `e2e/roles.spec.ts` (removed portal hashes render only the factory app). `src/BuyerPortal.tsx` was already deleted in Task 20.
 
 **Interfaces:**
 - Consumes: everything above.
@@ -1666,10 +1777,12 @@ git commit -m "Add the inspector and supervisor screens and retire the old free-
 - [ ] **Step 1: Write the failing test**
 
 ```js
-test('the factory no longer serves portal sessions or screens', async () => {
+test('the factory no longer serves portal session APIs', async () => {
   // POST /portal/login → 404; POST /buyer/login → 404; GET /portal/config → 404
 });
 ```
+
+In `e2e/roles.spec.ts` add `test('removed external portal hashes never render portal screens')`: visit `#/supplier` and `#/buyer` signed out and signed in; assert the factory sign-in/dashboard respectively, no supplier/buyer registration or portal controls. Retain these negative-route literals only in this named regression. In `tests/rbac.test.mjs`, replace `member.permissions includes receive/catalog` with effective role checks: supervisor finished entry allowed, PM/QI/dispatch denied, supervisor admin-users denied; assert `Object.hasOwn(member,'permissions') === false`. Cover all six role destinations/access and next-request role changes; no dot-permissions reference remains.
 
 - [ ] **Step 2: Run to verify failure**
 
@@ -1680,10 +1793,12 @@ Expected: FAIL (portal routes still answer).
 
 The supplier and buyer identity tables (`supplier_users`, `supplier_sessions`, `buyer_users`, `buyer_sessions`, `portal_rate_limits`) keep their rows and are no longer read or written.
 
+Explicitly update the Task 1 RBAC regression above before removing the shim; remove both shared and inventory-local allow helpers and replace any surviving caller with its responsible role check. Do not delete migration preservation fixtures merely to satisfy the search; use legacy-column SQL where needed, with no runtime permission dependence.
+
 - [ ] **Step 4: Verify nothing still references the removed layer**
 
-Run: `grep -rnE "\ballow\(|ROLE_PERMISSIONS|\bPERMISSIONS\b|\.permissions\b|\bcan\(|#/supplier|#/buyer|/portal/|/api/buyer/|supplierOperations" server src e2e tests --exclude=integration.test.mjs`
-Expected: no output (the excluded file is the 404 test above).
+Run: `rg -n "\ballow\(|ROLE_PERMISSIONS|\bPERMISSIONS\b|\.permissions\b|\bcan\(|supplierOperations" server src e2e tests`
+Expected: no output. Separately run `rg -n "#/supplier|#/buyer|/portal/|/api/buyer/" server src e2e tests`; only the explicit negative-route assertions in `tests/integration.test.mjs` and `e2e/roles.spec.ts` may match; inspect every match, with none in production sources.
 
 - [ ] **Step 5: Run all tests, the type check, the build and e2e**
 
