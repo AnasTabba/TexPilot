@@ -21,10 +21,20 @@
 
 /* Thread */
 .yf-chat-thread { display: flex; flex-direction: column; height: calc(100dvh - 180px); min-height: 440px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-field); background: var(--panel); }
-.yf-chat-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
-.yf-chat-bar h2 { min-width: 0; overflow: hidden; color: var(--ink); font: 700 18px var(--font); text-overflow: ellipsis; white-space: nowrap; }
+.yf-chat-bar { display: flex; flex: none; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.yf-chat-room-icon { display: grid; flex: none; place-items: center; width: 42px; height: 42px; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--sunken); color: var(--ink); }
+.yf-chat-room-heading { display: grid; min-width: 0; gap: 2px; }
+.yf-chat-room-heading h2 { min-width: 0; overflow: hidden; color: var(--ink); font: 700 19px/1.25 var(--font); text-overflow: ellipsis; white-space: nowrap; }
+.yf-chat-room-heading small { color: var(--ink-3); font: 500 13px var(--font); }
+.yf-chat-roster { display: flex; flex: none; gap: 8px; padding: 10px 14px; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: thin; }
+.yf-chat-roster-person { display: inline-flex; flex: none; align-items: center; gap: 8px; min-height: 42px; padding: 4px 10px 4px 4px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--ground); }
+.yf-chat-roster-person > span:last-child { display: grid; min-width: 0; gap: 1px; }
+.yf-chat-roster-person strong { max-width: 150px; overflow: hidden; color: var(--ink); font: 600 13px var(--font); text-overflow: ellipsis; white-space: nowrap; }
+.yf-chat-roster-person small { color: var(--ink-3); font: 500 11px var(--font); }
 html[dir="rtl"] .yf-chat-back svg { transform: scaleX(-1); }
 .yf-chat-log { display: flex; flex: 1; flex-direction: column; gap: 12px; min-height: 0; padding: 16px; overflow-y: auto; overscroll-behavior: contain; }
+.yf-chat-older { align-self: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--ground); color: var(--ink-2); font: 600 14px var(--font); cursor: pointer; }
+.yf-chat-older:disabled { opacity: 0.6; cursor: progress; }
 .yf-chat-msg { display: grid; justify-items: start; gap: 4px; max-width: 82%; }
 .yf-chat-msg.is-mine { margin-inline-start: auto; justify-items: end; }
 .yf-chat-sender { padding-inline: 12px; color: var(--ink-3); font: 600 13px var(--font); }
@@ -42,6 +52,12 @@ html[dir="rtl"] .yf-chat-back svg { transform: scaleX(-1); }
 .yf-chat-batch small { color: var(--ink-3); font: 500 12px var(--font); }
 .yf-chat-batch strong { overflow-wrap: anywhere; font: 600 15px/1.3 var(--font); }
 .yf-chat-batch .button { min-height: 44px; padding: 0 14px; font-size: 15px; }
+.yf-chat-shared-record { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 10px; min-width: min(320px, 70vw); padding: 9px; border-radius: 12px; background: var(--panel); color: var(--ink); }
+.yf-chat-shared-record > span:last-child { display: grid; min-width: 0; gap: 3px; }
+.yf-chat-shared-record small { overflow: hidden; color: var(--ink-3); font: 500 12px/1.35 var(--font); text-overflow: ellipsis; }
+.yf-chat-shared-record strong { overflow-wrap: anywhere; color: var(--ink); font: 650 15px/1.3 var(--font); }
+.yf-chat-shared-pdf { display: grid; justify-items: start; gap: 4px; }
+.yf-chat-shared-pdf .button { min-height: 40px; padding-inline: 12px; font-size: 13px; }
 
 /* Composer */
 .yf-chat-composer { display: grid; gap: 10px; padding: 10px 12px 12px; border-top: 1px solid var(--line); background: var(--panel); }
@@ -66,6 +82,13 @@ html[dir="rtl"] .yf-chat-back svg { transform: scaleX(-1); }
 .yf-chat-sheet.is-photo .yf-chat-sheet-head { background: var(--ink); color: var(--on-ink); }
 .yf-chat-sheet.is-photo .yf-chat-sheet-head h3 { color: var(--on-ink); }
 .yf-chat-error { margin: 0 12px; }
+.yf-chat-inline-error { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 12px 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--bad) 35%, var(--line)); border-radius: var(--r-control); background: var(--bad-bg); color: var(--bad); font: 500 14px/1.4 var(--font); }
+.yf-chat-inline-error p { margin: 0; }
+.yf-chat-inline-error .button { min-height: 40px; flex: none; }
+.yf-chat-share-types { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.yf-chat-share-types button { display: inline-flex; flex: none; align-items: center; gap: 7px; min-height: 42px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--panel); color: var(--ink-2); font: 600 14px var(--font); cursor: pointer; }
+.yf-chat-share-types button.is-active { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+.yf-chat-share-sheet .yf-chat-sheet-body { max-height: min(70dvh, 560px); overflow-y: auto; overscroll-behavior: contain; }
 .yf-chat-sheet.is-photo .yf-chat-sheet-body { padding: 0; }
 .yf-chat-full { display: block; width: 100%; max-height: 78dvh; object-fit: contain; }
 
@@ -76,6 +99,8 @@ html[dir="rtl"] .yf-chat-back svg { transform: scaleX(-1); }
 }
 /* Phone: the bottom nav is fixed over the page, so the thread stops above it and the composer stays reachable. */
 @media (max-width: 900px) {
-  .yf-chat-thread { height: calc(100dvh - 250px - var(--safe-bottom, 0px)); min-height: 360px; }
+  .yf-chat-thread { height: calc(100dvh - 230px - var(--safe-bottom, 0px)); min-height: 360px; }
+  .yf-chat-bar { padding: 10px 12px; }
+  .yf-chat-roster { padding: 8px 10px; }
   .yf-chat-actions .button { padding-inline: 12px; }
 }
