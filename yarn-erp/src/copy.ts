@@ -121,6 +121,12 @@ export const floor = {
   qcAgain: ['Check again', 'دوبارہ چیک کریں'],
   qcAgainHint: ['Not decided yet. Someone must inspect it again.', 'ابھی فیصلہ نہیں۔ دوبارہ معائنہ ضروری ہے۔'],
   qcReason: ['What did you check?', 'آپ نے کیا چیک کیا؟'],
+  tapReason: ['Tap a reason, or write your own below', 'کوئی وجہ دبائیں یا نیچے خود لکھیں'],
+  inspect: ['Add inspection', 'معائنہ درج کریں'],
+  inspectNote: ['What did you see?', 'آپ نے کیا دیکھا؟'],
+  pickOneBatch: ['Tap the batch you checked.', 'جو بیچ چیک کیا اسے دبائیں۔'],
+  correctDetail: ['{kg} kg · batch {batch}. A new line undoes it; the old line stays in History.', '{kg} کلو · بیچ {batch}۔ نئی لائن اسے واپس کرے گی؛ پرانی لائن ہسٹری میں رہے گی۔'],
+  reasonLabel: ['Reason', 'وجہ'],
   q_count: ['Count is right', 'کاؤنٹ درست ہے'],
   q_label: ['Label matches', 'لیبل درست ہے'],
   q_shade: ['Shade problem', 'رنگ میں فرق'],
@@ -164,6 +170,12 @@ export const serverWords: [string, string, string][] = [
 export function plainError(message: string, language: 'en' | 'ur') {
   const known = serverWords.find(([start]) => message.startsWith(start));
   return known ? known[language === 'ur' ? 2 : 1] : null;
+}
+
+/** The words for the two-step entry forms, in the current language. */
+export function useFloorLabels() {
+  const say = useFloor();
+  return { next: say('next'), reviewTitle: say('checkThis'), reviewHint: say('checkThisHint'), change: say('change'), cancel: say('cancel'), saving: say('saving'), fixAbove: say('fixAbove') };
 }
 
 /** say('receive') → the phrase in the current language; say('tooMuch', { have: 40 }) fills placeholders. */

@@ -52,7 +52,9 @@ export function AsyncForm({ title, detail, children, submit, onSubmit, onCancel,
   useEffect(() => { if (reviewing) heading.current?.focus(); }, [reviewing]);
   async function save(event: FormEvent) {
     event.preventDefault(); if (busy) return;
-    if (!reviewing && check && !check()) {
+    // Fields marked required or with a pattern are still checked by the browser, then the form's own check runs.
+    const nativeOk = reviewing || !form.current || form.current.checkValidity();
+    if (!reviewing && (!nativeOk || (check && !check()))) {
       setBlocked(true);
       // Bring the first problem into view: the worker may be below it with the keyboard open.
       requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.scrollIntoView({ block: 'center', behavior: 'smooth' }));

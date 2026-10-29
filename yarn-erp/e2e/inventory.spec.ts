@@ -14,20 +14,20 @@ test.describe('Shared inventory', () => {
     await page.getByLabel('Material name', { exact: true }).fill('Cotton combed 30/1');
     await page.getByLabel('SKU', { exact: true }).fill('COT-30');
     await page.getByLabel('Product barcode (optional)', { exact: true }).fill('8901234567890');
-    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
     await page.getByRole('button', { name: 'Save entry', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Saved. Everyone on the team sees it now.' })).toBeVisible();
     await page.getByRole('button', { name: 'New batch of Cotton combed 30/1', exact: true }).click();
     await page.getByLabel('Batch / dye lot', { exact: true }).fill('DYE-001');
-    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
     await page.getByRole('button', { name: 'Save entry', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Batch details', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Receive yarn', exact: true }).click();
     await enterStock(page, { cartons: '2', cones: '48', kg: '10.250' });
     await expect(page.getByRole('button', { name: 'Dispatch Pass QC first' })).toBeDisabled();
     await page.getByRole('button', { name: 'Check quality', exact: true }).click();
-    await page.getByLabel('Inspection reason', { exact: true }).fill('Physical inspection matches care label');
-    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
+    await page.getByLabel('What did you check?', { exact: true }).fill('Physical inspection matches care label');
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
     await page.getByRole('button', { name: 'Save QC decision', exact: true }).click();
     await page.getByRole('button', { name: 'Dispatch', exact: true }).click();
     await enterStock(page, { kg: '1.250' });
@@ -39,7 +39,7 @@ test.describe('Shared inventory', () => {
     expect(state.movements.filter((movement: { lot_id: string }) => movement.lot_id === lot.id)).toHaveLength(2);
     await page.getByRole('button', { name: 'Undo', exact: true }).click();
     await expect(page.getByLabel('Reason', { exact: true })).toHaveValue('Correction after saving');
-    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
     await page.getByRole('button', { name: 'Save reversal', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Reversal saved. The original entry is preserved.' })).toBeVisible();
     const corrected = await workspace(page);
@@ -164,8 +164,8 @@ test.describe('Shared inventory', () => {
         await page.getByRole('button', { name: 'Add inspection', exact: true }).click({ timeout: 5000 });
       }
       await page.getByLabel('Care-label text (optional)', { exact: true }).fill('100% COTTON');
-      await page.getByLabel('Notes', { exact: true }).fill('Label photographed at goods-in. Physical QC pending.');
-      await page.getByRole('button', { name: 'Review entry', exact: true }).click();
+      await page.getByLabel('What did you see?', { exact: true }).fill('Label photographed at goods-in. Physical QC pending.');
+      await page.getByRole('button', { name: 'Next', exact: true }).click();
       await page.getByRole('button', { name: 'Save inspection', exact: true }).click();
       await page.waitForTimeout(3000);
     };

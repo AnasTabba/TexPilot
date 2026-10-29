@@ -37,8 +37,8 @@ async function mockScanner(page: Page) {
 }
 const title = (page: Page, name: string) => expect(page.getByRole("heading", { level: 1, name, exact: true })).toBeVisible();
 async function reviewAndSave(page: Page, save: string) {
-  await page.getByRole("button", { name: "Review entry", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review before saving" })).toBeVisible();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Check before saving" })).toBeVisible();
   await page.getByRole("button", { name: save, exact: true }).click();
 }
 
@@ -155,8 +155,8 @@ test.describe("desktop", () => {
     await page.getByRole("button", { name: "New material" }).click();
     await page.getByLabel("Material name", { exact: true }).fill("Carded cotton Ne 20/1");
     await page.getByLabel("SKU", { exact: true }).fill("CTN-20");
-    await page.getByRole("button", { name: "Review entry", exact: true }).click();
-    await page.getByRole("button", { name: "Edit entry", exact: true }).click();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: "Change", exact: true }).click();
     await expect(page.getByLabel("SKU", { exact: true })).toHaveValue("CTN-20");
     await reviewAndSave(page, "Save entry");
     await expect(page.getByRole("status").filter({ hasText: "Saved. Everyone on the team sees it now." })).toBeVisible();
@@ -175,13 +175,13 @@ test.describe("desktop", () => {
     await expect(page.getByRole("heading", { level: 3, name: "Inspect this batch" })).toBeVisible();
 
     await page.getByRole("button", { name: "Add inspection", exact: true }).click();
-    await page.getByLabel("Notes", { exact: true }).fill("Shade and count match the order");
+    await page.getByLabel("What did you see?", { exact: true }).fill("Shade and count match the order");
     await reviewAndSave(page, "Save inspection");
     await expect(page.getByRole("heading", { level: 3, name: "Record the QC decision" })).toBeVisible();
     await expect(page.locator(".yf-timeline")).toContainText("Manual inspection");
 
     await page.getByRole("button", { name: "Check quality", exact: true }).click();
-    await page.getByLabel("Inspection reason", { exact: true }).fill("Physical check passed");
+    await page.getByLabel("What did you check?", { exact: true }).fill("Physical check passed");
     await reviewAndSave(page, "Save QC decision");
     await expect(page.locator(".yf-batch .live-panel-heading .live-quality")).toHaveText("QC approved");
     await expect(page.getByRole("heading", { level: 3, name: "Move it into production" })).toBeVisible();
@@ -218,7 +218,7 @@ test.describe("desktop", () => {
     await title(page, "Batch details");
     await page.goto("/#/activity");
     await page.getByRole("button", { name: "Reverse entry" }).first().click();
-    await expect(page.getByRole("heading", { name: "Reverse this movement" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Correct a mistake" })).toBeVisible();
     await page.getByRole("button", { name: "Close form" }).click();
 
     await page.goto("/#/settings");
@@ -277,7 +277,11 @@ test.describe("desktop", () => {
     await page.getByRole("button", { name: "Fabric", exact: true }).click();
     await page.getByRole("button", { name: "Save to a batch" }).click();
     await expect(page.getByRole("heading", { name: "Attach TexPilot evidence" })).toBeVisible();
-    await page.getByLabel("Notes", { exact: true }).fill("Scan matches the order");
+    // No batch is assumed: Next without one asks for it, then the worker taps the batch they scanned.
+    await page.getByLabel("What did you see?", { exact: true }).fill("Scan matches the order");
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await expect(page.getByText("Tap the batch you checked.")).toBeVisible();
+    await page.getByRole("group", { name: "Which batch?" }).getByRole("button", { name: /LOT-1024/ }).click();
     await reviewAndSave(page, "Save inspection");
     await expect(page.locator(".yf-timeline")).toContainText("TexPilot evidence");
   });

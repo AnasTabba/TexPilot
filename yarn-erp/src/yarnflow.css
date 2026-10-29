@@ -1191,6 +1191,10 @@ input[type="checkbox"], input[type="radio"] { width: 24px; height: 24px; min-hei
 @media (max-width: 640px) and (max-height: 600px) { .live-content[data-page="scanner"] .live-page-heading p { display: none; } }
 @media (max-height: 820px) { .scan-camera-controls .button, .barcode-panel .live-actions .button, .spec-form .button { min-height: 48px; font-size: 16px; } }
 @media (max-width: 640px) {
+  /* History on a phone: the words get the full width; time, weight and Reverse sit on one line under them. */
+  .live-history li:not(.yf-day) { grid-template-columns: 40px minmax(0, 1fr); }
+  .live-history li:not(.yf-day) > .yf-side { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; justify-items: start; gap: 4px 14px; }
+  .live-history .live-reverse { margin-inline-start: auto; }
   .yf-steps li:not(.current) { font-size: 0; }
   .yf-steps li:not(.current) > span { font-size: 13px; }
   .yf-steps li.current { flex: 2.4; font-size: 15px; }
