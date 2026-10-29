@@ -30,3 +30,10 @@ test('unknown and already-removed people get 404 and 409', async () => {
   assert.equal((await f.call(remove, { userId: id })).status, 200);
   assert.equal((await f.call(remove, { userId: id })).status, 409);
 });
+test('a removed person no longer appears in admin analytics staff activity', async () => {
+  const f = await portalFixture(), id = await f.person('Saima', 'supervisor');
+  const names = async () => (await f.call('/erp/analytics/admin')).data.users.map(u => u.name);
+  assert.ok((await names()).includes('Saima'));
+  assert.equal((await f.call(remove, { userId: id })).status, 200);
+  assert.ok(!(await names()).includes('Saima'));
+});

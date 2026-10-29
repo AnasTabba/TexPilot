@@ -4,10 +4,10 @@ import { signIn } from './helpers';
 test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
 
 for (const [name, sections] of [
-  ['Anas', ['Dashboard', 'Scan', 'Approvals', 'Claims', 'Stock', 'Procurement', 'Buyers', 'Activity', 'Reports', 'Analytics', 'Team']],
+  ['Anas', ['Dashboard', 'Scan', 'Approvals', 'Claims', 'Stock', 'Procurement', 'Sales portal', 'Activity', 'Reports', 'Analytics', 'Team']],
   ['Pervaiz', ['Dashboard', 'Scan', 'Procurement']],
   ['Saima', ['Dashboard', 'Scan', 'Review', 'Stock', 'Requests', 'Report', 'History']],
-  ['Sana', ['Dashboard', 'Scan', 'Buyers', 'Buyer RFQs', 'Invoices', 'Dispatch requests', 'Analytics']],
+  ['Sana', ['Dashboard', 'Scan', 'Sales portal', 'Buyer RFQs', 'Invoices', 'Dispatch requests', 'Analytics']],
   ['Qasim', ['Dashboard', 'Scan', 'Inspections', 'Stock', 'History']],
   ['Danish', ['Dashboard', 'Scan', 'Dispatches', 'New dispatch', 'History']],
 ] as const) test(`${name} sees only the sections of their role, plus the common ones`, async ({ page }) => {
