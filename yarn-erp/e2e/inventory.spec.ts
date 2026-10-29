@@ -94,7 +94,7 @@ test.describe('Shared inventory', () => {
     await context.setOffline(true);
     await expect(page.getByRole('status').filter({ hasText: 'You are offline' })).toBeVisible();
     await page.getByRole('button', { name: 'Save entry', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('Could not confirm a save. Check the connection');
+    await expect(page.getByRole('alert').first()).toContainText('Could not confirm a save. Check the connection');
     await expect(page.getByRole('status').filter({ hasText: 'Saved. Everyone on the team sees it now.' })).toHaveCount(0);
     await context.setOffline(false);
     const after = await workspace(page);

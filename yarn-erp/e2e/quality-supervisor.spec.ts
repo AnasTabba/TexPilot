@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { apiPost, origin, seedQcLots, signIn, workspace } from './helpers';
 
 test.use({ serviceWorkers: 'block', reducedMotion: 'reduce' });
-test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
+test.beforeEach(async ({ page, isMobile }) => { test.skip(isMobile, 'Desktop navigation workflow; phone navigation is covered by roles.spec.'); await page.request.post('/__test/reset'); });
 
 test('the supervisor answers a stock query and submits a flagged report snapshot', async ({ page, browser }) => {
   const salesContext = await browser.newContext({ baseURL: origin, serviceWorkers: 'block' });
