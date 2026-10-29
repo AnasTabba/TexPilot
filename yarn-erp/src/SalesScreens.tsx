@@ -18,6 +18,8 @@ type SalesState = { buyers: Buyer[]; rfqs: Rfq[]; revisions: Revision[]; orders:
 type DispatchRecord = { id: string; sales_order_id: string; status: 'pending_approval' | 'approved' | 'on_hold' | 'dispatched' | 'delivered'; order_reference: string; buyer_name: string; product_name: string; lot_batch: string; quantity_milli: number; grams: number; hold_reason: string | null; approval_request_id: string | null; hold_notice_id: string | null; created_at: number; dispatched_at: number | null; delivered_at: number | null };
 type StockQuery = { id: string; product_id: string; product_name: string; quantity_milli: number | null; buyer_rfq_id: string | null; question: string; status: string; available_grams: number | null; answer: string | null; created_at: number };
 type Props = { member: Member; section: string; tab: string; id: string; navigate: (to: string) => void };
+type BuyerSummary = { id: string; name: string; contact_name: string; city: string; status: string; credit_limit_minor: number | null; credit_limit_currency: string | null; sold: { unit: string; quantity_milli: number }[]; invoiced: { currency: string; total_minor: number; invoices: number }[]; outstanding: { currency: string; outstanding_minor: number }[]; overdue: { currency: string; overdue_minor: number }[]; next_due_at: number | null; days_left: number | null; credit_used_minor: number | null; over_limit: boolean };
+type SalesSettings = { currency: string; tax_rate_bp: number; invoice_format: string; reminder_hours: number; credit_alert_days: number[] };
 type Analytics = { byPeriod: { period: string; currency: string; totalMinor: number }[]; byBuyer: { buyer: string; currency: string; totalMinor: number }[]; byProduct: { product: string | null; currency: string; totalMinor: number }[]; paymentStatus: Record<string, number>; overdueByCurrency: { currency: string; overdueMinor: number }[] };
 
 /** Sections this screen renders; LiveApp routes these to SalesScreens for the sales manager and admin. */
@@ -31,7 +33,7 @@ const amountInput = (minor: number) => (minor / 100).toFixed(2);
 const today = () => dateInput(Date.now());
 const dueDate = (time: number | null) => time == null ? '—' : new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium' }).format(time);
 const tabs: Record<string, { id: string; en: string; ur: string }[]> = {
-  buyers: [{ id: 'pending', en: 'Pending', ur: 'زیرِ التوا' }, { id: 'active', en: 'Active', ur: 'فعال' }, { id: 'all', en: 'All', ur: 'سب' }],
+  buyers: [{ id: 'pending', en: 'To approve', ur: 'منظوری کے لیے' }, { id: 'active', en: 'Buyers', ur: 'خریدار' }, { id: 'all', en: 'All', ur: 'سب' }, { id: 'settings', en: 'Settings', ur: 'ترتیبات' }],
   'buyer-rfqs': [{ id: 'open', en: 'To quote', ur: 'قیمت دینے کے لیے' }, { id: 'quoted', en: 'Quoted', ur: 'قیمت دی گئی' }, { id: 'sold', en: 'Sold', ur: 'فروخت شدہ' }, { id: 'all', en: 'All', ur: 'سب' }],
   invoices: [{ id: 'owed', en: 'To collect', ur: 'وصولی کے لیے' }, { id: 'paid', en: 'Paid', ur: 'ادا شدہ' }, { id: 'all', en: 'All', ur: 'سب' }],
   'dispatch-requests': [{ id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'all', en: 'All', ur: 'سب' }],
@@ -48,6 +50,8 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
   const [dispatches, setDispatches] = useState<DispatchRecord[]>([]);
   const [queries, setQueries] = useState<StockQuery[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [summaries, setSummaries] = useState<BuyerSummary[]>([]);
+  const [salesSettings, setSalesSettings] = useState<SalesSettings | null>(null);
   const [loading, setLoading] = useState(true), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [online, setOnline] = useState(navigator.onLine), [open, setOpen] = useState('');
   const [intervention, setIntervention] = useState(''), [running, setRunning] = useState('');
@@ -61,6 +65,8 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
     try {
       const next = await inventoryRequest<SalesState>('/erp/sales');
       setState(next);
+      if (section === 'buyers') setSummaries((await inventoryRequest<{ buyers: BuyerSummary[] }>('/erp/sales/buyers/summary')).buyers);
+      if (section === 'buyers' && tab === 'settings') setSalesSettings((await inventoryRequest<{ settings: SalesSettings }>('/erp/sales/settings')).settings);
       if (section === 'buyer-rfqs') setQueries((await inventoryRequest<{ queries: StockQuery[] }>('/erp/stock/queries')).queries);
       if (section === 'dashboard' || section === 'dispatch-requests') setDispatches((await inventoryRequest<{ dispatches: DispatchRecord[] }>('/erp/dispatch')).dispatches);
       if (section === 'analytics') {
@@ -71,7 +77,7 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
       setError('');
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not load sales records.'); }
     finally { setLoading(false); }
-  }, [section, from, to, allowed]);
+  }, [section, tab, from, to, allowed]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     const changed = () => setOnline(navigator.onLine);
@@ -104,7 +110,8 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
   const overdue = new Map<string, number>();
   for (const invoice of s.invoices.filter(item => item.status === 'overdue')) overdue.set(invoice.currency, (overdue.get(invoice.currency) ?? 0) + invoice.outstanding_minor);
   const selectedInvoice = s.invoices.find(invoice => invoice.id === id);
-  const currentTab = tab || (section === 'buyers' ? 'pending' : section === 'buyer-rfqs' ? 'open' : section === 'invoices' ? 'owed' : 'pending_approval');
+  // An unknown buyers tab (for example a stale link) falls back to the approval queue instead of an empty page.
+  const currentTab = section === 'buyers' ? (tabs.buyers.some(item => item.id === tab) ? tab : 'pending') : tab || (section === 'buyer-rfqs' ? 'open' : section === 'invoices' ? 'owed' : 'pending_approval');
   const alerts = s.invoices.flatMap(invoice => invoice.alerts.map(alert => ({ invoice, alert })));
 
   const dashboardView = () => {
@@ -126,7 +133,21 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
     onSave={(status, reason, decisionIntervention) => act(t('Buyer review saved.', 'خریدار کی جانچ محفوظ ہوئی۔'), 'خریدار کی جانچ محفوظ ہوئی۔', () => salesPost('/buyers/review', { id: buyer.id, status, version: buyer.version, ...(reason ? { reason } : {}), ...(decisionIntervention ? { interventionReason: decisionIntervention } : {}) }))} />;
 
   const buyersView = () => {
-    const filtered = s.buyers.filter(buyer => currentTab === 'all' || buyer.status === currentTab);
+    if (currentTab === 'settings') return <div className="erp-workspace"><SectionTabs tabs={tabs.buyers} value={currentTab} onChange={value => navigate('buyers/' + value)} />
+      <CreditLimitForm key={summaries.length} buyers={summaries} currency={s.settings.currency} member={member}
+        onSave={payload => act(t('Credit limit saved.', 'ادھار کی حد محفوظ ہوئی۔'), 'ادھار کی حد محفوظ ہوئی۔', () => salesPost('/buyers/credit-limit', payload))} />
+      {salesSettings && <InvoiceSettingsForm key={JSON.stringify(salesSettings)} settings={salesSettings} member={member}
+        onSave={(changes, reason) => act(t('Settings saved.', 'ترتیبات محفوظ ہوئیں۔'), 'ترتیبات محفوظ ہوئیں۔', async () => { for (const change of changes) await salesPost('/settings', { ...change, ...(reason ? { interventionReason: reason } : {}) }); })} />}
+    </div>;
+    if (currentTab !== 'pending') {
+      const rows = summaries.filter(row => currentTab === 'all' || row.status === currentTab);
+      return <div className="erp-workspace"><SectionTabs tabs={tabs.buyers} value={currentTab} onChange={value => navigate('buyers/' + value)} />
+        {rows.length ? <ul className="buyer-list">{rows.map(row => <BuyerPositionRow key={row.id} buyer={row} invoices={s.invoices.filter(invoice => invoice.buyer_id === row.id)}
+          expanded={open === 'invoices:' + row.id} onToggle={() => setOpen(open === 'invoices:' + row.id ? '' : 'invoices:' + row.id)} navigate={navigate} />)}</ul>
+          : <p className="live-empty">{t('No buyers in this view.', 'اس حصے میں کوئی خریدار نہیں۔')}</p>}
+      </div>;
+    }
+    const filtered = s.buyers.filter(buyer => buyer.status === currentTab);
     const selected = filtered.find(buyer => buyer.id === id);
     return <div className="erp-workspace"><SectionTabs tabs={tabs.buyers} value={currentTab} onChange={value => navigate('buyers/' + value)} />
       {selected ? <section className="live-panel"><div className="live-panel-heading"><div><h2>{selected.name}</h2><p>{selected.contact_name} · {selected.email} · {selected.phone}</p></div><StatusTag status={selected.status} /></div>
@@ -356,6 +377,79 @@ function DispatchThread({ status, holdReason }: { status: DispatchRecord['status
     <ol>{nodes.map((node, i) => <li key={node} className={i <= index ? 'done' : ''} aria-current={node === status ? 'step' : undefined}><span aria-hidden="true">{i + 1}</span><StatusTag status={node} /></li>)}</ol>
     {status === 'on_hold' && <p className="live-warning"><StatusTag status="on_hold" /> · {holdReason}</p>}
   </div>;
+}
+
+function BuyerPositionRow({ buyer, invoices, expanded, onToggle, navigate }: { buyer: BuyerSummary; invoices: Invoice[]; expanded: boolean; onToggle: () => void; navigate: (to: string) => void }) {
+  const { t } = useLanguage();
+  const days = buyer.days_left;
+  const dueTone = days === null ? '' : days < 0 ? 'is-bad' : days <= 7 ? 'is-warn' : '';
+  const dueText = days === null ? t('Nothing due', 'کوئی واجب رقم نہیں')
+    : days < 0 ? t(`${-days} ${-days === 1 ? 'day' : 'days'} overdue`, `${-days} دن کی تاخیر`)
+    : days === 0 ? t('Due today', 'آج واجب ہے')
+    : t(`Due in ${days} ${days === 1 ? 'day' : 'days'}`, `${days} دن میں واجب`);
+  const limit = buyer.credit_limit_minor, limitCurrency = buyer.credit_limit_currency, used = buyer.credit_used_minor ?? 0;
+  const pct = !limit ? (used > 0 ? 100 : 0) : Math.min(100, (used / limit) * 100);
+  const list = (values: string[]) => values.length ? values.join(' · ') : '—';
+  return <li className="buyer-row">
+    <div className="buyer-row-head"><div><h2>{buyer.name}</h2><p>{buyer.contact_name}{buyer.city ? ` · ${buyer.city}` : ''}</p></div><StatusTag status={buyer.status} /></div>
+    <dl className="buyer-facts">
+      <div><dt>{t('Total sold', 'کل فروخت')}</dt><dd>{buyer.sold.length ? buyer.sold.map(line => `${line.quantity_milli / 1000} ${line.unit}`).join(' · ') : t('Nothing sold yet', 'ابھی کوئی فروخت نہیں')}</dd></div>
+      <div><dt>{t('Invoiced', 'انوائس شدہ')}</dt><dd>{list(buyer.invoiced.map(row => money(row.total_minor, row.currency)))}</dd></div>
+      <div><dt>{t('Outstanding', 'بقایا')}</dt><dd>{list(buyer.outstanding.map(row => money(row.outstanding_minor, row.currency)))}</dd></div>
+      {buyer.overdue.length > 0 && <div><dt>{t('Overdue', 'مدت گزر گئی')}</dt><dd className="is-bad">{list(buyer.overdue.map(row => money(row.overdue_minor, row.currency)))}</dd></div>}
+      <div><dt>{t('Next payment', 'اگلی ادائیگی')}</dt><dd className={dueTone}>{dueText}{buyer.next_due_at !== null && ` · ${dueDate(buyer.next_due_at)}`}</dd></div>
+    </dl>
+    {limit === null || limitCurrency === null ? <p className="buyer-credit-note">{t('No credit limit set.', 'ادھار کی کوئی حد مقرر نہیں۔')}</p>
+      : <div className="buyer-credit">
+        <div className="buyer-credit-head"><span>{t('Credit used', 'استعمال شدہ ادھار')}: {money(used, limitCurrency)} / {money(limit, limitCurrency)}</span>{buyer.over_limit && <span className="buyer-over">{t('Over limit', 'حد سے زیادہ')}</span>}</div>
+        <div className={`buyer-meter${buyer.over_limit ? ' is-warn' : ''}`} role="img" aria-label={`${t('Credit used', 'استعمال شدہ ادھار')}: ${Math.round(pct)}%`}><span style={{ width: `${pct}%` }} /></div>
+      </div>}
+    <div><button className="live-text-button" aria-expanded={expanded} onClick={onToggle}>{t('Invoices', 'انوائسز')} ({invoices.length})</button></div>
+    {expanded && <ul className="buyer-invoices">{invoices.length ? invoices.map(invoice => <li key={invoice.id}><button className="live-text-button" onClick={() => navigate('invoices/' + invoice.id)}>{invoice.number}</button>
+      <span>{money(invoice.outstanding_minor, invoice.currency)} {t('outstanding', 'بقایا')} · {dueDate(invoice.due_at)}</span></li>) : <li>{t('No invoices yet.', 'ابھی کوئی انوائس نہیں۔')}</li>}</ul>}
+  </li>;
+}
+
+function CreditLimitForm({ buyers, currency, member, onSave }: { buyers: BuyerSummary[]; currency: string; member: Member; onSave: (payload: unknown) => Promise<void> }) {
+  const { t } = useLanguage(); const first = buyers[0];
+  const [buyerId, setBuyerId] = useState(first?.id ?? ''), [amount, setAmount] = useState(first?.credit_limit_minor == null ? '' : amountInput(first.credit_limit_minor)),
+    [limitCurrency, setLimitCurrency] = useState(first?.credit_limit_currency ?? currency), [clear, setClear] = useState(false), [intervention, setIntervention] = useState('');
+  const pick = (next: string) => {
+    const buyer = buyers.find(item => item.id === next);
+    setBuyerId(next); setClear(false); setAmount(buyer?.credit_limit_minor == null ? '' : amountInput(buyer.credit_limit_minor)); setLimitCurrency(buyer?.credit_limit_currency ?? currency);
+  };
+  if (!buyers.length) return <section className="live-panel"><h2>{t('Credit limit per buyer', 'خریدار کے مطابق ادھار کی حد')}</h2><p className="live-empty">{t('No buyers yet.', 'ابھی کوئی خریدار نہیں۔')}</p></section>;
+  return <AsyncForm title={t('Credit limit per buyer', 'خریدار کے مطابق ادھار کی حد')} detail={t('A warning only. Quotations and invoices are never blocked.', 'صرف انتباہ۔ قیمتیں اور انوائسز کبھی نہیں رکتیں۔')} submit={t('Save credit limit', 'ادھار کی حد محفوظ کریں')}
+    onSubmit={() => onSave({ id: buyerId, ...(clear ? { amountMinor: null } : { amountMinor: fixedInput(amount, 2, 'Credit limit'), currency: limitCurrency }), ...(intervention ? { interventionReason: intervention } : {}) })}>
+    <Field>{t('Buyer', 'خریدار')}<select value={buyerId} onChange={event => pick(event.target.value)}>{buyers.map(buyer => <option key={buyer.id} value={buyer.id}>{buyer.name}</option>)}</select></Field>
+    <label className="buyer-clear"><input type="checkbox" checked={clear} onChange={event => setClear(event.target.checked)} /> {t('Clear the limit (no limit for this buyer)', 'حد ہٹائیں (اس خریدار کی کوئی حد نہیں)')}</label>
+    <Field>{t('Credit limit', 'ادھار کی حد')}<input inputMode="decimal" value={amount} disabled={clear} required={!clear} onChange={event => setAmount(event.target.value)} /></Field>
+    <Field>{t('Currency', 'کرنسی')}<select value={limitCurrency} disabled={clear} onChange={event => setLimitCurrency(event.target.value)}>{['PKR', 'USD', 'EUR', 'GBP'].map(code => <option key={code} value={code}>{code}</option>)}</select></Field>
+    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+  </AsyncForm>;
+}
+
+function InvoiceSettingsForm({ settings, member, onSave }: { settings: SalesSettings; member: Member; onSave: (changes: { key: string; value: unknown }[], reason: string) => Promise<void> }) {
+  const { t } = useLanguage();
+  const [currency, setCurrency] = useState(settings.currency), [gst, setGst] = useState(String(settings.tax_rate_bp / 100)), [format, setFormat] = useState(settings.invoice_format),
+    [hours, setHours] = useState(String(settings.reminder_hours)), [days, setDays] = useState(settings.credit_alert_days.join(', ')), [intervention, setIntervention] = useState('');
+  return <AsyncForm title={t('Invoice and factory settings', 'انوائس اور فیکٹری کی ترتیبات')} submit={t('Save settings', 'ترتیبات محفوظ کریں')} onSubmit={() => {
+    // Only changed keys are sent, one at a time; the server validates each value with the admin rules.
+    const changes: { key: string; value: unknown }[] = [], rate = Math.round(Number(gst) * 100), creditDays = days.split(',').map(item => item.trim()).filter(Boolean).map(Number);
+    if (currency !== settings.currency) changes.push({ key: 'currency', value: currency });
+    if (rate !== settings.tax_rate_bp) changes.push({ key: 'tax_rate_bp', value: rate });
+    if (format !== settings.invoice_format) changes.push({ key: 'invoice_format', value: format });
+    if (Number(hours) !== settings.reminder_hours) changes.push({ key: 'reminder_hours', value: Number(hours) });
+    if (creditDays.join() !== settings.credit_alert_days.join()) changes.push({ key: 'credit_alert_days', value: creditDays });
+    return onSave(changes, intervention);
+  }}>
+    <Field>{t('Currency', 'کرنسی')}<select value={currency} onChange={event => setCurrency(event.target.value)}>{['PKR', 'USD', 'EUR', 'GBP'].map(code => <option key={code} value={code}>{code}</option>)}</select></Field>
+    <Field>{t('GST (%)', 'جی ایس ٹی (%)')}<input type="number" min="0" max="100" step="0.01" value={gst} onChange={event => setGst(event.target.value)} /></Field>
+    <Field>{t('Invoice number format', 'انوائس نمبر کی ترتیب')}<input value={format} onChange={event => setFormat(event.target.value)} /></Field>
+    <Field>{t('Reminder hours', 'یاددہانی کے گھنٹے')}<input type="number" min="1" max="720" value={hours} onChange={event => setHours(event.target.value)} /></Field>
+    <Field>{t('Credit alert days (comma separated)', 'ادھار یاددہانی کے دن')}<input value={days} onChange={event => setDays(event.target.value)} /></Field>
+    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+  </AsyncForm>;
 }
 
 export default SalesScreens;
