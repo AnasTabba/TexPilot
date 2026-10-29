@@ -1,7 +1,7 @@
 import { all, one, query, json, fail, keys, recordId, readJson, text, multiline, audit } from './erp-utils.mjs';
 import { sha256 } from './auth.mjs';
 import { supplierData, supplierView, categoryIds, categoryQueries, submitBid } from './procurement.mjs';
-import { buyerData, buyerRfqData, recordAcceptance, invoiceFileResponse, paymentStatus } from './sales.mjs';
+import { buyerData, buyerRfqData, recordAcceptance, invoiceFileResponse, paymentStatus, rfqState } from './sales.mjs';
 import { notifyRole } from './notify.mjs';
 
 // Hash both inputs to a fixed length before comparing every byte (including for missing headers).
@@ -63,7 +63,7 @@ export async function integrationApi(request, env, path) {
     const po = buyerRfqData(data, now), hash = await sha256(JSON.stringify(po));
     const result = async status => {
       const row = await one(db, 'SELECT p.id,p.status,b.status AS buyer_status FROM buyer_purchase_orders p JOIN buyers b ON b.id=p.buyer_id WHERE p.id=?', id);
-      return json({ rfq: { id: row.id, state: row.status === 'confirmed' ? 'sold' : row.status === 'cancelled' ? 'closed' : row.status === 'quoted' ? 'quoted' : row.buyer_status === 'pending' ? 'awaiting_buyer_approval' : 'open' } }, status);
+      return json({ rfq: { id: row.id, state: rfqState(row.status, row.buyer_status) } }, status);
     };
     const replay = async () => {
       const previous = await one(db, 'SELECT * FROM buyer_purchase_orders WHERE id=?', id);

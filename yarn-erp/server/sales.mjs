@@ -30,7 +30,7 @@ const taxOf = (subtotalMinor, rateBp) => Number((BigInt(subtotalMinor) * BigInt(
 const guard = (db, condition, ...args) => query(db, `INSERT INTO buyers(id) SELECT 'guard' WHERE NOT (${condition})`, ...args);
 const REPLACED = 'This quotation was replaced. Accept the latest revision.';
 const NOT_APPROVED = 'Respond only to RFQs from approved buyers.';
-const rfqState = (status, buyerStatus) => status === 'cancelled' ? 'closed' : status === 'confirmed' ? 'sold' : status === 'quoted' ? 'quoted' : buyerStatus === 'pending' ? 'awaiting_buyer_approval' : 'open';
+export const rfqState = (status, buyerStatus) => status === 'cancelled' ? 'closed' : status === 'confirmed' ? 'sold' : status === 'quoted' ? 'quoted' : buyerStatus === 'pending' ? 'awaiting_buyer_approval' : 'open';
 
 export function buyerData(data) {
   return { name: text(data.name, 'Buyer name', 2, 120), contact: text(data.contactName, 'Contact name', 2, 80),
