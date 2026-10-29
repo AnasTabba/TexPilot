@@ -1,15 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Download, FileText, LogOut, RefreshCw, Truck } from 'lucide-react';
+import { CheckCircle2, FileText, LogOut, RefreshCw, Truck } from 'lucide-react';
 import { AsyncForm, Field, errorMessage } from './forms';
 import { LanguageSelect, useLanguage } from './i18n';
 import { factoryInput, fixedInput, localFactoryInput, factoryTime, quantity, rate } from './erp-client';
 import { Cone } from './Cone';
 import { InventoryError } from './inventory-client';
 import {
-  buyerInvoiceDownloadHref, buyerRequest,
+  buyerRequest,
   type BuyerIdentity, type BuyerWorkspace, type QuoteRevision,
 } from './sales-client';
+import { PdfDownloadButton } from './InvoiceDocument';
+import { invoiceDocData, type BuyerSource, type InvoiceSource, type SaleLineSource } from './invoice-pdf';
 import './erp.css';
+
+type BuyerInvoiceResponse = { invoice: InvoiceSource; lines: SaleLineSource[]; buyer: BuyerSource; factoryName: string };
+/** The buyer's own invoice with its balance, from the buyer invoice route; the PDF is built here from that data. */
+const buyerInvoiceDocument = async (invoiceId: string) => {
+  const result = await buyerRequest<BuyerInvoiceResponse>(`/invoices/${encodeURIComponent(invoiceId)}?format=json`);
+  return invoiceDocData(result.invoice, result.lines, result.buyer, result.factoryName);
+};
 
 export default function BuyerPortal() {
   const { t } = useLanguage();
@@ -82,7 +91,7 @@ export default function BuyerPortal() {
           <p className="live-muted">{t('Payment terms:', 'ادائیگی کی شرائط:')} {o.terms.payment_terms} · {t('requested delivery', 'مطلوبہ ترسیل')} {factoryTime(o.terms.requested_delivery_at)}</p>
           {state.invoices.filter(i => i.sales_order_id === o.id).map(i => <div className="sales-invoice" key={i.id}>
             <div className="erp-record-head"><div><h4><FileText size={18} /> {i.number}</h4><p>{rate(i.total_minor, i.currency)} · {factoryTime(i.issued_at)}</p></div>
-              <a className="button" href={buyerInvoiceDownloadHref(i.id)} download><Download size={18} />{t('Download invoice', 'انوائس ڈاؤن لوڈ کریں')}</a></div>
+              <PdfDownloadButton build={() => buyerInvoiceDocument(i.id)} /></div>
             <ul className="sales-lines">{(JSON.parse(i.lines_json) as { specifications: string; quantity_milli: number; unit: string; price_minor: number; amount_minor: number }[]).map((l, n) =>
               <li key={n}><span className="erp-multiline">{l.specifications}</span><span>{quantity(l.quantity_milli)} {l.unit} × {rate(l.price_minor, i.currency)} = <b>{rate(l.amount_minor, i.currency)}</b></span></li>)}</ul>
           </div>)}

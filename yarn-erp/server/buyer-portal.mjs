@@ -32,7 +32,7 @@ async function buyerWorkspace(db, buyerId, workspaceId) {
     all(db, 'SELECT id,reference,specifications,quantity_milli,unit,requested_delivery_at,payment_terms,status,source,created_at FROM buyer_purchase_orders WHERE buyer_id=? AND workspace_id=? ORDER BY created_at DESC LIMIT 200', buyerId, workspaceId),
     all(db, 'SELECT r.id,r.buyer_po_id,r.version,r.quantity_milli,r.unit,r.price_minor,r.currency,r.specifications,r.requested_delivery_at,r.payment_terms,r.credit_days,r.note,r.status,r.created_at FROM sales_quote_revisions r JOIN buyer_purchase_orders p ON p.id=r.buyer_po_id WHERE r.buyer_id=? AND p.workspace_id=? ORDER BY r.created_at DESC LIMIT 500', buyerId, workspaceId),
     all(db, 'SELECT o.id,o.reference,o.buyer_po_id,o.status,o.terms_snapshot,o.created_at FROM sales_orders o WHERE o.buyer_id=? AND o.workspace_id=? ORDER BY o.created_at DESC LIMIT 200', buyerId, workspaceId),
-    all(db, 'SELECT i.id,i.number,i.sales_order_id,i.total_minor,i.subtotal_minor,i.tax_rate_bp,i.tax_minor,i.due_at,i.currency,i.issued_at,i.lines_json FROM invoices i WHERE i.buyer_id=? AND i.workspace_id=? ORDER BY i.issued_at DESC LIMIT 200', buyerId, workspaceId),
+    all(db, 'SELECT i.id,i.number,i.sales_order_id,i.total_minor,i.subtotal_minor,i.tax_rate_bp,i.tax_minor,i.due_at,i.currency,i.issued_at,i.lines_json FROM invoices i WHERE i.buyer_id=? AND i.workspace_id=? AND NOT EXISTS(SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.workspace_id=i.workspace_id) ORDER BY i.issued_at DESC LIMIT 200', buyerId, workspaceId),
     all(db, `SELECT d.id,d.sales_order_id,d.quantity_milli,d.unit,d.carrier,d.documents_note,d.dispatched_at FROM sales_dispatches d JOIN sales_orders o ON o.id=d.sales_order_id WHERE o.buyer_id=? AND d.workspace_id=? ORDER BY d.created_at DESC LIMIT 500`, buyerId, workspaceId),
     all(db, `SELECT y.id,y.dispatch_id,y.delivery_date,y.evidence_note,y.created_at FROM sales_deliveries y JOIN sales_dispatches d ON d.id=y.dispatch_id JOIN sales_orders o ON o.id=d.sales_order_id WHERE o.buyer_id=? AND y.workspace_id=? ORDER BY y.created_at DESC LIMIT 500`, buyerId, workspaceId),
     all(db, `SELECT c.id,c.delivery_id,c.previous_date,c.corrected_date,c.due_revision,c.created_at FROM delivery_corrections c JOIN sales_deliveries y ON y.id=c.delivery_id JOIN sales_dispatches d ON d.id=y.dispatch_id JOIN sales_orders o ON o.id=d.sales_order_id WHERE o.buyer_id=? AND c.workspace_id=? ORDER BY c.created_at DESC LIMIT 500`, buyerId, workspaceId),
@@ -122,10 +122,20 @@ export async function buyerPortalApi(request, env, path) {
   }
   if (path.startsWith('/api/buyer/invoices/')) {
     if (request.method !== 'GET') fail(405, 'Method not allowed.');
-    const invoice = await one(db, `SELECT i.*,o.reference AS order_reference,o.terms_snapshot FROM invoices i JOIN sales_orders o ON o.id=i.sales_order_id WHERE i.id=? AND i.buyer_id=? AND i.workspace_id=?`, recordId(path.split('/')[4]), buyerId, w);
+    const invoice = await one(db, `SELECT i.*,o.reference AS order_reference,o.terms_snapshot FROM invoices i JOIN sales_orders o ON o.id=i.sales_order_id WHERE i.id=? AND i.buyer_id=? AND i.workspace_id=? AND NOT EXISTS(SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.workspace_id=i.workspace_id)`, recordId(path.split('/')[4]), buyerId, w);
     if (!invoice) fail(404, 'Invoice not found.');
     const buyer = await one(db, 'SELECT * FROM buyers WHERE id=?', buyerId);
     const factory = await one(db, 'SELECT name FROM workspaces WHERE id=?', w);
+    // ?format=json feeds the buyer's PDF download. Only this buyer's own invoice, its balance and its product names.
+    if (new URL(request.url).searchParams.get('format') === 'json') {
+      const balance = await one(db, 'SELECT credited_minor,paid_minor FROM invoice_balances WHERE id=? AND buyer_id=? AND workspace_id=?', invoice.id, buyerId, w);
+      const lines = await all(db, 'SELECT l.sales_order_id,p.name AS product_name FROM sales_order_lines l LEFT JOIN products p ON p.id=l.product_id WHERE l.sales_order_id=? AND l.workspace_id=?', invoice.sales_order_id, w);
+      return json({ invoice: { id: invoice.id, number: invoice.number, sales_order_id: invoice.sales_order_id, order_reference: invoice.order_reference, issued_at: invoice.issued_at,
+        due_at: invoice.due_at, currency: invoice.currency, lines_json: invoice.lines_json, subtotal_minor: invoice.subtotal_minor, tax_rate_bp: invoice.tax_rate_bp,
+        tax_minor: invoice.tax_minor, total_minor: invoice.total_minor, payment_terms: invoice.payment_terms, credit_days: invoice.credit_days,
+        paid_minor: balance.paid_minor, credited_minor: balance.credited_minor, outstanding_minor: Math.max(0, invoice.total_minor - balance.credited_minor - balance.paid_minor) },
+        lines, buyer: { name: buyer.name, contact_name: buyer.contact_name, city: buyer.city, email: buyer.email, phone: buyer.phone }, factoryName: factory.name });
+    }
     return invoiceFileResponse(invoice, { reference: invoice.order_reference, terms: JSON.parse(invoice.terms_snapshot) }, buyer, factory.name);
   }
   fail(404, 'Buyer portal route not found.');

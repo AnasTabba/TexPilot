@@ -1,0 +1,52 @@
+/* Invoice document and generator. Tokens come from yarnflow.css; no boxed card grids. */
+.invoice-form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 16px; }
+.invoice-preview { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 8px; }
+.invoice-preview h3 { margin: 0 0 8px; font-size: 16px; }
+.invoice-preview-empty, .invoice-preview-due { color: var(--muted); font-size: 14px; margin: 8px 0; }
+.invoice-preview-table, .invoice-doc-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.invoice-preview-table th, .invoice-preview-table td, .invoice-doc-table th, .invoice-doc-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.invoice-preview-table small { color: var(--muted); }
+.invoice-preview-table .num, .invoice-doc-table .num, .invoice-doc-totals dd { text-align: right; font-variant-numeric: tabular-nums; }
+.invoice-screen { display: grid; gap: 12px; }
+.invoice-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.invoice-doc { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: var(--r-sheet); padding: 28px 32px; font-family: var(--font); }
+.invoice-doc-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; border-bottom: 2px solid var(--ink); padding-bottom: 14px; }
+.invoice-doc-head h3 { margin: 0; font-size: 22px; }
+.invoice-kicker { margin: 0 0 4px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.invoice-doc-number { text-align: right; display: grid; gap: 2px; font-size: 14px; }
+.invoice-doc-number span { color: var(--muted); }
+.invoice-doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 18px 0; }
+.invoice-doc-grid h4 { margin: 0 0 6px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.invoice-doc-grid p { margin: 2px 0; font-size: 14px; }
+.invoice-doc-facts { display: grid; gap: 6px; margin: 0; }
+.invoice-doc-facts div { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.invoice-doc-facts dt { color: var(--muted); }
+.invoice-doc-facts dd { margin: 0; font-weight: 600; }
+.invoice-doc-totals { display: grid; gap: 6px; margin: 16px 0 0 auto; width: min(320px, 100%); }
+.invoice-doc-totals div { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.invoice-doc-totals dt { color: var(--muted); }
+.invoice-doc-totals dd { margin: 0; }
+.invoice-doc-totals .is-total { border-top: 1px solid var(--ink); padding-top: 6px; font-weight: 700; font-size: 16px; }
+.invoice-doc-totals .is-total dt { color: var(--ink); }
+.invoice-doc-note { color: var(--muted); font-size: 13px; margin-top: 24px; }
+
+@media (max-width: 640px) {
+  .invoice-doc { padding: 20px 16px; }
+  .invoice-doc-grid { grid-template-columns: 1fr; }
+  .invoice-doc-head { flex-direction: column; }
+  .invoice-doc-number { text-align: left; }
+}
+
+/* Print: only the invoice document, none of the app shell or buttons. */
+@media print {
+  body * { visibility: hidden; }
+  .invoice-doc, .invoice-doc * { visibility: visible; }
+  .invoice-doc { position: absolute; left: 0; top: 0; width: 100%; border: 0; padding: 0; background: none; }
+}
+
+/* Voided invoices: a stamp over the document, and a live-style note in the detail view. */
+.invoice-doc { position: relative; overflow: hidden; }
+.invoice-void-stamp { position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%) rotate(-24deg); color: #b3261e; border: 4px solid #b3261e; border-radius: 8px;
+  padding: 6px 28px; font: 700 64px/1 var(--font); letter-spacing: .12em; opacity: .82; text-align: center; pointer-events: none; }
+.invoice-void-stamp small { display: block; font: 600 13px/1.4 var(--font); letter-spacing: 0; margin-top: 6px; max-width: 320px; }
+.invoice-type-hint, .invoice-prefill-note { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }

@@ -1,7 +1,8 @@
 /** Sales API for the factory staff side: buyer review, quotations, noted sales, invoices and credit
  * notes. Exported as `salesApi(request,env,member,path,data)` for `/api/erp/sales/*`.
  * The buyer-facing counterpart lives in server/buyer-portal.mjs under `/api/buyer/*`; buyers
- * register and submit RFQs there, and staff never create buyers or enter RFQs for them. */
+ * register and submit RFQs there, and staff never create buyers. The one staff-entered sale, POST
+ * `/invoices/generate`, records its RFQ as entered by the sales team (source 'staff'). */
 import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, recordId, audit, role, viewer, reason as decisionReason } from './erp-utils.mjs';
 import { sha256 } from './auth.mjs';
 import { DEFAULT_SETTINGS, settingsOf, settingValue } from './governance.mjs';
@@ -30,6 +31,8 @@ const taxOf = (subtotalMinor, rateBp) => Number((BigInt(subtotalMinor) * BigInt(
 const guard = (db, condition, ...args) => query(db, `INSERT INTO buyers(id) SELECT 'guard' WHERE NOT (${condition})`, ...args);
 const REPLACED = 'This quotation was replaced. Accept the latest revision.';
 const NOT_APPROVED = 'Respond only to RFQs from approved buyers.';
+/** Reasons for corrections: 3 to 500 characters, kept with the audit row. */
+const correctionReason = value => multiline(value, 'Reason', 3, 500);
 export const rfqState = (status, buyerStatus) => status === 'cancelled' ? 'closed' : status === 'confirmed' ? 'sold' : status === 'quoted' ? 'quoted' : buyerStatus === 'pending' ? 'awaiting_buyer_approval' : 'open';
 
 export function buyerData(data) {
@@ -121,7 +124,7 @@ export async function noteSale(db, member, { id, revisionId, intervention = null
   const noted = await existing();
   if (noted) return noted;
   if (await one(db, 'SELECT id FROM sales_orders WHERE id=?', id)) fail(409, 'This request ID was used for a different sale.');
-  const revision = await one(db, 'SELECT r.*,p.reference AS po_reference FROM sales_quote_revisions r JOIN buyer_purchase_orders p ON p.id=r.buyer_po_id WHERE r.id=? AND r.workspace_id=?', revisionId, w);
+  const revision = await one(db, 'SELECT r.*,p.reference AS po_reference,(SELECT product_type FROM products WHERE id=r.product_id) AS product_type FROM sales_quote_revisions r JOIN buyer_purchase_orders p ON p.id=r.buyer_po_id WHERE r.id=? AND r.workspace_id=?', revisionId, w);
   if (!revision) fail(404, 'Quote not found.');
   if (revision.status !== 'approved' || !await one(db, 'SELECT id FROM quotation_acceptances WHERE revision_id=?', revisionId)) fail(409, 'The buyer has not accepted this quotation yet.');
   if (!await one(db, "SELECT id FROM buyers WHERE id=? AND workspace_id=? AND status='active'", revision.buyer_id, w)) fail(409, 'This buyer is not approved. Reactivate the buyer before noting the sale.');
@@ -130,7 +133,7 @@ export async function noteSale(db, member, { id, revisionId, intervention = null
   const terms = JSON.stringify({ po_reference: revision.po_reference, revision: revision.version, quantity_milli: revision.quantity_milli, unit: revision.unit,
     specifications: revision.specifications, price_minor: revision.price_minor, currency: revision.currency, requested_delivery_at: revision.requested_delivery_at,
     payment_terms: revision.payment_terms, credit_days: revision.credit_days, noted_at: now });
-  const lines = JSON.stringify([{ specifications: revision.specifications, quantity_milli: revision.quantity_milli, unit: revision.unit, price_minor: revision.price_minor, amount_minor: subtotal }]);
+  const lines = JSON.stringify([{ specifications: revision.specifications, quantity_milli: revision.quantity_milli, unit: revision.unit, price_minor: revision.price_minor, amount_minor: subtotal, product_type: revision.product_type ?? null }]);
   const invoiceId = crypto.randomUUID();
   const statements = () => [
     // Accepted, still the current sent revision, and the buyer is still approved.
@@ -165,13 +168,67 @@ export async function noteSale(db, member, { id, revisionId, intervention = null
   return { order: await one(db, 'SELECT * FROM sales_orders WHERE id=?', id), invoice };
 }
 
+/** A sale the sales team enters directly. The buyer RFQ, a sent quotation and the buyer's acceptance (recorded as
+ * entered by the sales team) are written in one batch, then noteSale issues the invoice, so numbering, GST, due date
+ * and audit match the buyer-accepted flow. The request ID is the RFQ ID: a repeat returns the same sale, and a repeat
+ * whose batch committed but whose sale did not is completed. `ponytail:` the sale is a second batch because noteSale
+ * validates committed state first; a crash between them is finished by the retry. */
+export async function generateInvoice(db, member, input, intervention = null, now = Date.now()) {
+  const w = member.workspace_id;
+  const requestHash = await sha256(JSON.stringify([input.buyerId, input.productId, input.quantityMilli, input.unit, input.rateMinor, input.currency, input.paymentTerms, input.creditDays, input.specifications, input.deliveryAt]));
+  const settle = async revisionId => {
+    const noted = await one(db, 'SELECT id FROM sales_orders WHERE revision_id=? AND workspace_id=?', revisionId, w);
+    return { ...await noteSale(db, member, { id: crypto.randomUUID(), revisionId, intervention }, now), created: !noted };
+  };
+  const replay = async () => {
+    const previous = await one(db, 'SELECT * FROM buyer_purchase_orders WHERE id=?', input.id);
+    if (!previous) return null;
+    if (previous.workspace_id !== w || previous.source !== 'staff' || previous.request_hash !== requestHash) fail(409, 'This request ID was used for different invoice values.');
+    return settle((await one(db, 'SELECT id FROM sales_quote_revisions WHERE buyer_po_id=?', previous.id)).id);
+  };
+  const same = await replay();
+  if (same) return same;
+  const buyer = await one(db, "SELECT id,status FROM buyers WHERE id=? AND workspace_id=? AND status!='archived'", input.buyerId, w);
+  if (!buyer) fail(404, 'Buyer not found.');
+  if (buyer.status !== 'active') fail(409, 'Only approved buyers can be invoiced. Approve this buyer first.');
+  const product = await one(db, 'SELECT id,name FROM products WHERE id=? AND workspace_id=?', input.productId, w);
+  if (!product) fail(404, 'Material not found.');
+  const settings = await settingsOf(db, w);
+  if (input.currency !== settings.currency) fail(409, 'Use the factory currency. Reload to get the current currency.');
+  lineAmount(input.rateMinor, input.quantityMilli); // refuses a non-whole amount before anything is written
+  const revisionId = crypto.randomUUID(), specifications = input.specifications || product.name, deliveryAt = input.deliveryAt ?? now;
+  try {
+    await db.batch([
+      guard(db, "EXISTS(SELECT 1 FROM buyers WHERE id=? AND workspace_id=? AND status='active')", buyer.id, w),
+      query(db, `INSERT INTO buyer_purchase_orders(id,workspace_id,buyer_id,reference,specifications,quantity_milli,unit,requested_delivery_at,payment_terms,status,source,request_hash,created_by,actor_type,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?,'entered','staff',?,?,'staff',?,?)`, input.id, w, buyer.id, reference('RFQ'), specifications, input.quantityMilli, input.unit, deliveryAt, input.paymentTerms, requestHash, member.user_id, now, now),
+      query(db, `INSERT INTO sales_quote_revisions(id,workspace_id,buyer_po_id,buyer_id,version,quantity_milli,unit,price_minor,currency,specifications,requested_delivery_at,payment_terms,credit_days,note,product_id,status,created_by,created_at,updated_at)
+        VALUES(?,?,?,?,1,?,?,?,?,?,?,?,?,'',?,'draft',?,?,?)`, revisionId, w, input.id, buyer.id, input.quantityMilli, input.unit, input.rateMinor, input.currency, specifications, deliveryAt, input.paymentTerms, input.creditDays, product.id, member.user_id, now, now),
+      query(db, "UPDATE sales_quote_revisions SET status='sent',updated_at=? WHERE id=? AND status='draft'", now, revisionId),
+      query(db, "UPDATE buyer_purchase_orders SET status='quoted',sent_revision_id=?,sent_version=1,updated_at=? WHERE id=? AND status='entered'", revisionId, now, input.id),
+      query(db, 'INSERT INTO quotation_acceptances(id,workspace_id,revision_id,buyer_id,version,accepted_by,created_by,note,created_at,updated_at) VALUES(?,?,?,?,1,?,?,?,?,?)',
+        crypto.randomUUID(), w, revisionId, buyer.id, member.name, member.user_id, 'Entered by sales team', now, now),
+      query(db, "UPDATE sales_quote_revisions SET status='approved',updated_at=? WHERE id=? AND status='sent'", now, revisionId),
+      audit(db, member, 'buyer_rfq.entered', input.id, { buyer: buyer.id, product: product.id, quantity_milli: input.quantityMilli, unit: input.unit, price_minor: input.rateMinor }, 'staff', { objectType: 'buyer_rfq', intervention }),
+      audit(db, member, 'quotation.accepted', revisionId, { version: 1, acceptedBy: member.name, buyer: buyer.id, entered: true }, 'staff', { objectType: 'quotation', intervention }),
+    ]);
+  } catch {
+    const raced = await replay();
+    if (raced) return raced;
+    fail(409, 'The buyer changed while creating this invoice. Reload and check again.');
+  }
+  return settle(revisionId);
+}
+
 export function paymentStatus({ total_minor, credited_minor, paid_minor, due_at }, now) {
   if (total_minor - credited_minor - paid_minor <= 0) return 'paid';
   if (due_at !== null && now > due_at) return 'overdue';
   return paid_minor > 0 ? 'partially_paid' : 'unpaid';
 }
 const daysToDue = (due, now) => due === null ? null : (Date.parse(karachiDate(due)) - Date.parse(karachiDate(now))) / 86400000;
-const balanceData = (invoice, now) => ({ ...invoice, outstanding_minor: Math.max(0, invoice.total_minor - invoice.credited_minor - invoice.paid_minor), status: paymentStatus(invoice, now), days_to_due: daysToDue(invoice.due_at, now) });
+const balanceData = (invoice, now) => invoice.voided_at != null
+  ? { ...invoice, outstanding_minor: 0, status: 'void', days_to_due: daysToDue(invoice.due_at, now) }
+  : { ...invoice, outstanding_minor: Math.max(0, invoice.total_minor - invoice.credited_minor - invoice.paid_minor), status: paymentStatus(invoice, now), days_to_due: daysToDue(invoice.due_at, now) };
 /** A buyer's payment position from its invoice balances (invoice_balances rows). `days_left` is the
  * Karachi calendar days to the earliest open due date; negative means that many days overdue.
  * Warn-only: nothing here blocks a quotation or an invoice. */
@@ -224,31 +281,34 @@ export async function creditAlertsScheduled(env, now = Date.now()) {
 }
 
 async function salesOverview(db, w, now) {
-  const [buyers, rfqs, revisions, acceptances, orders, invoices, creditNotes, products, settings] = await Promise.all([
+  const [buyers, rfqs, revisions, acceptances, orders, invoices, creditNotes, products, settings, saleLines, invoicePayments, factory] = await Promise.all([
     all(db, "SELECT id,name,contact_name,email,phone,city,notes,assigned_manager_id,status,version,created_at,updated_at FROM buyers WHERE workspace_id=? AND status!='archived' ORDER BY name COLLATE NOCASE LIMIT 500", w),
     all(db, 'SELECT p.id,p.buyer_id,p.reference,p.specifications,p.quantity_milli,p.unit,p.requested_delivery_at,p.payment_terms,p.status,p.sent_revision_id,p.sent_version,p.created_at,p.updated_at,b.name AS buyer_name,b.status AS buyer_status FROM buyer_purchase_orders p JOIN buyers b ON b.id=p.buyer_id WHERE p.workspace_id=? ORDER BY p.created_at DESC LIMIT 200', w),
     all(db, 'SELECT r.* FROM sales_quote_revisions r WHERE r.workspace_id=? ORDER BY r.created_at DESC LIMIT 500', w),
     all(db, 'SELECT a.* FROM quotation_acceptances a WHERE a.workspace_id=? ORDER BY a.created_at DESC LIMIT 500', w),
     all(db, 'SELECT o.*,b.name AS buyer_name FROM sales_orders o JOIN buyers b ON b.id=o.buyer_id WHERE o.workspace_id=? ORDER BY o.created_at DESC LIMIT 200', w),
-    all(db, 'SELECT i.*,o.reference AS order_reference FROM invoice_balances i JOIN sales_orders o ON o.id=i.sales_order_id WHERE i.workspace_id=? ORDER BY i.issued_at DESC LIMIT 500', w),
+    all(db, 'SELECT i.*,o.reference AS order_reference FROM invoice_ledger i JOIN sales_orders o ON o.id=i.sales_order_id WHERE i.workspace_id=? ORDER BY i.issued_at DESC LIMIT 500', w),
     all(db, 'SELECT c.* FROM credit_notes c WHERE c.workspace_id=? ORDER BY c.created_at DESC LIMIT 500', w),
-    all(db, 'SELECT id,sku,name FROM products WHERE workspace_id=? ORDER BY name', w),
+    all(db, 'SELECT id,sku,name,product_type FROM products WHERE workspace_id=? ORDER BY name', w),
     settingsOf(db, w),
+    all(db, 'SELECT l.sales_order_id,l.product_id,p.name AS product_name FROM sales_order_lines l LEFT JOIN products p ON p.id=l.product_id WHERE l.workspace_id=? LIMIT 1000', w),
+    all(db, 'SELECT p.*,r.id AS reversal_id,r.reason AS reversal_reason,r.created_at AS reversed_at FROM invoice_payments p LEFT JOIN payment_reversals r ON r.payment_id=p.id WHERE p.workspace_id=? ORDER BY p.created_at DESC LIMIT 500', w),
+    one(db, 'SELECT name FROM workspaces WHERE id=?', w),
   ]);
   const alertsByInvoice = new Map();
   for (const alert of await all(db, 'SELECT * FROM credit_alerts WHERE workspace_id=? AND invoice_id IN (SELECT value FROM json_each(?)) ORDER BY created_at', w, JSON.stringify(invoices.map(invoice => invoice.id)))) {
     if (!alertsByInvoice.has(alert.invoice_id)) alertsByInvoice.set(alert.invoice_id, []);
     alertsByInvoice.get(alert.invoice_id).push(alert);
   }
-  return json({ buyers, rfqs: rfqs.map(({ buyer_status, ...rfq }) => ({ ...rfq, state: rfqState(rfq.status, buyer_status) })), revisions, acceptances, orders, invoices: invoices.map(invoice => ({ ...balanceData(invoice, now), alerts: alertsByInvoice.get(invoice.id) ?? [] })), creditNotes, products, settings });
+  return json({ buyers, rfqs: rfqs.map(({ buyer_status, ...rfq }) => ({ ...rfq, state: rfqState(rfq.status, buyer_status) })), revisions, acceptances, orders, invoices: invoices.map(invoice => ({ ...balanceData(invoice, now), alerts: alertsByInvoice.get(invoice.id) ?? [] })), creditNotes, products, settings, saleLines, invoicePayments, factoryName: factory.name });
 }
 
 /** One row per buyer: quantities sold (sales order lines), invoiced totals, and the payment position. */
 async function buyersSummary(db, w, now) {
   const [buyers, sold, invoiced, open] = await Promise.all([
     all(db, "SELECT id,name,contact_name,email,phone,city,notes,status,version,credit_limit_minor,credit_limit_currency FROM buyers WHERE workspace_id=? AND status!='archived' ORDER BY name COLLATE NOCASE LIMIT 500", w),
-    all(db, 'SELECT o.buyer_id,l.unit,SUM(l.quantity_milli) AS quantity_milli FROM sales_order_lines l JOIN sales_orders o ON o.id=l.sales_order_id WHERE l.workspace_id=? GROUP BY o.buyer_id,l.unit', w),
-    all(db, 'SELECT buyer_id,currency,SUM(total_minor) AS total_minor,COUNT(*) AS invoices FROM invoices WHERE workspace_id=? GROUP BY buyer_id,currency', w),
+    all(db, "SELECT o.buyer_id,l.unit,SUM(l.quantity_milli) AS quantity_milli FROM sales_order_lines l JOIN sales_orders o ON o.id=l.sales_order_id WHERE l.workspace_id=? AND o.status!='cancelled' GROUP BY o.buyer_id,l.unit", w),
+    all(db, 'SELECT buyer_id,currency,SUM(total_minor) AS total_minor,COUNT(*) AS invoices FROM invoice_balances WHERE workspace_id=? GROUP BY buyer_id,currency', w),
     all(db, 'SELECT buyer_id,currency,total_minor,credited_minor,paid_minor,due_at FROM invoice_balances WHERE workspace_id=? AND total_minor>credited_minor+paid_minor', w),
   ]);
   const rowsFor = (rows, buyerId) => rows.filter(row => row.buyer_id === buyerId).map(({ buyer_id, ...row }) => row);
@@ -301,6 +361,131 @@ export async function salesApi(request, env, member, path, data) {
       throw error;
     }
     return result(await one(db, 'SELECT * FROM invoice_payments WHERE id=?', id), 201);
+  }
+
+  // Reverses a recorded payment with a new row; the payment row stays. Balances use the net paid amount.
+  if (path === '/api/erp/sales/payments/reverse') {
+    const intervention = role(member, data, 'sales_manager');
+    keys(data, ['id', 'paymentId', 'reason', 'interventionReason']);
+    const id = recordId(data.id), paymentId = recordId(data.paymentId), why = correctionReason(data.reason);
+    const payment = await one(db, 'SELECT * FROM invoice_payments WHERE id=? AND workspace_id=?', paymentId, w);
+    if (!payment) fail(404, 'Payment not found.');
+    const reply = async status => {
+      const balance = await one(db, 'SELECT * FROM invoice_balances WHERE id=? AND workspace_id=?', payment.invoice_id, w);
+      return json({ reversal: await one(db, 'SELECT * FROM payment_reversals WHERE payment_id=?', paymentId), invoice: balance ? balanceData(balance, now) : null }, status);
+    };
+    const previous = await one(db, 'SELECT * FROM payment_reversals WHERE id=?', id);
+    if (previous) {
+      if (previous.payment_id !== paymentId || previous.reason !== why) fail(409, 'This request ID was used for a different reversal.');
+      return reply(200);
+    }
+    if (await one(db, 'SELECT id FROM payment_reversals WHERE payment_id=?', paymentId)) fail(409, 'This payment was already reversed.');
+    try {
+      await db.batch([
+        query(db, 'INSERT INTO payment_reversals(id,workspace_id,payment_id,invoice_id,amount_minor,reason,created_by,created_at) VALUES(?,?,?,?,?,?,?,?)', id, w, paymentId, payment.invoice_id, payment.amount_minor, why, member.user_id, now),
+        audit(db, member, 'payment.reversed', paymentId, { invoice: payment.invoice_id, amount_minor: payment.amount_minor, reason: why }, 'staff', { objectType: 'payment', reason: why, intervention, before: { reversed: false }, after: { reversed: true } }),
+      ]);
+    } catch (error) {
+      if (await one(db, 'SELECT id FROM payment_reversals WHERE payment_id=?', paymentId)) fail(409, 'This payment was already reversed.');
+      throw error;
+    }
+    return reply(201);
+  }
+
+  // Voids an invoice that was issued by mistake. Only while no payment stands, no credit note or receivable exists,
+  // and nothing was dispatched. The order and its RFQ are cancelled; the number stays used. A corrected invoice is generated afterwards.
+  if (path === '/api/erp/sales/invoices/void') {
+    const intervention = role(member, data, 'sales_manager');
+    keys(data, ['id', 'invoiceId', 'reason', 'interventionReason']);
+    const id = recordId(data.id), invoiceId = recordId(data.invoiceId), why = correctionReason(data.reason);
+    const invoice = await one(db, 'SELECT * FROM invoices WHERE id=? AND workspace_id=?', invoiceId, w);
+    if (!invoice) fail(404, 'Invoice not found.');
+    const previous = await one(db, 'SELECT * FROM invoice_voids WHERE id=? OR invoice_id=?', id, invoiceId);
+    if (previous) {
+      if (previous.id === id && previous.invoice_id === invoiceId && previous.reason === why) return json({ void: previous });
+      fail(409, previous.invoice_id === invoiceId ? 'This invoice was already voided.' : 'This request ID was used for a different void.');
+    }
+    if (await one(db, 'SELECT 1 FROM invoice_payments p WHERE p.invoice_id=? AND NOT EXISTS(SELECT 1 FROM payment_reversals r WHERE r.payment_id=p.id) UNION ALL SELECT 1 FROM sales_payments WHERE invoice_id=?', invoiceId, invoiceId))
+      fail(409, 'A payment stands on this invoice, so it cannot be voided. Reverse the payment first, or issue a credit note.');
+    if (await one(db, 'SELECT 1 FROM credit_notes WHERE invoice_id=?', invoiceId)) fail(409, 'This invoice has a credit note, so it cannot be voided. Credit notes stay on record.');
+    const order = await one(db, 'SELECT id,status,buyer_po_id FROM sales_orders WHERE id=? AND workspace_id=?', invoice.sales_order_id, w);
+    if (!order || order.status !== 'confirmed' || await one(db, 'SELECT 1 FROM dispatches WHERE sales_order_id=? UNION ALL SELECT 1 FROM sales_dispatches WHERE sales_order_id=? UNION ALL SELECT 1 FROM receivables WHERE invoice_id=?', order.id, order.id, invoiceId))
+      fail(409, 'Goods were dispatched for this order, so the invoice cannot be voided. Issue a credit note instead.');
+    try {
+      await db.batch([
+        query(db, 'INSERT INTO invoice_voids(id,workspace_id,invoice_id,sales_order_id,reason,created_by,created_at) VALUES(?,?,?,?,?,?,?)', id, w, invoiceId, order.id, why, member.user_id, now),
+        query(db, "UPDATE sales_orders SET status='cancelled' WHERE id=? AND workspace_id=? AND status='confirmed'", order.id, w),
+        query(db, "UPDATE buyer_purchase_orders SET status='cancelled',updated_at=? WHERE id=? AND status='confirmed'", now, order.buyer_po_id),
+        audit(db, member, 'invoice.voided', invoiceId, { sale: order.id, number: invoice.number, reason: why }, 'staff', { objectType: 'invoice', reason: why, intervention }),
+      ]);
+    } catch (error) {
+      const raced = await one(db, 'SELECT * FROM invoice_voids WHERE id=?', id);
+      if (raced) return json({ void: raced });
+      if (String(error).includes('cannot be voided')) fail(409, 'A payment, credit note or dispatch now stands on this invoice, so it cannot be voided.');
+      fail(409, 'The invoice changed while voiding it. Reload first.');
+    }
+    return json({ void: await one(db, 'SELECT * FROM invoice_voids WHERE id=?', id) }, 201);
+  }
+
+  // Takes back a sent quotation the buyer has not accepted. The revision returns to draft, so it can be corrected and sent again.
+  if (path === '/api/erp/sales/quotes/withdraw') {
+    const intervention = role(member, data, 'sales_manager');
+    keys(data, ['id', 'revisionId', 'reason', 'interventionReason']);
+    const requestId = recordId(data.id), revisionId = recordId(data.revisionId), why = correctionReason(data.reason);
+    if (await one(db, "SELECT id FROM erp_audit_events WHERE action='sales.quote_withdrawn' AND record_id=? AND json_extract(detail_json,'$.request')=?", revisionId, requestId)) return json({ withdrawn: true });
+    const revision = await one(db, 'SELECT r.*,p.sent_revision_id FROM sales_quote_revisions r JOIN buyer_purchase_orders p ON p.id=r.buyer_po_id WHERE r.id=? AND r.workspace_id=?', revisionId, w);
+    if (!revision) fail(404, 'Quote revision not found.');
+    if (revision.status === 'approved') fail(409, 'The buyer has accepted this quotation, so it cannot be withdrawn.');
+    if (revision.status !== 'sent' || revision.sent_revision_id !== revisionId) fail(409, 'Only the quotation the buyer can see now can be withdrawn.');
+    try {
+      await db.batch([
+        guard(db, "EXISTS(SELECT 1 FROM sales_quote_revisions WHERE id=? AND status='sent')", revisionId),
+        query(db, "UPDATE sales_quote_revisions SET status='draft',updated_at=? WHERE id=? AND status='sent'", now, revisionId),
+        query(db, "UPDATE buyer_purchase_orders SET status='entered',sent_revision_id=NULL,sent_version=NULL,updated_at=? WHERE id=? AND status='quoted' AND sent_revision_id=?", now, revision.buyer_po_id, revisionId),
+        audit(db, member, 'sales.quote_withdrawn', revisionId, { request: requestId, version: revision.version, reason: why }, 'staff', { objectType: 'quotation', reason: why, intervention }),
+      ]);
+    } catch { fail(409, 'The quotation was accepted or changed. Reload before withdrawing.'); }
+    return json({ withdrawn: true }, 201);
+  }
+
+  // Admin-only: a buyer rejected by mistake goes back to pending review. Its cancelled RFQs stay cancelled; the buyer resubmits.
+  if (path === '/api/erp/sales/buyers/reopen') {
+    viewer(member);
+    keys(data, ['id', 'buyerId', 'version', 'reason']);
+    const requestId = recordId(data.id), buyerId = recordId(data.buyerId), version = integer(data.version, 'Version'), why = correctionReason(data.reason);
+    if (await one(db, "SELECT id FROM erp_audit_events WHERE action='buyer.reopened' AND record_id=? AND json_extract(detail_json,'$.request')=?", buyerId, requestId)) return json({ saved: true, version: version + 1 });
+    const buyer = await one(db, 'SELECT id,status,version FROM buyers WHERE id=? AND workspace_id=?', buyerId, w);
+    if (!buyer) fail(404, 'Buyer not found.');
+    if (buyer.status !== 'rejected') fail(409, 'Only a rejected buyer can be reopened.');
+    if (buyer.version !== version) fail(409, 'The buyer record changed. Reload before reopening.');
+    try {
+      await db.batch([
+        guard(db, "EXISTS(SELECT 1 FROM buyers WHERE id=? AND workspace_id=? AND version=? AND status='rejected')", buyerId, w, version),
+        query(db, "UPDATE buyers SET status='pending',version=version+1,updated_at=? WHERE id=? AND workspace_id=? AND version=?", now, buyerId, w, version),
+        audit(db, member, 'buyer.reopened', buyerId, { request: requestId, reason: why }, 'staff', { reason: why, before: { status: 'rejected' }, after: { status: 'pending' } }),
+      ]);
+    } catch { fail(409, 'The buyer record changed. Reload before reopening.'); }
+    return json({ saved: true, version: version + 1 });
+  }
+
+  // Material type shown on invoices. Sales managers, supervisors and admins (with a reason) can change it; each change is audited.
+  // Invoices keep the type they were issued with.
+  if (path === '/api/erp/products/type') {
+    const intervention = role(member, data, 'sales_manager', 'supervisor');
+    keys(data, ['productId', 'productType', 'interventionReason']);
+    const productId = recordId(data.productId);
+    const productType = data.productType === null ? null : text(data.productType, 'Product type', 1, 60);
+    const product = await one(db, 'SELECT id,product_type FROM products WHERE id=? AND workspace_id=?', productId, w);
+    if (!product) fail(404, 'Material not found.');
+    if (product.product_type === productType) return json({ saved: true, productType });
+    try {
+      await db.batch([
+        guard(db, 'EXISTS(SELECT 1 FROM products WHERE id=? AND workspace_id=? AND product_type IS ?)', productId, w, product.product_type),
+        query(db, 'UPDATE products SET product_type=? WHERE id=? AND workspace_id=? AND product_type IS ?', productType, productId, w, product.product_type),
+        audit(db, member, 'product.type_changed', productId, { product_type: productType }, 'staff', { objectType: 'product', before: { product_type: product.product_type }, after: { product_type: productType }, intervention }),
+      ]);
+    } catch { fail(409, 'The material type changed. Reload and try again.'); }
+    return json({ saved: true, productType });
   }
 
   // Warn-only credit limit: stored per buyer, shown on the buyers page, never checked when quoting or invoicing.
@@ -463,6 +648,25 @@ export async function salesApi(request, env, member, path, data) {
     const noted = await one(db, 'SELECT id FROM sales_orders WHERE revision_id=? AND workspace_id=?', revisionId, w);
     const sale = await noteSale(db, member, { id, revisionId, intervention }, now);
     return json(sale, noted ? 200 : 201);
+  }
+
+  // Sales-team entry of a sale: the buyer must be approved and the currency the factory currency. Same request ID, same sale.
+  if (path === '/api/erp/sales/invoices/generate') {
+    const intervention = role(member, data, 'sales_manager');
+    keys(data, ['id', 'buyerId', 'productId', 'quantity', 'unit', 'rateMinor', 'currency', 'paymentTerms', 'creditDays', 'specifications', 'deliveryAt', 'interventionReason']);
+    const quantity = data.quantity, quantityMilli = typeof quantity === 'number' ? Math.round(quantity * 1000) : NaN;
+    if (typeof quantity !== 'number' || !(quantity > 0) || !Number.isSafeInteger(quantityMilli) || Math.abs(quantity * 1000 - quantityMilli) > 1e-6 || quantityMilli > 1_000_000_000)
+      fail(422, 'Quantity must be more than zero, with up to three decimal places.');
+    const input = {
+      id: recordId(data.id), buyerId: recordId(data.buyerId), productId: recordId(data.productId), quantityMilli,
+      unit: ['kg', 'metre', 'piece'].includes(data.unit) ? data.unit : fail(422, 'Choose kg, metre or piece.'),
+      rateMinor: integer(data.rateMinor, 'Rate'),
+      currency: ['PKR', 'USD', 'EUR', 'GBP'].includes(data.currency) ? data.currency : fail(422, 'Choose PKR, USD, EUR or GBP.'),
+      paymentTerms: multiline(data.paymentTerms, 'Payment terms', 3, 1000), creditDays: integer(data.creditDays, 'Credit days', 0, 365),
+      specifications: multiline(data.specifications ?? '', 'Specifications', 0, 4000), deliveryAt: data.deliveryAt == null ? null : date(data.deliveryAt, 'Delivery date'),
+    };
+    const sale = await generateInvoice(db, member, input, intervention, now);
+    return json({ order: sale.order, invoice: sale.invoice }, sale.created ? 201 : 200);
   }
 
   if (path === '/api/erp/sales/credit-notes') {

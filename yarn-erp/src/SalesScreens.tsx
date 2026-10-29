@@ -1,21 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, BadgeCheck, Ban, Banknote, ChartNoAxesCombined, ClipboardList, Download, ExternalLink, FileText, Pencil, Receipt, RefreshCw, Send, Truck } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Ban, Banknote, ChartNoAxesCombined, ClipboardList, ExternalLink, FileText, Pencil, Plus, Receipt, RefreshCw, RotateCcw, Send, Star, Truck } from 'lucide-react';
 import { AnalyticsSection, BarList, KpiStrip, StackedBar, firstCurrency, type BarRow, type Tone } from './AnalyticsKit';
 import { AsyncForm, Field } from './forms';
 import { useLanguage } from './i18n';
 import { InterventionField, NextStep, ReasonField, SectionTabs, StatusTag, kg, money } from './PortalCommon';
 import { inventoryRequest, type Member } from './inventory-client';
 import { factoryTime, fixedInput } from './erp-client';
+import { InvoiceGenerator } from './InvoiceGenerator';
+import { BuyerRatingHistory, BuyerRatingSummary, RateBuyer } from './BuyerRating';
+import { InvoiceDocument } from './InvoiceDocument';
+import { invoiceDocData, type InvoiceDocData } from './invoice-pdf';
 import './sales.css';
 import './sales-screens.css';
 
 type Buyer = { id: string; name: string; contact_name: string; email: string; phone: string; city: string; notes: string; status: string; version: number; created_at: number };
 type Rfq = { id: string; buyer_id: string; buyer_name: string; reference: string; specifications: string; quantity_milli: number; unit: string; requested_delivery_at: number; payment_terms: string; status: string; state: string; created_at: number };
 type Revision = { id: string; buyer_po_id: string; version: number; quantity_milli: number; unit: string; price_minor: number; currency: string; specifications: string; requested_delivery_at: number; payment_terms: string; credit_days: number; note: string; status: string; created_at: number };
-type Invoice = { id: string; number: string; sales_order_id: string; buyer_id: string; buyer_name?: string; order_reference?: string; subtotal_minor: number | null; tax_rate_bp: number | null; tax_minor: number | null; total_minor: number; currency: string; issued_at: number; due_at: number | null; payment_terms?: string; credit_days?: number; credited_minor: number; paid_minor: number; outstanding_minor: number; status: string; days_to_due: number | null; alerts: { id: string; kind: string; created_at: number }[] };
+type Invoice = { id: string; number: string; sales_order_id: string; buyer_id: string; buyer_name?: string; order_reference?: string; lines_json: string; subtotal_minor: number | null; tax_rate_bp: number | null; tax_minor: number | null; total_minor: number; currency: string; issued_at: number; due_at: number | null; payment_terms?: string; credit_days?: number; credited_minor: number; paid_minor: number; outstanding_minor: number; status: string; days_to_due: number | null; voided_at?: number | null; void_reason?: string | null; alerts: { id: string; kind: string; created_at: number }[] };
 type CreditNote = { id: string; invoice_id: string; number: string; amount_minor: number; reason: string; created_at: number };
-type SalesOrder = { id: string; revision_id: string; buyer_id: string; reference: string; status: string; created_at: number };
-type SalesState = { buyers: Buyer[]; rfqs: Rfq[]; revisions: Revision[]; orders: SalesOrder[]; invoices: Invoice[]; creditNotes: CreditNote[]; products: { id: string; sku: string; name: string }[]; settings: { currency: string; tax_rate_bp: number } };
+type InvoicePayment = { id: string; invoice_id: string; amount_minor: number; received_at: number; note: string; reversal_id: string | null; reversal_reason: string | null };
+type SalesOrder = { id: string; revision_id: string; buyer_id: string; reference: string; status: string; terms_snapshot: string; created_at: number };
+type SalesState = { buyers: Buyer[]; rfqs: Rfq[]; revisions: Revision[]; orders: SalesOrder[]; invoices: Invoice[]; creditNotes: CreditNote[]; products: { id: string; sku: string; name: string; product_type: string | null }[]; settings: { currency: string; tax_rate_bp: number };
+  saleLines: { sales_order_id: string; product_id: string | null; product_name: string | null }[]; invoicePayments: InvoicePayment[]; factoryName: string };
 type DispatchRecord = { id: string; sales_order_id: string; status: 'pending_approval' | 'approved' | 'on_hold' | 'dispatched' | 'delivered'; order_reference: string; buyer_name: string; product_name: string; lot_batch: string; quantity_milli: number; grams: number; hold_reason: string | null; approval_request_id: string | null; hold_notice_id: string | null; created_at: number; dispatched_at: number | null; delivered_at: number | null };
 type StockQuery = { id: string; product_id: string; product_name: string; quantity_milli: number | null; buyer_rfq_id: string | null; question: string; status: string; available_grams: number | null; answer: string | null; created_at: number };
 type Props = { member: Member; section: string; tab: string; id: string; navigate: (to: string) => void };
@@ -65,6 +71,8 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
   const [online, setOnline] = useState(navigator.onLine), [open, setOpen] = useState('');
   const [intervention, setIntervention] = useState(''), [running, setRunning] = useState('');
   const saleIds = useRef<Record<string, string>>({});
+  // Set when a voided invoice's "issue corrected invoice" is used: the generator starts from that invoice's values.
+  const [regenerateFrom, setRegenerateFrom] = useState('');
   const [from, setFrom] = useState(() => dateInput(Date.now() - 30 * 86400000)), [to, setTo] = useState(today);
   const allowed = member.role === 'sales_manager' || member.role === 'admin';
 
@@ -94,7 +102,7 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
     return () => { window.removeEventListener('online', changed); window.removeEventListener('offline', changed); };
   }, []);
 
-  const saved = async (message: string, urdu: string, path?: string) => { setOpen(''); setNotice(t(message, urdu)); if (path) navigate(path); await load(); };
+  const saved = async (message: string, urdu: string, path?: string) => { setOpen(''); setRegenerateFrom(''); setNotice(t(message, urdu)); if (path) navigate(path); await load(); };
   const act = async (message: string, urdu: string, run: () => Promise<unknown>, path?: string) => { setError(''); await run(); await saved(message, urdu, path); };
   // Button actions: show the failure and block repeat clicks while one is running.
   const quick = async (key: string, ...args: Parameters<typeof act>) => {
@@ -104,6 +112,11 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
     finally { setRunning(''); }
   };
   const salesPost = (path: string, body: unknown) => inventoryRequest(`/erp/sales${path}`, body);
+  // A new invoice opens its locked document straight away, where the PDF download is offered.
+  const issueInvoice = async (body: unknown) => {
+    const result = await salesPost('/invoices/generate', body) as { invoice: { id: string } };
+    await saved(t('Invoice issued.', 'انوائس جاری ہو گئی۔'), 'انوائس جاری ہو گئی۔', 'invoices/' + result.invoice.id);
+  };
   const dispatchPost = (path: string, body: unknown) => inventoryRequest(`/erp/dispatch${path}`, body);
   const adminIntervention = (value: string) => member.role === 'admin' && value ? { interventionReason: value } : {};
 
@@ -124,6 +137,15 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
   const buyerTabs = member.admin ? tabs.buyers : tabs.buyers.filter(item => item.id !== 'settings');
   const currentTab = section === 'buyers' ? (buyerTabs.some(item => item.id === tab) ? tab : 'pending') : tab || (section === 'buyer-rfqs' ? 'open' : section === 'invoices' ? 'owed' : 'pending_approval');
   const alerts = s.invoices.flatMap(invoice => invoice.alerts.map(alert => ({ invoice, alert })));
+  // Values for a corrected invoice: the voided invoice's buyer, material and the terms of its sales order.
+  const regenPrefill = (() => {
+    const source = s.invoices.find(invoice => invoice.id === regenerateFrom), order = source && s.orders.find(item => item.id === source.sales_order_id);
+    if (!source || !order) return undefined;
+    const terms = JSON.parse(order.terms_snapshot) as { quantity_milli: number; unit: string; price_minor: number; currency: string; payment_terms: string; credit_days: number; specifications: string; requested_delivery_at: number };
+    return { buyerId: source.buyer_id, productId: s.saleLines.find(line => line.sales_order_id === order.id && line.product_id)?.product_id ?? '', quantity: String(terms.quantity_milli / 1000), unit: terms.unit,
+      rate: (terms.price_minor / 100).toFixed(2), currency: terms.currency, paymentTerms: terms.payment_terms, creditDays: String(terms.credit_days), specifications: terms.specifications,
+      delivery: dateInput(terms.requested_delivery_at), voidedNumber: source.number };
+  })();
 
   const dashboardView = () => {
     const target: [string, string] = pendingBuyer ? ['buyers/' + pendingBuyer.id, 'Review pending buyer'] : openRfq ? ['buyer-rfqs/' + openRfq.id, 'Quote buyer request'] : pendingDispatch ? ['dispatch-requests/' + pendingDispatch.id, 'Review dispatch request'] : ['', 'No sales action is waiting'];
@@ -145,6 +167,15 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
   const saveProfile = (buyer: BuyerSummary, fields: { contactName: string; phone: string; city: string; notes: string }, intervention: string) =>
     act(t('Buyer profile saved.', 'خریدار کا پروفائل محفوظ ہوا۔'), 'خریدار کا پروفائل محفوظ ہوا۔', () => salesPost('/buyers/profile', { id: buyer.id, version: buyer.version, ...fields, ...(intervention ? { interventionReason: intervention } : {}) }));
 
+  // Material type: saved through the products route (not the sales route); the sales screen reloads so the generator sees it.
+  const saveProductType = async (productId: string, productType: string | null, intervention: string) => {
+    setError('');
+    await inventoryRequest('/erp/products/type', { productId, productType, ...(intervention ? { interventionReason: intervention } : {}) });
+    await load();
+  };
+  const saveReopen = (buyer: BuyerSummary, requestId: string, reason: string) =>
+    act(t('Buyer reopened for review.', 'خریدار دوبارہ جانچ کے لیے کھول دیا گیا۔'), 'خریدار دوبارہ جانچ کے لیے کھول دیا گیا۔', () => salesPost('/buyers/reopen', { id: requestId, buyerId: buyer.id, version: buyer.version, reason }));
+
   const buyersView = () => {
     if (currentTab === 'settings') return <div className="erp-workspace"><SectionTabs tabs={buyerTabs} value={currentTab} onChange={value => navigate('buyers/' + value)} />
       <CreditLimitForm key={summaries.length} buyers={summaries} currency={s.settings.currency}
@@ -156,7 +187,7 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
     const focused = id ? summaries.filter(buyer => buyer.id === id) : [];
     return <div className="erp-workspace"><SectionTabs tabs={buyerTabs} value={currentTab} onChange={value => navigate('buyers/' + value)} />
       <BuyerDirectory key={currentTab} buyers={focused.length ? focused : summaries} focused={focused.length > 0} defaultStatus={currentTab} sales={s} dispatches={dispatches}
-        member={member} open={open} setOpen={setOpen} navigate={navigate} onDecide={saveDecision} onProfile={saveProfile} />
+        member={member} open={open} setOpen={setOpen} navigate={navigate} onDecide={saveDecision} onProfile={saveProfile} onReopen={saveReopen} />
     </div>;
   };
 
@@ -174,6 +205,12 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
           <p>{money(newest.price_minor, newest.currency)} / {selected.unit} · {newest.credit_days} {t('days credit', 'دن ادھار')}</p><p>{newest.specifications} · {newest.payment_terms}</p>
           {newest.status === 'draft' && <><InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
             <button className="button primary" disabled={!!running} onClick={() => void quick('send:' + newest.id, t('Quotation sent to buyer.', 'قیمت خریدار کو بھیج دی گئی۔'), 'قیمت خریدار کو بھیج دی گئی۔', () => salesPost('/quotes/send', { id: newest.id, ...adminIntervention(intervention) }))}><Send size={18} aria-hidden="true" />{t('Send quotation', 'قیمت بھیجیں')}</button></>}
+          {newest.status === 'sent' && <>
+            <button className="button" onClick={() => setOpen(open === 'withdraw:' + newest.id ? '' : 'withdraw:' + newest.id)}><RotateCcw size={18} aria-hidden="true" />{t('Withdraw quotation', 'قیمت واپس لیں')}</button>
+            {open === 'withdraw:' + newest.id && <CorrectionForm title={t('Withdraw quotation', 'قیمت واپس لیں')} detail={t('The buyer has not accepted it. It returns to draft, where you can correct it and send it again.', 'خریدار نے اسے قبول نہیں کیا۔ یہ مسودہ بن جائے گی، جہاں آپ درست کر کے دوبارہ بھیج سکتے ہیں۔')}
+              submit={t('Withdraw quotation', 'قیمت واپس لیں')} member={member} onCancel={() => setOpen('')}
+              onSave={(requestId, reason, intervention) => act(t('Quotation withdrawn. It is back in draft.', 'قیمت واپس لے لی گئی۔ اب یہ مسودہ ہے۔'), 'قیمت واپس لے لی گئی۔ اب یہ مسودہ ہے۔', () => salesPost('/quotes/withdraw', { id: requestId, revisionId: newest.id, reason, ...adminIntervention(intervention) }))} />}
+          </>}
         </div>}
         {newest?.status === 'approved' && !s.orders.some(order => order.revision_id === newest.id) && <div>
           <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
@@ -193,14 +230,24 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
   };
 
   const invoicesView = () => {
-    if (selectedInvoice) return <InvoiceDetail invoice={selectedInvoice} creditNotes={s.creditNotes.filter(note => note.invoice_id === selectedInvoice.id)} member={member}
-      onPayment={payload => act(t('Payment recorded.', 'ادائیگی درج ہو گئی۔'), 'ادائیگی درج ہو گئی۔', () => salesPost('/payments', payload))}
-      onCredit={payload => act(t('Credit note issued.', 'کریڈٹ نوٹ جاری ہو گیا۔'), 'کریڈٹ نوٹ جاری ہو گیا۔', () => salesPost('/credit-notes', payload))} />;
+    if (selectedInvoice) {
+      const doc = invoiceDocData(selectedInvoice, s.saleLines, s.buyers.find(buyer => buyer.id === selectedInvoice.buyer_id), s.factoryName, selectedInvoice.buyer_name);
+      return <div className="erp-workspace"><InvoiceDocument doc={doc} /><InvoiceDetail invoice={selectedInvoice} creditNotes={s.creditNotes.filter(note => note.invoice_id === selectedInvoice.id)} member={member}
+        payments={s.invoicePayments.filter(item => item.invoice_id === selectedInvoice.id)} orderStatus={s.orders.find(order => order.id === selectedInvoice.sales_order_id)?.status ?? ''}
+        onPayment={payload => act(t('Payment recorded.', 'ادائیگی درج ہو گئی۔'), 'ادائیگی درج ہو گئی۔', () => salesPost('/payments', payload))}
+        onCredit={payload => act(t('Credit note issued.', 'کریڈٹ نوٹ جاری ہو گیا۔'), 'کریڈٹ نوٹ جاری ہو گیا۔', () => salesPost('/credit-notes', payload))}
+        onReversePayment={payload => act(t('Payment reversed. The balance is restored.', 'ادائیگی منسوخ ہو گئی۔ بقایا بحال ہو گیا۔'), 'ادائیگی منسوخ ہو گئی۔ بقایا بحال ہو گیا۔', () => salesPost('/payments/reverse', payload))}
+        onVoid={payload => act(t('Invoice voided. Issue a corrected invoice when ready.', 'انوائس منسوخ ہو گئی۔ تیار ہونے پر درست شدہ انوائس جاری کریں۔'), 'انوائس منسوخ ہو گئی۔', () => salesPost('/invoices/void', payload))}
+        onRegenerate={() => { setRegenerateFrom(selectedInvoice.id); setOpen('new-invoice'); navigate('invoices'); }} /></div>;
+    }
     const filtered = s.invoices.filter(invoice => currentTab === 'all' || (currentTab === 'paid' ? invoice.status === 'paid' : invoice.outstanding_minor > 0));
     return <div className="erp-workspace"><SectionTabs tabs={tabs.invoices} value={currentTab} onChange={value => navigate('invoices/' + value)} />
+      {open === 'new-invoice' ? <InvoiceGenerator member={member} buyers={s.buyers} products={s.products} currency={s.settings.currency} taxRateBp={s.settings.tax_rate_bp} prefill={regenPrefill}
+        onCancel={() => { setOpen(''); setRegenerateFrom(''); }} onSave={issueInvoice} onSaveProductType={saveProductType} />
+        : <div className="erp-toolbar"><span>{t('Invoices are locked once issued.', 'جاری انوائس مقفل ہو جاتی ہے۔')}</span><button className="button primary" onClick={() => { setRegenerateFrom(''); setOpen('new-invoice'); }}><Plus size={18} aria-hidden="true" />{t('New invoice', 'نئی انوائس')}</button></div>}
       {filtered.length ? <div className="erp-records">{filtered.map(invoice => <article className="erp-record" key={invoice.id}><div className="erp-record-head"><div><h2><button className="live-text-button" onClick={() => navigate('invoices/' + invoice.id)}>{invoice.number}</button></h2><p>{invoice.buyer_name} · {invoice.order_reference} · {dueDate(invoice.due_at)}</p></div><StatusTag status={invoice.status} /></div>
         <p>{t('Outstanding', 'بقایا')}: {money(invoice.outstanding_minor, invoice.currency)} · {t('Total', 'کل')}: {money(invoice.total_minor, invoice.currency)}</p>
-        <button className="button" onClick={() => navigate('invoices/' + invoice.id)}><FileText size={18} aria-hidden="true" />{t('Open locked invoice', 'مقفل انوائس کھولیں')}</button></article>)}</div>
+        <button className="button" onClick={() => navigate('invoices/' + invoice.id)}><FileText size={18} aria-hidden="true" />{t('Open invoice', 'انوائس کھولیں')}</button></article>)}</div>
         : <p className="live-empty">{t('No invoices in this view.', 'اس حصے میں کوئی انوائس نہیں۔')}</p>}
       <section className="live-panel"><h2>{t('Credit alerts', 'ادائیگی کی یاددہانیاں')}</h2>{alerts.length ? <ul className="erp-records">{alerts.map(({ invoice, alert }) => <li className="erp-record" key={alert.id}><strong>{invoice.number} · {invoice.buyer_name}</strong><p><StatusTag status={alert.kind} /> · {money(invoice.outstanding_minor, invoice.currency)} · {dueDate(invoice.due_at)}</p></li>)}</ul> : <p>{t('No credit alerts.', 'ادائیگی کی کوئی یاددہانی نہیں۔')}</p>}</section>
     </div>;
@@ -325,9 +372,21 @@ function StockQueryForm({ rfq, products, member, onSave, onCancel }: { rfq: Rfq;
   </AsyncForm>;
 }
 
-function InvoiceDetail({ invoice, creditNotes, member, onPayment, onCredit }: { invoice: Invoice; creditNotes: CreditNote[]; member: Member; onPayment: (data: unknown) => Promise<void>; onCredit: (data: unknown) => Promise<void> }) {
+function InvoiceDetail({ invoice, creditNotes, payments, orderStatus, member, onPayment, onCredit, onReversePayment, onVoid, onRegenerate }: {
+  invoice: Invoice; creditNotes: CreditNote[]; payments: InvoicePayment[]; orderStatus: string; member: Member; onPayment: (data: unknown) => Promise<void>; onCredit: (data: unknown) => Promise<void>;
+  onReversePayment: (data: unknown) => Promise<void>; onVoid: (data: unknown) => Promise<void>; onRegenerate: () => void;
+}) {
   const { t } = useLanguage(); const [open, setOpen] = useState(''), [payment, setPayment] = useState(amountInput(invoice.outstanding_minor)), [received, setReceived] = useState(today()), [paymentNote, setPaymentNote] = useState(''), [credit, setCredit] = useState(''), [creditReason, setCreditReason] = useState(''), [intervention, setIntervention] = useState('');
+  const voided = invoice.status === 'void';
+  // A void is refused while money stands on the invoice or goods left for the order; the reason is shown instead of the button.
+  const voidBlocker = invoice.paid_minor > 0 ? t('A payment stands on this invoice. Reverse the payment to void the invoice, or issue a credit note.', 'اس انوائس پر ادائیگی درج ہے۔ انوائس منسوخ کرنے کے لیے ادائیگی منسوخ کریں، یا کریڈٹ نوٹ جاری کریں۔')
+    : invoice.credited_minor > 0 ? t('A credit note stands on this invoice. Credit notes stay on record.', 'اس انوائس پر کریڈٹ نوٹ جاری ہے۔ کریڈٹ نوٹ ریکارڈ میں رہتے ہیں۔')
+    : orderStatus !== 'confirmed' ? t('Goods were dispatched for this order. Issue a credit note instead.', 'اس آرڈر کا مال روانہ ہو چکا ہے۔ اس کے بجائے کریڈٹ نوٹ جاری کریں۔') : '';
   return <section className="live-panel"><div className="live-panel-heading"><div><h2>{invoice.number}</h2><p>{invoice.buyer_name} · {invoice.order_reference} · {factoryTime(invoice.issued_at)}</p></div><StatusTag status={invoice.status} /></div>
+    {voided && <section className="live-panel invoice-void-note"><h3>{t('Voided', 'منسوخ')}</h3>
+      <p>{invoice.voided_at ? factoryTime(invoice.voided_at) : ''}{invoice.void_reason ? ` · ${invoice.void_reason}` : ''}</p>
+      <p>{t('This invoice is not payable. Issue a corrected invoice in its place; the voided number stays on record.', 'یہ انوائس قابلِ ادائیگی نہیں۔ اس کی جگہ درست شدہ انوائس جاری کریں؛ منسوخ شدہ نمبر ریکارڈ میں رہے گا۔')}</p>
+      <button className="button primary" onClick={onRegenerate}><Receipt size={18} aria-hidden="true" />{t('Issue corrected invoice', 'درست شدہ انوائس جاری کریں')}</button></section>}
     <section className="sales-invoice"><h3>{t('Locked invoice', 'مقفل انوائس')}</h3>
       <dl className="erp-facts">
         <div><dt>{t('Subtotal', 'ذیلی کل')}</dt><dd>{invoice.subtotal_minor == null ? '—' : money(invoice.subtotal_minor, invoice.currency)}</dd></div>
@@ -337,8 +396,7 @@ function InvoiceDetail({ invoice, creditNotes, member, onPayment, onCredit }: { 
         <div><dt>{t('Paid', 'ادا شدہ')}</dt><dd>{money(invoice.paid_minor, invoice.currency)}</dd></div>
         <div><dt>{t('Credit notes', 'کریڈٹ نوٹس')}</dt><dd>{money(invoice.credited_minor, invoice.currency)}</dd></div>
         <div><dt>{t('Outstanding', 'بقایا')}</dt><dd>{money(invoice.outstanding_minor, invoice.currency)}</dd></div>
-      </dl>
-      <a className="button" href={`/api/erp/sales/invoices/${encodeURIComponent(invoice.id)}`} download><Download size={18} aria-hidden="true" />{t('Download invoice', 'انوائس ڈاؤن لوڈ کریں')}</a></section>
+      </dl></section>
     <section className="live-panel"><h3>{t('Credit notes', 'کریڈٹ نوٹس')}</h3>
       {creditNotes.length ? creditNotes.map(note => <article className="erp-record" key={note.id}><strong>{note.number} · {money(note.amount_minor, invoice.currency)}</strong><p>{note.reason} · {dueDate(note.created_at)}</p></article>) : <p>{t('No credit notes.', 'کوئی کریڈٹ نوٹ نہیں۔')}</p>}
       {invoice.outstanding_minor > 0 && <button className="button" onClick={() => setOpen(open === 'credit' ? '' : 'credit')}><FileText size={18} aria-hidden="true" />{t('Issue credit note', 'کریڈٹ نوٹ جاری کریں')}</button>}
@@ -351,6 +409,13 @@ function InvoiceDetail({ invoice, creditNotes, member, onPayment, onCredit }: { 
     </section>
     <section className="live-panel"><h3>{t('Payment tracking', 'ادائیگی کا ریکارڈ')}</h3>
       <p>{t('Due', 'آخری تاریخ')}: {dueDate(invoice.due_at)} · {t('Outstanding', 'بقایا')}: {money(invoice.outstanding_minor, invoice.currency)}</p>
+      {payments.length ? <ul className="invoice-payments">{payments.map(item => <li key={item.id}>
+        <span>{factoryTime(item.received_at)} · {money(item.amount_minor, invoice.currency)}{item.note ? ` · ${item.note}` : ''}</span>
+        {item.reversal_id ? <span className="live-muted">{t('Reversed', 'منسوخ')}{item.reversal_reason ? ` · ${item.reversal_reason}` : ''}</span>
+          : open === 'reverse:' + item.id ? <CorrectionForm title={t('Reverse payment', 'ادائیگی منسوخ کریں')} detail={t('The payment stays on record as reversed. The balance goes back up by the same amount.', 'ادائیگی ریکارڈ میں منسوخ شدہ کے طور پر رہے گی۔ بقایا اتنی ہی رقم بڑھ جائے گا۔')} submit={t('Reverse payment', 'ادائیگی منسوخ کریں')} member={member} onCancel={() => setOpen('')}
+            onSave={(requestId, reason, intervention) => onReversePayment({ id: requestId, paymentId: item.id, reason, ...(intervention ? { interventionReason: intervention } : {}) })} />
+          : <button className="button" onClick={() => setOpen('reverse:' + item.id)}><RotateCcw size={18} aria-hidden="true" />{t('Reverse payment', 'ادائیگی منسوخ کریں')}</button>}
+      </li>)}</ul> : <p>{t('No payments yet.', 'ابھی کوئی ادائیگی نہیں۔')}</p>}
       {invoice.outstanding_minor > 0 && <button className="button primary" onClick={() => setOpen(open === 'payment' ? '' : 'payment')}><Banknote size={18} aria-hidden="true" />{t('Record payment', 'ادائیگی درج کریں')}</button>}
       {open === 'payment' && <AsyncForm title={t('Record payment', 'ادائیگی درج کریں')} submit={t('Save payment', 'ادائیگی محفوظ کریں')} onCancel={() => setOpen('')}
         onSubmit={() => onPayment({ id: crypto.randomUUID(), invoiceId: invoice.id, amountMinor: fixedInput(payment, 2, 'Payment amount'), receivedAt: dateAtNoon(received), note: paymentNote, ...(intervention ? { interventionReason: intervention } : {}) })}>
@@ -360,7 +425,30 @@ function InvoiceDetail({ invoice, creditNotes, member, onPayment, onCredit }: { 
         <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
       </AsyncForm>}
     </section>
+    {!voided && <section className="live-panel"><h3>{t('Void invoice', 'انوائس منسوخ کریں')}</h3>
+      {voidBlocker ? <p className="live-muted">{voidBlocker}</p> : <>
+        <p className="live-muted">{t('For an invoice issued by mistake. Nothing has been paid or dispatched, so the order is cancelled and a corrected invoice can replace it.', 'غلطی سے جاری ہونے والی انوائس کے لیے۔ کوئی ادائیگی یا ترسیل نہیں ہوئی، اس لیے آرڈر منسوخ ہوگا اور درست شدہ انوائس اس کی جگہ لے سکتی ہے۔')}</p>
+        {open !== 'void' && <button className="button" onClick={() => setOpen('void')}><Ban size={18} aria-hidden="true" />{t('Void invoice', 'انوائس منسوخ کریں')}</button>}
+        {open === 'void' && <CorrectionForm title={t('Void invoice', 'انوائس منسوخ کریں')} detail={t('The invoice number stays used. The buyer order is cancelled.', 'انوائس کا نمبر استعمال شدہ رہے گا۔ خریدار کا آرڈر منسوخ ہوگا۔')} submit={t('Void invoice', 'انوائس منسوخ کریں')} member={member} onCancel={() => setOpen('')}
+          onSave={(requestId, reason, intervention) => onVoid({ id: requestId, invoiceId: invoice.id, reason, ...(intervention ? { interventionReason: intervention } : {}) })} />}
+      </>}
+    </section>}
   </section>;
+}
+
+/** One correction form: a fixed request ID (retries are safe), a reason of 3 to 500 characters, and the admin's intervention reason when needed. */
+function CorrectionForm({ title, detail, submit, member, onSave, onCancel }: { title: string; detail: string; submit: string; member: Member;
+  onSave: (requestId: string, reason: string, intervention: string) => Promise<void>; onCancel: () => void }) {
+  const [requestId] = useState(() => crypto.randomUUID()), [reason, setReason] = useState(''), [intervention, setIntervention] = useState('');
+  return <AsyncForm title={title} detail={detail} submit={submit} onCancel={onCancel} onSubmit={() => onSave(requestId, reason, intervention)}>
+    <CorrectionReason value={reason} onChange={setReason} />
+    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+  </AsyncForm>;
+}
+
+function CorrectionReason({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { t } = useLanguage();
+  return <Field>{t('Reason for the correction', 'درستی کی وجہ')}<textarea value={value} onChange={event => onChange(event.target.value)} minLength={3} maxLength={500} required /></Field>;
 }
 
 function DispatchHoldForm({ member, onSave, onCancel }: { member: Member; onSave: (term: string, reason: string, intervention: string) => Promise<void>; onCancel: () => void }) {
@@ -389,10 +477,11 @@ function DispatchThread({ status, holdReason }: { status: DispatchRecord['status
   </div>;
 }
 
-function BuyerDirectory({ buyers, focused, defaultStatus, sales, dispatches, member, open, setOpen, navigate, onDecide, onProfile }: {
+function BuyerDirectory({ buyers, focused, defaultStatus, sales, dispatches, member, open, setOpen, navigate, onDecide, onProfile, onReopen }: {
   buyers: BuyerSummary[]; focused: boolean; defaultStatus: string; sales: SalesState; dispatches: DispatchRecord[]; member: Member; open: string; setOpen: (key: string) => void; navigate: (to: string) => void;
   onDecide: (buyer: BuyerSummary, status: string, reason: string, intervention: string) => Promise<void>;
   onProfile: (buyer: BuyerSummary, fields: { contactName: string; phone: string; city: string; notes: string }, intervention: string) => Promise<void>;
+  onReopen: (buyer: BuyerSummary, requestId: string, reason: string) => Promise<void>;
 }) {
   const { t } = useLanguage();
   const [status, setStatus] = useState(defaultStatus), [search, setSearch] = useState('');
@@ -409,18 +498,22 @@ function BuyerDirectory({ buyers, focused, defaultStatus, sales, dispatches, mem
     {rows.length ? <div className="erp-records">{rows.map(buyer => <BuyerRecord key={buyer.id} buyer={buyer} sales={sales}
         dispatches={dispatches.filter(item => orderBuyer.get(item.sales_order_id) === buyer.id)} member={member} open={open} setOpen={setOpen} navigate={navigate}
         onDecide={(status, reason, intervention) => onDecide(buyer, status, reason, intervention)}
-        onProfile={(fields, intervention) => onProfile(buyer, fields, intervention)} />)}</div>
+        onProfile={(fields, intervention) => onProfile(buyer, fields, intervention)} onReopen={(requestId, reason) => onReopen(buyer, requestId, reason)} />)}</div>
       : buyers.length ? <p className="live-empty">{t('No buyers in this view.', 'اس حصے میں کوئی خریدار نہیں۔')}</p> : null}
   </section>;
 }
 
-function BuyerRecord({ buyer, sales, dispatches, member, open, setOpen, navigate, onDecide, onProfile }: {
+function BuyerRecord({ buyer, sales, dispatches, member, open, setOpen, navigate, onDecide, onProfile, onReopen }: {
   buyer: BuyerSummary; sales: SalesState; dispatches: DispatchRecord[]; member: Member; open: string; setOpen: (key: string) => void; navigate: (to: string) => void;
   onDecide: (status: string, reason: string, intervention: string) => Promise<void>; onProfile: (fields: { contactName: string; phone: string; city: string; notes: string }, intervention: string) => Promise<void>;
+  onReopen: (requestId: string, reason: string) => Promise<void>;
 }) {
   const { t } = useLanguage();
   const invoices = sales.invoices.filter(invoice => invoice.buyer_id === buyer.id), orders = sales.orders.filter(order => order.buyer_id === buyer.id);
-  const move = buyerMoves[buyer.status], decisionKey = 'buyer:' + buyer.id, profileKey = 'profile:' + buyer.id, detailKey = 'detail:' + buyer.id;
+  const move = buyerMoves[buyer.status], decisionKey = 'buyer:' + buyer.id, profileKey = 'profile:' + buyer.id, detailKey = 'detail:' + buyer.id, rateKey = 'rate:' + buyer.id, reopenKey = 'reopen:' + buyer.id;
+  // The rating readers load once on mount; a save bumps this counter so they remount and show the new rating.
+  const [ratingVersion, setRatingVersion] = useState(0), [ratingNotice, setRatingNotice] = useState('');
+  const canRate = buyer.status === 'active' && (member.role === 'sales_manager' || member.admin);
   const days = buyer.days_left;
   const dueTone = days === null ? '' : days < 0 ? 'is-bad' : days <= 7 ? 'is-warn' : '';
   const dueText = days === null ? t('Nothing due', 'کوئی واجب رقم نہیں')
@@ -431,8 +524,10 @@ function BuyerRecord({ buyer, sales, dispatches, member, open, setOpen, navigate
   const pct = !limit ? (used > 0 ? 100 : 0) : Math.min(100, (used / limit) * 100);
   const list = (values: string[]) => values.length ? values.join(' · ') : '—';
   return <article className="erp-record">
-    <div className="erp-record-head"><div><h3>{buyer.name}</h3><p>{buyer.contact_name}{buyer.city ? ` · ${buyer.city}` : ''} · {buyer.email} · {buyer.phone}</p></div><StatusTag status={buyer.status} /></div>
+    <div className="erp-record-head"><div><h3>{buyer.name}</h3><p>{buyer.contact_name}{buyer.city ? ` · ${buyer.city}` : ''} · {buyer.email} · {buyer.phone}</p></div>
+      <div className="buyer-head-side"><StatusTag status={buyer.status} /><BuyerRatingSummary key={'summary' + ratingVersion} buyerId={buyer.id} /></div></div>
     {buyer.notes && <p className="live-muted">{buyer.notes}</p>}
+    {ratingNotice && <p role="status" className="live-success">{ratingNotice}</p>}
     <dl className="buyer-facts">
       <div><dt>{t('Total sold', 'کل فروخت')}</dt><dd>{buyer.sold.length ? buyer.sold.map(line => `${line.quantity_milli / 1000} ${line.unit}`).join(' · ') : t('Nothing sold yet', 'ابھی کوئی فروخت نہیں')}</dd></div>
       <div><dt>{t('Invoiced', 'انوائس شدہ')}</dt><dd>{list(buyer.invoiced.map(row => money(row.total_minor, row.currency)))}</dd></div>
@@ -446,13 +541,20 @@ function BuyerRecord({ buyer, sales, dispatches, member, open, setOpen, navigate
         <div className={`buyer-meter${buyer.over_limit ? ' is-warn' : ''}`} role="img" aria-label={`${t('Credit used', 'استعمال شدہ ادھار')}: ${Math.round(pct)}%`}><span style={{ width: `${pct}%` }} /></div>
       </div>}
     {open === decisionKey && move && <BuyerDecision buyer={buyer} move={move} member={member} onCancel={() => setOpen('')} onSave={onDecide} />}
+    {open === reopenKey && <ReopenBuyerForm buyer={buyer} onCancel={() => setOpen('')} onSave={onReopen} />}
     {open === profileKey && <BuyerProfileForm buyer={buyer} member={member} onCancel={() => setOpen('')} onSave={onProfile} />}
+    {open === rateKey && <RateBuyer member={member} buyerId={buyer.id} onCancel={() => setOpen('')}
+      onSaved={async message => { setOpen(''); setRatingNotice(message ?? ''); setRatingVersion(version => version + 1); }} />}
     <div className="live-actions">
       {move && open !== decisionKey && <button className="button primary" onClick={() => setOpen(decisionKey)}><BadgeCheck size={18} aria-hidden="true" />{t(move.en, move.ur)}</button>}
+      {canRate && open !== rateKey && <button className="button" onClick={() => setOpen(rateKey)}><Star size={18} aria-hidden="true" />{t('Rate buyer', 'خریدار کی ریٹنگ دیں')}</button>}
+      {buyer.status === 'rejected' && member.admin && open !== reopenKey && <button className="button" onClick={() => setOpen(reopenKey)}><RotateCcw size={18} aria-hidden="true" />{t('Reopen buyer', 'خریدار دوبارہ کھولیں')}</button>}
       {open !== profileKey && <button className="button" onClick={() => setOpen(profileKey)}><Pencil size={18} aria-hidden="true" />{t('Edit profile', 'پروفائل میں ترمیم')}</button>}
       <button className="button" aria-expanded={open === detailKey} onClick={() => setOpen(open === detailKey ? '' : detailKey)}><ClipboardList size={18} aria-hidden="true" />{t('Buyer details', 'خریدار کی تفصیلات')}</button>
     </div>
     {open === detailKey && <div className="buyer-detail">
+      <h4>{t('Ratings', 'ریٹنگز')}</h4>
+      <BuyerRatingHistory key={'history' + ratingVersion} buyerId={buyer.id} member={member} onChanged={() => setRatingVersion(version => version + 1)} />
       <h4>{t('Invoices', 'انوائسز')}</h4>
       {invoices.length ? <ul className="buyer-invoices">{invoices.map(invoice => <li key={invoice.id}><button className="live-text-button" onClick={() => navigate('invoices/' + invoice.id)}>{invoice.number}</button>
         <span>{money(invoice.total_minor, invoice.currency)} · {money(invoice.outstanding_minor, invoice.currency)} {t('outstanding', 'بقایا')} · {dueDate(invoice.due_at)}</span></li>)}</ul>
@@ -506,6 +608,16 @@ function InvoiceSettingsForm({ settings, onSave }: { settings: SalesSettings; on
     <Field>{t('Invoice number format', 'انوائس نمبر کی ترتیب')}<input value={format} onChange={event => setFormat(event.target.value)} /></Field>
     <Field>{t('Reminder hours', 'یاددہانی کے گھنٹے')}<input type="number" min="1" max="720" value={hours} onChange={event => setHours(event.target.value)} /></Field>
     <Field>{t('Credit alert days (comma separated)', 'ادھار یاددہانی کے دن')}<input value={days} onChange={event => setDays(event.target.value)} /></Field>
+  </AsyncForm>;
+}
+
+/** Admin-only: a rejected buyer goes back to pending review. Admins need no intervention reason here; the route takes none. */
+function ReopenBuyerForm({ buyer, onSave, onCancel }: { buyer: BuyerSummary; onSave: (requestId: string, reason: string) => Promise<void>; onCancel: () => void }) {
+  const { t } = useLanguage(); const [requestId] = useState(() => crypto.randomUUID()), [reason, setReason] = useState('');
+  return <AsyncForm title={t('Reopen buyer', 'خریدار دوبارہ کھولیں')} detail={buyer.name} submit={t('Reopen for review', 'جانچ کے لیے دوبارہ کھولیں')} onCancel={onCancel}
+    note={t('The buyer goes back to pending review. RFQs closed when the buyer was rejected stay closed; the buyer must send them again.', 'خریدار دوبارہ زیرِ جانچ ہوگا۔ مسترد ہونے پر بند ہونے والی درخواستیں بند رہیں گی؛ خریدار انہیں دوبارہ بھیجے گا۔')}
+    onSubmit={() => onSave(requestId, reason)}>
+    <CorrectionReason value={reason} onChange={setReason} />
   </AsyncForm>;
 }
 

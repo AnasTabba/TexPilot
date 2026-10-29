@@ -117,10 +117,6 @@ export const outboxWhen = (message: SalesOutboxMessage) =>
 export const invoiceLines = (invoice: Invoice) => JSON.parse(invoice.lines_json) as {
   specifications: string; quantity_milli: number; unit: SalesUnit; price_minor: number; amount_minor: number;
 }[];
-/** The printable invoice document; same-origin GET with the staff session, offered as a file download. */
-export const invoiceDownloadHref = (invoiceId: string) => `/api/erp/sales/invoices/${invoiceId}`;
-/** The buyer-side invoice document; scoped to the signed-in buyer's own organization. */
-export const buyerInvoiceDownloadHref = (invoiceId: string) => `/api/buyer/invoices/${invoiceId}`;
 /** A civil PKT calendar date (from <input type="date">) as a timestamp at noon of that Karachi day. */
 export function factoryDateValue(value: string) {
   const result = Date.parse(value + 'T12:00:00+05:00');

@@ -32,3 +32,12 @@
 .buyer-invoices { display:grid; gap:6px; margin:0; padding:0; list-style:none; font-size:14px; }
 .buyer-invoices li { display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline; }
 .buyer-clear { display:flex; align-items:center; gap:8px; font-size:15px; }
+
+.buyer-head-side { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+
+/* Corrections: a voided rating stays in the history struck through; payments list with reversal state. */
+.buyer-rating-history li.is-voided .buyer-rating-scores,
+.buyer-rating-history li.is-voided p:not(.buyer-rating-void) { text-decoration: line-through; opacity: .55; }
+.buyer-rating-void { font-size: 13px; color: var(--muted); }
+.invoice-payments { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.invoice-payments li { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; }
