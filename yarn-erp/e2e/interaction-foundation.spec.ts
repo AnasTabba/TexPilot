@@ -99,10 +99,10 @@ async function expectPagesFit(page: Page, language: Language) {
   await expectNoHorizontalOverflow(page, `${prefix} batch detail`);
   await openPage(page, '#/scanner', language === 'ur' ? 'اسکین' : 'Scan');
   await expectNoHorizontalOverflow(page, `${prefix} Scan`);
-  await openPage(page, '#/activity', language === 'ur' ? 'ہسٹری' : 'History');
+  await openPage(page, '#/history', language === 'ur' ? 'ہسٹری' : 'History');
   await expectNoHorizontalOverflow(page, `${prefix} History`);
-  await openPage(page, '#/team', language === 'ur' ? 'ٹیم' : 'Team');
-  await expectNoHorizontalOverflow(page, `${prefix} Team`);
+  await openPage(page, '#/settings/users', language === 'ur' ? 'ترتیبات' : 'Settings');
+  await expectNoHorizontalOverflow(page, `${prefix} Settings`);
   await openPage(page, '#/profile', language === 'ur' ? 'میری پروفائل' : 'My profile');
   await expectNoHorizontalOverflow(page, `${prefix} My profile`);
 }
@@ -163,13 +163,13 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
   await expect(page.getByRole('status').filter({ hasText: 'Saved. Everyone on the team sees it now.' })).toBeVisible();
   await expectTarget(page.locator('.live-success .live-icon-button'), 'notice dismiss');
 
-  await openPage(page, '#/activity', 'History');
+  await openPage(page, '#/history', 'History');
   const historyActions = page.locator('.live-history .live-text-button');
   for (const action of await historyActions.all()) await expectTarget(action, 'History text action');
   await expectScreenTargets(page, 'History');
 
-  await openPage(page, '#/team', 'Team');
-  await expectScreenTargets(page, 'Team');
+  await openPage(page, '#/settings/users', 'Settings');
+  await expectScreenTargets(page, 'Settings');
   await openPage(page, '#/profile', 'My profile');
   await expectTarget(page.locator('.yf-language'), 'profile language switch');
   await expectScreenTargets(page, 'My profile');
@@ -302,7 +302,7 @@ test('reduced motion removes entrance animation and keeps state changes immediat
   expect(state.endlessThread).toBe('none');
 
   await page.locator('.live-bottom-nav button').nth(1).click();
-  await expect(page.getByRole('heading', { name: 'Stock', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Approvals', exact: true })).toBeVisible();
   await expectMotionSettled(page);
 });
 

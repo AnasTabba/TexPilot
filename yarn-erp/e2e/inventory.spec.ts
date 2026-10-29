@@ -46,7 +46,7 @@ test.describe('Shared inventory', () => {
     const state = await workspace(page);
     expect(rawOf(state)).toBe(rawOf(seeded) - 1250);
     expect(movementsOf(state)).toBe(movementsOf(seeded) + 1);
-    await page.goto('/#/activity');
+    await page.goto('/#/history');
     await expect(page.getByRole('button', { name: 'Reverse entry' })).toHaveCount(0);
   });
 

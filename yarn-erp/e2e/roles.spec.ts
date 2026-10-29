@@ -4,7 +4,7 @@ import { signIn } from './helpers';
 test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
 
 for (const [name, sections] of [
-  ['Anas', ['Dashboard', 'Stock', 'History', 'Procurement', 'Team']],
+  ['Anas', ['Dashboard', 'Approvals', 'Claims', 'Activity', 'Reports', 'Analytics', 'Settings', 'Modules']],
   ['Pervaiz', ['Dashboard', 'Procurement']],
   ['Saima', ['Dashboard', 'Review', 'Stock', 'History']],
   ['Sana', ['Dashboard']],
@@ -45,6 +45,7 @@ test('My profile shows the role and switches language', async ({ page }) => {
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /^My profile/ }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'My profile', exact: true })).toBeVisible();
   await expect(page.getByText('Purchase Manager').first()).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Your role' })).toBeVisible();
   await page.getByRole('button', { name: /Switch language to Urdu/ }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.getByRole('heading', { level: 1, name: 'میری پروفائل', exact: true })).toBeVisible();

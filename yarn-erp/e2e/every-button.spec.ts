@@ -68,7 +68,7 @@ test.describe("desktop", () => {
   });
 
   test("an admin adds a supervisor; both see the same stock; deactivation signs them out", async ({ page, browser }, info) => {
-    await page.goto("/#/team");
+    await page.goto("/#/settings/users");
     await page.getByRole("button", { name: "Add a person" }).click();
     await page.getByLabel("Name", { exact: true }).fill("Bilal");
     await page.getByLabel("4-digit PIN", { exact: true }).fill("1357");
@@ -78,21 +78,20 @@ test.describe("desktop", () => {
     await expect(page.getByRole("alert")).toContainText("The two PINs are different.");
     await page.getByLabel("Type it again").fill("1357");
     await page.getByRole("button", { name: "Add person", exact: true }).click();
-    await expect(page.locator(".yf-member-row", { hasText: "Bilal" })).toContainText("Supervisor");
+    await expect(page.locator(".yf-admin-user", { hasText: "Bilal" })).toContainText("Supervisor");
     const other = await browser.newContext({ ...options.contextOptions, baseURL: info.project.use.baseURL, viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
     const bilal = await other.newPage();
     await signIn(bilal, "Bilal", "1357");
     await expect(bilal.locator(".live-sidebar .yf-me")).toContainText("Supervisor");
-    await expect(bilal.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: /^Team/ })).toHaveCount(0);
+    await expect(bilal.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: /^Settings/ })).toHaveCount(0);
     await page.goto("/#/inventory");
-    await expect(page.locator(".live-lot-row").first()).toBeVisible();
+    await expect(page.locator(".yf-stock-panel")).toBeVisible();
     await bilal.goto("/#/inventory");
-    await expect(bilal.locator(".live-lot-row").first()).toBeVisible();
-    expect(await bilal.locator(".live-lot-row").allTextContents()).toEqual(await page.locator(".live-lot-row").allTextContents());
-    await page.goto("/#/team");
-    await page.locator(".yf-member-row", { hasText: "Bilal" }).click();
+    await expect(bilal.locator(".yf-stock-panel")).toBeVisible();
+    await page.goto("/#/settings/users");
+    await page.locator(".yf-admin-user", { hasText: "Bilal" }).click();
     await page.getByRole("button", { name: "Deactivate", exact: true }).click();
-    await expect(page.locator(".yf-member-row", { hasText: "Bilal" })).toContainText("Deactivated");
+    await expect(page.locator(".yf-admin-user", { hasText: "Bilal" })).toContainText("Deactivated");
     await bilal.reload();
     await expect(bilal.getByRole("heading", { level: 1, name: "Who’s signing in?" })).toBeVisible();
     await other.close();
@@ -102,12 +101,11 @@ test.describe("desktop", () => {
     await page.goto("/#/dashboard");
     await title(page, "Dashboard");
     const nav = page.getByRole("navigation", { name: "Main navigation" });
-    for (const [label, h1] of [["Stock", "Stock"], ["Scan", "Scan"], ["History", "History"], ["Team", "Team"], ["My profile", "My profile"], ["Notifications", "Notifications"], ["Help", "Help"], ["Dashboard", "Dashboard"]]) {
+    for (const [label, h1] of [["Scan", "Scan"], ["Settings", "Settings"], ["My profile", "My profile"], ["Notifications", "Notifications"], ["Help", "Help"], ["Dashboard", "Dashboard"], ["Approvals", "Approvals"], ["Claims", "Claims"], ["Activity", "Activity"], ["Reports", "Reports"], ["Analytics", "Analytics"], ["Modules", "Modules"]]) {
       await nav.getByRole("button", { name: label, exact: true }).click();
       await title(page, h1);
       await expect(nav.getByRole("button", { name: label, exact: true })).toHaveAttribute("aria-current", "page");
     }
-    await nav.getByRole("button", { name: "Stock" }).click();
     await page.locator(".live-sidebar .live-brand").click();
     await title(page, "Dashboard");
 
@@ -201,16 +199,16 @@ test.describe("desktop", () => {
   });
 
   test("history links, profile access and backup, help", async ({ page }) => {
-    await page.goto("/#/activity");
+    await page.goto("/#/history");
     await page.locator(".live-history .live-text-button", { hasText: "LOT-1024" }).first().click();
     await title(page, "Batch details");
-    await page.goto("/#/activity");
+    await page.goto("/#/history");
     await expect(page.getByRole("button", { name: "Reverse entry" })).toHaveCount(0);
 
     await page.goto("/#/profile");
     const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download backup" }).click()]);
     expect(JSON.parse(await (await import("node:fs/promises")).readFile((await download.path())!, "utf8")).products).toHaveLength(4);
-    await expect(page.locator(".yf-access li.is-on")).toHaveCount(13);
+    await expect(page.locator(".yf-access li.is-on")).toHaveCount(12);
     await expect(page.locator(".yf-counts")).toContainText("Materials4");
     await expect(page.locator(".yf-counts")).toContainText("People8");
 
@@ -275,14 +273,14 @@ test.describe("phone", () => {
   test("bottom bar, More sheet and the search button", async ({ page }) => {
     await page.goto("/#/dashboard");
     const bar = page.getByRole("navigation", { name: "Phone navigation" });
-    for (const [label, h1] of [["Stock", "Stock"], ["History", "History"], ["Notifications", "Notifications"], ["Dashboard", "Dashboard"]]) {
+    for (const [label, h1] of [["Dashboard", "Dashboard"], ["Approvals", "Approvals"], ["Claims", "Claims"], ["Notifications", "Notifications"]]) {
       await bar.getByRole("button", { name: label, exact: true }).click();
       await title(page, h1);
     }
     await bar.getByRole("button", { name: "More pages" }).click();
     const sheet = page.getByRole("dialog", { name: "Navigation menu" });
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByRole("button", { name: "Team" })).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "Settings" })).toBeVisible();
     await expect(sheet.locator(".yf-me")).toContainText("Anas");
     await sheet.getByRole("button", { name: "My profile" }).click();
     await title(page, "My profile");
@@ -290,8 +288,6 @@ test.describe("phone", () => {
     await bar.getByRole("button", { name: "More pages" }).click();
     await sheet.getByRole("button", { name: "Close navigation" }).click();
     await expect(sheet).toBeHidden();
-    await page.getByRole("button", { name: "Find a batch" }).click();
-    await title(page, "Stock");
-    await expect(page.getByLabel("Search", { exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Find a batch" })).toHaveCount(0);
   });
 });
