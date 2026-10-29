@@ -1,5 +1,7 @@
 # Task16 analytics handoff
 
+Implementation commit: `1907350ac7fd410d4a27695efb9ef57eef543008`.
+
 ## Implemented
 
 - Added admin, sales-manager and purchase-manager analytics endpoints with server-side role checks and validated inclusive `from`/`to` ranges. Admin dispatch counts cover each Task14 status.
@@ -17,6 +19,6 @@
 
 ## Dependency
 
-Task14's `drizzle/0018_dispatch.sql` is still owned in its separate worktree and must be cherry-picked into this checkout for a clean checkout to run the analytics suite. Its exact schema defines `dispatches.status` as `pending_approval | approved | on_hold | dispatched | delivered`. The admin block and a nonzero status-count assertion are implemented; no migration was added to this commit. The coordinator has been notified of this dependency.
+Task14's `drizzle/0018_dispatch.sql` is still owned in its separate worktree and must be cherry-picked into this checkout for a clean checkout to run the analytics suite. Its exact schema defines `dispatches.status` as `pending_approval | approved | on_hold | dispatched | delivered`. The admin block and a nonzero status-count assertion are implemented; no migration was added to the implementation commit. The temporary exact migration copy remains untracked in this working tree until Task14's cherry-pick lands; remove it after that.
 
 No production database or fixtures were changed. No migrations were added.
