@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 import { QualityBadge, StockFlow, movedName, when, yarnName } from './WorkspaceDashboard';
 import { moveIcon } from './icons';
 import { Dashboard, Notifications, type Inbox } from './Notifications';
+import { ShipmentTracking } from './ShipmentTracking';
 import Profile from './Profile';
 import { portal } from './PortalCommon';
 import { COMMON, NAV } from './roles';
@@ -292,10 +293,10 @@ export default function LiveApp() {
     const groups = workspace.products.map(p => ({ p, lots: filtered.filter(l => l.product_id === p.id), waiting: arrivals.filter(a => a.product_id === p.id) }))
       .filter(({ p, lots, waiting }) => lots.length || waiting.length || (view === 'all' && [p.name, p.sku, p.barcode].join(' ').toLowerCase().includes(q)));
     return <div className="yf-stock-groups">{groups.map(({ p, lots, waiting }) => <section className="yf-stock-group" key={p.id} aria-label={p.name}>
-      <header><Cone hue={materialHue(workspace.products, p.id)} size={36} /><div><strong>{yarnName(p.name)}</strong><span>{p.sku}{p.barcode ? ' · ' + p.barcode : ''}</span></div><strong className="live-row-weight">{weight(workspace.lots.filter(l => l.product_id === p.id).reduce((sum, l) => sum + lotGrams(l.id), 0))} <small>kg</small></strong>{allow('catalog') && <button className="live-icon-button" aria-label={t(`Add finished ${p.name}`, `${p.name} کا تیار مال شامل کریں`)} title="Add finished goods" onClick={() => setAction({ type: 'finished', productId: p.id })}><Plus size={20} aria-hidden="true" /></button>}</header>
+      <header><Cone hue={materialHue(workspace.products, p.id)} size={36} /><div><strong>{yarnName(p.name)}</strong><span>{p.sku}{p.barcode ? ' · ' + p.barcode : ''}</span></div><strong className="live-row-weight">{weight(lots.reduce((sum, l) => sum + lotGrams(l.id), 0) + waiting.reduce((sum, a) => sum + a.open_milli * (a.unit === 'tonne' ? 1000 : 1), 0))} <small>kg</small></strong></header>
       {lots.map(lot => <button key={lot.id} className="live-lot-row" onClick={() => { navigate('inventory', lot.id); }}><span className="live-lot-name"><strong>{t("Batch")} {lot.batch}</strong><span>{lot.supplier || 'Supplier not recorded'}</span></span><QualityBadge value={lot.quality} /><strong className="live-row-weight">{weight(lotGrams(lot.id))} <small>kg</small></strong><ChevronRight size={20} aria-hidden="true" /></button>)}
       {waiting.map(a => <button key={a.id} className="live-lot-row" onClick={() => { location.hash = me.role === 'quality_inspector' ? '#/lots' : '#/procurement'; }}><span className="live-lot-name"><strong>{t("Arrival")} {a.reference}</strong><span>{a.supplier_name} · {t("Awaiting inspection", "معائنے کا منتظر")}</span></span><QualityBadge value="uninspected" /><strong className="live-row-weight">{weight(a.open_milli * (a.unit === 'tonne' ? 1000 : 1))} <small>kg</small></strong><ChevronRight size={20} aria-hidden="true" /></button>)}
-      {!lots.length && !waiting.length && <p className="yf-stock-empty">{allow('catalog') ? 'No batches yet. Tap + to add one.' : 'No batches yet.'}</p>}
+      {!lots.length && !waiting.length && <p className="yf-stock-empty">{t('No batches yet.')}</p>}
     </section>)}{!groups.length && <div className="live-empty"><h3>{workspace.products.length ? 'Nothing matches' : 'Start with your first material'}</h3><p>{workspace.products.length ? 'Try another name, batch or filter.' : 'Add a material (for example Cotton 30/1), then add its batches.'}</p></div>}</div>;
   }
   function activityList(movements: StockMovement[]) {
@@ -356,6 +357,7 @@ export default function LiveApp() {
       {page==='lots' && <Inspections />}
       {page==='reviews' && <Review />}
       {page==='procurement' && <Procurement member={me} onInventoryChanged={() => refresh(true)} />}
+      {page==='tracking' && <ShipmentTracking />}
 
       </>}
     </main><footer className="live-sync" role="status"><CheckCheck size={17} aria-hidden="true"/><span>{t("All changes saved")}{savedAt ? ' · '+t('checked', 'چیک کیا')+' '+new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Karachi'}).format(savedAt) : ''}</span></footer></div>

@@ -1,13 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { qualityName, stageName, stockStages, weight, type StockStage, type WorkspaceState } from './inventory-client';
+import { RangeSelect, buckets, bucketIndex, useRange } from './RangeSelect';
 import './stock-widgets.css';
 
 const COLOUR: Record<StockStage, string> = { raw: '#f2a541', wip: '#4f5bd5', finished: '#0f8b8d', cops: '#e4572e' };
-const DAY_MS = 86_400_000;
-const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi', year: 'numeric', month: '2-digit', day: '2-digit' });
-const dayLabel = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', day: 'numeric', month: 'short' });
-const dayNumber = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', day: 'numeric' });
 const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
@@ -40,27 +37,37 @@ function useCountUp(target: number, duration = 700) {
 
 export function ProductionWidget({ state }: { state: WorkspaceState }) {
   const now = state.serverTime || Date.now();
+  const [range, setRange] = useRange('yf-range-production');
   const [active, setActive] = useState<number | null>(null);
   const gradientId = `stw-prod-${useId().replace(/:/g, '')}`;
 
   const { days, current, prior, allTime } = useMemo(() => {
     const reversed = new Set<string>();
     for (const m of state.movements) if (m.reverses) reversed.add(m.reverses);
-    const byDay = new Map<string, number>();
+    const counted: { time: number; grams: number }[] = [];
     let allTime = 0;
     for (const m of state.movements) {
       if (m.action !== 'transfer' || reversed.has(m.id)) continue;
       if (m.to_stage !== 'finished' && m.to_stage !== 'cops') continue;
       allTime += m.grams;
-      const key = dayKey.format(m.created_at);
-      byDay.set(key, (byDay.get(key) ?? 0) + m.grams);
+      counted.push({ time: m.created_at, grams: m.grams });
     }
-    // 28 consecutive Karachi days ending today: first 14 are the prior period, last 14 the current one.
-    const times = Array.from({ length: 28 }, (_, i) => now - (27 - i) * DAY_MS);
-    const grams = times.map(t => byDay.get(dayKey.format(t)) ?? 0);
-    const days = times.slice(14).map((time, i) => ({ time, grams: grams[14 + i] }));
-    return { days, current: sum(grams.slice(14)), prior: sum(grams.slice(0, 14)), allTime };
-  }, [state.movements, now]);
+    const firstTime = counted.reduce<number | undefined>((min, c) => (min === undefined || c.time < min ? c.time : min), undefined);
+    const list = buckets(range, now, firstTime);
+    const from = list[0].start, to = list[list.length - 1].end;
+    // The previous period has the same length, directly before the current one.
+    const prevFrom = from - (to - from);
+    const days = list.map(b => ({ time: b.start, label: b.label, grams: 0 }));
+    let current = 0, prior = 0;
+    for (const c of counted) {
+      const i = bucketIndex(list, c.time);
+      if (i >= 0) days[i].grams += c.grams;
+      // 'all' totals every movement, including any older than the 60-month chart cap.
+      if (range === 'all' || i >= 0) current += c.grams;
+      else if (c.time >= prevFrom && c.time < from) prior += c.grams;
+    }
+    return { days, current, prior, allTime };
+  }, [state.movements, now, range]);
 
   const shown = useCountUp(current);
   const maxGrams = Math.max(1, ...days.map(d => d.grams));
@@ -68,6 +75,8 @@ export function ProductionWidget({ state }: { state: WorkspaceState }) {
   const plotH = H - PAD_TOP - PAD_BOTTOM;
   const colW = W / days.length;
   const barW = colW * 0.62;
+  // Show roughly one tick per 40px so 30 days or 60 months stay legible.
+  const tickEvery = Math.max(1, Math.ceil(40 / colW));
   const up = current >= prior;
   const pct = prior > 0 ? Math.round(((current - prior) / prior) * 100) : null;
 
@@ -79,16 +88,24 @@ export function ProductionWidget({ state }: { state: WorkspaceState }) {
           <div className="stw-kpi">{weight(Math.round(shown))}<small>kg</small></div>
         </div>
         <div className="stw-side">
-          <span className={`stw-delta ${up ? 'up' : 'down'}`}>
-            {up ? <ArrowUpRight size={15} aria-hidden /> : <ArrowDownRight size={15} aria-hidden />}
-            {pct !== null ? `${Math.abs(pct)}%` : current > 0 ? 'new' : '—'}
-          </span>
+          <RangeSelect
+            value={range}
+            onChange={next => { setRange(next); setActive(null); }}
+            label="Production period"
+          />
+          {range !== 'all' && (
+            <span className={`stw-delta ${up ? 'up' : 'down'}`}>
+              {up ? <ArrowUpRight size={15} aria-hidden /> : <ArrowDownRight size={15} aria-hidden />}
+              {pct !== null ? `${Math.abs(pct)}%` : current > 0 ? 'new' : '—'}
+            </span>
+          )}
           <div className="stw-sub">all time {weight(allTime)} kg</div>
         </div>
       </div>
 
       <div className={`stw-chart${active !== null ? ' is-hover' : ''}`}>
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Production per day, last 14 days">
+        {/* Keyed by range so the bars grow again on change. */}
+        <svg key={range} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Production per period">
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#4fd1c5" />
@@ -98,14 +115,13 @@ export function ProductionWidget({ state }: { state: WorkspaceState }) {
           {days.map((d, i) => {
             const x = i * colW;
             const h = d.grams === 0 ? 6 : Math.max(4, (d.grams / maxGrams) * plotH);
-            const label = dayLabel.format(d.time);
             return (
               <g
                 key={d.time}
                 className={`stw-col${active === i ? ' is-on' : ''}`}
                 tabIndex={0}
                 role="img"
-                aria-label={`${label}: ${weight(d.grams)} kg`}
+                aria-label={`${d.label}: ${weight(d.grams)} kg`}
                 onMouseEnter={() => setActive(i)}
                 onMouseLeave={() => setActive(null)}
                 onFocus={() => setActive(i)}
@@ -122,14 +138,16 @@ export function ProductionWidget({ state }: { state: WorkspaceState }) {
                   fill={d.grams === 0 ? undefined : `url(#${gradientId})`}
                   style={{ '--i': i } as CSSProperties}
                 />
-                <text className="stw-tick" x={x + colW / 2} y={H - 4} textAnchor="middle">{dayNumber.format(d.time)}</text>
+                {i % tickEvery === 0 && (
+                  <text className="stw-tick" x={x + colW / 2} y={H - 4} textAnchor="middle">{d.label}</text>
+                )}
               </g>
             );
           })}
         </svg>
         {active !== null && days[active] && (
           <div className="stw-tip is-on" style={{ left: `${((active + 0.5) / days.length) * 100}%` }}>
-            <b>{dayLabel.format(days[active].time)}</b> {weight(days[active].grams)} kg
+            <b>{days[active].label}</b> {weight(days[active].grams)} kg
           </div>
         )}
       </div>

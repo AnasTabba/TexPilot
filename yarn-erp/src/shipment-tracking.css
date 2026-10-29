@@ -1,0 +1,64 @@
+.trk-wrap { display: grid; gap: 18px; }
+.trk-muted { color: #6b655c; margin: 2px 0; font-size: 0.9rem; }
+.trk-mono, .trk-bl { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.trk-banner { margin: 0; padding: 12px 16px; border-radius: 14px; background: #f4efe2; border: 1px solid var(--line); color: #6b655c; }
+.trk-filters { justify-self: start; }
+.trk-list { display: grid; gap: 14px; }
+.trk-card { display: grid; gap: 14px; padding: 20px; border-radius: 20px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 1px 2px rgb(29 27 25 / 0.05), 0 8px 24px rgb(29 27 25 / 0.06); }
+.trk-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.trk-head p { margin: 4px 0 0; }
+.trk-bl { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.02em; color: var(--ink); }
+.trk-pill { display: inline-block; padding: 4px 11px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+
+.trk-route { display: grid; gap: 8px; }
+.trk-ends { display: flex; justify-content: space-between; gap: 12px; font-size: 0.85rem; color: #6b655c; }
+.trk-track { position: relative; height: 26px; margin: 0 8px; }
+.trk-dot { position: absolute; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: var(--panel); border: 2px solid var(--ink); z-index: 1; }
+.trk-dot.is-origin { left: -8px; }
+.trk-dot.is-dest { right: -8px; }
+.trk-line { position: absolute; top: 50%; left: 0; right: 0; border-top: 2px dashed #c9bfa8; }
+.trk-lane { position: absolute; inset: 0; display: flex; align-items: center; transition: transform 900ms cubic-bezier(0.22, 0.61, 0.36, 1); pointer-events: none; }
+.trk-ship { color: var(--ink); margin-left: -11px; flex: none; }
+.trk-track.is-moving .trk-ship { animation: trk-bob 1.8s ease-in-out infinite; }
+.trk-steps { display: flex; justify-content: space-between; list-style: none; margin: 0; padding: 0; font-size: 0.75rem; color: #9a9385; gap: 4px; }
+.trk-steps li.is-done { color: var(--ink); font-weight: 600; }
+
+.trk-chips { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.trk-chip { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: #fff; font-size: 0.82rem; }
+.trk-error { margin: 0; color: #e4572e; font-size: 0.88rem; font-weight: 600; }
+.trk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.trk-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; transition: transform 160ms var(--ease-out), background 160ms; }
+.trk-btn:active { transform: scale(0.97); }
+.trk-btn:disabled { opacity: 0.6; cursor: progress; }
+.trk-btn.is-ghost { background: transparent; }
+.trk-btn svg { transition: transform 200ms var(--ease-out); }
+.trk-btn svg.is-open { transform: rotate(180deg); }
+.trk-spin { animation: trk-spin 900ms linear infinite; }
+
+.trk-events { display: grid; gap: 0; list-style: none; margin: 0; padding: 0 0 0 6px; border-left: 2px solid var(--line); }
+.trk-events li { position: relative; display: flex; gap: 12px; padding: 0 0 14px 16px; }
+.trk-events li > div { display: grid; gap: 2px; }
+.trk-event-dot { position: absolute; left: -7px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+.trk-events li:first-child .trk-event-dot { background: #4f5bd5; }
+
+.trk-empty { display: grid; justify-items: center; gap: 8px; padding: 36px 16px; border-radius: 20px; border: 1px dashed var(--line); color: #6b655c; text-align: center; }
+.trk-empty h3 { margin: 0; color: var(--ink); }
+
+.trk-w { display: grid; gap: 10px; padding: 20px; border-radius: 20px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 1px 2px rgb(29 27 25 / 0.05), 0 8px 24px rgb(29 27 25 / 0.06); min-width: 0; }
+.trk-w-title { margin: 0; font-size: 1.05rem; }
+.trk-w-count { display: flex; align-items: baseline; gap: 8px; margin: 0; color: #6b655c; }
+.trk-w-count strong { font-size: 2.4rem; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.trk-w-list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.trk-w-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px; width: 100%; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: #fff; font: inherit; color: var(--ink); text-align: left; cursor: pointer; transition: transform 160ms var(--ease-out); }
+.trk-w-row:active { transform: scale(0.97); }
+.trk-w-row .trk-w-bar { grid-column: 1 / -1; }
+.trk-w-bar { display: block; height: 4px; border-radius: 999px; background: #efe8d7; overflow: hidden; }
+.trk-w-bar > span { display: block; height: 100%; width: 100%; background: #4f5bd5; border-radius: inherit; transform-origin: left center; transform: scaleX(var(--p)); animation: trk-grow 900ms var(--ease-out) both; }
+
+@keyframes trk-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes trk-spin { to { transform: rotate(360deg); } }
+@keyframes trk-grow { from { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .trk-lane, .trk-btn, .trk-w-row { transition: none; }
+  .trk-track.is-moving .trk-ship, .trk-spin, .trk-w-bar > span { animation: none; }
+}

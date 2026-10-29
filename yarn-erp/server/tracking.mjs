@@ -23,6 +23,9 @@ export function sanitizeTrackingPayload(payload, env) {
 }
 
 const FIELDS = 'id,purchase_order_id,bill_of_lading,status,last_status_json,last_checked_at,last_error,created_at';
+// The list adds the PO reference and supplier name so rows can be labelled; the single-row reads keep FIELDS.
+const LIST_FIELDS = 's.id,s.purchase_order_id,s.bill_of_lading,s.status,s.last_status_json,s.last_checked_at,s.last_error,s.created_at,po.reference,sup.name AS supplier_name';
+const LIST_FROM = 'FROM shipments s LEFT JOIN supplier_purchase_orders po ON po.id=s.purchase_order_id AND po.workspace_id=s.workspace_id LEFT JOIN suppliers sup ON sup.id=po.supplier_id AND sup.workspace_id=po.workspace_id';
 const shipmentOf = (db, id, w) => one(db, `SELECT ${FIELDS} FROM shipments WHERE id=? AND workspace_id=?`, id, w);
 
 export async function trackingApi(request, env, member, path, data) {
@@ -31,8 +34,8 @@ export async function trackingApi(request, env, member, path, data) {
     viewer(member, 'purchase_manager');
     const orderId = new URL(request.url).searchParams.get('orderId');
     const shipments = orderId
-      ? await all(db, `SELECT ${FIELDS} FROM shipments WHERE workspace_id=? AND purchase_order_id=? ORDER BY created_at DESC,id`, w, recordId(orderId))
-      : await all(db, `SELECT ${FIELDS} FROM shipments WHERE workspace_id=? ORDER BY created_at DESC,id LIMIT 200`, w);
+      ? await all(db, `SELECT ${LIST_FIELDS} ${LIST_FROM} WHERE s.workspace_id=? AND s.purchase_order_id=? ORDER BY s.created_at DESC,s.id`, w, recordId(orderId))
+      : await all(db, `SELECT ${LIST_FIELDS} ${LIST_FROM} WHERE s.workspace_id=? ORDER BY s.created_at DESC,s.id LIMIT 200`, w);
     return json({ shipments, tracking: trackingStatus(env) });
   }
   if (path === '/api/erp/shipments' && data) {

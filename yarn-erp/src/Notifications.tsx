@@ -8,6 +8,7 @@ import type { Member, WorkspaceState } from './inventory-client';
 import { SalesWidget } from './SalesWidget';
 import { InventoryWidget, ProductionWidget } from './StockWidgets';
 import { NoticeWidget } from './NoticeWidget';
+import { ShipmentsWidget } from './ShipmentTracking';
 
 export interface Notice { id: string; event: string; object_type: string; object_id: string; label: string; status: 'unread' | 'read'; created_at: number }
 export interface Inbox { notifications: Notice[]; unread: number }
@@ -40,10 +41,10 @@ export function Notifications({ member, inbox, reload }: { member: Member; inbox
 }
 
 /** Dashboard widgets the user can make half or full width; the choice persists per browser. */
-type DashKey = 'sales' | 'production' | 'notices' | 'inventory';
+type DashKey = 'sales' | 'production' | 'notices' | 'inventory' | 'shipments';
 type DashSize = 'half' | 'full';
 const SIZE_KEY = 'yf-dash-sizes';
-const DEFAULT_SIZES: Record<DashKey, DashSize> = { sales: 'full', production: 'half', notices: 'half', inventory: 'full' };
+const DEFAULT_SIZES: Record<DashKey, DashSize> = { sales: 'full', production: 'half', notices: 'half', inventory: 'full', shipments: 'half' };
 
 function loadSizes(): Record<DashKey, DashSize> {
   try {
@@ -91,6 +92,7 @@ export function Dashboard({ member, inbox, reload, state }: { member: Member; in
       <DashItem size={sizes.production} moving={moving === 'production'} onToggle={() => resize('production')}><ProductionWidget state={state} /></DashItem>
       <DashItem size={sizes.notices} moving={moving === 'notices'} onToggle={() => resize('notices')}><NoticeWidget member={member} inbox={inbox} reload={reload} /></DashItem>
       <DashItem size={sizes.inventory} moving={moving === 'inventory'} onToggle={() => resize('inventory')}><InventoryWidget state={state} /></DashItem>
+      <DashItem size={sizes.shipments} moving={moving === 'shipments'} onToggle={() => resize('shipments')}><ShipmentsWidget /></DashItem>
     </div>
   </div>;
 }

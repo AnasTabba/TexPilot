@@ -11,13 +11,6 @@
 }
 .sw-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sw-head h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
-.sw-pill {
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  color: var(--ink-2);
-  background: linear-gradient(90deg, rgba(15, 139, 141, 0.12), rgba(79, 91, 213, 0.12));
-}
 
 /* KPI tiles */
 .sw-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }

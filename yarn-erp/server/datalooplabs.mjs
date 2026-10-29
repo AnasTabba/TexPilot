@@ -5,6 +5,26 @@
  * verified contract (base URL, track path, field mapping) with an audit note.
  * The credential itself stays in a Worker secret (`DATALOOPLABS_API_KEY`) and is
  * scrubbed from every message, URL and stored string.
+ *
+ * Plugging in a provider = set the secret `DATALOOPLABS_API_KEY` and the var
+ * `DATALOOPLABS_CONTRACT` (JSON, no secrets). Example:
+ *
+ *   {
+ *     "baseUrl": "https://api.example-tracking.test/v1",
+ *     "trackPath": "/shipments/track",
+ *     "request": { "number": "bl", "type": "kind", "types": { "bol": "bill_of_lading" }, "carrier": "carrier", "force": "refresh" },
+ *     "response": {
+ *       "containers": "data.containers", "containerNumber": "number", "reference": "referenceNumber",
+ *       "events": "data.events", "event": { "time": "eventTime", "title": "status", "code": "statusCode", "location": "location" },
+ *       "dataTimestamp": "data.updatedAt",
+ *       "eta": "data.eta", "origin": "data.origin", "destination": "data.destination",
+ *       "vessel": "data.vessel", "carrier": "data.carrier"
+ *     }
+ *   }
+ *
+ * Required: baseUrl, trackPath, request.number, response.containers, response.reference,
+ * response.events, response.event.time and response.event.title. Everything else is optional;
+ * an omitted optional path normalizes to null. Paths are dot-separated.
  */
 
 export const PROVIDER = 'datalooplabs';
@@ -123,6 +143,13 @@ export async function trackUnit(env, account, request, deps = {}) {
   return normalize(contract, payload);
 }
 
+/** Optional response path: a trimmed string, or null when the contract omits it or the provider left it empty. */
+const optionalText = (upstream, path) => {
+  if (typeof path !== 'string') return null;
+  const value = String(pickFn(upstream, path) ?? '').trim();
+  return value || null;
+};
+
 export function normalize(contract, payload) {
   const upstream = payload?.data ?? payload?.result ?? payload ?? {};
   const containers = pickFn(upstream, contract.response.containers);
@@ -150,6 +177,11 @@ export function normalize(contract, payload) {
     dataAt: typeof contract.response.dataTimestamp === 'string'
       ? (() => { const at = Date.parse(String(pickFn(upstream, contract.response.dataTimestamp) ?? '')); return Number.isFinite(at) ? at : null; })()
       : null,
+    eta: (() => { const at = Date.parse(String(optionalText(upstream, contract.response.eta) ?? '')); return Number.isFinite(at) ? at : null; })(),
+    origin: optionalText(upstream, contract.response.origin),
+    destination: optionalText(upstream, contract.response.destination),
+    vessel: optionalText(upstream, contract.response.vessel),
+    carrier: optionalText(upstream, contract.response.carrier),
   };
   return { ...result, empty: !result.containers.length && !result.events.length && !result.reference };
 }

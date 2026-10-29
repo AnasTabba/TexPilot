@@ -1,9 +1,8 @@
 import { useEffect, useId, useMemo, useState, type KeyboardEvent } from 'react';
 import { factoryDay, salesRequest, type SalesOverview } from './sales-client';
+import { RangeSelect, buckets, bucketIndex, useRange, type Bucket } from './RangeSelect';
 import './sales-widget.css';
 
-const DAY = 86_400_000;
-const DAYS = 14;
 const VB_W = 1000;
 const VB_H = 200;
 const PAD_X = 14;
@@ -12,16 +11,12 @@ const PAD_BOTTOM = 14;
 const BASELINE = VB_H - PAD_BOTTOM;
 const PLOT_H = VB_H - PAD_TOP - PAD_BOTTOM;
 
-type Day = { key: string; time: number; total: number };
+type Point = Bucket & { total: number };
 // The sales API returns invoices with their balances (invoice_balances + balanceData), not separate receivables.
 type Data = { invoices: (SalesOverview['invoices'][number] & { paid_minor: number; outstanding_minor: number; status: string })[] };
 
 const money = (minor: number, currency: string) =>
   new Intl.NumberFormat('en-PK', { style: 'currency', currency, maximumFractionDigits: 0 }).format(minor / 100);
-
-/** Civil date in the factory zone, used as the day-bucket key. */
-const dayKey = (time: number) =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi', year: 'numeric', month: '2-digit', day: '2-digit' }).format(time);
 
 const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
@@ -58,11 +53,11 @@ function Kpi({ label, target, currency, tone, alert = false }: {
   );
 }
 
-function Chart({ days, currency }: { days: Day[]; currency: string }) {
+function Chart({ days, currency }: { days: Point[]; currency: string }) {
   const uid = useId().replace(/:/g, '');
   const [active, setActive] = useState<number | null>(null);
   const max = Math.max(1, ...days.map(d => d.total));
-  const xs = days.map((_, i) => PAD_X + (i * (VB_W - 2 * PAD_X)) / (days.length - 1));
+  const xs = days.map((_, i) => (days.length === 1 ? VB_W / 2 : PAD_X + (i * (VB_W - 2 * PAD_X)) / (days.length - 1)));
   const ys = days.map(d => PAD_TOP + PLOT_H * (1 - d.total / max));
   const points = days.map((_, i) => [xs[i], ys[i]] as const);
 
@@ -84,7 +79,7 @@ function Chart({ days, currency }: { days: Day[]; currency: string }) {
 
   return (
     <div className="sw-chart">
-      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="sw-svg" role="group" aria-label={`Invoiced per day, last ${DAYS} days`}>
+      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="sw-svg" role="group" aria-label="Invoiced over the selected period">
         <defs>
           <linearGradient id={`${uid}-line`} x1="0" x2="1" y1="0" y2="0">
             <stop offset="0" stopColor="#0f8b8d" />
@@ -103,10 +98,10 @@ function Chart({ days, currency }: { days: Day[]; currency: string }) {
         )}
         {days.map((day, i) => (
           <g
-            key={day.key}
+            key={day.start}
             role="img"
             tabIndex={0}
-            aria-label={`${factoryDay(day.time)}: ${money(day.total, currency)}`}
+            aria-label={`${day.label}: ${money(day.total, currency)}`}
             className={`sw-point${active === i ? ' is-active' : ''}`}
             onPointerEnter={() => setActive(i)}
             onPointerLeave={() => setActive(null)}
@@ -120,13 +115,13 @@ function Chart({ days, currency }: { days: Day[]; currency: string }) {
       </svg>
       {current && (
         <div className="sw-tip" style={{ left: `${leftPct}%`, top: `${topPct}%`, transform: `translate(${shift}, calc(-100% - 12px))` }}>
-          <span>{factoryDay(current.time)}</span>
+          <span>{current.label}</span>
           <strong>{money(current.total, currency)}</strong>
         </div>
       )}
       <div className="sw-axis">
-        <span>{factoryDay(days[0].time)}</span>
-        <span>{factoryDay(days[days.length - 1].time)}</span>
+        <span>{days[0].label}</span>
+        <span>{days[days.length - 1].label}</span>
       </div>
     </div>
   );
@@ -170,38 +165,42 @@ function Latest({ data }: { data: Data }) {
 }
 
 function Ready({ data }: { data: Data }) {
-  const now = Date.now(), currency = data.invoices[0]?.currency ?? 'PKR';
+  const [range, setRange] = useRange('yf-range-sales');
+  const currency = data.invoices[0]?.currency ?? 'PKR';
   const stats = useMemo(() => {
-    const invoiced = data.invoices.reduce((sum, invoice) => sum + invoice.total_minor, 0);
-    const collected = data.invoices.reduce((sum, invoice) => sum + invoice.paid_minor, 0);
-    const outstanding = data.invoices.reduce((sum, invoice) => sum + invoice.outstanding_minor, 0);
-    const overdue = data.invoices.some(invoice => invoice.status === 'overdue');
+    const now = Date.now();
+    const firstTime = data.invoices.reduce<number | undefined>((min, invoice) => (min === undefined || invoice.issued_at < min ? invoice.issued_at : min), undefined);
+    const list = buckets(range, now, firstTime);
+    const from = list[0].start, to = list[list.length - 1].end;
+    // 'all' counts every invoice; the chart only shows the buckets, so older invoices are still in the totals.
+    const picked = range === 'all' ? data.invoices : data.invoices.filter(invoice => invoice.issued_at >= from && invoice.issued_at < to);
 
-    const totals = new Map<string, number>();
-    for (const invoice of data.invoices) {
-      const key = dayKey(invoice.issued_at);
-      totals.set(key, (totals.get(key) ?? 0) + invoice.total_minor);
+    const invoiced = picked.reduce((sum, invoice) => sum + invoice.total_minor, 0);
+    const collected = picked.reduce((sum, invoice) => sum + invoice.paid_minor, 0);
+    const outstanding = picked.reduce((sum, invoice) => sum + invoice.outstanding_minor, 0);
+    const overdue = picked.some(invoice => invoice.status === 'overdue');
+
+    const days: Point[] = list.map(bucket => ({ ...bucket, total: 0 }));
+    for (const invoice of picked) {
+      const i = bucketIndex(list, invoice.issued_at);
+      if (i >= 0) days[i].total += invoice.total_minor;
     }
-    const days: Day[] = Array.from({ length: DAYS }, (_, i) => {
-      const time = now - (DAYS - 1 - i) * DAY;
-      const key = dayKey(time);
-      return { key, time, total: totals.get(key) ?? 0 };
-    });
     return { invoiced, collected, outstanding, overdue, days };
-  }, [data]);
+  }, [data, range]);
 
   return (
     <section className="sw" aria-label="Total sales">
       <div className="sw-head">
         <h2>Total sales</h2>
-        <span className="sw-pill">{DAYS} days</span>
+        <RangeSelect value={range} onChange={setRange} label="Sales period" />
       </div>
       <div className="sw-kpis">
         <Kpi label="Invoiced" target={stats.invoiced} currency={currency} tone="indigo" />
         <Kpi label="Collected" target={stats.collected} currency={currency} tone="teal" />
         <Kpi label="Outstanding" target={stats.outstanding} currency={currency} tone="coral" alert={stats.overdue} />
       </div>
-      <Chart days={stats.days} currency={currency} />
+      {/* Keyed by range so the line draw and area fade play again on change. */}
+      <Chart key={range} days={stats.days} currency={currency} />
       <Latest data={data} />
     </section>
   );
