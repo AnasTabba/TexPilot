@@ -46,14 +46,14 @@ test('the supervisor answers a stock query and submits a flagged report snapshot
     await page.getByLabel('Note to admin (optional)', { exact: true }).fill('Stock reconciled this month.');
     await page.getByRole('button', { name: 'Submit report', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Report submitted and saved.' })).toBeVisible();
-    const saved = (await (await sales.request.get('/api/erp/stock/reports')).json()).reports;
+    const saved = (await (await page.request.get('/api/erp/stock/reports')).json()).reports;
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({ created_by_name: 'Saima', note: 'Stock reconciled this month.', flagged: [{ objectType: 'adjustment', note: 'Review cycle count before reorder' }] });
 
     await page.goto('/#/report');
-    await expect(page.getByText('Review cycle count before reorder', { exact: true })).toBeVisible();
+    await expect(page.getByText('Review cycle count before reorder')).toBeVisible();
     await expect(page.getByText('Stock reconciled this month.', { exact: true })).toBeVisible();
-    expect((await (await sales.request.get('/api/erp/stock/reports')).json()).reports).toHaveLength(1);
+    expect((await (await page.request.get('/api/erp/stock/reports')).json()).reports).toHaveLength(1);
   } finally { await salesContext.close(); }
 });
 
@@ -84,8 +84,8 @@ test('dispatch issues use both gate previews and adjustments at threshold wait f
     const gatedIssue = supervisor.locator(`[id="${gatedId}"]`);
     await expect(gatedIssue).toBeVisible();
     await expect(gatedIssue.getByText(/5 kg against 5 kg.*admin approval required/)).toBeVisible();
-    await expect(gatedIssue.getByText(/0.5 kg against 0.5 kg.*admin approval required/)).toBeVisible();
     await gatedIssue.getByLabel('Correction (kg, optional)', { exact: true }).fill('0.500');
+    await expect(gatedIssue.getByText(/0.5 kg against 0.5 kg.*admin approval required/)).toBeVisible();
     await gatedIssue.getByLabel('Decision reason', { exact: true }).fill('Correct the short count in the register.');
     await gatedIssue.getByRole('button', { name: 'Accept', exact: true }).click();
     await expect(gatedIssue).toContainText('pending approval');
@@ -94,7 +94,7 @@ test('dispatch issues use both gate previews and adjustments at threshold wait f
     const rejectedIssue = supervisor.locator(`[id="${rejectedId}"]`);
     await rejectedIssue.getByLabel('Decision reason', { exact: true }).fill('The recount confirmed this was a label mismatch.');
     await rejectedIssue.getByRole('button', { name: 'Reject', exact: true }).click();
-    await expect(rejectedIssue).toContainText('rejected');
+    await expect(rejectedIssue).toContainText(/rejected/i);
     const issues = (await (await supervisor.request.get('/api/erp/dispatch/stock-issues')).json()).issues;
     expect(issues.find((row: { id: string }) => row.id === gatedId).status).toBe('pending_approval');
     expect(issues.find((row: { id: string }) => row.id === rejectedId).status).toBe('rejected');

@@ -192,7 +192,7 @@ test('the PM records an arrived lot against the PO and the inspector is told', a
     await expect(bell.locator('.yf-nav-count')).toHaveText('1');
     await bell.click();
     await inspector.getByRole('button', { name: /Lot ready for inspection/ }).click();
-    await expect(inspector.getByRole('heading', { level: 1, name: 'Inspections', exact: true })).toBeVisible();
+    await expect(inspector.getByRole('heading', { level: 1, name: 'Lots', exact: true })).toBeVisible();
     await expect(inspector.getByText('ERP-RCV-001 ·').first()).toBeVisible();
   } finally { await inspectorContext.close(); }
 });

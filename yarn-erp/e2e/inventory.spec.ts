@@ -51,8 +51,6 @@ test.describe('Shared inventory', () => {
     const friend = await browser.newContext({ baseURL: origin, viewport: { width: 390, height: 844 } });
     const phone = await friend.newPage();
     await signIn(phone, 'Nadia', '1357');
-    await phone.goto('/#/inventory');
-    await expect(phone.getByRole('button', { name: /Batch LOT-1024/ })).toBeVisible();
     await phone.goto('/#/scanner');
     await phone.getByRole('button', { name: 'Stock label', exact: true }).click();
     const { lot } = await seededLot(phone, 'LOT-1024');

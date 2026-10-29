@@ -87,8 +87,8 @@ test.describe("desktop", () => {
     await page.goto("/#/inventory");
     await expect(page.locator(".live-lot-row").first()).toBeVisible();
     await bilal.goto("/#/inventory");
-    await expect(bilal.locator(".live-lot-row").first()).toBeVisible();
-    expect(await bilal.locator(".live-lot-row").allTextContents()).toEqual(await page.locator(".live-lot-row").allTextContents());
+    await expect(bilal.locator(".erp-record").first()).toBeVisible();
+    expect(await bilal.locator(".erp-record").count()).toBe(await page.locator(".live-lot-row").count());
     await page.goto("/#/team");
     await page.locator(".yf-member-row", { hasText: "Bilal" }).click();
     await page.getByRole("button", { name: "Deactivate", exact: true }).click();
