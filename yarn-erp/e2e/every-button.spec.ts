@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { apiPost } from "./helpers";
 
 // Every control on every screen does what it says. Stock lives in the shared database of the dev
 // server, reset to the demo's opening stock before each test; the scanner's model answer is a fixture
@@ -139,19 +140,20 @@ test.describe("desktop", () => {
     await page.getByRole("button", { name: "New material" }).click();
     await page.getByLabel("Material name", { exact: true }).fill("Carded cotton Ne 20/1");
     await page.getByLabel("SKU", { exact: true }).fill("CTN-20");
+    await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
     await page.getByRole("button", { name: "Review entry", exact: true }).click();
     await page.getByRole("button", { name: "Edit entry", exact: true }).click();
     await expect(page.getByLabel("SKU", { exact: true })).toHaveValue("CTN-20");
     await reviewAndSave(page, "Save entry");
     await expect(page.getByRole("status").filter({ hasText: "Saved. Everyone on the team sees it now." })).toBeVisible();
 
-    await page.getByRole("button", { name: /New batch of Carded cotton/ }).click();
+    await page.getByRole("button", { name: /Add finished Carded cotton/ }).click();
     await page.getByLabel("Batch / dye lot", { exact: true }).fill("LOT-2001");
-    await page.getByLabel("Supplier (optional)", { exact: true }).fill("Test Mills");
+    await page.getByLabel("Weight (kg)", { exact: true }).fill("40");
+    await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
     await reviewAndSave(page, "Save entry");
     await title(page, "Batch details");
-    await expect(page.getByRole("heading", { level: 3, name: "Waiting for the first delivery" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Dispatch", exact: true })).toBeDisabled();
+    await expect(page.locator(".yf-flow")).toContainText("40");
     await expect(page.getByRole("button", { name: "Receive stock", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Review quality", exact: true })).toHaveCount(0);
 
@@ -162,26 +164,34 @@ test.describe("desktop", () => {
     await expect(page.locator(".yf-batch .live-panel-heading .live-quality")).toHaveText("QC approved");
     await expect(page.getByRole("heading", { level: 3, name: "Dispatch finished stock" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Move stage", exact: true }).click();
-    await page.getByLabel("Weight (kg)", { exact: true }).fill("40");
-    await reviewAndSave(page, "Save entry");
-    await expect(page.getByRole("heading", { level: 3, name: "Dispatch finished stock" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Move stage", exact: true })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Dispatch", exact: true }).click();
     await page.getByLabel("Weight (kg)", { exact: true }).fill("10");
     await page.getByLabel("Notes", { exact: true }).fill("Order 77");
     await reviewAndSave(page, "Save entry");
-    await page.getByRole("button", { name: "Record waste", exact: true }).click();
+    // A write-off needs a reason; below the (unset) threshold it applies at once.
+    await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
     await page.getByLabel("Weight (kg)", { exact: true }).fill("1");
+    await page.getByLabel("Reason", { exact: true }).fill("Counted one kilogram short");
+    await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
     await reviewAndSave(page, "Save entry");
-    await expect(page.locator(".yf-flow")).toContainText("6,699");
+    await expect(page.locator(".yf-flow")).toContainText("6,739");
 
-    // Undo opens the reversal form already filled in.
-    await page.getByRole("button", { name: "Undo entry" }).click();
-    await title(page, "History");
-    await expect(page.getByLabel("Reason", { exact: true })).toHaveValue("Correction after saving");
-    await reviewAndSave(page, "Save reversal");
-    await expect(page.getByRole("status").filter({ hasText: "Reversal saved." })).toBeVisible();
+    // Guarded stock workflow: at the threshold the change waits for admin approval and the stock stays put.
+    await apiPost(page, "/erp/admin/thresholds", { type: "inventory_adjustment", value: 5000 });
+    await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
+    await page.getByLabel("Weight (kg)", { exact: true }).fill("6");
+    await page.getByLabel("Reason", { exact: true }).fill("Water damage in bay 3");
+    await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
+    await reviewAndSave(page, "Save entry");
+    await expect(page.getByRole("status").filter({ hasText: "Sent to the admin for approval" })).toBeVisible();
+    await expect(page.locator(".yf-flow")).toContainText("6,739");
+    const pending = (await (await page.request.get("/api/erp/approvals?type=inventory_adjustment")).json()).approvals;
+    expect(pending).toHaveLength(1);
+    await apiPost(page, "/erp/approvals/decide", { id: pending[0].id, decision: "approve" });
+    await page.reload();
+    await expect(page.locator(".yf-flow")).toContainText("6,733");
 
     await page.goto("/#/inventory");
     await page.locator(".live-lot-row", { hasText: "LOT-2001" }).click();
@@ -195,9 +205,7 @@ test.describe("desktop", () => {
     await page.locator(".live-history .live-text-button", { hasText: "LOT-1024" }).first().click();
     await title(page, "Batch details");
     await page.goto("/#/activity");
-    await page.getByRole("button", { name: "Reverse entry" }).first().click();
-    await expect(page.getByRole("heading", { name: "Reverse this movement" })).toBeVisible();
-    await page.getByRole("button", { name: "Close form" }).click();
+    await expect(page.getByRole("button", { name: "Reverse entry" })).toHaveCount(0);
 
     await page.goto("/#/profile");
     const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download backup" }).click()]);

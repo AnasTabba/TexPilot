@@ -103,4 +103,12 @@ export const urdu: Record<string, string> = {
   'Finished stock': 'تیار مال', 'Moved': 'منتقل شدہ', 'Waste recorded': 'ضائع شدہ مال درج ہوا', 'Reversed': 'واپس شدہ',
   'Move between stages': 'مراحل کے درمیان منتقل کریں', 'Reverse entries': 'اندراجات واپس کریں',
   'Pattern': 'پیٹرن', 'Plain': 'سادہ', 'Floral': 'پھول دار', 'Stripe': 'دھاری دار', 'Check plaid': 'چیک دار', 'Check': 'چیک دار', 'Dot': 'نقطے دار', 'Paisley': 'بوٹے دار',
+  'Add finished goods': 'تیار مال شامل کریں', 'Adjust stock': 'اسٹاک ایڈجسٹ کریں', 'Stage': 'مرحلہ', 'Change': 'تبدیلی',
+  'Write off (remove stock)': 'ضائع قرار دیں (اسٹاک کم کریں)', 'Correction: remove stock': 'درستی: اسٹاک کم کریں', 'Correction: add stock': 'درستی: اسٹاک بڑھائیں',
+  'What happened to this stock?': 'اس اسٹاک کے ساتھ کیا ہوا؟', 'Large changes wait for admin approval and take effect only once approved.': 'بڑی تبدیلیاں ایڈمن کی منظوری کا انتظار کرتی ہیں اور منظوری کے بعد ہی لاگو ہوتی ہیں۔',
+  'Why are you stepping in?': 'آپ خود کیوں کر رہے ہیں؟', 'The reason an admin does this instead of the usual role': 'عام کردار کی جگہ ایڈمن کے یہ کام کرنے کی وجہ',
+  'Raw stock arrives when you accept an inspection report. Finished goods are recorded here.': 'خام اسٹاک معائنہ رپورٹ قبول کرنے پر آتا ہے۔ تیار مال یہاں درج ہوتا ہے۔',
+  'Sent to the admin for approval. The stock changes only after they approve.': 'منظوری کے لیے ایڈمن کو بھیج دیا گیا۔ اسٹاک ان کی منظوری کے بعد ہی بدلے گا۔',
+  'The supervisor adjusts or writes off stock with a reason. Large changes wait for admin approval, the original entries stay visible and stock cannot become negative.': 'سپروائزر وجہ کے ساتھ اسٹاک ایڈجسٹ یا ضائع کرتا ہے۔ بڑی تبدیلیاں ایڈمن کی منظوری کا انتظار کرتی ہیں، اصل اندراج نظر آتے رہتے ہیں اور اسٹاک منفی نہیں ہو سکتا۔',
+  'The supervisor records finished goods and adjusts stock; materials are added by the supervisor or purchase manager.': 'سپروائزر تیار مال درج کرتا اور اسٹاک ایڈجسٹ کرتا ہے؛ مٹیریل سپروائزر یا پرچیز مینیجر شامل کرتا ہے۔',
 };

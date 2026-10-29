@@ -1,7 +1,7 @@
 export type StockStage = 'raw' | 'wip' | 'finished' | 'cops';
 export type Quality = 'uninspected' | 'approved' | 'hold';
 export interface Product { id: string; sku: string; name: string; barcode: string | null }
-export interface StockLot { id: string; product_id: string; batch: string; supplier: string; quality: Quality; created_at: number }
+export interface StockLot { id: string; product_id: string; batch: string; supplier: string; quality: Quality; created_at: number; inventory_type?: 'raw' | 'finished' | null; source?: 'qc_lot' | 'production' | null }
 export interface StockBalance { lot_id: string; stage: StockStage; grams: number; cartons: number; cones: number }
 export interface StockMovement {
   id: string; lot_id: string; action: string; from_stage: StockStage | null;

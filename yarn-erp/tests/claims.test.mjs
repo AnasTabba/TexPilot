@@ -431,7 +431,7 @@ test('raw stock enters only through report decisions; the old receive and QC wri
   assert.deepEqual([count(f, 'movements'), count(f, 'quality_events'), one(f, 'SELECT quality FROM lots WHERE id=?', lotId).quality], before);
   const movementId = one(f, "SELECT id FROM movements WHERE lot_id=? AND action='receive'", lotId).id;
   const undo = await f.call('/reversals', { id: crypto.randomUUID(), movementId, note: 'Wrong receipt' }, 'Anas');
-  assert.equal(undo.status, 409, 'a decided inspection is never rewritten by reversing its receipt'); assert.equal(raw(f, lotId), 80000);
+  assert.equal(undo.status, 410, 'reversals are closed, so a decided inspection is never rewritten by reversing its receipt'); assert.equal(raw(f, lotId), 80000);
 });
 
 test('the claim table refuses rewrites at the database', async () => {

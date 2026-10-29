@@ -163,9 +163,10 @@ test('issue severity is minor, major or critical', async () => {
 test('inspectors cannot add inventory or change catalogue items; the old receive and QC writes are closed', async () => {
   const f = await fixture();
   assert.equal((await f.call('/products', { sku: 'NEW', name: 'New material' }, 'Qasim')).status, 403);
-  assert.equal((await f.call('/lots', { productId: f.productId, batch: 'B1', supplier: 'Mill' }, 'Qasim')).status, 403);
+  assert.equal((await f.call('/lots', { productId: f.productId, batch: 'B1', supplier: 'Mill' }, 'Qasim')).status, 410, 'batches are no longer created by hand');
   assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: crypto.randomUUID(), action: 'receive', stage: 'raw', grams: 1000 }, 'Qasim')).status, 410);
-  const legacy = (await f.call('/lots', { productId: f.productId, batch: 'OLD-1', supplier: 'Mill' }, 'Anas')).data;
+  const legacy = { id: crypto.randomUUID() };
+  f.sql.prepare('INSERT INTO lots(id,workspace_id,product_id,batch,supplier,created_at) VALUES(?,?,?,?,?,?)').run(legacy.id, f.workspaceId, f.productId, 'OLD-1', 'Mill', Date.now());
   assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: legacy.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: '' }, 'Pervaiz')).status, 410, 'raw stock enters only through a report decision');
   assert.equal((await f.call('/quality', { lotId: legacy.id, status: 'approved', note: 'Inspector approves' }, 'Qasim')).status, 410);
   assert.equal((await f.call('/inspections', { id: crypto.randomUUID(), lotId: legacy.id, labelText: '', note: 'Looks fine', result: null }, 'Qasim')).status, 403);

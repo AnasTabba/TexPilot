@@ -2,7 +2,7 @@ import { integrationApi } from './integration.mjs';
 /** Shared inventory API: PIN sessions (server/auth.mjs) give identity, D1 supplies durable SQL. */
 import { LOCK_AFTER, LOCK_MS, ROLE_PERMISSIONS, SESSION_MS, nameKey, pinHash, randomHex, sessionCookie, sessionToken, sha256, validPin } from './auth.mjs';
 import { adminApi } from './admin.mjs';
-import { ErpProblem } from './erp-utils.mjs';
+import { ErpProblem, role } from './erp-utils.mjs';
 import { supplierPortal } from './supplier-portal.mjs';
 import { staffProcurement, approvalHandlers } from './procurement.mjs';
 import { receiving } from './receiving.mjs';
@@ -12,9 +12,10 @@ import { notificationsApi } from './notify.mjs';
 import { approvalsApi } from './governance.mjs';
 import { trackingApi } from './tracking.mjs';
 import { qualityApi, approvalHandlers as qualityHandlers } from './quality.mjs';
+import { stockApi, approvalHandlers as stockHandlers } from './stock.mjs';
 import { readPhoto } from './photos.mjs';
-const erp = { admin: adminApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi, qc: qualityApi };
-erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, { ...approvalHandlers, ...qualityHandlers });
+const erp = { admin: adminApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi, qc: qualityApi, stock: stockApi };
+erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, { ...approvalHandlers, ...qualityHandlers, ...stockHandlers });
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
 class Problem extends Error {
@@ -69,7 +70,7 @@ const allow = (member, permission, what) => { if (!member.admin && !member.permi
 // Quality inspectors record inspections, photos and issues through /api/erp/qc/*, and the purchase manager registers arrivals as QC lots; the old stock writes stay for admins and supervisors.
 const useQc = (member, role, what) => { if (member.role === role) fail(403, `${what} now goes through the lot inspection flow. The old stock record is read-only for your role.`); };
 const adminOnly = member => { if (!member.admin) fail(403, 'Only an admin can do this.'); };
-const movementPermission = { receive: ['receive', 'receive stock'], transfer: ['produce', 'move stock between stages'], dispatch: ['dispatch', 'dispatch stock'], waste: ['waste', 'record waste'] };
+const movementPermission = { dispatch: ['dispatch', 'dispatch stock'] };
 
 async function snapshot(db, member) {
   const w = member.workspace_id;
@@ -89,31 +90,15 @@ async function snapshot(db, member) {
   return { workspace, member, products, lots, balances, movements, members, inspections, qualityEvents, photos, pending, serverTime: Date.now(), backend: 'Yarnflow / Cloudflare D1' };
 }
 
-async function saveMovement(db, member, data, reversal = false) {
-  let record;
-  if (reversal) {
-    keys(data, ['id', 'movementId', 'note']);
-    allow(member, 'reverse', 'reverse entries');
-    const original = await first(db, 'SELECT * FROM movements WHERE id=? AND workspace_id=?', id(data.movementId), member.workspace_id);
-    if (!original) fail(404, 'This movement was not found.');
-    if (original.action === 'receive' && await first(db, "SELECT id FROM lots WHERE id=? AND source='qc_lot'", original.lot_id)) fail(409, 'A QC receipt is part of a decided inspection and is never reversed. Record a reasoned stock adjustment that refers to the inspection instead.');
-    if (await first(db,'SELECT id FROM goods_receipts WHERE movement_id=?',original.id)) fail(409,'Reverse this purchase receipt from Incoming stock so the purchase order stays reconciled.');
-    if (original.action === 'reverse') fail(409, 'A reversal cannot be reversed.');
-    record = { id: id(data.id), lotId: original.lot_id, action: 'reverse', fromStage: original.to_stage,
-      toStage: original.from_stage, grams: original.grams, cartons: original.cartons,
-      cones: original.cones, note: text(data.note, 'Reversal reason', 3, 1000), reverses: original.id };
-  } else {
-    keys(data, ['id', 'lotId', 'action', 'grams', 'cartons', 'cones', 'stage', 'toStage', 'note']);
-    if (!['receive', 'dispatch', 'transfer', 'waste'].includes(data.action)) fail(422, 'Choose a valid stock movement.');
-    allow(member, ...movementPermission[data.action]);
-    if (!STAGES.includes(data.stage) || (data.action === 'transfer' && (!STAGES.includes(data.toStage) || data.stage === data.toStage))) fail(422, 'Choose different, valid stock stages.');
-    record = { id: id(data.id), lotId: id(data.lotId), action: data.action,
-      fromStage: data.action === 'receive' ? null : data.stage,
-      toStage: data.action === 'receive' ? data.stage : data.action === 'transfer' ? data.toStage : null,
-      grams: integer(data.grams, 'Weight in grams', 1, 9_000_000_000_000),
-      cartons: integer(data.cartons ?? 0, 'Cartons'), cones: integer(data.cones ?? 0, 'Cones'),
-      note: text(data.note ?? '', 'Note', 0, 1000), reverses: null };
-  }
+/** The temporary immediate sale dispatch (Task 14 replaces it); every other stock change goes through server/stock.mjs. */
+async function saveMovement(db, member, data) {
+  keys(data, ['id', 'lotId', 'action', 'grams', 'cartons', 'cones', 'stage', 'toStage', 'note']);
+  allow(member, ...movementPermission.dispatch);
+  if (!STAGES.includes(data.stage)) fail(422, 'Choose a valid stock stage.');
+  const record = { id: id(data.id), lotId: id(data.lotId), action: 'dispatch', fromStage: data.stage, toStage: null,
+    grams: integer(data.grams, 'Weight in grams', 1, 9_000_000_000_000),
+    cartons: integer(data.cartons ?? 0, 'Cartons'), cones: integer(data.cones ?? 0, 'Cones'),
+    note: text(data.note ?? '', 'Note', 0, 1000), reverses: null };
   const digest = await hash(JSON.stringify(record));
   const previous = await first(db, 'SELECT * FROM movements WHERE id=? AND workspace_id=?', record.id, member.workspace_id);
   if (previous) {
@@ -135,7 +120,7 @@ async function saveMovement(db, member, data, reversal = false) {
     const raced = await first(db, 'SELECT * FROM movements WHERE id=? AND workspace_id=?', record.id, member.workspace_id);
     if (raced?.request_hash === digest) return json(raced);
     if (/QC approval|held lot/i.test(String(error))) fail(409, 'QC approval is required before issuing raw stock or dispatching. Held lots cannot move.');
-    fail(409, 'Stock changed, the quantities exceed available stock, or this entry was already reversed. Refresh and try again.');
+    fail(409, 'Stock changed, the quantities exceed available stock. Refresh and try again.');
   }
   return json(await first(db, 'SELECT * FROM movements WHERE id=?', record.id), 201);
 }
@@ -204,24 +189,17 @@ async function route(request, env) {
     return json({ inspections, qualityEvents, photos, nextOffset: [inspections, qualityEvents, photos].some(items => items.length === 100) ? offset + 100 : null });
   }
   if (path === '/api/products' && data) {
-    allow(member, 'catalog', 'add materials'); keys(data, ['sku', 'name', 'barcode']);
+    role(member, data, 'supervisor', 'purchase_manager'); keys(data, ['sku', 'name', 'barcode', 'interventionReason']);
     const item = { id: uuid(), sku: text(data.sku, 'SKU', 1, 80), name: text(data.name, 'Material name', 2, 160), barcode: data.barcode ? text(data.barcode, 'Barcode', 1, 120) : null };
     try { await statement(db, 'INSERT INTO products(id,workspace_id,sku,name,barcode,created_at) VALUES(?,?,?,?,?,?)', item.id, w, item.sku, item.name, item.barcode, Date.now()).run(); }
     catch { fail(409, 'That SKU or barcode already exists in this workspace.'); }
     return json(item, 201);
   }
-  if (path === '/api/lots' && data) {
-    allow(member, 'catalog', 'add batches'); keys(data, ['productId', 'batch', 'supplier']);
-    const productId = id(data.productId);
-    if (!await first(db, 'SELECT id FROM products WHERE id=? AND workspace_id=?', productId, w)) fail(404, 'Material not found.');
-    const lot = { id: uuid(), batch: text(data.batch, 'Batch / dye lot', 1, 100), supplier: text(data.supplier ?? '', 'Supplier', 0, 160) };
-    try { await statement(db, 'INSERT INTO lots(id,workspace_id,product_id,batch,supplier,created_at) VALUES(?,?,?,?,?,?)', lot.id, w, productId, lot.batch, lot.supplier, Date.now()).run(); }
-    catch { fail(409, 'This material already has that batch number. Use the existing lot.'); }
-    return json(lot, 201);
-  }
+  if (path === '/api/lots' && data) fail(410, 'Batches are created when the supervisor records finished goods or accepts an inspection report. Use POST /api/erp/stock/finished.');
   if (path === '/api/movements' && data?.action === 'receive') fail(410, 'Raw stock is received when the supervisor accepts an inspection report. Use POST /api/erp/qc/reports/decide.');
+  if (path === '/api/movements' && data && data.action !== 'dispatch') fail(410, 'Stock changes now go through the supervisor: POST /api/erp/stock/finished or /api/erp/stock/adjustments. Dispatch is the only movement left here.');
   if (path === '/api/movements' && data) return saveMovement(db, member, data);
-  if (path === '/api/reversals' && data) return saveMovement(db, member, data, true);
+  if (path === '/api/reversals' && data) fail(410, 'Reversals are closed. Record a reasoned stock adjustment with POST /api/erp/stock/adjustments.');
   if (path === '/api/quality' && data) fail(410, 'QC decisions are made on the inspection report. Use POST /api/erp/qc/reports/decide or /api/erp/qc/rejections/decide.');
   if (path === '/api/inspections' && data) {
     allow(member, 'inspect', 'record inspections'); useQc(member, 'quality_inspector', 'Inspections'); keys(data, ['id', 'lotId', 'labelText', 'note', 'result']);

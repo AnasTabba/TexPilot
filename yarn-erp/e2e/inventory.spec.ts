@@ -7,27 +7,30 @@ test.use({ serviceWorkers: 'block' });
 test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
 
 test.describe('Shared inventory', () => {
-  test('a new batch waits for its first delivery; dispatch and undo work on QC-approved stock', async ({ page }) => {
+  test('finished goods are entered with a reason when an admin steps in; dispatch works on QC-approved stock and nothing can be reversed', async ({ page }) => {
     await signIn(page);
     await page.goto('/#/inventory');
     await page.getByRole('button', { name: 'New material', exact: true }).click();
     await page.getByLabel('Material name', { exact: true }).fill('Cotton combed 30/1');
     await page.getByLabel('SKU', { exact: true }).fill('COT-30');
     await page.getByLabel('Product barcode (optional)', { exact: true }).fill('8901234567890');
+    await page.getByLabel('Why are you stepping in?', { exact: true }).fill('Supervisor is away today');
     await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save entry', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Saved. Everyone on the team sees it now.' })).toBeVisible();
-    await page.getByRole('button', { name: 'New batch of Cotton combed 30/1', exact: true }).click();
+    await page.getByRole('button', { name: 'Add finished Cotton combed 30/1', exact: true }).click();
     await page.getByLabel('Batch / dye lot', { exact: true }).fill('DYE-001');
+    await page.getByLabel('Weight (kg)', { exact: true }).fill('5');
+    await page.getByLabel('Why are you stepping in?', { exact: true }).fill('Supervisor is away today');
     await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save entry', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Batch details', exact: true })).toBeVisible();
-    // A new batch has no stock: raw stock arrives only when the supervisor accepts an inspection report.
-    await expect(page.getByRole('heading', { level: 3, name: 'Waiting for the first delivery' })).toBeVisible();
+    // Finished goods are recorded with their type and source; raw stock still arrives only through an inspection report.
+    const finished = (await workspace(page)).lots.find((l: { batch: string }) => l.batch === 'DYE-001');
+    expect([finished.inventory_type, finished.source, finished.quality]).toEqual(['finished', 'production', 'approved']);
     await expect(page.getByRole('button', { name: 'Receive stock', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Review quality', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Dispatch', exact: true })).toBeDisabled();
-    // Dispatch and undo work on QC-approved stock that arrived through the inspection flow.
+    // Dispatch works on QC-approved stock that arrived through the inspection flow.
     const { lot, state: seeded } = await seededLot(page, 'LOT-1024');
     const rawOf = (state: { balances: { lot_id: string; stage: string; grams: number }[] }) => state.balances.find(balance => balance.lot_id === lot.id && balance.stage === 'raw')!.grams;
     const movementsOf = (state: { movements: { lot_id: string }[] }) => state.movements.filter(movement => movement.lot_id === lot.id).length;
@@ -38,18 +41,13 @@ test.describe('Shared inventory', () => {
     await page.getByLabel('Cones', { exact: true }).fill('0');
     await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save entry', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Undo entry', exact: true })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Saved. Everyone on the team sees it now.' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Undo entry', exact: true })).toHaveCount(0);
     const state = await workspace(page);
     expect(rawOf(state)).toBe(rawOf(seeded) - 1250);
     expect(movementsOf(state)).toBe(movementsOf(seeded) + 1);
-    await page.getByRole('button', { name: 'Undo entry', exact: true }).click();
-    await expect(page.getByLabel('Reason', { exact: true })).toHaveValue('Correction after saving');
-    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
-    await page.getByRole('button', { name: 'Save reversal', exact: true }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Reversal saved. The original entry is preserved.' })).toBeVisible();
-    const corrected = await workspace(page);
-    expect(rawOf(corrected)).toBe(rawOf(seeded));
-    expect(movementsOf(corrected)).toBe(movementsOf(seeded) + 2);
+    await page.goto('/#/activity');
+    await expect(page.getByRole('button', { name: 'Reverse entry' })).toHaveCount(0);
   });
 
   test('another phone signs in with its own PIN and sees the same stock', async ({ browser, page }) => {
@@ -176,7 +174,8 @@ test.describe('Shared inventory', () => {
   test('changing batch routes keeps each batch inspection history separate', async ({ page }) => {
     await signIn(page);
     const { lot: first, state } = await seededLot(page, 'LOT-1022');
-    const second = await apiPost<{ id: string }>(page, '/lots', { productId: state.products.find((p: any) => p.id === first.product_id)?.id || state.products[0].id, batch: 'DYE-002', supplier: 'Another mill' });
+    const created = await apiPost<{ lotId: string }>(page, '/erp/stock/finished', { id: crypto.randomUUID(), productId: first.product_id, batch: 'DYE-002', grams: 1000, interventionReason: 'Supervisor is away today' });
+    const second = { id: created.lotId };
     await apiPost(page, '/inspections', { id: crypto.randomUUID(), lotId: first.id, labelText: '', note: 'Only the first batch has this inspection', result: null });
     await apiPost(page, '/inspections', { id: crypto.randomUUID(), lotId: second.id, labelText: '', note: 'Only the second batch has this inspection', result: null });
     await page.goto('/#/inventory/' + first.id);

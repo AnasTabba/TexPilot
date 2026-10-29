@@ -48,11 +48,16 @@ async function fixture() {
     const row = await userRow({ workspaceId: 'other-factory', name: 'Outsider', pin: PIN, role: 'admin' });
     sql.prepare(row.sql).run(...row.args);
   }
+  // Batches are created by the supervisor's finished-goods entry or a report decision; these tests only need a legacy-shaped lot to act on.
+  function addLot(productId, batch, supplier = '') {
+    const id = crypto.randomUUID();
+    sql.prepare('INSERT INTO lots(id,workspace_id,product_id,batch,supplier,created_at) VALUES((?),(SELECT workspace_id FROM users WHERE name=\'Anas\'),?,?,?,?)').run(id, productId, batch, supplier, Date.now());
+    return { id };
+  }
   async function setup() {
-    const product = await call('/products', { sku: 'COT-30', name: 'Cotton 30/1', barcode: '8901234567890' });
-    const lot = await call('/lots', { productId: product.data.id, batch: 'DYE-001', supplier: 'Test mill' });
-    assert.equal(lot.status, 201);
-    return { product: product.data, lot: lot.data };
+    const product = await call('/products', { sku: 'COT-30', name: 'Cotton 30/1', barcode: '8901234567890', interventionReason: 'Catalogue setup for tests' });
+    assert.equal(product.status, 201);
+    return { product: product.data, lot: addLot(product.data.id, 'DYE-001', 'Test mill') };
   }
   // Raw stock now enters only when a supervisor accepts an inspection report, so this runs that flow for a lot of exactly `grams`.
   let portal;
@@ -62,7 +67,7 @@ async function fixture() {
     assert.equal((await portal.call('/erp/qc/reports/decide', { inspectionId, decision: 'accept' }, 'Saima')).status, 200);
     return { lot: { id: lotId } };
   }
-  return { call, send, login, cookieFor, addPerson, addOutsider, setup, received, sql, env, cookies };
+  return { call, send, login, cookieFor, addPerson, addOutsider, addLot, setup, received, sql, env, cookies };
 }
 const movement = (lotId, action = 'receive', grams = 10000, extra = {}) => ({
   id: crypto.randomUUID(), lotId, action, grams, cartons: 2, cones: 48,
@@ -110,20 +115,19 @@ test('duplicate delivery is idempotent; reusing its key for different stock is r
   assert.equal((await call('/workspace')).data.balances[0].grams, 6000);
 });
 
-test('a stage transfer conserves exact grams, cartons and cones across the batch', async () => {
-  const { call, setup, received } = await fixture();
-  const { lot: empty } = await setup();
-  assert.equal((await call('/movements', movement(empty.id, 'transfer', 3333, { toStage: 'wip', cartons: 0, cones: 0 }))).status, 409, 'a batch without stock has nothing to move');
+test('the old transfer, waste, reversal and batch writes are closed; balances stay as they were', async () => {
+  const { call, setup, received, sql } = await fixture();
+  const { product, lot: empty } = await setup();
   const { lot } = await received();
-  assert.equal((await call('/movements', movement(lot.id, 'transfer', 3333, { toStage: 'wip', cartons: 0, cones: 0 }))).status, 201);
-  const balances = (await call('/workspace')).data.balances;
-  assert.deepEqual(balances.map(({ stage, grams, cartons, cones }) => ({ stage, grams, cartons, cones })).sort((a,b) => a.stage.localeCompare(b.stage)), [
-    { stage: 'raw', grams: 6667, cartons: 0, cones: 0 },
-    { stage: 'wip', grams: 3333, cartons: 0, cones: 0 },
-  ]);
+  const before = sql.prepare('SELECT lot_id,stage,grams FROM balances ORDER BY lot_id,stage').all(), movements = sql.prepare('SELECT COUNT(*) AS n FROM movements').get().n;
+  for (const body of [movement(lot.id, 'transfer', 3333, { toStage: 'wip', cartons: 0, cones: 0 }), movement(lot.id, 'waste', 100), movement(empty.id, 'transfer', 1, { toStage: 'wip' })]) assert.equal((await call('/movements', body)).status, 410);
+  assert.equal((await call('/reversals', { id: crypto.randomUUID(), movementId: sql.prepare('SELECT id FROM movements').get().id, note: 'Wrong receipt' })).status, 410);
+  assert.equal((await call('/lots', { productId: product.id, batch: 'NEW', supplier: '' })).status, 410);
+  assert.deepEqual(sql.prepare('SELECT lot_id,stage,grams FROM balances ORDER BY lot_id,stage').all(), before);
+  assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM movements').get().n, movements);
 });
 
-test('stock cannot go negative, including concurrent dispatches; failed transfer rolls back', async () => {
+test('stock cannot go negative, including concurrent dispatches', async () => {
   const { call, received } = await fixture();
   const { lot } = await received();
   const responses = await Promise.all([
@@ -131,7 +135,7 @@ test('stock cannot go negative, including concurrent dispatches; failed transfer
     call('/movements', movement(lot.id, 'dispatch', 7000, { cartons: 0, cones: 0 })),
   ]);
   assert.deepEqual(responses.map(x => x.status).sort(), [201, 409]);
-  const failed = await call('/movements', movement(lot.id, 'transfer', 4000, { toStage: 'finished', cartons: 0, cones: 0 }));
+  const failed = await call('/movements', movement(lot.id, 'dispatch', 4000, { cartons: 0, cones: 0 }));
   assert.equal(failed.status, 409);
   const state = (await call('/workspace')).data;
   assert.equal(state.balances.find(b => b.stage === 'raw').grams, 3000);
@@ -146,32 +150,28 @@ test('QC-approved stock can be dispatched by a dispatcher; the old QC toggle is 
   assert.equal((await call('/quality', { lotId: lot.id, status: 'hold', note: 'Manager inspected' })).status, 410);
   assert.equal((await call('/quality', { lotId: lot.id, status: 'approved', note: 'Looks fine' }, 'Store')).status, 410);
   assert.equal((await call('/movements', movement(lot.id, 'dispatch', 1000, { cartons: 0, cones: 0 }), 'Store')).status, 201);
-  assert.equal((await call('/reversals', { id: crypto.randomUUID(), movementId: (await call('/workspace')).data.movements[0].id, note: 'Oops' }, 'Store')).status, 403);
+  assert.equal((await call('/reversals', { id: crypto.randomUUID(), movementId: (await call('/workspace')).data.movements[0].id, note: 'Oops' }, 'Store')).status, 410);
 });
 
-test('reversal is immutable, only once, and never rewrites a decided QC receipt', async () => {
+test('the ledger is immutable and a decided QC receipt is never reversed', async () => {
   const { call, received, sql } = await fixture();
   const { lot } = await received();
   const dispatch = movement(lot.id, 'dispatch', 4000, { cartons: 0, cones: 0 });
   await call('/movements', dispatch);
-  const reversal = { id: crypto.randomUUID(), movementId: dispatch.id, note: 'Wrong dispatch' };
-  assert.equal((await call('/reversals', reversal)).status, 201);
-  assert.equal((await call('/reversals', { ...reversal, id: crypto.randomUUID() })).status, 409);
-  assert.equal((await call('/workspace')).data.balances[0].grams, 10000);
-  const receipt = sql.prepare("SELECT id FROM movements WHERE action='receive'").get().id;
-  assert.equal((await call('/reversals', { id: crypto.randomUUID(), movementId: receipt, note: 'Wrong receipt' })).status, 409);
+  assert.equal((await call('/reversals', { id: crypto.randomUUID(), movementId: dispatch.id, note: 'Wrong dispatch' })).status, 410);
+  assert.equal((await call('/workspace')).data.balances[0].grams, 6000);
   assert.throws(() => sql.exec('DELETE FROM movements'), /immutable/);
   assert.throws(() => sql.exec('UPDATE stock_deltas SET grams = 1'), /immutable/);
 });
 
 test('workspace data never leaks to other members or ambiguous barcode matches', async () => {
-  const { call, setup, addOutsider } = await fixture();
+  const { call, setup, addOutsider, addLot } = await fixture();
   const { product, lot } = await setup();
   await addOutsider();
   assert.equal((await call('/movements', movement(lot.id, 'dispatch', 1000, { cartons: 0, cones: 0 }), 'Outsider')).status, 404);
   assert.equal((await call('/lookup?code=' + encodeURIComponent(`YF:${lot.id}`), undefined, 'Outsider')).status, 404);
   assert.equal((await call('/erp/admin/users', undefined, 'Outsider')).data.users.length, 1);
-  await call('/lots', { productId: product.id, batch: 'DYE-002', supplier: '' });
+  addLot(product.id, 'DYE-002');
   const lookup = await call('/lookup?code=8901234567890');
   assert.equal(lookup.data.lots.length, 2);
   assert.equal(lookup.data.lotId, undefined);
@@ -232,9 +232,9 @@ test('inspection photos persist independently of the device and remain private t
 });
 
 test('batch evidence and data export retain older inspections beyond the workspace overview limit', async () => {
-  const { call, setup, sql } = await fixture();
+  const { call, setup, sql, addLot } = await fixture();
   const { product, lot } = await setup();
-  const other = (await call('/lots', { productId: product.id, batch: 'NEWER', supplier: '' })).data;
+  const other = addLot(product.id, 'NEWER');
   const oldestId = crypto.randomUUID();
   await call('/inspections', { id: oldestId, lotId: lot.id, labelText: 'Original label', note: 'Oldest batch evidence', result: null });
   const member = (await call('/workspace')).data.member;

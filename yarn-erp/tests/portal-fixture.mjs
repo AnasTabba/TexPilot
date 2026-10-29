@@ -145,7 +145,14 @@ export async function portalFixture(database) {
     await step('/erp/qc/inspections/submit', { id: inspectionId }, 'Qasim');
     return { lotId, inspectionId, ...submittedContext };
   }
-  return { sql, env, storage, submitted, workspaceId, adminId, person, insertSupplier, insertBid, insertPO, insertProduct, upload, setThreshold, login, call, member: async name => (await call('/workspace', undefined, name)).data.member, insertBuyer, insertBuyerRfq, acceptedQuote };
+  // A product and a finished lot of `grams`, received by a supervisor (created on first use).
+  async function addFinished({ grams = 10000 } = {}) {
+    if (!sql.prepare('SELECT 1 FROM users WHERE name=?').get('Saima')) await person('Saima', 'supervisor');
+    const saved = await call('/erp/stock/finished', { id: crypto.randomUUID(), productId: await insertProduct(), batch: `FIN-${++reference}`, grams }, 'Saima');
+    assert.equal(saved.status, 201, saved.text);
+    return saved.data.lotId;
+  }
+  return { sql, env, storage, submitted, addFinished, workspaceId, adminId, person, insertSupplier, insertBid, insertPO, insertProduct, upload, setThreshold, login, call, member: async name => (await call('/workspace', undefined, name)).data.member, insertBuyer, insertBuyerRfq, acceptedQuote };
 }
 
 // Deliberately uses the pre-portal schema, including real commercial and immutable data.

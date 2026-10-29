@@ -143,7 +143,7 @@ function legacyReceipt(f,order,qty,batch){
 }
 test('goods receipts are closed and arrivals register QC lots without touching stock',async()=>{
  const f=await fixture(),supplier=await f.active(),r=await f.rfq(),{order}=await f.award(supplier,r);
- const product=(await f.staff('/products',{sku:'COT-30',name:'Cotton combed 30/1'})).data,shipment=crypto.randomUUID(),w=f.sql.prepare('SELECT id FROM workspaces').get().id;
+ const product=(await f.staff('/products',{sku:'COT-30',name:'Cotton combed 30/1',interventionReason:'Catalogue setup for tests'})).data,shipment=crypto.randomUUID(),w=f.sql.prepare('SELECT id FROM workspaces').get().id;
  f.sql.prepare('INSERT INTO shipments(id,workspace_id,purchase_order_id,bill_of_lading,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(shipment,w,order.id,'BL-1','u',1,1);
  const d={id:crypto.randomUUID(),orderId:order.id,productId:product.id,batch:'RECEIPT-001',quantityMilli:40000,cartons:2,cones:40,supplierLot:'SUP-LOT-A'};
  const closed=await f.staff('/erp/receipts',d);assert.equal(closed.status,410);assert.match(closed.data.error,/QC lots/);
@@ -161,7 +161,7 @@ test('receipt corrections reconcile the PO and cannot remove already used stock'
  const receipt=legacyReceipt(f,order,100000,'REV-001');
  f.sql.prepare("UPDATE supplier_purchase_orders SET status='received' WHERE id=?").run(order.id);
  assert.equal((await f.staff('/erp/inbound')).data.orders[0].status,'received');
- assert.equal((await f.staff('/reversals',{id:crypto.randomUUID(),movementId:receipt,note:'Correct delivery'})).status,409,'generic reversal cannot bypass PO reconciliation');
+ assert.equal((await f.staff('/reversals',{id:crypto.randomUUID(),movementId:receipt,note:'Correct delivery'})).status,410,'generic reversal is closed; the PO reconciles through receipt reversal');
  assert.equal((await f.staff('/erp/receipts/reverse',{id:crypto.randomUUID(),receiptId:receipt,reason:'Correct historical receipt'})).status,422);
  const reverse={id:crypto.randomUUID(),receiptId:receipt,interventionReason:'Correct historical receipt',reason:'Wrong supplier delivery was booked'};
  assert.equal((await f.staff('/erp/receipts/reverse',reverse)).status,200);
@@ -169,7 +169,8 @@ test('receipt corrections reconcile the PO and cannot remove already used stock'
  assert.equal((await f.staff('/erp/inbound')).data.orders[0].status,'dispatched');
  const next=legacyReceipt(f,order,100000,'REV-002');
  f.sql.prepare("UPDATE lots SET quality='approved' WHERE id=?").run(next);
- await f.staff('/movements',{id:crypto.randomUUID(),lotId:next,action:'transfer',stage:'raw',toStage:'wip',grams:1000,cartons:0,cones:0,note:'Production issue'});
+ const used=crypto.randomUUID();f.sql.prepare("INSERT INTO movements(id,workspace_id,lot_id,action,from_stage,to_stage,grams,cartons,cones,note,actor,actor_name,request_hash,created_at) VALUES(?,?,?,'waste','raw',NULL,1000,0,0,'Production issue','u','u',?,?)").run(used,f.sql.prepare('SELECT workspace_id FROM lots WHERE id=?').get(next).workspace_id,next,used,Date.now());
+ f.sql.prepare("INSERT INTO stock_deltas(id,movement_id,lot_id,stage,grams,cartons,cones) VALUES(?,?,?,'raw',-1000,0,0)").run(crypto.randomUUID(),used,next);
  assert.equal((await f.staff('/erp/receipts/reverse',{id:crypto.randomUUID(),receiptId:next,interventionReason:'Correct historical receipt',reason:'Cannot reverse consumed stock'})).status,409);
  assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM receipt_reversals').get().n,1);
 });
@@ -177,7 +178,7 @@ test('tonne lots keep the order unit and the inventory role never receives suppl
  const f=await fixture(),supplier=await f.active();const r=await f.rfq();
  f.sql.prepare("UPDATE procurement_rfqs SET quantity_milli=1000,unit='tonne' WHERE id=?").run(r.id);
  const modified=f.sql.prepare('SELECT * FROM procurement_rfqs WHERE id=?').get(r.id),{order}=await f.award(supplier,modified);
- const product=(await f.staff('/products',{sku:'BULK-COT',name:'Bulk Cotton'})).data,shipment=crypto.randomUUID(),w=f.sql.prepare('SELECT id FROM workspaces').get().id;
+ const product=(await f.staff('/products',{sku:'BULK-COT',name:'Bulk Cotton',interventionReason:'Catalogue setup for tests'})).data,shipment=crypto.randomUUID(),w=f.sql.prepare('SELECT id FROM workspaces').get().id;
  f.sql.prepare('INSERT INTO shipments(id,workspace_id,purchase_order_id,bill_of_lading,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(shipment,w,order.id,'BL-T','u',1,1);
  const row=await userRow({workspaceId:w,name:'Inventory manager',pin:'2468',role:'supervisor'});f.sql.prepare(row.sql).run(...row.args);
  const c=(await f.request('/auth/login',{name:'Inventory manager',pin:'2468'})).cookie;
