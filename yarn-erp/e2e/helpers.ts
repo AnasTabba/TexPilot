@@ -7,7 +7,7 @@ export async function signIn(page: Page, name = 'Anas', pin = '2468') {
   await page.goto('/');
   await page.getByRole('button', { name, exact: true }).click();
   await page.getByLabel('4-digit PIN', { exact: true }).fill(pin);
-  await expect(page.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 }
 
 /** One signed-in API call; the server rejects writes without a same-origin Origin header. */

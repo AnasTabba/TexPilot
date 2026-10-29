@@ -7,7 +7,7 @@ async function signIn(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Anas', exact: true }).click();
   await page.getByLabel('4-digit PIN').fill('2468');
-  await expect(page.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 }
 
 test('Urdu selection persists through sign-in, navigation and reload', async ({ page }) => {
@@ -18,16 +18,16 @@ test('Urdu selection persists through sign-in, navigation and reload', async ({ 
   await expect(page.getByRole('heading', { name: 'کون سائن اِن کر رہا ہے؟' })).toBeVisible();
   await page.getByRole('button', { name: 'Anas', exact: true }).click();
   await page.getByLabel('چار ہندسوں کا پن').fill('2468');
-  await expect(page.getByRole('heading', { name: 'ہوم', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'ڈیش بورڈ', exact: true })).toBeVisible();
   await page.goto('/#/scanner');
   await expect(page.getByRole('button', { name: 'کپڑا', exact: true })).toBeVisible();
   await page.reload();
   // A reload keeps both the session and current route.
   await expect(page.getByRole('heading', { name: 'اسکین', exact: true })).toBeVisible();
-  await page.goto('/#/settings');
+  await page.goto('/#/profile');
   await page.getByRole('button', { name: 'Switch language to English' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
-  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My profile', exact: true })).toBeVisible();
 });
 
 for (const language of ['en', 'ur']) for (const [width, height] of [[375, 548], [390, 664], [1280, 633]]) {
@@ -43,7 +43,7 @@ for (const language of ['en', 'ur']) for (const [width, height] of [[375, 548], 
     expect(zero!.width).toBeGreaterThanOrEqual(44);
     expect(await page.evaluate(() => document.scrollingElement!.scrollHeight - innerHeight)).toBeLessThanOrEqual(1);
     await page.getByLabel(language === 'ur' ? 'چار ہندسوں کا پن' : '4-digit PIN').fill('2468');
-    await expect(page.getByRole('heading', { name: language === 'ur' ? 'ہوم' : 'Home', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: language === 'ur' ? 'ڈیش بورڈ' : 'Dashboard', exact: true })).toBeVisible();
     await page.goto('/#/scanner');
     const open = page.locator('.scan-camera-controls button').first();
     await expect(open).toBeVisible();

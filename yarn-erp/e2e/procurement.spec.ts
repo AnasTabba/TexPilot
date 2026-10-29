@@ -27,7 +27,7 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await page.goto('/');
   await page.getByRole('button', { name: 'Anas', exact: true }).click();
   await page.getByLabel('4-digit PIN', { exact: true }).fill('2468');
-  await expect(page.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.goto('/#/procurement');
   await page.getByRole('button', { name: 'Review supplier access', exact: true }).click();
   await page.getByLabel('Verification details / reason').fill('Contacted the supplier and checked company identity');
