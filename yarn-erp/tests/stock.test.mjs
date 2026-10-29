@@ -234,6 +234,36 @@ test('the supervisor report bundles confirmed rejections, escalations, adjustmen
   assert.deepEqual(one(f, 'SELECT * FROM supervisor_reports'), stored);
 });
 
+test('the report covers the whole period with no per-category cap', async () => {
+  const f = await fixture(), { inspectionId } = await f.submitted({ acceptedMilli: 0, rejectedMilli: 2000 });
+  assert.equal((await f.call('/erp/qc/rejections/decide', { inspectionId, decision: 'confirm' }, 'Saima')).status, 200);
+  // 209 more confirmed rejections on the same lot enter the period faster than any cap.
+  const saima = (await f.member('Saima')).user_id, issuedAt = Date.now(), rejections = [];
+  for (let i = 0; i < 209; i++) {
+    const id = crypto.randomUUID(), issue = crypto.randomUUID();
+    f.sql.prepare("INSERT INTO qc_inspections(id,workspace_id,lot_id,accepted_milli,rejected_milli,note,status,created_by,created_at,updated_at) VALUES(?,?,(SELECT id FROM qc_lots LIMIT 1),0,400,'','draft','q',?,?)").run(id, f.workspaceId, issuedAt, issuedAt);
+    f.sql.prepare("INSERT INTO qc_issues(id,workspace_id,inspection_id,type,severity,description,created_by,created_at,updated_at) VALUES(?,?,?,'Shade variation','major','Dye lot differs from the approved sample','q',?,?)").run(issue, f.workspaceId, id, issuedAt, issuedAt);
+    f.sql.prepare("UPDATE qc_inspections SET status='submitted',rejection_status='pending',submitted_at=?,updated_at=? WHERE id=?").run(issuedAt, issuedAt, id);
+    f.sql.prepare("UPDATE qc_inspections SET rejection_status='confirmed',rejection_reason='Slight shade variation confirmed',decided_by=?,decided_at=?,updated_at=? WHERE id=?").run(saima, issuedAt + 100 + i, issuedAt + 100 + i, id);
+    rejections.push(id);
+  }
+  const finishedLot = await f.addFinished({ grams: 10000 }), adjustments = [];
+  for (let i = 0; i < 205; i++) adjustments.push((await adjust(f, finishedLot, -1)).data.adjustment.id);
+  const draft = (await f.call('/erp/stock/reports/draft?from=1&to=' + (issuedAt + 600000), undefined, 'Saima')).data;
+  assert.equal(draft.confirmedRejections.length, 210, 'every rejected inspection is listed');
+  assert.deepEqual(draft.confirmedRejections.slice(1).map(r => r.id), rejections, 'the seeded 209, in period order');
+  assert.equal(draft.confirmedRejections[0].id, inspectionId);
+  assert.equal(draft.adjustments.length, 205, 'every adjustment is listed');
+  // Flagging the items beyond the old category cap works, so nothing is silently omitted.
+  const body = { id: uuid(), from: 1, to: issuedAt + 600000, flagged: [{ objectType: 'inspection', objectId: rejections[200], note: 'Two hundredth entry onwards' }, { objectType: 'adjustment', objectId: adjustments[200], note: 'Adjustment past the old cap' }] };
+  const saved = await f.call('/erp/stock/reports', body, 'Saima');
+  assert.equal(saved.status, 201);
+  assert.equal(saved.data.report.content.confirmedRejections.length, 210);
+  assert.equal(saved.data.report.content.adjustments.length, 205);
+  assert.deepEqual(saved.data.report.flagged.map(x => x.objectId), [rejections[200], adjustments[200]]);
+  assert.equal(one(f, 'SELECT COUNT(*) AS n FROM supervisor_reports').n, 1);
+});
+
 test('the report counts escalated rejections', async () => {
   const f = await fixture(), { inspectionId } = await f.submitted({ acceptedMilli: 0, rejectedMilli: 20000 });
   assert.equal((await f.call('/erp/qc/rejections/decide', { inspectionId, decision: 'escalate' }, 'Saima')).status, 200);
