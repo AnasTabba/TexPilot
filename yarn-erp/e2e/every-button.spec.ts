@@ -161,7 +161,7 @@ test.describe("desktop", () => {
     await page.goto("/#/inventory");
     await page.locator(".live-lot-row", { hasText: "LOT-1024" }).click();
     await title(page, "Batch details");
-    await expect(page.locator(".yf-batch .live-panel-heading .live-quality")).toHaveText("QC approved");
+    await expect(page.locator(".yf-steps li.done", { hasText: "QC approved" })).toHaveCount(1);
     await expect(page.getByRole("heading", { level: 3, name: "Dispatch finished stock" })).toBeVisible();
 
     await expect(page.getByRole("button", { name: "Move stage", exact: true })).toHaveCount(0);

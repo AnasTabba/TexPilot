@@ -44,6 +44,7 @@ export const urdu: Record<string, string> = {
   'Decide on the QC hold': 'روکے ہوئے بیچ کا فیصلہ کریں', 'Record the QC decision': 'کوالٹی کا فیصلہ درج کریں',
   'Approve after the physical check, or keep the batch on hold.': 'جسمانی معائنے کے بعد منظور کریں یا بیچ کو روکے رکھیں۔',
   'Move it into production': 'پیداوار میں منتقل کریں', 'Transfer raw material to work in progress when the floor is ready.': 'فلور تیار ہونے پر خام مال کو پیداوار میں منتقل کریں۔',
+  'Send to production': 'پیداوار میں بھیجیں', 'This batch passed QC. Move it into production next.': 'یہ بیچ کوالٹی چیک میں پاس ہے۔ اب اسے پیداوار میں بھیجیں۔', 'To production': 'پیداوار میں',
   'Dispatch finished stock': 'تیار مال روانہ کریں', 'Send approved stock out with its delivery reference.': 'منظور شدہ مال ڈیلیوری حوالے کے ساتھ روانہ کریں۔',
   'All stock': 'تمام اسٹاک', '· Batch': '· بیچ', 'Supplier not recorded': 'سپلائر درج نہیں', '· since': '· از', 'Batch progress': 'بیچ کی پیش رفت',
   'Stock in this batch': 'اس بیچ کا اسٹاک', 'Other actions': 'دیگر کام', 'Approve quality first': 'پہلے کوالٹی منظور کریں', 'Inspection notes': 'معائنے کے نوٹس',
