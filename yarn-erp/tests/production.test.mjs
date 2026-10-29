@@ -57,7 +57,8 @@ test('moving 60 kg of 100 to production is one transfer from raw to wip, with it
   assert.equal(one(f, 'SELECT COUNT(*) AS n FROM erp_audit_events WHERE action=? AND record_id=?', 'stock.to_production', body.id).n, 1);
   assert.deepEqual(recipients(f, 'stock.to_production'), ['Anas', 'Fahad', 'Zuhair']);
   assert.equal(one(f, "SELECT label FROM notifications WHERE event='stock.to_production' LIMIT 1").label.endsWith('· 60 kg'), true);
-  assert.equal((await attention(f)).data.readyForProduction[0].rawGrams, 40000);
+  // Once a batch is in production it is no longer offered for production, even with raw left over.
+  assert.equal((await attention(f)).data.readyForProduction.some(row => row.lotId === lotId), false);
 });
 
 test('moving more raw stock than the lot holds is refused and changes nothing', async () => {

@@ -104,7 +104,8 @@ export async function stockApi(request, env, member, path, data) {
         readyForProduction: await all(db, `SELECT l.id AS lotId,l.batch,m.name AS productName,b.grams AS rawGrams,
           (SELECT MAX(v.created_at) FROM movements v WHERE v.lot_id=l.id AND v.action='receive' AND v.to_stage='raw') AS approvedAt
           FROM lots l JOIN products m ON m.id=l.product_id JOIN balances b ON b.lot_id=l.id AND b.stage='raw'
-          WHERE l.workspace_id=? AND l.quality='approved' AND b.grams>0 ORDER BY approvedAt DESC,l.id LIMIT 50`, w) });
+          WHERE l.workspace_id=? AND l.quality='approved' AND b.grams>0
+            AND NOT EXISTS(SELECT 1 FROM balances x WHERE x.lot_id=l.id AND x.stage!='raw' AND x.grams>0) ORDER BY approvedAt DESC,l.id LIMIT 50`, w) });
     }
     if (path === base + '/reports/draft') { viewer(member, 'supervisor'); return json(await draftOf(db, w, ...period(params))); }
     if (path === base + '/reports') {
