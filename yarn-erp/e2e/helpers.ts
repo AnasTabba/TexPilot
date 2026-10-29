@@ -30,3 +30,16 @@ export async function seededLot(page: Page, batch: string) {
   expect(lot, `seeded batch ${batch}`).toBeTruthy();
   return { lot, state };
 }
+
+/** A stock entry on the floor screens: counts first, then the scale weight, check the sentence, save. */
+export async function enterStock(page: Page, { cartons = '0', cones = '0', kg, note, from }: { cartons?: string; cones?: string; kg: string; note?: string; from?: string }) {
+  if (from) await page.getByRole('group', { name: 'Take from' }).getByRole('button', { name: new RegExp('^' + from) }).click();
+  await page.getByLabel('Cartons', { exact: true }).fill(cartons);
+  await page.getByLabel('Cones', { exact: true }).fill(cones);
+  await page.getByLabel('Weight on the scale (kg)', { exact: true }).fill(kg);
+  if (note) await page.getByLabel(/^(Note \(optional\)|Customer or gate pass number \(optional\))$/).fill(note);
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Check before saving' })).toBeVisible();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Saved', exact: true })).toBeVisible();
+}

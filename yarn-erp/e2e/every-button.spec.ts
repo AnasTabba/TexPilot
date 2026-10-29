@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { enterStock } from "./helpers";
 
 // Every control on every screen does what it says. Stock lives in the shared database of the dev
 // server, reset to the demo's opening stock before each test; the scanner's model answer is a fixture
@@ -53,7 +54,7 @@ test.describe("desktop", () => {
     await page.getByRole("button", { name: "Anas", exact: true }).click();
     const keypad = page.locator(".yf-keypad");
     for (const key of "1111") await keypad.getByRole("button", { name: key, exact: true }).click();
-    await expect(page.getByRole("alert")).toHaveText("That name and PIN do not match.");
+    await expect(page.getByRole("alert")).toHaveText("Wrong PIN. Try again.");
     await keypad.getByRole("button", { name: "9", exact: true }).click();
     await keypad.getByRole("button", { name: "Delete last digit" }).click();
     await expect(page.locator(".yf-pin-dots .filled")).toHaveCount(0);
@@ -166,13 +167,11 @@ test.describe("desktop", () => {
     await reviewAndSave(page, "Save entry");
     await title(page, "Batch details");
     await expect(page.getByRole("heading", { level: 3, name: "Receive the first delivery" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Dispatch", exact: true })).toBeDisabled();
+    // A job the batch cannot take yet is shown greyed with the plain reason, not hidden.
+    await expect(page.getByRole("button", { name: "Dispatch Pass QC first" })).toBeDisabled();
 
-    await page.getByRole("button", { name: "Receive stock", exact: true }).click();
-    await page.getByLabel("Weight (kg)", { exact: true }).fill("100");
-    await page.getByLabel("Cartons", { exact: true }).fill("4");
-    await page.getByLabel("Cones", { exact: true }).fill("40");
-    await reviewAndSave(page, "Save entry");
+    await page.getByRole("button", { name: "Receive yarn", exact: true }).click();
+    await enterStock(page, { cartons: "4", cones: "40", kg: "100" });
     await expect(page.getByRole("heading", { level: 3, name: "Inspect this batch" })).toBeVisible();
 
     await page.getByRole("button", { name: "Add inspection", exact: true }).click();
@@ -181,28 +180,26 @@ test.describe("desktop", () => {
     await expect(page.getByRole("heading", { level: 3, name: "Record the QC decision" })).toBeVisible();
     await expect(page.locator(".yf-timeline")).toContainText("Manual inspection");
 
-    await page.getByRole("button", { name: "Review quality", exact: true }).click();
+    await page.getByRole("button", { name: "Check quality", exact: true }).click();
     await page.getByLabel("Inspection reason", { exact: true }).fill("Physical check passed");
     await reviewAndSave(page, "Save QC decision");
     await expect(page.locator(".yf-batch .live-panel-heading .live-quality")).toHaveText("QC approved");
     await expect(page.getByRole("heading", { level: 3, name: "Move it into production" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Move stage", exact: true }).click();
-    await page.getByLabel("Weight (kg)", { exact: true }).fill("40");
-    await reviewAndSave(page, "Save entry");
+    await page.getByRole("button", { name: "Issue to production", exact: true }).click();
+    await enterStock(page, { cartons: "2", cones: "20", kg: "40" });
     await expect(page.getByRole("heading", { level: 3, name: "Dispatch finished stock" })).toBeVisible();
 
+    // Dispatch and wastage start from the floor stock; the place can still be changed on the cards.
     await page.getByRole("button", { name: "Dispatch", exact: true }).click();
-    await page.getByLabel("Weight (kg)", { exact: true }).fill("10");
-    await page.getByLabel("Notes", { exact: true }).fill("Order 77");
-    await reviewAndSave(page, "Save entry");
-    await page.getByRole("button", { name: "Record waste", exact: true }).click();
-    await page.getByLabel("Weight (kg)", { exact: true }).fill("1");
-    await reviewAndSave(page, "Save entry");
-    await expect(page.locator(".yf-flow")).toContainText("49");
+    await enterStock(page, { cartons: "1", cones: "10", kg: "10", note: "Order 77" });
+    await page.getByRole("button", { name: "Record wastage", exact: true }).click();
+    await enterStock(page, { kg: "1" });
+    await expect(page.locator(".yf-flow")).toContainText("60");
+    await expect(page.locator(".yf-flow")).toContainText("29");
 
     // Undo opens the reversal form already filled in.
-    await page.getByRole("button", { name: "Undo entry" }).click();
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
     await title(page, "History");
     await expect(page.getByLabel("Reason", { exact: true })).toHaveValue("Correction after saving");
     await reviewAndSave(page, "Save reversal");

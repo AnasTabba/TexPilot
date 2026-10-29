@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import QRCode from 'qrcode';
-import { apiPost, origin, seededLot, signIn, workspace } from './helpers';
+import { apiPost, enterStock, origin, seededLot, signIn, workspace } from './helpers';
 
 test.use({ serviceWorkers: 'block' });
 test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
@@ -22,30 +22,22 @@ test.describe('Shared inventory', () => {
     await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save entry', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Batch details', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Receive stock', exact: true }).click();
-    await page.getByLabel('Weight (kg)', { exact: true }).fill('10.250');
-    await page.getByLabel('Cartons', { exact: true }).fill('2');
-    await page.getByLabel('Cones', { exact: true }).fill('48');
-    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
-    await page.getByRole('button', { name: 'Save entry', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Dispatch', exact: true })).toBeDisabled();
-    await page.getByRole('button', { name: 'Review quality', exact: true }).click();
+    await page.getByRole('button', { name: 'Receive yarn', exact: true }).click();
+    await enterStock(page, { cartons: '2', cones: '48', kg: '10.250' });
+    await expect(page.getByRole('button', { name: 'Dispatch Pass QC first' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Check quality', exact: true }).click();
     await page.getByLabel('Inspection reason', { exact: true }).fill('Physical inspection matches care label');
     await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save QC decision', exact: true }).click();
     await page.getByRole('button', { name: 'Dispatch', exact: true }).click();
-    await page.getByLabel('Weight (kg)', { exact: true }).fill('1.250');
-    await page.getByLabel('Cartons', { exact: true }).fill('0');
-    await page.getByLabel('Cones', { exact: true }).fill('0');
-    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
-    await page.getByRole('button', { name: 'Save entry', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Undo entry', exact: true })).toBeVisible();
+    await enterStock(page, { kg: '1.250' });
+    await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeVisible();
     const state = await workspace(page);
     const lot = state.lots.find((candidate: { batch: string }) => candidate.batch === 'DYE-001');
     const raw = () => state.balances.find((balance: { lot_id: string; stage: string }) => balance.lot_id === lot.id && balance.stage === 'raw');
     expect(raw().grams).toBe(9000);
     expect(state.movements.filter((movement: { lot_id: string }) => movement.lot_id === lot.id)).toHaveLength(2);
-    await page.getByRole('button', { name: 'Undo entry', exact: true }).click();
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
     await expect(page.getByLabel('Reason', { exact: true })).toHaveValue('Correction after saving');
     await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save reversal', exact: true }).click();
@@ -71,7 +63,7 @@ test.describe('Shared inventory', () => {
     await phone.getByLabel('Barcode or batch number', { exact: true }).fill('YF:' + lot.id);
     await phone.getByRole('button', { name: 'Find batch', exact: true }).click();
     await expect(phone.getByRole('heading', { name: 'Batch details', exact: true })).toBeVisible();
-    await expect(phone.getByRole('button', { name: 'Review quality', exact: true })).toHaveCount(0);
+    await expect(phone.getByRole('button', { name: 'Check quality', exact: true })).toHaveCount(0);
     expect((await workspace(phone)).balances).toEqual((await workspace(page)).balances);
     await friend.close();
   });
@@ -87,29 +79,27 @@ test.describe('Shared inventory', () => {
     await expect(page.getByRole('img', { name: 'QR code for batch LOT-1022' })).toBeVisible();
   });
 
-  test('a failed save keeps the draft and offline mode never claims it was shared', async ({ page, context }) => {
+  test('more than is in stock is stopped before anything is sent, and offline is said plainly', async ({ page, context }) => {
     await signIn(page);
     const { lot, state } = await seededLot(page, 'LOT-1023');
     await page.goto('/#/inventory/' + lot.id);
     await page.getByRole('button', { name: 'Dispatch', exact: true }).click();
+    await page.getByRole('group', { name: 'Take from' }).getByRole('button', { name: /^Raw store/ }).click();
     const available = state.balances.find((b: { lot_id: string; stage: string; grams: number }) => b.lot_id === lot.id && b.stage === 'raw')?.grams || 0;
-    await page.getByLabel('Weight (kg)', { exact: true }).fill(((available + 1000) / 1000).toFixed(3));
-    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
-    await page.getByRole('button', { name: 'Save entry', exact: true }).click();
-    await page.waitForTimeout(2000);
+    await page.getByLabel('Cartons', { exact: true }).fill('0');
+    await page.getByLabel('Cones', { exact: true }).fill('0');
+    await page.getByLabel('Weight on the scale (kg)', { exact: true }).fill(String((available + 1000) / 1000));
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    // The worker sees the real amount under the box and stays on the details; nothing reaches the server.
+    await expect(page.getByText(`Only ${(available / 1000).toLocaleString('en')} kg in Raw store.`)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Check before saving' })).toHaveCount(0);
     await context.setOffline(true);
-    try {
-      await expect(page.getByRole('status').filter({ hasText: 'You are offline' })).toBeVisible({ timeout: 2000 });
-    } catch {}
-    const saveButton = page.getByRole('button', { name: 'Save entry', exact: true });
-    if (await saveButton.isVisible().catch(() => false) && await saveButton.isEnabled().catch(() => false)) {
-      await saveButton.click().catch(() => {});
-      await page.waitForTimeout(500);
-    }
+    await page.evaluate(() => dispatchEvent(new Event('offline')));
+    await expect(page.locator('.live-sync')).toContainText('No internet');
+    await expect(page.locator('.live-sync')).not.toContainText('Up to date');
     await context.setOffline(false);
-    await page.waitForTimeout(1000);
-    const after = await workspace(page);
-    expect(after.movements).toHaveLength(state.movements.length);
+    await page.evaluate(() => dispatchEvent(new Event('online')));
+    expect((await workspace(page)).movements).toHaveLength(state.movements.length);
   });
 
   test('an inspection note is saved and still there after signing in again', async ({ page }) => {
