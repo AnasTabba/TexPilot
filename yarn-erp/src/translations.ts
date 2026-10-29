@@ -86,7 +86,7 @@ export const urdu: Record<string, string> = {
   'Backup': 'بیک اپ', "Everyone's entries live in one shared database. Download a copy for your records.": 'سب کے اندراجات ایک مشترکہ ڈیٹابیس میں ہیں۔ اپنے ریکارڈ کے لیے کاپی ڈاؤن لوڈ کریں۔',
   'Preparing backup…': 'بیک اپ تیار ہورہا ہے…', 'Download backup': 'بیک اپ ڈاؤن لوڈ کریں', 'Shared records': 'مشترکہ ریکارڈ',
   'Materials': 'مٹیریل', 'Batches': 'بیچ', 'Stock movements': 'اسٹاک کی نقل و حرکت', 'Inspections': 'معائنے', 'People': 'افراد', 'All changes saved': 'تمام تبدیلیاں محفوظ ہیں',
-  'Phone navigation': 'فون کا مینو', 'More pages': 'مزید صفحات', 'Raw material': 'خام مال', 'Work in progress': 'زیرِ پیداوار', 'Finished goods': 'تیار مال', 'Cops': 'کاپس',
+  'Phone navigation': 'فون کا مینو', 'Raw store': 'خام مال گودام', 'Production floor': 'پروڈکشن فلور', 'Ready goods': 'تیار مال', 'More pages': 'مزید صفحات', 'Raw material': 'خام مال', 'Work in progress': 'زیرِ پیداوار', 'Finished goods': 'تیار مال', 'Cops': 'کاپس',
   'QC approved': 'کوالٹی منظور', 'Needs inspection': 'معائنہ ضروری', 'QC hold': 'کوالٹی چیک تک روکا گیا',
   'Receive deliveries': 'ڈیلیوری وصول کریں', 'Production moves': 'پیداوار میں منتقلی', 'Dispatch goods': 'مال روانہ کریں', 'Record wastage': 'ضائع شدہ مال درج کریں',
   'Materials and batches': 'مٹیریل اور بیچ', 'QC decisions': 'کوالٹی کے فیصلے', 'Corrections': 'تصحیح', 'View and scan only': 'صرف دیکھنے اور اسکین کی اجازت',

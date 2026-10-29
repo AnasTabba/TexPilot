@@ -53,14 +53,16 @@ export async function inventoryRequest<T>(path: string, data?: unknown, signal?:
     return result as T;
   } catch (error) {
     if (error instanceof InventoryError) throw error;
-    throw new InventoryError('Could not confirm a save. Check the connection and retry with the same values; duplicate requests are safe.');
+    // A failed read changed nothing; only a failed write leaves the outcome unknown.
+    throw new InventoryError(data === undefined ? 'Could not reach Yarnflow. Check the connection.' : 'Could not confirm a save. Check the connection and retry with the same values; duplicate requests are safe.');
   } finally {
     clearTimeout(timer); signal?.removeEventListener('abort', abort);
   }
 }
 export const can = (member: Member, permission: Permission) => member.admin || member.permissions.includes(permission);
 export const stockStages: StockStage[] = ['raw', 'wip', 'finished', 'cops'];
-export const stageName: Record<StockStage, string> = { raw: 'Raw material', wip: 'Work in progress', finished: 'Finished stock', cops: 'Cops' };
+// Floor words; copy.ts keeps the same names (stage_*) for the stock entry screens.
+export const stageName: Record<StockStage, string> = { raw: 'Raw store', wip: 'Production floor', finished: 'Ready goods', cops: 'Cops' };
 export const qualityName: Record<Quality, string> = { uninspected: 'Needs inspection', approved: 'QC approved', hold: 'QC hold' };
 export const weight = (grams: number) => new Intl.NumberFormat('en', { maximumFractionDigits: 3 }).format(grams / 1000);
 export const timestamp = (value: number) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium', timeStyle: 'short' }).format(value);
