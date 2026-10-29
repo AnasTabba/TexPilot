@@ -323,7 +323,7 @@ export default function LiveApp() {
       saveFile('yarnflow-backup-' + new Date().toISOString().slice(0, 10) + '.json', { ...output, movements, inspections, qualityEvents, photos }); setNotice('Inventory backup downloaded.');
     } catch (error) { setError(errorMessage(error)); } finally { setExportBusy(false); }
   }
-  const clockTime = (value: number) => value ? new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Karachi' }).format(value) : '—';
+  const clockTime = (value: number) => value ? new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Karachi' }).format(value) : '—';
   const today = new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Karachi' }).format(Date.now());
   const stockJob = action?.preset ?? (action && ['receive', 'dispatch', 'transfer', 'waste'].includes(action.type) ? (action.type === 'transfer' ? 'move' : action.type as Preset) : null);
   const pageTitle = stockJob ? say(presetInfo[stockJob].title) : picking ? say(picking === 'qc' ? 'qc' : presetInfo[picking].title) : action ? t("Stock entry") : selected ? t("Batch details") : tabs.find(t => t[0] === route)?.[1] || t("Home");

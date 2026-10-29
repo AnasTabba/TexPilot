@@ -1121,7 +1121,9 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
 
 /* The check before saving: big numbers, then the sentence that goes in the register. */
 .yf-sentence { display: grid; gap: 14px; }
-.live-review .yf-big-numbers, .yf-big-numbers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+/* The weight is the longest number; it gets the whole row so 1,814.4 never breaks. */
+.yf-big-numbers > div:last-child { grid-column: 1 / -1; }
+.live-review .yf-big-numbers, .yf-big-numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
 .live-review .yf-big-numbers > div, .yf-big-numbers > div { display: grid; justify-items: center; gap: 2px; padding: 14px 6px; border-radius: 16px; background: var(--panel); }
 .yf-big-numbers dd { margin: 0; font-size: 34px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .yf-big-numbers dt { color: var(--ink-2); font-size: 16px; font-weight: 600; }
