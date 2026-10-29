@@ -14,6 +14,7 @@ const MAX_GRAMS = 9_000_000_000_000;
 const STATUSES = ['pending_approval', 'approved', 'on_hold', 'dispatched', 'delivered'];
 const TERMS = ['payment_overdue', 'terms_not_met', 'other'];
 const REUSED = 'This request ID was already used for different values.';
+const HOLD_PENDING = 'A sales-manager hold notice is pending; acknowledge it before dispatching.';
 const RAW_ONLY = 'Raw stock cannot be sale-dispatched; only finished goods are supported.';
 const LEGACY = 'Legacy cops/WIP stock is read-only; an authorized migration is required.';
 const FINISHED_ONLY = 'This lot holds no finished stock to dispatch.';
@@ -49,7 +50,7 @@ export async function dispatchApi(request, env, member, path, data) {
         (SELECT r.id FROM dispatch_requests r WHERE r.dispatch_id=d.id AND r.kind='approval' AND r.status='pending' LIMIT 1) AS approval_request_id,
         (SELECT r.id FROM dispatch_requests r WHERE r.dispatch_id=d.id AND r.kind='hold_notice' AND r.status='pending' LIMIT 1) AS hold_notice_id
         FROM dispatches d JOIN lots l ON l.id=d.lot_id JOIN products p ON p.id=l.product_id
-        JOIN sales_orders o ON o.id=d.sales_order_id JOIN sales_order_lines lg ON lg.sales_order_id=o.id JOIN buyers b ON b.id=o.buyer_id
+        JOIN sales_orders o ON o.id=d.sales_order_id JOIN sales_order_lines lg ON lg.id=(SELECT MIN(l2.id) FROM sales_order_lines l2 WHERE l2.sales_order_id=o.id) JOIN buyers b ON b.id=o.buyer_id
         WHERE d.workspace_id=?${status ? ' AND d.status=?' : ''} ORDER BY d.created_at DESC,d.id DESC LIMIT 200`, ...(status ? [w, status] : [w]));
       const orders = await all(db, `SELECT o.id,o.reference,o.status,b.name AS buyer_name,l.product_id,p.name AS product_name,l.quantity_milli,${remainingOf('l')} AS remaining_milli
         FROM sales_orders o JOIN sales_order_lines l ON l.sales_order_id=o.id JOIN buyers b ON b.id=o.buyer_id LEFT JOIN products p ON p.id=l.product_id
@@ -241,6 +242,7 @@ export async function dispatchApi(request, env, member, path, data) {
     if (!row) fail(404, 'This dispatch was not found in your workspace.');
     if (row.status === 'dispatched' || row.status === 'delivered') return json({ dispatch: row });
     if (row.status !== 'approved') fail(409, APPROVED_ONLY);
+    if (await one(db, "SELECT 1 AS n FROM dispatch_requests WHERE dispatch_id=? AND kind='hold_notice' AND status='pending'", dispatchId)) fail(409, HOLD_PENDING);
     const available = await balanceOf(db, row.lot_id, 'finished');
     if (available < row.grams) fail(409, SHORT_STOCK);
     const vehicle = data.vehicle === undefined ? row.vehicle : text(data.vehicle, 'Vehicle', 0, 100);
@@ -256,6 +258,7 @@ export async function dispatchApi(request, env, member, path, data) {
       await db.batch([
         guard(db, `EXISTS(SELECT 1 FROM dispatches d JOIN sales_orders o ON o.id=d.sales_order_id JOIN sales_order_lines l ON l.sales_order_id=o.id
           JOIN lots lt ON lt.id=d.lot_id WHERE d.id=? AND d.workspace_id=? AND d.status='approved' AND lt.quality='approved'
+          AND NOT EXISTS(SELECT 1 FROM dispatch_requests hr WHERE hr.dispatch_id=d.id AND hr.kind='hold_notice' AND hr.status='pending')
           AND o.status IN ('confirmed','partially_dispatched') AND l.unit='kg' AND (l.product_id IS NULL OR l.product_id=lt.product_id)
           AND EXISTS(SELECT 1 FROM balances fb WHERE fb.lot_id=d.lot_id AND fb.stage='finished' AND fb.grams>=d.grams AND fb.cartons>=d.cartons AND fb.cones>=d.cones)
           AND l.quantity_milli>=d.quantity_milli+(SELECT COALESCE(SUM(sd.quantity_milli),0) FROM sales_dispatches sd WHERE sd.sales_order_id=o.id))`, dispatchId, w),
@@ -276,6 +279,7 @@ export async function dispatchApi(request, env, member, path, data) {
       const raced = await dispatchOf(db, dispatchId, w);
       if (raced?.status === 'dispatched') return json({ dispatch: raced });
       if (raced?.status !== 'approved') fail(409, APPROVED_ONLY);
+      if (await one(db, "SELECT 1 AS n FROM dispatch_requests WHERE dispatch_id=? AND kind='hold_notice' AND status='pending'", dispatchId)) fail(409, HOLD_PENDING);
       fail(409, SHORT_STOCK);
     }
     return json({ dispatch: await dispatchOf(db, dispatchId, w) }, 201);
@@ -313,7 +317,11 @@ export async function dispatchApi(request, env, member, path, data) {
     if (previous) return sameAs(previous, terms) ? json({ issue: previous }) : fail(409, REUSED);
     const lot = await one(db, 'SELECT id FROM lots WHERE id=? AND workspace_id=?', lotId, w);
     if (!lot) fail(404, 'This lot was not found in your workspace.');
-    if (dispatchId && !await dispatchOf(db, dispatchId, w)) fail(404, 'This dispatch was not found in your workspace.');
+    if (dispatchId) {
+      const linked = await dispatchOf(db, dispatchId, w);
+      if (!linked) fail(404, 'This dispatch was not found in your workspace.');
+      if (linked.lot_id !== lotId) fail(422, 'The stock issue lot must be the dispatch lot.');
+    }
     const lotLabel = await one(db, 'SELECT l.batch,p.name FROM lots l JOIN products p ON p.id=l.product_id WHERE l.id=?', lotId);
     try {
       await db.batch([
@@ -360,7 +368,7 @@ export async function dispatchApi(request, env, member, path, data) {
     const inventoryGate = correction ? await needsApproval(db, w, 'inventory_adjustment', Math.abs(correction)) : { required: false, threshold: null };
     const gate = dispatchGate.required ? dispatchGate : inventoryGate, amount = dispatchGate.required ? issue.difference_grams : Math.abs(correction);
     const payload = {
-      correctionGrams: correction || null, correctionReason: correction ? why : null, lotId: issue.lot_id, stage: issue.stage,
+      correctionGrams: correction || null, correctionReason: correction ? why : null, intervention, lotId: issue.lot_id, stage: issue.stage,
       gates: {
         dispatch: { amount: issue.difference_grams, threshold: dispatchGate.threshold, required: dispatchGate.required },
         inventory: correction ? { amount: Math.abs(correction), threshold: inventoryGate.threshold, required: inventoryGate.required } : null,

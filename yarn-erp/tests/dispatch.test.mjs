@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { portalFixture } from './portal-fixture.mjs';
+import { remindersScheduled } from '../server/notify.mjs';
 
 const uuid = () => crypto.randomUUID();
 async function setup() {
@@ -42,7 +43,7 @@ const balance = (f, lotId) => one(f, "SELECT grams FROM balances WHERE lot_id=? 
   assert.equal(balance(f, lotId), 5000);
   assert.equal(one(f, 'SELECT status FROM sales_orders WHERE id=?', sale.order.id).status, 'partially_dispatched');
   assert.equal(count(f, 'sales_dispatches'), 1);
-  assert.equal((await f.call('/movements', { id: uuid(), action: 'dispatch' }, 'Danish')).status, 410);
+  assert.equal((await f.call('/movements', { id: uuid(), action: 'dispatch' }, 'Danish')).status, 404);
 });
 
 test('holds require reasons, terms and sales-manager notices; held requests can be resubmitted', async () => {
@@ -166,4 +167,69 @@ test('rejected stock issues need a reason; an issue-only gate works without a co
   const final = await f.call('/erp/dispatch/stock-issues/decide', { id: rejected.data.issue.id, decision: 'reject', reason: 'Recount found no discrepancy' }, 'Saima');
   assert.equal(final.status, 200, final.text);
   assert.equal(final.data.issue.status, 'rejected');
+});
+
+test('a pending hold notice blocks dispatching and deducts nothing', async () => {
+  const { f, lotId, request } = await setup();
+  const created = await request();
+  await f.call('/erp/dispatch/requests/decide', { requestId: created.data.requestId, decision: 'approve' }, 'Sana');
+  const notice = await f.call('/erp/dispatch/hold-notices', { dispatchId: created.data.dispatch.id, term: 'terms_not_met', message: 'Buyer has not signed the revised terms' }, 'Sana');
+  assert.equal(notice.status, 201, notice.text);
+  assert.equal((await f.call('/erp/dispatch/dispatched', { dispatchId: created.data.dispatch.id }, 'Danish')).status, 409);
+  assert.equal(balance(f, lotId), 10000);
+  assert.equal(one(f, 'SELECT status FROM dispatches WHERE id=?', created.data.dispatch.id).status, 'approved');
+});
+
+test('stock issues reject a lot that is not the dispatch lot', async () => {
+  const { f, lotId, request } = await setup();
+  const created = await request();
+  const other = await f.addFinished({ grams: 100 });
+  const body = { id: uuid(), dispatchId: created.data.dispatch.id, stage: 'finished', kind: 'shortage', differenceGrams: 10, description: 'Recount found less yarn' };
+  assert.equal((await f.call('/erp/dispatch/stock-issues', { ...body, lotId: other }, 'Danish')).status, 422);
+  assert.equal((await f.call('/erp/dispatch/stock-issues', { ...body, lotId }, 'Danish')).status, 201);
+});
+
+test('admin on dispatch and stock-issue routes needs an intervention reason, stored in the audit and the adjustment', async () => {
+  const { f, lotId, request } = await setup();
+  const created = await request();
+  const dispatchId = created.data.dispatch.id;
+  assert.equal((await f.call('/erp/dispatch/requests/decide', { requestId: created.data.requestId, decision: 'approve' }, 'Anas')).status, 422);
+  assert.equal((await f.call('/erp/dispatch/requests/decide', { requestId: created.data.requestId, decision: 'approve', interventionReason: 'Sales manager is away today' }, 'Anas')).status, 200);
+  assert.equal((await f.call('/erp/dispatch/dispatched', { dispatchId }, 'Anas')).status, 422);
+  const sent = await f.call('/erp/dispatch/dispatched', { dispatchId, interventionReason: 'Dispatch clerk is away today' }, 'Anas');
+  assert.equal(sent.status, 201, sent.text);
+  assert.equal(one(f, "SELECT intervention_reason AS r FROM erp_audit_events WHERE action='dispatch.dispatched'").r, 'Dispatch clerk is away today');
+  const issueBody = { id: uuid(), lotId, stage: 'finished', kind: 'shortage', differenceGrams: 2000, description: 'Recount found less yarn than ledger' };
+  assert.equal((await f.call('/erp/dispatch/stock-issues', issueBody, 'Anas')).status, 422);
+  f.setThreshold('dispatch_stock_issue', 1000);
+  const issue = await f.call('/erp/dispatch/stock-issues', { ...issueBody, interventionReason: 'Clerk is away today' }, 'Anas');
+  assert.equal(issue.status, 201, issue.text);
+  const decide = { id: issue.data.issue.id, decision: 'accept', correctionGrams: -2000, reason: 'Verified shortage after recount' };
+  assert.equal((await f.call('/erp/dispatch/stock-issues/decide', decide, 'Anas')).status, 422);
+  const pending = await f.call('/erp/dispatch/stock-issues/decide', { ...decide, interventionReason: 'Supervisor is away today' }, 'Anas');
+  assert.equal(pending.status, 202, pending.text);
+  const approval = one(f, "SELECT id FROM approval_requests WHERE type='dispatch_stock_issue'");
+  assert.equal((await f.call('/erp/approvals/decide', { id: approval.id, decision: 'approve' }, 'Fahad')).status, 200);
+  assert.equal(one(f, "SELECT intervention_reason AS r FROM erp_audit_events WHERE action LIKE 'inventory.%' OR action LIKE 'adjustment%' ORDER BY created_at DESC LIMIT 1")?.r, 'Supervisor is away today');
+});
+
+test('GET /dispatch lists one row per dispatch even when the order has several lines', async () => {
+  const { f, sale, request } = await setup();
+  await request();
+  f.sql.prepare("INSERT INTO sales_order_lines(id,workspace_id,sales_order_id,product_id,specifications,quantity_milli,unit,created_at) VALUES(?,?,?,?,?,1000,'kg',1)")
+    .run(uuid(), f.workspaceId, sale.order.id, null, 'Second line');
+  const list = await f.call('/erp/dispatch', undefined, 'Sana');
+  assert.equal(list.data.dispatches.length, 1);
+});
+
+test('hold-notice reminders stop once the dispatch is dispatched', async () => {
+  const { f, request } = await setup();
+  const created = await request(), id = created.data.dispatch.id;
+  await f.call('/erp/dispatch/requests/decide', { requestId: created.data.requestId, decision: 'approve' }, 'Sana');
+  const stale = () => f.sql.prepare("INSERT INTO dispatch_requests(id,workspace_id,dispatch_id,kind,status,term,message,requested_by,created_by,created_at,updated_at) VALUES(?,?,?,'hold_notice','pending','terms_not_met','Buyer has not signed',?,?,1,1)")
+    .run(uuid(), f.workspaceId, id, f.adminId, f.adminId);
+  const later = Date.now() + 100 * 3600000;
+  assert.equal((await f.call('/erp/dispatch/dispatched', { dispatchId: id }, 'Danish')).status, 201);
+  stale();
+  assert.equal((await remindersScheduled(f.env, later)).created, 0);
 });

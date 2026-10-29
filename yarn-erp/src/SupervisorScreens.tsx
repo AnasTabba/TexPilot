@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { CheckCheck, Plus, RefreshCw, TriangleAlert } from 'lucide-react';
 import './erp.css';
 import { Field, errorMessage } from './forms';
-import { NextStep, SectionTabs, StatusTag, portal } from './PortalCommon';
+import { InterventionField, NextStep, SectionTabs, StatusTag, portal } from './PortalCommon';
 import { StockFlow } from './WorkspaceDashboard';
 import { stageName, weight, type Member, type StockBalance, type WorkspaceState } from './inventory-client';
 import { quantity } from './erp-client';
@@ -49,12 +49,23 @@ const balanceRows = (lot: StockLot): StockBalance[] => [
   { lot_id: lot.id, stage: 'wip', grams: lot.wip_grams, cartons: 0, cones: 0 },
   { lot_id: lot.id, stage: 'finished', grams: lot.finished_grams, cartons: 0, cones: 0 },
 ];
+const stageUr: Record<string, string> = { raw: 'خام مال', cops: 'کاپس', wip: 'زیرِ تیاری', finished: 'تیار مال' };
+const kindWords: Record<string, [string, string]> = { write_off: ['Write-off', 'ضائع'], adjustment: ['Correction', 'درستگی'], shortage: ['Shortage', 'کمی'], mismatch: ['Mismatch', 'عدم مطابقت'] };
+const severityUr: Record<string, string> = { minor: 'معمولی', major: 'بڑا', critical: 'سنگین' };
+const actionWords: Record<string, [string, string]> = {
+  'inspection_report.accepted': ['Inspection report accepted', 'معائنہ رپورٹ قبول'], 'inspection_report.rejected': ['Inspection report returned', 'معائنہ رپورٹ واپس'],
+  'rejection.confirmed': ['Rejection confirmed', 'مسترد مقدار کی تصدیق'], 'rejection.dismissed': ['Rejection dismissed', 'مسترد مقدار خارج'], 'rejection.escalated': ['Rejection escalated to admin', 'مسترد مقدار ایڈمن کو بھیجی'],
+  'inventory.received': ['Finished goods recorded', 'تیار مال درج'], 'inventory.adjusted': ['Stock adjusted', 'اسٹاک کی درستگی'], 'inventory.adjustment_requested': ['Stock adjustment sent for approval', 'درستگی منظوری کے لیے بھیجی'],
+  'stock_issue.accepted': ['Stock issue accepted', 'اسٹاک مسئلہ قبول'], 'stock_issue.rejected': ['Stock issue rejected', 'اسٹاک مسئلہ مسترد'],
+  'stock_query.answered': ['Stock query answered', 'اسٹاک درخواست کا جواب'], 'stock_report.submitted': ['Report to admin submitted', 'ایڈمن کو رپورٹ جمع'],
+};
 const keyOf = (type: string, id: string) => `${type}:${id}`;
 const errorText = (caught: unknown) => errorMessage(caught);
 
 export function SupervisorScreens({ section, member, state, tab = '', itemId = '' }: { section: Section; member: Member; state: WorkspaceState; tab?: string; itemId?: string }) {
   const { t } = useLanguage();
-  const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false);
+  const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false), [intervention, setIntervention] = useState(''), [loaded, setLoaded] = useState(false);
+  const stepIn = member.role === 'admin' ? { interventionReason: intervention } : {};
   const [stock, setStock] = useState<{ lots: StockLot[]; adjustmentThreshold: { value: number | null; unit: 'grams' } } | null>(null);
   const [queries, setQueries] = useState<StockQuery[]>([]), [issues, setIssues] = useState<StockIssue[]>([]), [thresholds, setThresholds] = useState<Threshold | null>(null);
   const [queryDrafts, setQueryDrafts] = useState<Record<string, { kg: string; answer: string }>>({});
@@ -92,7 +103,7 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
   }, []);
 
   useEffect(() => {
-    setError(''); setNotice('');
+    setError(''); setNotice(''); setLoaded(false);
     const load = async () => {
       if (section === 'dashboard') await loadDashboard();
       else if (section === 'inventory') await loadStock();
@@ -100,7 +111,7 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
       else if (section === 'report') await loadReports();
       else await loadHistory();
     };
-    void load().catch(caught => setError(errorText(caught)));
+    void load().then(() => setLoaded(true)).catch(caught => { setError(errorText(caught)); setLoaded(true); });
   }, [section, loadDashboard, loadHistory, loadReports, loadRequests, loadStock]);
   useEffect(() => {
     if (!itemId) return;
@@ -115,7 +126,8 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
       else if (section === 'requests') await loadRequests();
       else if (section === 'report') await loadReports();
       else await loadHistory();
-    } catch (caught) { setError(errorText(caught)); } finally { setBusy(false); }
+      setLoaded(true);
+    } catch (caught) { setError(errorText(caught)); setLoaded(true); } finally { setBusy(false); }
   };
   const finish = async (action: () => Promise<string | void>, message: string) => {
     setBusy(true); setError(''); setNotice('');
@@ -129,7 +141,7 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
     event.preventDefault();
     await finish(async () => {
       if (!/^\d+$/.test(cartons) || !/^\d+$/.test(cones)) throw new Error('Cartons and cones must be whole numbers.');
-      await portal('/stock/finished', { id: crypto.randomUUID(), productId, batch, grams: kgToGrams(finishedKg), cartons: Number(cartons), cones: Number(cones) });
+      await portal('/stock/finished', { id: crypto.randomUUID(), productId, batch, grams: kgToGrams(finishedKg), cartons: Number(cartons), cones: Number(cones), ...stepIn });
       setBatch(''); setFinishedKg(''); setCartons('0'); setCones('0'); await loadStock();
     }, t('Finished goods recorded.', 'تیار مال درج ہو گیا۔'));
   }
@@ -137,7 +149,7 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
     event.preventDefault();
     await finish(async () => {
       const grams = kgToGrams(adjustDelta), deltaGrams = adjustKind === 'write_off' ? -grams : grams;
-      const saved = await portal<{ pendingApproval?: boolean }>('/stock/adjustments', { id: crypto.randomUUID(), lotId: selectedLot, stage: adjustStage, kind: adjustKind, deltaGrams, reason: adjustReason });
+      const saved = await portal<{ pendingApproval?: boolean }>('/stock/adjustments', { id: crypto.randomUUID(), lotId: selectedLot, stage: adjustStage, kind: adjustKind, deltaGrams, reason: adjustReason, ...stepIn });
       setAdjustDelta(''); setAdjustReason(''); await loadStock();
       return saved.pendingApproval ? t('Sent to the admin for approval. Stock has not changed.', 'ایڈمن کی منظوری کے لیے بھیج دیا۔ اسٹاک تبدیل نہیں ہوا۔') : undefined;
     }, t('Stock adjustment recorded.', 'اسٹاک کی درستگی درج ہو گئی۔'));
@@ -145,7 +157,7 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
   async function answer(query: StockQuery, event: FormEvent) {
     event.preventDefault(); const values = queryDrafts[query.id] || { kg: '', answer: '' };
     await finish(async () => {
-      await portal('/stock/queries/answer', { id: query.id, availableGrams: kgToGrams(values.kg, { allowZero: true }), ...(values.answer.trim() ? { answer: values.answer.trim() } : {}) });
+      await portal('/stock/queries/answer', { id: query.id, availableGrams: kgToGrams(values.kg, { allowZero: true }), ...(values.answer.trim() ? { answer: values.answer.trim() } : {}), ...stepIn });
       await loadRequests();
     }, t('Stock query answered.', 'اسٹاک کی درخواست کا جواب دے دیا گیا۔'));
   }
@@ -153,7 +165,7 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
     const values = issueDrafts[issue.id] || { correctionKg: '', reason: '' };
     await finish(async () => {
       const correctionGrams = values.correctionKg.trim() ? kgToGrams(values.correctionKg, { signed: true }) : undefined;
-      const result = await portal<{ pendingApproval?: boolean }>('/dispatch/stock-issues/decide', { id: issue.id, decision, reason: values.reason, ...(correctionGrams === undefined ? {} : { correctionGrams }) });
+      const result = await portal<{ pendingApproval?: boolean }>('/dispatch/stock-issues/decide', { id: issue.id, decision, reason: values.reason, ...(correctionGrams === undefined ? {} : { correctionGrams }), ...stepIn });
       await loadRequests();
       if (result.pendingApproval) return t('The decision and stock correction are waiting for admin approval.', 'فیصلہ اور اسٹاک کی درستگی ایڈمن کی منظوری کے منتظر ہیں۔');
     }, t(decision === 'accept' ? 'Stock issue accepted.' : 'Stock issue rejected.', decision === 'accept' ? 'اسٹاک کا مسئلہ قبول کیا گیا۔' : 'اسٹاک کا مسئلہ مسترد کیا گیا۔'));
@@ -172,7 +184,7 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
       const bounds = periodBounds(fromDate, toDate);
       const flagged = [...draft.confirmedRejections.map(row => ({ objectType: 'inspection', objectId: row.id })), ...draft.escalations.map(row => ({ objectType: 'inspection', objectId: row.id })), ...draft.adjustments.map(row => ({ objectType: 'adjustment', objectId: row.id }))]
         .flatMap(item => { const value = flags[keyOf(item.objectType, item.objectId)]; return value?.selected ? [{ ...item, note: value.note }] : []; });
-      await portal('/stock/reports', { id: reportId, ...bounds, flagged, note: reportNote });
+      await portal('/stock/reports', { id: reportId, ...bounds, flagged, note: reportNote, ...stepIn });
       setDraft(null); setFlags({}); setReportNote(''); setReportId(crypto.randomUUID()); await loadReports();
     }, t('Report submitted and saved.', 'رپورٹ جمع اور محفوظ ہو گئی۔'));
   }
@@ -191,8 +203,9 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
   ] : [];
 
   const actions = <button className="button" type="button" disabled={busy} onClick={() => void refresh()}><RefreshCw size={18} aria-hidden="true" />{t('Refresh', 'تازہ کریں')}</button>;
-  return <section className="live-panel" aria-label={t(`Supervisor ${section}`, `سپروائزر ${section}`)}>
+  return <section className="live-panel" aria-label={t('Supervisor workspace', 'سپروائزر کا کام')}>
     <div className="live-panel-heading"><h2>{t(section === 'dashboard' ? 'Supervisor overview' : section === 'inventory' ? 'Inventory register' : section === 'requests' ? 'Requests' : section === 'report' ? 'Report to admin' : 'Your decisions', section === 'dashboard' ? 'سپروائزر کا جائزہ' : section === 'inventory' ? 'انوینٹری رجسٹر' : section === 'requests' ? 'درخواستیں' : section === 'report' ? 'ایڈمن کو رپورٹ' : 'آپ کے فیصلے')}</h2>{actions}</div>
+    {section !== 'dashboard' && section !== 'history' && <InterventionField member={member} owners={['supervisor']} value={intervention} onChange={setIntervention} />}
     {error && <p className="live-error" role="alert"><TriangleAlert size={18} aria-hidden="true" />{t(error)}</p>}
     {notice && <p className="live-success" role="status"><CheckCheck size={18} aria-hidden="true" />{notice}</p>}
 
@@ -208,7 +221,7 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
         <h3>{lot.product_name} · {lot.batch}</h3><p>{t('Type', 'قسم')}: {lot.inventory_type || t('Legacy / untyped', 'پرانا / غیر متعین')} · {t('Source', 'ذریعہ')}: {lot.source || t('Legacy record', 'پرانا ریکارڈ')} · {lot.legacyReadOnly && <strong>{t('Legacy cops/WIP is read-only', 'پرانا کاپس/زیرِ تیاری اسٹاک صرف مطالعے کے لیے ہے')}</strong>}</p>
         <StockFlow balances={balanceRows(lot)} compact />
       </article>)}</div>
-      {!stock?.lots.length && <p className="live-muted">{t('No inventory lots are recorded.', 'کوئی انوینٹری لاٹ درج نہیں۔')}</p>}
+      {stock && !stock.lots.length && <p className="live-muted">{t('No inventory lots are recorded.', 'کوئی انوینٹری لاٹ درج نہیں۔')}</p>}
       <section className="yf-section"><h3 className="live-subheading">{t('Add finished goods', 'تیار مال شامل کریں')}</h3>
         <form onSubmit={event => void addFinished(event)} aria-label={t('Add finished goods', 'تیار مال شامل کریں')}>
           <Field>{t('Material', 'دھاگہ')}<select value={productId} onChange={event => setProductId(event.target.value)} required><option value="">{t('Choose material', 'دھاگہ منتخب کریں')}</option>{state.products.map(product => <option key={product.id} value={product.id}>{product.name} · {product.sku}</option>)}</select></Field>
@@ -235,7 +248,8 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
       <SectionTabs tabs={[{ id: 'queries', en: 'Stock queries', ur: 'اسٹاک کی درخواستیں' }, { id: 'stock-issues', en: 'Stock issues', ur: 'اسٹاک کے مسائل' }]} value={issueTab ? 'stock-issues' : 'queries'} onChange={value => { location.hash = `#/requests/${value}`; }} />
       {queryTab && <>
         <h3 className="live-subheading">{t('Stock queries from sales', 'سیلز کی اسٹاک درخواستیں')}</h3>
-        {!queries.length && <p className="live-muted">{t('No stock queries have been raised.', 'اسٹاک کی کوئی درخواست موصول نہیں ہوئی۔')}</p>}
+        {!loaded && !error && <p role="status">{t('Loading…', 'لوڈ ہو رہا ہے…')}</p>}
+        {loaded && !error && !queries.length && <p className="live-muted">{t('No stock queries have been raised.', 'اسٹاک کی کوئی درخواست موصول نہیں ہوئی۔')}</p>}
         <div className="erp-records">{queries.map(query => <article className="erp-record" key={query.id} id={query.id}>
           <h3>{query.product_name}{query.quantity_milli !== null && ` · ${quantity(query.quantity_milli)} kg`}</h3><p>{query.question}</p><p>{query.asked_by_name} · <StatusTag status={query.status} /></p>
           {query.status === 'answered' ? <p>{t('Available', 'دستیاب')}: {weight(query.available_grams || 0)} kg{query.answer ? ` · ${query.answer}` : ''}</p> : <form onSubmit={event => void answer(query, event)}>
@@ -248,13 +262,14 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
       {issueTab && <>
         <h3 className="live-subheading">{t('Stock issues from dispatch', 'ڈسپیچ کے اسٹاک مسائل')}</h3>
         {thresholds && <p className="live-muted">{t('Gate previews use the threshold snapshots returned by the stock issue service.', 'منظوری کے جائزے اسٹاک مسئلے کی سروس سے موصول شدہ حدوں کے مطابق ہیں۔')}</p>}
-        {!visibleIssues.length && <p className="live-muted">{t('No dispatch stock issues are waiting.', 'ڈسپیچ کا کوئی اسٹاک مسئلہ منتظر نہیں۔')}</p>}
+        {!loaded && !error && <p role="status">{t('Loading…', 'لوڈ ہو رہا ہے…')}</p>}
+        {loaded && !error && !visibleIssues.length && <p className="live-muted">{t('No dispatch stock issues are waiting.', 'ڈسپیچ کا کوئی اسٹاک مسئلہ منتظر نہیں۔')}</p>}
         <div className="erp-records">{visibleIssues.map(issue => {
           const values = issueDrafts[issue.id] || { correctionKg: '', reason: '' };
           const correction = tryKgToGrams(values.correctionKg, { signed: true }) || 0;
           return <article className="erp-record" key={issue.id} id={issue.id}>
             <h3>{issue.product_name} · {issue.lot_batch} · {t(issue.stage === 'raw' ? 'Raw' : 'Finished', issue.stage === 'raw' ? 'خام مال' : 'تیار مال')}</h3>
-            <p>{t(issue.kind === 'shortage' ? 'Shortage' : 'Mismatch', issue.kind === 'shortage' ? 'کمی' : 'عدم مطابقت')} · {issue.description}</p>
+            <p>{t(...(kindWords[issue.kind] || [issue.kind, issue.kind]))} · {issue.description}</p>
             <p>{t('Reported difference', 'درج شدہ فرق')}: {weight(issue.difference_grams)} kg · <StatusTag status={issue.status} /></p>
             {issue.decision_reason && <p>{t('Decision reason', 'فیصلے کی وجہ')}: {issue.decision_reason}</p>}
             {issue.status === 'open' && thresholds && <div className="live-muted" aria-label={t('Approval previews', 'منظوری کا پیش نظارہ')}>
@@ -287,14 +302,15 @@ export function SupervisorScreens({ section, member, state, tab = '', itemId = '
         <button className="button primary" disabled={busy}>{t('Submit report', 'رپورٹ جمع کریں')}</button>
       </form>}
       <h3 className="live-subheading">{t('Saved reports', 'محفوظ رپورٹس')}</h3>
-      {!savedReports.length && <p className="live-muted">{t('No reports have been submitted.', 'ابھی کوئی رپورٹ جمع نہیں ہوئی۔')}</p>}
+      {loaded && !error && !savedReports.length && <p className="live-muted">{t('No reports have been submitted.', 'ابھی کوئی رپورٹ جمع نہیں ہوئی۔')}</p>}
       <div className="erp-records">{savedReports.map(report => <SavedReportView key={report.id} report={report} />)}</div>
     </>}
 
     {section === 'history' && <>
       <p className="live-muted">{t('Only decisions recorded by your supervisor account appear here.', 'یہاں صرف آپ کے سپروائزر اکاؤنٹ کے فیصلے دکھائے جاتے ہیں۔')}</p>
-      {!history.length && <p className="live-muted">{t('No decisions recorded yet.', 'ابھی کوئی فیصلہ درج نہیں ہوا۔')}</p>}
-      <ol className="yf-timeline">{history.map(row => <li key={row.id}><div><strong>{row.action.replaceAll('_', ' ')}</strong><span>{row.object_type || t('Record', 'ریکارڈ')} · {row.record_id}</span>{row.reason && <span>{t('Reason', 'وجہ')}: {row.reason}</span>}</div><time>{new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium', timeStyle: 'short' }).format(row.created_at)}</time></li>)}</ol>
+      {!loaded && !error && <p role="status">{t('Loading…', 'لوڈ ہو رہا ہے…')}</p>}
+      {loaded && !error && !history.length && <p className="live-muted">{t('No decisions recorded yet.', 'ابھی کوئی فیصلہ درج نہیں ہوا۔')}</p>}
+      <ol className="yf-timeline">{history.map(row => <li key={row.id}><div><strong>{actionWords[row.action] ? t(...actionWords[row.action]) : row.action.replaceAll('_', ' ').replaceAll('.', ' · ')}</strong><span>{row.object_type || t('Record', 'ریکارڈ')} · {row.record_id}</span>{row.reason && <span>{t('Reason', 'وجہ')}: {row.reason}</span>}</div><time>{new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium', timeStyle: 'short' }).format(row.created_at)}</time></li>)}</ol>
     </>}
   </section>;
 }
@@ -305,14 +321,14 @@ function ReportItem({ type, item, flag, setFlag }: { type: 'inspection' | 'adjus
     const qc = item as QcItem;
     return <article className="erp-record"><h4>{qc.product_name} · {qc.lot_reference} · {t('Rejected', 'مسترد')}: {quantity(qc.rejected_milli)} {qc.unit}</h4>
       {qc.rejection_reason && <p>{t('Decision reason', 'فیصلے کی وجہ')}: {qc.rejection_reason}</p>}
-      {qc.issues.map((issue, i) => <p key={`${issue.type}-${i}`}><strong>{issue.type} · {issue.severity}</strong> {issue.description}</p>)}
+      {qc.issues.map((issue, i) => <p key={`${issue.type}-${i}`}><strong>{issue.type} · {t(issue.severity, severityUr[issue.severity] || issue.severity)}</strong> {issue.description}</p>)}
       {qc.photos.map(photo => { const id = typeof photo === 'string' ? photo : photo.id; return <a key={id} href={`/api/erp/qc/photos/${id}`} target="_blank" rel="noreferrer"><img src={`/api/erp/qc/photos/${id}`} alt={t('Inspection photo evidence', 'معائنے کی تصویری شہادت')} width={120} height={120} loading="lazy" /></a>; })}
       <label className="live-check"><input type="checkbox" checked={chosen.selected} onChange={event => setFlag({ ...chosen, selected: event.target.checked })} />{t('Flag for admin', 'ایڈمن کے لیے نشان زد کریں')}</label>
       {chosen.selected && <Field>{t('Flag note', 'نشان کی وجہ')}<textarea value={chosen.note} onChange={event => setFlag({ ...chosen, note: event.target.value })} minLength={3} maxLength={500} required /></Field>}
     </article>;
   }
   const adjustment = item as Adjustment;
-  return <article className="erp-record"><h4>{adjustment.product_name} · {adjustment.batch}</h4><p>{adjustment.kind} · {adjustment.stage} · {adjustment.delta_grams < 0 ? '−' : '+'}{weight(Math.abs(adjustment.delta_grams))} kg · {adjustment.status}</p><p>{adjustment.reason}</p>
+  return <article className="erp-record"><h4>{adjustment.product_name} · {adjustment.batch}</h4><p>{t(...(kindWords[adjustment.kind] || [adjustment.kind, adjustment.kind]))} · {t(stageName[adjustment.stage as 'raw'] || adjustment.stage, stageUr[adjustment.stage] || adjustment.stage)} · {adjustment.delta_grams < 0 ? '−' : '+'}{weight(Math.abs(adjustment.delta_grams))} kg · <StatusTag status={adjustment.status} /></p><p>{adjustment.reason}</p>
     <label className="live-check"><input type="checkbox" checked={chosen.selected} onChange={event => setFlag({ ...chosen, selected: event.target.checked })} />{t('Flag for admin', 'ایڈمن کے لیے نشان زد کریں')}</label>
     {chosen.selected && <Field>{t('Flag note', 'نشان کی وجہ')}<textarea value={chosen.note} onChange={event => setFlag({ ...chosen, note: event.target.value })} minLength={3} maxLength={500} required /></Field>}
   </article>;
@@ -325,6 +341,6 @@ function SavedReportView({ report }: { report: SavedReport }) {
     <p>{t('Period', 'مدت')}: {new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium' }).format(report.period_from)} – {new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium' }).format(report.period_to)}</p>
     {report.note && <p>{report.note}</p>}
     <p>{t('Snapshot', 'خلاصہ')}: {content.confirmedRejections.length} {t('confirmed rejections', 'تصدیق شدہ مسترد مقداریں')} · {content.escalations.length} {t('escalations', 'ایڈمن کو بھیجی گئی')} · {content.adjustments.length} {t('adjustments', 'درستگیاں')}</p>
-    {report.flagged.map(item => <p key={`${item.objectType}:${item.objectId}`}><strong>{t('Flagged', 'نشان زد')}: </strong>{item.objectType} · {item.objectId} · {item.note}</p>)}
+    {report.flagged.map(item => <p key={`${item.objectType}:${item.objectId}`}><strong>{t('Flagged', 'نشان زد')}: </strong>{item.objectType === 'adjustment' ? t('Adjustment', 'درستگی') : t('Inspection', 'معائنہ')} · {item.objectId} · {item.note}</p>)}
   </article>;
 }

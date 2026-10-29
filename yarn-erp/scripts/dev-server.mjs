@@ -38,8 +38,8 @@ async function open() {
       const { sql, args } = await userRow({ workspaceId, name, pin, role, createdBy: 'system:seed' }); database.prepare(sql).run(...args);
     }
     const call = (path, body, cookie) => inventoryApi(new Request('http://local/api' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://local', ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(body) }), { DB });
-    const cookie = (await call('/auth/login', { name: 'Anas', pin })).headers.get('Set-Cookie').split(';')[0];
-    await seedDemoStock({ sql: database, post: async (path, body) => { const response = await call(path, body, cookie); if (!response.ok) throw new Error(`Demo stock ${path}: ${response.status}`); return response.json(); } });
+    const cookie = (await call('/auth/login', { name: 'Saima', pin })).headers.get('Set-Cookie').split(';')[0];
+    await seedDemoStock({ post: async (path, body) => { const response = await call(path, body, cookie); if (!response.ok) throw new Error(`Demo stock ${path}: ${response.status}`); return response.json(); } });
     database.exec('DELETE FROM sessions');
   }
   return { database, DB };

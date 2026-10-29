@@ -81,8 +81,8 @@ test('purchase analytics give supplier performance and a bidding summary', async
   assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM supplier_bids WHERE rfq_id=?').get(rfq.data.rfq.id).n, 2);
   const purchase = await bill(f, `/erp/analytics/purchase?from=${fixtureAt + 1}&to=${Date.now() + DAY}`, 'Pervaiz');
   assert.equal(purchase.status, 200, purchase.text);
-  // The fixture PO is outside the range: exactly 2 RFQs, 3 bids, 1 award and 1 cancellation remain.
-  assert.deepEqual(purchase.data.bidding, { rfqs: 2, bids: 3, averageBidsPerRfq: 1.5, awarded: 1, cancelled: 1 });
+  // The fixture PO is outside the range: one awarded RFQ with one bid counts; the cancelled RFQ is reported but not averaged.
+  assert.deepEqual(purchase.data.bidding, { rfqs: 1, bids: 1, averageBidsPerRfq: 1, awarded: 1, cancelled: 1 }, 'cancelled and draft RFQs stay out of the bid average');
   const mill = purchase.data.suppliers.find(row => row.id === settled.supplierId);
   assert.equal(mill.qcPassRate, 0.8, 'final lot disposition: 80000 of 100000 dispositioned as accepted');
   assert.deepEqual(mill.claims, { return: 0, replacement: 0, claim: 0 }, 'an undecided claim is not yet part of performance');
@@ -269,4 +269,24 @@ test('analytics respect their from/to range and refuse invalid ranges', async ()
   assert.equal((await bill(f, `/erp/analytics/sales?from=${Date.now() + DAY}&to=${Date.now()}`, 'Sana')).status, 422, 'the period must end after it starts');
   assert.equal((await bill(f, '/erp/analytics/sales?from=notanumber&to=99', 'Sana')).status, 422);
   assert.equal((await bill(f, '/erp/analytics/sales?from=0&to=-1', 'Sana')).status, 422);
+});
+
+test('byProduct counts an invoice once per product however many lines name it', async () => {
+  const f = await portalFixture();
+  await f.person('Sana', 'sales_manager');
+  const { invoiceId, productId } = await issued(f, { issuedAt: past, dueAt: null });
+  const order = f.sql.prepare('SELECT sales_order_id AS id FROM invoices WHERE id=?').get(invoiceId).id;
+  f.sql.prepare("INSERT INTO sales_order_lines(id,workspace_id,sales_order_id,product_id,specifications,quantity_milli,unit,created_at) VALUES(?,?,?,?,?,100000,'kg',?)")
+    .run(UUID(), f.workspaceId, order, productId, 'Second line, same product', past);
+  const sales = await bill(f, `/erp/analytics/sales?${range()}`, 'Sana');
+  assert.equal(sales.data.byProduct.find(row => row.product !== null).totalMinor, 14750000);
+});
+
+test('purchasing totals skip cancelled purchase orders', async () => {
+  const f = await portalFixture();
+  const supplierId = await f.insertSupplier({ status: 'approved' });
+  await f.insertPO({ supplierId });
+  f.sql.exec("UPDATE supplier_purchase_orders SET status='cancelled'");
+  const admin = await bill(f, `/erp/analytics/admin?from=0&to=${Date.now() + DAY}`, 'Anas');
+  assert.deepEqual(admin.data.purchasing.totalsByCurrency, []);
 });

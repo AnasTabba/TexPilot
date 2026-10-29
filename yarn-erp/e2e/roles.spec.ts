@@ -105,3 +105,31 @@ test('the InvenTree check is for admins only and reports in both languages', asy
   await expect(page.getByRole('heading', { level: 1, name: 'My profile', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Check InvenTree' })).toHaveCount(0);
 });
+
+test('quality and stock-issue notifications open the exact item for the inspector, the supervisor and the admin module', async ({ browser, baseURL, page }) => {
+  const lotId = crypto.randomUUID(), submittedId = crypto.randomUUID(), decidedId = crypto.randomUUID(), issueId = crypto.randomUUID();
+  const raise = async (role: string, event: string, objectType: string, objectId: string, label: string) => expect((await page.request.post('/__test/notify', { data: { role, event, objectType, objectId, label } })).ok()).toBeTruthy();
+  const open = async (name: string, title: RegExp, route: RegExp, heading: string, level = 1) => {
+    const context = await browser.newContext({ baseURL }); const person = await context.newPage();
+    try {
+      await signIn(person, name); await person.goto('/#/notifications');
+      await person.getByRole('button', { name: title }).click();
+      await expect(person).toHaveURL(route);
+      await expect(person.getByRole('heading', { level, name: heading, exact: true })).toBeVisible();
+    } finally { await context.close(); }
+  };
+  await raise('quality_inspector', 'lot.ready', 'qc_lot', lotId, 'LOT-N');
+  await raise('quality_inspector', 'inspection.decided', 'qc_inspection', decidedId, 'INS-D');
+  await open('Qasim', /Lot ready for inspection/, new RegExp(`#\\/lots\\/${lotId}$`), 'Lots');
+  await open('Qasim', /Inspection decided/, new RegExp(`#\\/submissions\\/${decidedId}$`), 'My submissions');
+  await raise('supervisor', 'inspection.submitted', 'qc_inspection', submittedId, 'INS-S');
+  await raise('supervisor', 'stock_issue.raised', 'stock_issue', issueId, 'SI-1');
+  await open('Saima', /Inspection submitted/, new RegExp(`#\\/reviews\\/reports\\/${submittedId}$`), 'Reviews');
+  await open('Saima', /Stock issue raised/, new RegExp(`#\\/requests\\/stock-issues\\/${issueId}$`), 'Requests');
+  await raise('admin', 'lot.ready', 'qc_lot', lotId, 'LOT-N');
+  await raise('admin', 'inspection.submitted', 'qc_inspection', submittedId, 'INS-S');
+  await raise('admin', 'stock_issue.raised', 'stock_issue', issueId, 'SI-1');
+  await open('Anas', /Lot ready for inspection/, new RegExp(`#\\/modules\\/quality\\/lots\\/${lotId}$`), 'Lots to inspect', 2);
+  await open('Anas', /Inspection submitted/, new RegExp(`#\\/modules\\/supervisor\\/reviews\\/reports\\/${submittedId}$`), 'Inspection review', 2);
+  await open('Anas', /Stock issue raised/, new RegExp(`#\\/modules\\/supervisor\\/requests\\/stock-issues\\/${issueId}$`), 'Requests', 2);
+});

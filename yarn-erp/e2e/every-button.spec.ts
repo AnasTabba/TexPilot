@@ -1,5 +1,4 @@
 import { test, expect, type Page } from "@playwright/test";
-import { apiPost } from "./helpers";
 
 // Every control on every screen does what it says. Stock lives in the shared database of the dev
 // server, reset to the demo's opening stock before each test; the scanner's model answer is a fixture
@@ -36,11 +35,6 @@ async function mockScanner(page: Page) {
   await page.route("**/api/v1/scan", (route) => route.fulfill({ json: answer }));
 }
 const title = (page: Page, name: string) => expect(page.getByRole("heading", { level: 1, name, exact: true })).toBeVisible();
-async function reviewAndSave(page: Page, save: string) {
-  await page.getByRole("button", { name: "Review entry", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review before saving" })).toBeVisible();
-  await page.getByRole("button", { name: save, exact: true }).click();
-}
 
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
@@ -117,10 +111,10 @@ test.describe("desktop", () => {
     await expect(page.getByRole("heading", { name: "No notifications yet" })).toBeVisible();
   });
 
-  test("stock filters, search, new material, new batch and a batch's whole life", async ({ page }) => {
+  test("stock filters, search and a batch's details", async ({ page }) => {
     await page.goto("/#/inventory");
     const views = page.getByRole("group", { name: "Show" });
-    for (const [name, rows] of [[/^Needs QC/, 2], [/^In production/, 1], [/^To dispatch/, 2], [/^All/, 4]] as const) {
+    for (const [name, rows] of [[/^Needs QC/, 0], [/^In production/, 0], [/^To dispatch/, 4], [/^All/, 4]] as const) {
       await views.getByRole("button", { name }).click();
       await expect(page.locator(".live-lot-row")).toHaveCount(rows);
     }
@@ -128,69 +122,13 @@ test.describe("desktop", () => {
     await expect(page.locator(".live-lot-row")).toHaveCount(1);
     await page.getByLabel("Search", { exact: true }).fill("");
 
-    // A form opens, closes with its X and with Cancel.
-    await page.getByRole("button", { name: "New material" }).click();
-    await page.getByRole("button", { name: "Close form" }).click();
-    await title(page, "Stock");
-    await page.getByRole("button", { name: "New material" }).click();
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await title(page, "Stock");
-
-    await page.getByRole("button", { name: "New material" }).click();
-    await page.getByLabel("Material name", { exact: true }).fill("Carded cotton Ne 20/1");
-    await page.getByLabel("SKU", { exact: true }).fill("CTN-20");
-    await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
-    await page.getByRole("button", { name: "Review entry", exact: true }).click();
-    await page.getByRole("button", { name: "Edit entry", exact: true }).click();
-    await expect(page.getByLabel("SKU", { exact: true })).toHaveValue("CTN-20");
-    await reviewAndSave(page, "Save entry");
-    await expect(page.getByRole("status").filter({ hasText: "Saved. Everyone on the team sees it now." })).toBeVisible();
-
-    await page.getByRole("button", { name: /Add finished Carded cotton/ }).click();
-    await page.getByLabel("Batch / dye lot", { exact: true }).fill("LOT-2001");
-    await page.getByLabel("Weight (kg)", { exact: true }).fill("40");
-    await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
-    await reviewAndSave(page, "Save entry");
-    await title(page, "Batch details");
-    await expect(page.locator(".yf-flow")).toContainText("40");
-    await expect(page.getByRole("button", { name: "Receive stock", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Review quality", exact: true })).toHaveCount(0);
-
-    // The rest of a batch's life runs on QC-approved stock that arrived through the inspection flow.
-    await page.goto("/#/inventory");
+    // Stock is entered and corrected on the supervisor screens, never on the admin stock page.
+    for (const name of ["New material", "Finished goods", "Adjust stock", "Add inspection"]) await expect(page.getByRole("button", { name })).toHaveCount(0);
     await page.locator(".live-lot-row", { hasText: "LOT-1024" }).click();
     await title(page, "Batch details");
     await expect(page.locator(".yf-batch .live-panel-heading .live-quality")).toHaveText("QC approved");
     await expect(page.getByText("Request and approve a sale dispatch from the Dispatch page.")).toBeVisible();
-
-    await expect(page.getByRole("button", { name: "Move stage", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Dispatch", exact: true })).toHaveCount(0);
-
-    // A write-off needs a reason; below the (unset) threshold it applies at once.
-    await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
-    await page.getByLabel("Weight (kg)", { exact: true }).fill("1");
-    await page.getByLabel("Reason", { exact: true }).fill("Counted one kilogram short");
-    await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
-    await reviewAndSave(page, "Save entry");
-    await expect(page.locator(".yf-flow")).toContainText("6,749");
-
-    // Guarded stock workflow: at the threshold the change waits for admin approval and the stock stays put.
-    await apiPost(page, "/erp/admin/thresholds", { type: "inventory_adjustment", value: 5000 });
-    await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
-    await page.getByLabel("Weight (kg)", { exact: true }).fill("6");
-    await page.getByLabel("Reason", { exact: true }).fill("Water damage in bay 3");
-    await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
-    await reviewAndSave(page, "Save entry");
-    await expect(page.getByRole("status").filter({ hasText: "Sent to the admin for approval" })).toBeVisible();
-    await expect(page.locator(".yf-flow")).toContainText("6,749");
-    const pending = (await (await page.request.get("/api/erp/approvals?type=inventory_adjustment")).json()).approvals;
-    expect(pending).toHaveLength(1);
-    await apiPost(page, "/erp/approvals/decide", { id: pending[0].id, decision: "approve" });
-    await page.reload();
-    await expect(page.locator(".yf-flow")).toContainText("6,743");
-
-    await page.goto("/#/inventory");
-    await page.locator(".live-lot-row", { hasText: "LOT-2001" }).click();
+    for (const name of ["Move stage", "Dispatch", "Receive stock", "Review quality", "Adjust stock"]) await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
     await page.evaluate(() => { (window as unknown as { printed: number }).printed = 0; window.print = () => { (window as unknown as { printed: number }).printed++; }; });
     await page.getByRole("button", { name: "Print batch label" }).click();
     expect(await page.evaluate(() => (window as unknown as { printed: number }).printed)).toBe(1);
@@ -217,7 +155,7 @@ test.describe("desktop", () => {
     }
   });
 
-  test("scan: tabs, connection, upload, analyse, details, download, measure, save to a batch, stock label", async ({ page }) => {
+  test("scan: tabs, connection, upload, analyse, details, download, measure, stock label", async ({ page }) => {
     await mockScanner(page);
     await page.goto("/#/scanner");
     await expect(page.getByText("TexPilot model connected")).toBeVisible();
@@ -255,13 +193,6 @@ test.describe("desktop", () => {
     await page.getByRole("button", { name: "Find batch" }).click();
     await title(page, "Batch details");
 
-    await page.goto("/#/scanner");
-    await page.getByRole("button", { name: "Fabric", exact: true }).click();
-    await page.getByRole("button", { name: "Save to a batch" }).click();
-    await expect(page.getByRole("heading", { name: "Attach TexPilot evidence" })).toBeVisible();
-    await page.getByLabel("Notes", { exact: true }).fill("Scan matches the order");
-    await reviewAndSave(page, "Save inspection");
-    await expect(page.locator(".yf-timeline")).toContainText("TexPilot evidence");
   });
 });
 

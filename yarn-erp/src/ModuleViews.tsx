@@ -18,6 +18,6 @@ export const MODULES: Record<Role, ModuleScreen | undefined> = {
   purchase_manager: p => <PurchaseScreens member={p.member} section={p.section} tab={p.tab} id={p.id} navigate={p.navigate} onInventoryChanged={p.onInventoryChanged} />,
   sales_manager: p => <SalesScreens member={p.member} section={p.section} tab={p.tab} id={p.id} navigate={p.navigate} />,
   dispatch: p => <DispatchScreens member={p.member} section={p.section} tab={p.tab} id={p.id} navigate={p.navigate} />,
-  quality_inspector: p => <QualityScreens section={(qualitySections as readonly string[]).includes(p.section) ? p.section as typeof qualitySections[number] : 'dashboard'} />,
-  supervisor: p => p.section === 'reviews' ? <Review /> : <SupervisorScreens section={(p.section === 'activity' ? 'history' : p.section || 'dashboard') as SupervisorSection} member={p.member} state={p.state!} tab={p.tab} itemId={p.id} />,
+  quality_inspector: p => <QualityScreens member={p.member} section={(qualitySections as readonly string[]).includes(p.section) ? p.section as typeof qualitySections[number] : 'dashboard'} />,
+  supervisor: p => p.section === 'reviews' ? <Review member={p.member} tab={p.tab} itemId={p.id} /> : <SupervisorScreens section={(p.section === 'activity' ? 'history' : p.section || 'dashboard') as SupervisorSection} member={p.member} state={p.state!} tab={p.tab} itemId={p.id} />,
 };

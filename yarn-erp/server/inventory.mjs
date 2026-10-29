@@ -14,7 +14,6 @@ import { qualityApi, approvalHandlers as qualityHandlers } from './quality.mjs';
 import { stockApi, approvalHandlers as stockHandlers } from './stock.mjs';
 import { analyticsApi } from './analytics.mjs';
 import { dispatchApi, approvalHandlers as dispatchHandlers } from './dispatch.mjs';
-import { readPhoto } from './photos.mjs';
 const erp = { admin: adminApi, analytics: analyticsApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi, qc: qualityApi, stock: stockApi, dispatch: dispatchApi };
 erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, { ...approvalHandlers, ...qualityHandlers, ...stockHandlers, ...dispatchHandlers });
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
@@ -65,7 +64,6 @@ const statement = (db, sql, ...args) => db.prepare(sql).bind(...args);
 // Admins can do everything; everyone else needs the permission an admin gave them. Scanning needs none.
 const allow = (member, permission, what) => { if (!member.admin && !member.permissions.includes(permission)) fail(403, `You don't have permission to ${what}. Ask an admin.`); };
 // Quality inspectors record inspections, photos and issues through /api/erp/qc/*, and the purchase manager registers arrivals as QC lots; the old stock writes stay for admins and supervisors.
-const useQc = (member, role, what) => { if (member.role === role) fail(403, `${what} now goes through the lot inspection flow. The old stock record is read-only for your role.`); };
 const adminOnly = member => { if (!member.admin) fail(403, 'Only an admin can do this.'); };
 
 async function snapshot(db, member) {
@@ -115,26 +113,6 @@ async function route(request, env) {
     if (!object) fail(404, 'The photo object could not be found.');
     return new Response(object.body, { headers: { 'Content-Type': photo.content_type, 'Cache-Control': 'private,no-store', 'X-Content-Type-Options': 'nosniff' } });
   }
-  if (path === '/api/photos' && request.method === 'POST') {
-    allow(member, 'inspect', 'record inspections'); useQc(member, 'quality_inspector', 'Inspection photos');
-    if (!env.BUCKET) fail(503, 'Photo storage is unavailable. The inspection note is saved; retry the photo after reconnecting.');
-    const { form, bytes, type, digest } = await readPhoto(request);
-    const inspectionId = id(form.get('inspectionId'));
-    const inspection = await first(db, 'SELECT * FROM inspections WHERE id=? AND workspace_id=?', inspectionId, member.workspace_id);
-    if (!inspection) fail(404, 'Save an inspection in your workspace before attaching a photo.');
-    const previous = await first(db, 'SELECT * FROM inspection_photos WHERE id=?', inspectionId);
-    if (previous) { if (previous.content_hash !== digest) fail(409, 'This inspection already has a different photo. Create another inspection to preserve the evidence.'); return json({ id: inspectionId }); }
-    const key = `${member.workspace_id}/${inspectionId}/${digest}`;
-    await env.BUCKET.put(key, bytes, { httpMetadata: { contentType: type } });
-    try { await statement(db, 'INSERT INTO inspection_photos(id,workspace_id,lot_id,object_key,content_type,content_hash,size,actor_name,created_at) VALUES(?,?,?,?,?,?,?,?,?)', inspectionId, member.workspace_id, inspection.lot_id, key, type, digest, bytes.length, member.name, Date.now()).run(); }
-    catch (error) {
-      const raced = await first(db, 'SELECT * FROM inspection_photos WHERE id=?', inspectionId);
-      if (raced?.content_hash === digest) return json({ id: inspectionId });
-      await env.BUCKET.delete(key);
-      fail(409, 'Another photo was attached first. Create another inspection to preserve both photos.');
-    }
-    return json({ id: inspectionId }, 201);
-  }
   if (path === '/api/erp/qc/photos' && request.method === 'POST') return qualityApi(request, env, member, path, null);
   const data = request.method === 'POST' ? await body(request) : null;
   const w = member.workspace_id;
@@ -157,26 +135,6 @@ async function route(request, env) {
     try { await statement(db, 'INSERT INTO products(id,workspace_id,sku,name,barcode,created_at) VALUES(?,?,?,?,?,?)', item.id, w, item.sku, item.name, item.barcode, Date.now()).run(); }
     catch { fail(409, 'That SKU or barcode already exists in this workspace.'); }
     return json(item, 201);
-  }
-  if (path === '/api/lots' && data) fail(410, 'Batches are created when the supervisor records finished goods or accepts an inspection report. Use POST /api/erp/stock/finished.');
-  if (path === '/api/movements' && data?.action === 'receive') fail(410, 'Raw stock is received when the supervisor accepts an inspection report. Use POST /api/erp/qc/reports/decide.');
-  if (path === '/api/movements' && data?.action === 'dispatch') fail(410, 'Dispatches are sale requests now: create the dispatch request with POST /api/erp/dispatch; goods leave only when the dispatch is approved and runs.');
-  if (path === '/api/movements' && data) fail(410, 'Stock changes now go through the supervisor: POST /api/erp/stock/finished or /api/erp/stock/adjustments.');
-  if (path === '/api/reversals' && data) fail(410, 'Reversals are closed. Record a reasoned stock adjustment with POST /api/erp/stock/adjustments.');
-  if (path === '/api/quality' && data) fail(410, 'QC decisions are made on the inspection report. Use POST /api/erp/qc/reports/decide or /api/erp/qc/rejections/decide.');
-  if (path === '/api/inspections' && data) {
-    allow(member, 'inspect', 'record inspections'); useQc(member, 'quality_inspector', 'Inspections'); keys(data, ['id', 'lotId', 'labelText', 'note', 'result']);
-    const inspectionId = id(data.id); const lotId = id(data.lotId);
-    if (!await first(db, 'SELECT id FROM lots WHERE id=? AND workspace_id=?', lotId, w)) fail(404, 'Lot not found.');
-    const labelText = text(data.labelText ?? '', 'Care label', 0, 4000);
-    const note = text(data.note, 'Inspection note', 3, 2000);
-    const result = data.result ?? null;
-    if (result && (typeof result !== 'object' || !['PASS', 'FLAG', 'INSUFFICIENT_EVIDENCE'].includes(result.verdict) || typeof result.scan_id !== 'string' || typeof result.model_version !== 'string' || /stub/i.test(result.model_version))) fail(422, 'A real TexPilot result is required. Manual inspection is also available.');
-    const existing = await first(db, 'SELECT id FROM inspections WHERE id=? AND workspace_id=?', inspectionId, w);
-    if (existing) return json({ id: existing.id });
-    await statement(db, 'INSERT INTO inspections(id,workspace_id,lot_id,label_text,note,source,result_json,actor,actor_name,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
-      inspectionId, w, lotId, labelText, note, result ? 'client-texpilot' : 'manual', result ? JSON.stringify(result) : null, userId, member.name, Date.now()).run();
-    return json({ id: inspectionId, qualityChanged: false }, 201);
   }
   if (path === '/api/lookup' && request.method === 'GET') {
     const code = text(url.searchParams.get('code'), 'Barcode', 1, 200);

@@ -63,6 +63,6 @@ export const COMMON: Section[] = [
 ];
 
 /** Role modules an admin can open; owner screens handle notification deep links. */
-export const INSTALLED_MODULES: Role[] = ['purchase_manager', 'quality_inspector', 'supervisor', 'sales_manager', 'dispatch'];
+export const INSTALLED_MODULES: Role[] = ['purchase_manager', 'sales_manager', 'dispatch', 'quality_inspector', 'supervisor'];
 
 export const objectRoute = (objectType: string, objectId: string, context: { role: Role; module?: Role; installedModules: Role[] }) => route(objectType, objectId, context, NAV);
