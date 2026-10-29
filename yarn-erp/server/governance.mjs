@@ -1,4 +1,4 @@
-import { all, one, fail, integer, text, query, audit, role, viewer, reason, keys, recordId, json } from './erp-utils.mjs';
+import { all, one, fail, integer, text, multiline, query, audit, role, viewer, reason, keys, recordId, json } from './erp-utils.mjs';
 import { notifyRole } from './notify.mjs';
 export const THRESHOLDS = ['purchase','inventory_adjustment','claim','dispatch_stock_issue'];
 export const DEFAULT_SETTINGS = { currency: 'PKR', tax_rate_bp: 1800, invoice_format: 'INV-{YYYY}-{NNNN}', reminder_hours: 24, credit_alert_days: [7, 3] };
@@ -32,6 +32,18 @@ export function settingValue(key, value) {
   return value.map(day => integer(day, 'Credit alert days', 1, 90)).sort((a,b) => b-a);
 }
 
+// Corrections are new rows in erp_reversals (migration 0031), never edits. The client request ID is the row ID,
+// so a repeated request finds its earlier row and does nothing twice.
+export const reversalReason = value => multiline(value, 'Reason', 3, 500);
+export async function replayed(db, id, action, objectId) {
+  const prior = await one(db, 'SELECT action,object_id FROM erp_reversals WHERE id=?', id);
+  if (!prior) return false;
+  if (prior.action !== action || prior.object_id !== objectId) fail(409, 'This request ID was already used for a different correction.');
+  return true;
+}
+export const reversalRow = (db, member, id, action, objectId, reasonText, now) => query(db, 'INSERT INTO erp_reversals(id,workspace_id,action,object_id,reason,actor_id,created_at) VALUES(?,?,?,?,?,?,?)',
+  id, member.workspace_id, action, objectId, reasonText, member.user_id, now);
+
 const APPROVAL_TYPES = ['purchase_award','po_change','inventory_adjustment','claim','dispatch_stock_issue','escalation'];
 const APPROVAL_CHANGED = 'The item changed since this request was raised. Reload and review it again.';
 const APPROVAL_DECIDED = 'This request was already decided. Reload.';
@@ -47,6 +59,14 @@ export function approvalQueries(db, member, { id = crypto.randomUUID(), type, ob
     notifyRole(db, member.workspace_id, 'admin', type === 'purchase_award' ? 'award.pending_approval' : 'approval.pending', 'approval', id, type)];
 }
 const approvalRow = row => ({ ...row, payload: JSON.parse(row.payload_json) });
+const FINAL = 'This decision is final. Record a correction in its own screen instead.';
+async function undoState(db, approval, handlers) {
+  if (approval.status !== 'approved') return null;
+  if (await one(db, "SELECT id FROM erp_reversals WHERE action='approval.undone' AND object_id=?", approval.id)) return { available: false, message: 'This decision was already undone.' };
+  const handler = handlers[approval.type];
+  if (typeof handler?.undoability !== 'function') return { available: false, message: FINAL };
+  return handler.undoability(db, approval);
+}
 const objectValue = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 export async function approvalsApi(request, env, member, path, data, handlers) {
   const db = env.DB, base = '/api/erp/approvals';
@@ -56,7 +76,9 @@ export async function approvalsApi(request, env, member, path, data, handlers) {
       const params = new URL(request.url).searchParams, status = params.get('status') ?? 'pending', type = params.get('type');
       if (!['pending','approved','rejected'].includes(status) || (type && !APPROVAL_TYPES.includes(type))) fail(422, 'Choose a valid approval status and type.');
       const rows = await all(db, `SELECT * FROM approval_requests WHERE workspace_id=? AND status=?${type ? ' AND type=?' : ''} ORDER BY created_at DESC,id DESC`, member.workspace_id, status, ...(type ? [type] : []));
-      return json({ approvals: rows.map(approvalRow) });
+      // An approved request says whether its decision can be undone, and why not when it cannot.
+      const approvals = await Promise.all(rows.map(async row => ({ ...approvalRow(row), undo: await undoState(db, approvalRow(row), handlers) })));
+      return json({ approvals });
     }
     if (path.startsWith(base + '/')) {
       const row = await one(db, 'SELECT * FROM approval_requests WHERE id=? AND workspace_id=?', recordId(path.slice(base.length + 1)), member.workspace_id);
@@ -71,6 +93,24 @@ export async function approvalsApi(request, env, member, path, data, handlers) {
     }
   } else {
     role(member, data, 'admin');
+    if (request.method === 'POST' && path === base + '/undo') {
+      // Only where the handler can compensate with its own reversal (an award is undone by cancelling its PO).
+      keys(data, ['id','requestId','reason','interventionReason']);
+      const id = recordId(data.id), requestId = recordId(data.requestId), text = reversalReason(data.reason);
+      const row = await one(db, 'SELECT * FROM approval_requests WHERE id=? AND workspace_id=?', id, member.workspace_id);
+      if (!row) fail(404, 'Approval request not found.');
+      if (await replayed(db, requestId, 'approval.undone', id)) return json({ approval: approvalRow(row) });
+      if (row.status !== 'approved') fail(409, 'Only an approved request can be undone.');
+      if (await one(db, "SELECT id FROM erp_reversals WHERE action='approval.undone' AND object_id=?", id)) fail(409, 'This decision was already undone.');
+      const handler = handlers[row.type];
+      if (typeof handler?.undo !== 'function') fail(409, FINAL);
+      const now = Date.now(), effects = await handler.undo(db, member, approvalRow(row), { reason: text, now, requestId });
+      try {
+        await db.batch([...effects, reversalRow(db, member, requestId, 'approval.undone', id, text, now),
+          audit(db, member, 'approval.undone', id, { type: row.type }, 'staff', { objectType: 'approval', before: { status: 'approved' }, after: { status: 'undone' }, reason: text })]);
+      } catch { fail(409, 'The order changed while undoing this decision. Reload first.'); }
+      return json({ approval: approvalRow(await one(db, 'SELECT * FROM approval_requests WHERE id=? AND workspace_id=?', id, member.workspace_id)) });
+    }
     if (request.method === 'POST' && path === base + '/decide') {
       keys(data, ['id','decision','reason','interventionReason']);
       const id = recordId(data.id), decision = data.decision;

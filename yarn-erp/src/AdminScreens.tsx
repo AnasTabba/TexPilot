@@ -5,6 +5,7 @@ import { Field, errorMessage } from './forms';
 import { useLanguage } from './i18n';
 import { inventoryRequest as api, roleLabel, type Member, type Role, type WorkspaceState } from './inventory-client';
 import { InterventionField, NextStep, ReasonField, SectionTabs, StatusTag, kg, money, portal } from './PortalCommon';
+import { Correction } from './CorrectionForm';
 import { when } from './WorkspaceDashboard';
 import './admin-screens.css';
 
@@ -138,8 +139,16 @@ function ApprovalDetail({ member, row, currency, navigate, reload }: { member: M
         <button className="button" disabled={busy || reason.trim().length < 5} onClick={() => void decide('reject')}><X size={18} aria-hidden="true" />{t('Reject', 'مسترد کریں')}</button>
       </div>
     </> : <p className="live-empty">{t('This request has no details to show.', 'اس درخواست کی کوئی تفصیل نہیں۔')}</p>}</Loaded>
+    {row.status === 'approved' && row.undo && <UndoApproval member={member} row={row} reload={reload} />}
     {error && <p className="live-error" role="alert">{t(error)}</p>}
   </section>;
+}
+
+/** Undo is offered only where the server can compensate (an award, undone by cancelling its order). Other decisions say they are final. */
+function UndoApproval({ member, row, reload }: { member: Member; row: any; reload: () => void }) {
+  const { t } = useLanguage();
+  if (!row.undo.available) return <p className="live-muted" role="status">{row.undo.message}</p>;
+  return <Correction member={member} label={t('Undo this approval', 'یہ منظوری واپس لیں')} title={t('Undo this approval', 'یہ منظوری واپس لیں')} effect={t('The purchase order this approval created is cancelled and the RFQ reopens for awarding. Only possible before dispatch, arrival or a bill of lading.', 'اس منظوری سے بنا خریداری آرڈر منسوخ ہوگا اور درخواست دوبارہ منظوری کے لیے کھل جائے گی۔ صرف روانگی، آمد یا بل آف لیڈنگ سے پہلے ممکن ہے۔')} submit={t('Undo approval', 'منظوری واپس لیں')} owners={['admin']} path="/erp/approvals/undo" requestField="requestId" payload={() => ({ id: row.id })} onSaved={async () => reload()} />;
 }
 
 export function Thresholds({ currency }: { currency: string }) {

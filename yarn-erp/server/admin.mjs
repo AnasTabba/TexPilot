@@ -1,7 +1,8 @@
-import { ROLES, userRow, validPin, randomHex, pinHash } from './auth.mjs';
+import { ROLES, userRow, validPin, randomHex, pinHash, nameKey } from './auth.mjs';
 import { all, one, query, json, fail, keys, text, recordId, integer, role, viewer, audit } from './erp-utils.mjs';
 import { THRESHOLDS, DEFAULT_SETTINGS, settingsOf, settingValue } from './governance.mjs';
 import { notifyRole } from './notify.mjs';
+import { reversalReason, replayed, reversalRow } from './governance.mjs';
 const roleOf = value => { if (!ROLES.includes(value)) fail(422, 'Choose a valid role.'); return value; };
 const pinOf = value => { if (!validPin(value)) fail(422, 'The PIN must be exactly 4 digits.'); return value; };
 
@@ -45,8 +46,10 @@ export async function adminApi(request, env, member, path, data) {
       return json({ thresholds: await all(db, 'SELECT type,value,currency,updated_at FROM user_thresholds WHERE workspace_id=? AND user_id=? ORDER BY type', w, target.id) });
     }
     if (path !== '/api/erp/admin/users') fail(404, 'API route not found.');
-    const users = await all(db, 'SELECT id,name,portal_role AS role,status,deactivated_at,created_at,locked_until FROM users WHERE workspace_id=? AND removed_at IS NULL ORDER BY name COLLATE NOCASE', w);
-    return json({ users: users.map(({ deactivated_at, locked_until, ...user }) => ({ ...user, status: deactivated_at === null ? user.status : 'deactivated', locked: locked_until > Date.now() })) });
+    // ?removed=1 lists the removed people, who can be restored. A restored person has no PIN (needsPin) until an admin sets one.
+    const removed = new URL(request.url).searchParams.get('removed') === '1';
+    const users = await all(db, `SELECT id,name,portal_role AS role,status,deactivated_at,created_at,locked_until,removed_at,(pin_hash='') AS no_pin FROM users WHERE workspace_id=? AND removed_at IS ${removed ? 'NOT NULL' : 'NULL'} ORDER BY name COLLATE NOCASE`, w);
+    return json({ users: users.map(({ deactivated_at, locked_until, no_pin, ...user }) => ({ ...user, status: deactivated_at === null ? user.status : 'deactivated', locked: locked_until > Date.now(), needsPin: !!no_pin })) });
   }
   role(member, data, 'admin');
   if (path === '/api/erp/admin/thresholds' || path === '/api/erp/admin/settings') {
@@ -124,6 +127,28 @@ export async function adminApi(request, env, member, path, data) {
     catch (error) { if (/UNIQUE constraint failed: users.name_key/.test(String(error))) fail(409, 'That name is already taken.'); throw error; }
     return json({ id: row.args[0] }, 201);
   }
+  if (path === '/api/erp/admin/users/restore') {
+    // Admin-only (checked above). The PIN is cleared, so the person cannot sign in until an admin sets a new PIN.
+    keys(data, ['id','userId','reason','interventionReason']);
+    const requestId = recordId(data.id), text = reversalReason(data.reason);
+    const target = await one(db, 'SELECT * FROM users WHERE id=? AND workspace_id=?', recordId(data.userId), w);
+    if (!target) fail(404, 'This person was not found.');
+    if (await replayed(db, requestId, 'user.restored', target.id)) return json({ saved: true });
+    if (target.removed_at === null) fail(409, 'This person is not removed.');
+    const now = Date.now();
+    try {
+      await db.batch([
+        query(db, "UPDATE users SET removed_at=NULL,deactivated_at=NULL,deactivated_by=NULL,status='active',pin_salt='',pin_hash='',failed_attempts=0,locked_until=0,updated_at=? WHERE id=? AND removed_at IS NOT NULL", Math.max(now, (target.updated_at ?? 0) + 1), target.id),
+        query(db, "SELECT json('!') WHERE changes()=0"),
+        reversalRow(db, member, requestId, 'user.restored', target.id, text, now),
+        audit(db, member, 'user.restored', target.id, { name: target.name, role: target.portal_role }, 'staff', { before: { removed: true }, after: { removed: false, pin: 'cleared' }, reason: text }),
+      ]);
+    } catch (error) {
+      if (/constraint failed: users\./i.test(String(error))) fail(409, 'This account changed. Refresh and try again.');
+      throw error;
+    }
+    return json({ saved: true });
+  }
   if (path === '/api/erp/admin/users/remove') {
     // Soft delete: history keeps pointing at the row; sessions end now. Admins are never removable.
     keys(data, ['userId']);
@@ -148,12 +173,14 @@ export async function adminApi(request, env, member, path, data) {
     return json({ saved: true });
   }
   if (path !== '/api/erp/admin/users/update') fail(404, 'API route not found.');
-  keys(data, ['id','role','pin','active','interventionReason']);
+  keys(data, ['id','role','pin','active','name','interventionReason']);
   const target = await one(db, 'SELECT * FROM users WHERE id=? AND workspace_id=?', recordId(data.id), w);
   if (!target) fail(404, 'This person was not found.');
   if (data.active !== undefined && typeof data.active !== 'boolean') fail(422, 'Choose active or deactivated.');
   if (data.active === false && target.id === member.user_id) fail(409, "You can't deactivate yourself.");
   const nextRole = data.role === undefined ? target.portal_role : roleOf(data.role);
+  const newName = data.name === undefined ? null : text(data.name, 'Name', 2, 40);
+  if (newName !== null && nameKey(newName) !== target.name_key && await one(db, 'SELECT id FROM users WHERE name_key=? AND id!=?', nameKey(newName), target.id)) fail(409, 'That name is already taken.');
   if (data.active === true && !nextRole) fail(422, 'Choose a valid role.');
   const now = Date.now(), changes = [], events = [];
   if (data.role !== undefined && nextRole !== target.portal_role) {
@@ -167,6 +194,10 @@ export async function adminApi(request, env, member, path, data) {
   if (data.active === true && (target.deactivated_at !== null || target.status !== 'active')) {
     changes.push(query(db, "UPDATE users SET deactivated_at=NULL,deactivated_by=NULL,status='active' WHERE id=?", target.id));
     events.push(audit(db, member, 'user.reactivated', target.id, {}));
+  }
+  if (newName !== null && newName !== target.name) {
+    changes.push(query(db, 'UPDATE users SET name=?,name_key=? WHERE id=?', newName, nameKey(newName), target.id));
+    events.push(audit(db, member, 'user.renamed', target.id, { from: target.name, to: newName }, 'staff', { before: { name: target.name }, after: { name: newName } }));
   }
   if (data.pin !== undefined) {
     const salt = randomHex(), hash = await pinHash(pinOf(data.pin), salt);
@@ -182,6 +213,7 @@ export async function adminApi(request, env, member, path, data) {
     try { await db.batch([guard, ...changes, query(db, 'UPDATE users SET updated_at=? WHERE id=?', Math.max(now, (target.updated_at ?? 0) + 1), target.id), ...events]); }
     catch (error) {
       if (/Keep at least one admin/.test(String(error))) fail(409, 'Keep at least one admin.');
+      if (/UNIQUE constraint failed: users.name_key/.test(String(error))) fail(409, 'That name is already taken.');
       if (/constraint failed: users\./i.test(String(error))) fail(409, 'This account changed. Refresh and try again.');
       throw error;
     }

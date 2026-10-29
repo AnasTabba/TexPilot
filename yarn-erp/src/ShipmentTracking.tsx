@@ -2,7 +2,8 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { ChevronDown, RefreshCw, Ship } from 'lucide-react';
 import { InventoryError, type Member } from './inventory-client';
 import { portal } from './PortalCommon';
-import { errorMessage } from './forms';
+import { errorMessage, Field } from './forms';
+import { Correction } from './CorrectionForm';
 import { useLanguage } from './i18n';
 import { factoryTime } from './erp-client';
 import { trackingView, type Shipment, type TrackingStage, type TrackingStatus } from './tracking';
@@ -77,7 +78,14 @@ function Route({ stage, progress, origin, destination }: { stage: TrackingStage;
   </div>;
 }
 
-function ShipmentCard({ shipment, error, busy, moved, onCheck }: { shipment: Shipment; error: string; busy: boolean; moved: TrackingStage | null; onCheck: () => void }) {
+/** A typed bill of lading can be fixed by purchase managers and admins, but only before tracking has any events. */
+function BillCorrection({ member, shipment, onSaved }: { member: Member; shipment: Shipment; onSaved: () => void }) {
+  const { t } = useLanguage(); const [bl, setBl] = useState(shipment.bill_of_lading);
+  return <Correction member={member} label={t('Correct bill of lading', 'بل آف لیڈنگ درست کریں')} title={t('Correct bill of lading', 'بل آف لیڈنگ درست کریں')} effect={t('The number changes on this shipment and its order. The old number stays in the audit log.', 'اس شپمنٹ اور اس کے آرڈر پر نیا نمبر لگے گا۔ پرانا نمبر آڈٹ لاگ میں رہے گا۔')} submit={t('Save bill of lading', 'بل آف لیڈنگ محفوظ کریں')} owners={['purchase_manager']} path="/erp/shipments/correct" payload={() => ({ shipmentId: shipment.id, billOfLading: bl })} onSaved={async () => onSaved()}>
+    <Field>{t('Bill of lading', 'بل آف لیڈنگ')}<input dir="ltr" value={bl} onChange={e => setBl(e.target.value)} minLength={3} maxLength={100} required /></Field>
+  </Correction>;
+}
+function ShipmentCard({ shipment, error, busy, moved, onCheck, member, onChanged }: { shipment: Shipment; error: string; busy: boolean; moved: TrackingStage | null; onCheck: () => void; member?: Member; onChanged: () => void }) {
   const { t } = useLanguage(); const [open, setOpen] = useState(false);
   const view = trackingView(shipment);
   const note = error || shipment.last_error || '';
@@ -98,6 +106,7 @@ function ShipmentCard({ shipment, error, busy, moved, onCheck }: { shipment: Shi
     {!error && shipment.last_error && <p className="trk-muted">{t('Last check failed. Showing the last known status.', 'آخری چیک ناکام رہا۔ آخری معلوم حیثیت دکھائی جا رہی ہے۔')}</p>}
     <div className="trk-actions">
       <button type="button" className="trk-btn" disabled={busy} onClick={onCheck}><RefreshCw size={16} aria-hidden="true" className={busy ? 'trk-spin' : undefined} />{t('Check tracking', 'ٹریکنگ چیک کریں')}</button>
+      {member && (member.role === 'purchase_manager' || member.admin) && view.events.length === 0 && <BillCorrection member={member} shipment={shipment} onSaved={onChanged} />}
       {view.events.length > 0 && <button type="button" className="trk-btn is-ghost" aria-expanded={open} onClick={() => setOpen(!open)}><ChevronDown size={16} aria-hidden="true" className={open ? 'is-open' : undefined} />{open ? t('Hide timeline', 'ٹائم لائن چھپائیں') : t('Show timeline', 'ٹائم لائن دکھائیں')} ({view.events.length})</button>}
     </div>
     {open && <ol className="trk-events">{view.events.map((e, i) => <li key={i}><span className="trk-event-dot" aria-hidden="true" /><div><strong>{e.title || e.code || t('Update', 'اپ ڈیٹ')}</strong><span className="trk-muted">{[e.location, e.at ? factoryTime(e.at) : t('Time not given', 'وقت درج نہیں')].filter(Boolean).join(' · ')}</span></div></li>)}</ol>}
@@ -142,7 +151,7 @@ export function ShipmentTracking({ member }: { member?: Member } = {}) {
     </div>}
     {data && !data.shipments.length && <div className="trk-empty"><Ship size={32} aria-hidden="true" /><h3>{t('No shipments yet', 'ابھی کوئی شپمنٹ نہیں')}</h3></div>}
     {data && data.shipments.length > 0 && !shown.length && <p className="live-muted">{t('Nothing in this view yet.', 'اس فلٹر میں ابھی کچھ نہیں۔')}</p>}
-    <div className="trk-list">{shown.map(s => <ShipmentCard key={s.id} shipment={s} error={errors[s.id] || ''} busy={busy === s.id} moved={moved?.id === s.id ? moved.stage : null} onCheck={() => void check(s.id)} />)}</div>
+    <div className="trk-list">{shown.map(s => <ShipmentCard key={s.id} shipment={s} error={errors[s.id] || ''} busy={busy === s.id} moved={moved?.id === s.id ? moved.stage : null} onCheck={() => void check(s.id)} member={member} onChanged={retry} />)}</div>
   </section>;
 }
 

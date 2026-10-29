@@ -28,6 +28,25 @@ test('migrations preserve stable values, not only counts and balances', () => {
   assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM roles').get().n,6);
   assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM users WHERE updated_at=created_at AND portal_role IS NOT NULL').get().n,10);
 });
+test('0031 PO rebuild preserves its row and restores dependent guards and views', () => {
+  const sql = legacy();
+  const names = readdirSync(dir).filter(f => f.endsWith('.sql') && f >= '0004').sort();
+  migrate(sql, names.filter(name => name !== '0031_reversals.sql'));
+  const original = sql.prepare('SELECT * FROM supplier_purchase_orders WHERE id=?').get('po');
+  migrate(sql, ['0031_reversals.sql']);
+
+  assert.deepEqual(sql.prepare('SELECT * FROM supplier_purchase_orders WHERE id=?').get('po'), original);
+  assert.equal(sql.prepare("SELECT arrived_milli FROM po_arrived WHERE order_id='po'").get().arrived_milli, 2000);
+  assert.ok(sql.prepare("SELECT 1 FROM sqlite_master WHERE type='view' AND name='currency_change_blockers'").get());
+  for (const name of ['po_quantity_floor','purchase_terms_immutable','purchase_orders_no_delete','validate_purchase_order','validate_procurement_dispatch','validate_goods_receipt','validate_qc_lot','settings_currency_insert','settings_currency_update']) {
+    assert.ok(sql.prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?").get(name), `${name} was restored`);
+  }
+
+  assert.throws(() => sql.prepare('UPDATE supplier_purchase_orders SET quantity_milli=1999 WHERE id=?').run('po'), /already arrived/);
+  assert.throws(() => sql.prepare("UPDATE supplier_purchase_orders SET terms_snapshot='{}' WHERE id='po'").run(), /immutable/);
+  assert.throws(() => sql.prepare('DELETE FROM supplier_purchase_orders WHERE id=?').run('po'), /audit trail/);
+  assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(), []);
+});
 test('roles and newly created users carry required metadata', async () => {
   const f = await portalFixture();
   for (const table of ['roles','users']) {

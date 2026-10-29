@@ -4,8 +4,10 @@ import { ProviderProblem, contractGaps, credentialOf, maskedCredential, parseCon
 import { stageOf } from './tracking-stage.mjs';
 import { notifyRole } from './notify.mjs';
 import { karachiDate } from './sales.mjs';
+import { reversalReason, replayed, reversalRow } from './governance.mjs';
 
 const PROVIDER = 'DataLoopLabs';
+const text2 = (value, label) => text(String(value ?? '').toUpperCase().replace(/\s+/g, ''), label, 3, 100);
 const OPEN = "('accepted','dispatched')";
 const DEFAULT_ROW = { enabled: 0, base_url: '', track_path: '', contract_json: '', refresh_hours: 12, daily_budget: 0, verified_by: null, verified_at: null };
 
@@ -218,6 +220,27 @@ export async function trackingApi(request, env, member, path, data) {
       fail(409, 'This bill of lading is already on the order, or the order changed. Reload and try again.');
     }
     return json({ shipment: await shipmentOf(db, id, w) }, 201);
+  }
+  if (path === '/api/erp/shipments/correct' && data) {
+    // A typed bill of lading is corrected in place, but only before tracking has events: the old number is in the audit row.
+    const intervention = role(member, data, 'purchase_manager');
+    keys(data, ['id','shipmentId','billOfLading','reason','interventionReason']);
+    const requestId = recordId(data.id), text = reversalReason(data.reason), bl = text2(data.billOfLading, 'Bill of lading');
+    const shipment = await shipmentOf(db, recordId(data.shipmentId), w);
+    if (!shipment) fail(404, 'Shipment not found.');
+    if (await replayed(db, requestId, 'shipment.bl_corrected', shipment.id)) return json({ shipment });
+    if (shipment.bill_of_lading === bl) fail(422, 'Enter a different bill of lading.');
+    if (await one(db, 'SELECT 1 AS x FROM shipment_events WHERE shipment_id=? LIMIT 1', shipment.id)) fail(409, 'Tracking already has events for this shipment, so its bill of lading cannot change. Record the correct shipment instead.');
+    try {
+      await db.batch([
+        query(db, 'UPDATE shipments SET bill_of_lading=?,updated_at=? WHERE id=? AND workspace_id=? AND bill_of_lading=? AND NOT EXISTS(SELECT 1 FROM shipment_events WHERE shipment_id=shipments.id)', bl, now, shipment.id, w, shipment.bill_of_lading),
+        query(db, "SELECT json('!') WHERE changes()=0"),
+        query(db, 'UPDATE supplier_purchase_orders SET bill_of_lading=?,updated_at=? WHERE id=? AND workspace_id=? AND bill_of_lading=?', bl, now, shipment.purchase_order_id, w, shipment.bill_of_lading),
+        reversalRow(db, member, requestId, 'shipment.bl_corrected', shipment.id, text, now),
+        audit(db, member, 'shipment.bl_corrected', shipment.id, { orderId: shipment.purchase_order_id, billOfLading: bl }, 'staff', { objectType: 'shipment', before: { billOfLading: shipment.bill_of_lading }, after: { billOfLading: bl }, reason: text, intervention }),
+      ]);
+    } catch { fail(409, 'This bill of lading is already on the order, or the shipment changed. Reload and try again.'); }
+    return json({ shipment: await shipmentOf(db, shipment.id, w) });
   }
   if (path === '/api/erp/shipments/track' && data) {
     const intervention = role(member, data, 'purchase_manager');

@@ -1,13 +1,14 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { ArrowRightLeft, ChevronDown, ClipboardCheck, KeyRound, Package, PackagePlus, ShieldCheck, Trash2, Truck, Undo2, UserCheck, UserPlus, type LucideIcon } from 'lucide-react';
 import { AsyncForm, Field, errorMessage } from './forms';
+import { Correction } from './CorrectionForm';
 import { Avatar } from './SignIn';
 import { when } from './WorkspaceDashboard';
 import { inventoryRequest as api, roleLabel, type Role, type Member, type Permission } from './inventory-client';
 import { translate, useLanguage } from './i18n';
 import { kg, money } from './PortalCommon';
 
-interface Person { id: string; name: string; role: Role | null; status: 'active' | 'pending' | 'deactivated'; created_at: number; locked: boolean }
+interface Person { id: string; name: string; role: Role | null; status: 'active' | 'pending' | 'deactivated'; created_at: number; locked: boolean; needsPin?: boolean }
 
 // The same icons as the batch actions they unlock.
 export const permissionInfo: [Permission, string, string, LucideIcon][] = [
@@ -103,10 +104,11 @@ export default function Team({ me, onChanged }: { me: Member; onChanged: () => P
   const { t } = useLanguage();
   const [people, setPeople] = useState<Person[] | null>(null);
   const [error, setError] = useState(''); const [open, setOpen] = useState('');
+  const [removedView, setRemovedView] = useState(false);
   const { factory, error: factoryError } = useFactoryLimits();
   const load = useCallback(async () => {
-    try { setPeople((await api<{ users: Person[] }>('/erp/admin/users')).users); setError(''); } catch (error) { setError(errorMessage(error)); }
-  }, []);
+    try { setPeople((await api<{ users: Person[] }>(removedView ? '/erp/admin/users?removed=1' : '/erp/admin/users')).users); setError(''); } catch (error) { setError(errorMessage(error)); }
+  }, [removedView]);
   useEffect(() => { void load(); }, [load]);
   const changed = async () => { await load(); await onChanged(); };
   const waiting = people?.filter(p => p.status === 'pending') ?? [];
@@ -121,10 +123,21 @@ export default function Team({ me, onChanged }: { me: Member; onChanged: () => P
     </section>}
     {open === 'new' && <AddPerson factory={factory} onDone={async () => { setOpen(''); await changed(); }} onCancel={() => setOpen('')} />}
     {people && <section className="live-panel" aria-labelledby="yf-people">
-      <div className="yf-head"><h2 id="yf-people">{t('People', 'ٹیم کے لوگ')}</h2>{open !== 'new' && <button className="button" onClick={() => setOpen('new')}><UserPlus size={18} aria-hidden="true" />{t('Add a person', 'نیا فرد شامل کریں')}</button>}</div>
-      <ul className="yf-team">{listed.map(person => <Member key={person.id} person={person} self={person.id === me.user_id} open={open === person.id} onToggle={() => setOpen(open === person.id ? '' : person.id)} onDone={changed} canLimits={me.admin} factory={factory} />)}</ul>
+      <div className="yf-head"><h2 id="yf-people">{removedView ? t('Removed people', 'ہٹائے گئے افراد') : t('People', 'ٹیم کے لوگ')}</h2>{open !== 'new' && !removedView && <button className="button" onClick={() => setOpen('new')}><UserPlus size={18} aria-hidden="true" />{t('Add a person', 'نیا فرد شامل کریں')}</button>}</div>
+      <div className="live-segments" role="group" aria-label={t('Show', 'دکھائیں')}><button type="button" aria-pressed={!removedView} onClick={() => setRemovedView(false)}>{t('Team', 'ٹیم')}</button><button type="button" aria-pressed={removedView} onClick={() => setRemovedView(true)}>{t('Removed', 'ہٹائے گئے')}</button></div>
+      {removedView
+        ? <ul className="yf-team">{listed.map(person => <RemovedPerson key={person.id} person={person} me={me} onDone={changed} />)}</ul>
+        : <ul className="yf-team">{listed.map(person => <Member key={person.id} person={person} self={person.id === me.user_id} open={open === person.id} onToggle={() => setOpen(open === person.id ? '' : person.id)} onDone={changed} canLimits={me.admin} factory={factory} />)}</ul>}
     </section>}
   </>;
+}
+
+/** A removed person comes back with no PIN: they cannot sign in until an admin sets one. */
+function RemovedPerson({ person, me, onDone }: { person: Person; me: Member; onDone: () => Promise<void> }) {
+  const { t } = useLanguage();
+  return <li className="yf-member"><div className="yf-member-row"><Avatar name={person.name} /><span><strong>{person.name}</strong><span>{person.role ? accessSummary(person.role) : t('Role not assigned', 'کردار مقرر نہیں')}</span></span></div>
+    <div className="yf-member-body"><Correction member={me} label={t('Restore this person', 'یہ فرد بحال کریں')} title={t('Restore this person', 'یہ فرد بحال کریں')} effect={t('They return to the team with no PIN. Set a new PIN before they can sign in.', 'وہ ٹیم میں واپس آ جائیں گے مگر بغیر پن کے۔ سائن اِن سے پہلے نیا پن مقرر کریں۔')} submit={t('Restore person', 'فرد بحال کریں')} owners={['admin']} path="/erp/admin/users/restore" payload={() => ({ userId: person.id })} onSaved={onDone} /></div>
+  </li>;
 }
 
 function Request({ person, onDone }: { person: Person; onDone: () => Promise<void> }) {
@@ -150,7 +163,8 @@ function Member({ person, self, open, onToggle, onDone, canLimits, factory }: { 
   const { language, t } = useLanguage();
   const [role, setRole] = useState<Role>(person.role ?? 'quality_inspector');
   useEffect(() => setRole(person.role ?? 'quality_inspector'), [person.role]);
-  const [pin, setPin] = useState(''); const [busy, setBusy] = useState(false);
+  const [pin, setPin] = useState(''); const [name, setName] = useState(person.name), [busy, setBusy] = useState(false);
+  useEffect(() => setName(person.name), [person.name]);
   const [error, setError] = useState(''); const [notice, setNotice] = useState<[string, string?] | null>(null);
   const showLimits = canLimits && role === 'supervisor';
   const [limits, setLimits] = useState<Draft>(blankDraft), [savedLimits, setSavedLimits] = useState<Draft>(blankDraft), [limitsReady, setLimitsReady] = useState(false);
@@ -175,7 +189,7 @@ function Member({ person, self, open, onToggle, onDone, canLimits, factory }: { 
   return <li className={`yf-member${open ? ' is-open' : ''}`}>
     <button className="yf-member-row" aria-expanded={open} onClick={onToggle}>
       <Avatar name={person.name} /><span><strong>{person.name}{self && <small> · {t('you', 'آپ')}</small>}</strong><span>{person.role ? accessSummary(person.role, language) : t('Role not assigned', 'کردار مقرر نہیں')}</span></span>
-      {person.status === 'deactivated' && <span className="live-quality hold"><ShieldCheck size={16} aria-hidden="true" />{t('Deactivated', 'غیر فعال')}</span>}{person.locked && <span className="live-quality hold">{t('Locked', 'مقفل')}</span>}<ChevronDown size={20} aria-hidden="true" />
+      {person.status === 'deactivated' && <span className="live-quality hold"><ShieldCheck size={16} aria-hidden="true" />{t('Deactivated', 'غیر فعال')}</span>}{person.needsPin && <span className="live-quality hold">{t('Needs a new PIN', 'نئے پن کی ضرورت')}</span>}{person.locked && <span className="live-quality hold">{t('Locked', 'مقفل')}</span>}<ChevronDown size={20} aria-hidden="true" />
     </button>
     {open && <div className="yf-member-body">
       <RolePicker value={role} onChange={setRole} disabled={busy} />
@@ -183,6 +197,10 @@ function Member({ person, self, open, onToggle, onDone, canLimits, factory }: { 
         ? <><LimitFields draft={limits} onChange={setLimits} factory={factory} disabled={busy} /><div className="live-actions"><button className="button primary" disabled={busy || !factory} onClick={() => void saveLimitsNow()}>{t('Save approval limits', 'منظوری کی حدیں محفوظ کریں')}</button></div></>
         : <p role="status" className="live-muted">{t('Loading approval limits…', 'منظوری کی حدیں لوڈ ہو رہی ہیں…')}</p>)}
       {dirty && <div className="live-actions"><button className="button primary" disabled={busy} onClick={() => void act('/erp/admin/users/update', { id: person.id, role }, [`${person.name}'s access is saved.`, `${person.name} کے اختیارات محفوظ ہو گئے۔`])}>{t('Save access', 'اختیارات محفوظ کریں')}</button><button className="button" disabled={busy} onClick={() => { setRole(person.role ?? 'quality_inspector'); }}>{t('Undo changes', 'تبدیلیاں واپس کریں')}</button></div>}
+      <form className="yf-pin-reset" onSubmit={event => { event.preventDefault(); void act('/erp/admin/users/update', { id: person.id, name: name.trim() }, [`${name.trim()} is the name now.`, `نام اب ${name.trim()} ہے۔`]); }}>
+        <Field>{t('Name', 'نام')}<input value={name} onChange={e => setName(e.target.value)} minLength={2} maxLength={40} required /></Field>
+        <button className="button" disabled={busy || name.trim() === person.name}>{t('Save name', 'نام محفوظ کریں')}</button>
+      </form>
       <form className="yf-pin-reset" onSubmit={event => { event.preventDefault(); void act('/erp/admin/users/update', { id: person.id, pin }, [`New PIN set. ${self ? 'Sign in again with it.' : `Tell ${person.name} the new PIN.`}`, `نیا پن مقرر ہو گیا۔ ${self ? 'اس سے دوبارہ سائن اِن کریں۔' : `${person.name} کو نیا پن بتا دیں۔`}`]).then(() => setPin('')); }}>
         <Field>{person.locked ? t('Locked after wrong PINs. Set a new PIN to unlock', 'غلط پن سے اکاؤنٹ مقفل ہے۔ کھولنے کے لیے نیا پن مقرر کریں') : t('Set a new PIN', 'نیا پن مقرر کریں')}<input type="password" dir="ltr" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} autoComplete="new-password" value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, ''))} required /></Field>
         <button className="button" disabled={busy}><KeyRound size={18} aria-hidden="true" />{t('Set PIN', 'پن مقرر کریں')}</button>
