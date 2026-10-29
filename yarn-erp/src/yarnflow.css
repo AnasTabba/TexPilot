@@ -1069,3 +1069,8 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
   .live-print-label { position: absolute; left: 0; top: 0; width: 80mm; padding: 8mm; color: #111; background: #fff; }
   .live-print-label .live-qr { width: 55mm; height: 55mm; }
 }
+
+.yf-dash-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.yf-dash-wide { grid-column: 1 / -1; min-width: 0; }
+.yf-dash-grid > * { min-width: 0; }
+@media (max-width: 900px) { .yf-dash-grid { grid-template-columns: minmax(0, 1fr); } }
