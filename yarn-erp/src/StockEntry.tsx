@@ -118,7 +118,7 @@ export default function StockEntry({ preset, lotId, state, onSaved, onCancel }: 
     check={() => { setShown(true); return !Object.keys(errors).length; }}
     labels={{ next: say('next'), reviewTitle: say('checkThis'), reviewHint: say('checkThisHint'), change: say('change'), cancel: say('cancel'), saving: say('saving'), fixAbove: say('fixAbove') }}
     review={<EntrySentence sentence={sentence} numbers={[[say('cartons'), String(cartons)], [say('cones'), String(cones)], ['kg', weight(grams)]]} warnings={warnings} />}>
-    <div className="yf-entry-batch"><span className="yf-entry-icon"><Icon size={26} aria-hidden="true" /></span><Cone hue={materialHue(state.products, lot.product_id)} size={40} /><div><strong>{yarn}</strong><span>{lot.batch}{lot.supplier ? ' · ' + lot.supplier : ''}</span></div><QualityBadge value={lot.quality} /></div>
+    <div className="yf-entry-batch"><span className="yf-entry-icon"><Icon size={26} aria-hidden="true" /></span><Cone hue={materialHue(state.products, lot.product_id)} size={40} /><div><strong>{yarn}</strong><span><bdi>{lot.batch}</bdi>{lot.supplier ? <> · <bdi>{lot.supplier}</bdi></> : ''}</span></div><QualityBadge value={lot.quality} /></div>
     {offer && stored && <div className="live-warning yf-draft-offer" role="status"><span>{say('draftBack', { time: when.format(stored.startedAt, language) })}</span><div className="live-actions"><button type="button" className="button" onClick={() => { setDraft(stored); setOffer(false); }}>{say('draftKeep')}</button><button type="button" className="button" onClick={() => { forget(); setOffer(false); }}>{say('draftFresh')}</button></div></div>}
     {info.movement === 'receive' && (changePlace
       ? <ChoiceCards label={say('to')} value={to} onChange={v => set('to', v)} options={stageCards('to')} />
@@ -151,7 +151,7 @@ export function BatchPicker({ preset, state, onPick, onBack, onNewBatch }: { pre
     {onNewBatch && <button type="button" className="yf-pick-row is-new" onClick={onNewBatch}><span className="yf-pick-plus" aria-hidden="true">+</span><strong>{say('newBatch')}</strong></button>}
     <ul className="yf-pick-list">{rows.map(({ lot, why, grams }) => <li key={lot.id}><button type="button" className="yf-pick-row" disabled={!!why} onClick={() => onPick(lot.id)}>
       <Cone hue={materialHue(state.products, lot.product_id)} size={36} />
-      <span className="yf-pick-name"><strong>{yarnName(name(lot.product_id))}</strong><span>{lot.batch}{lot.supplier ? ' · ' + lot.supplier : ''}</span>{why && <em>{say(why)}</em>}</span>
+      <span className="yf-pick-name"><strong>{yarnName(name(lot.product_id))}</strong><span><bdi>{lot.batch}</bdi>{lot.supplier ? <> · <bdi>{lot.supplier}</bdi></> : ''}</span>{why && <em>{say(why)}</em>}</span>
       <span className="yf-pick-kg" dir="ltr">{weight(grams)} <small>kg</small></span>
     </button></li>)}</ul>
     {!rows.length && <p className="live-muted">{say('noBatchFound')}</p>}

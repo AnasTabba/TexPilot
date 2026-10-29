@@ -102,6 +102,54 @@ test.describe('Shared inventory', () => {
     expect((await workspace(page)).movements).toHaveLength(state.movements.length);
   });
 
+  test('a save whose reply is lost, then saved again, is recorded once', async ({ page }) => {
+    await signIn(page);
+    const { lot, state } = await seededLot(page, 'LOT-1024');
+    await page.goto('/#/inventory/' + lot.id);
+    await page.getByRole('button', { name: 'Receive yarn', exact: true }).click();
+    // The first save reaches the server, but its reply never comes back: the worker cannot tell it worked.
+    let first = true;
+    await page.route('**/api/movements', async route => {
+      if (!first) return route.continue();
+      first = false; await route.fetch(); await route.abort('connectionreset');
+    });
+    await page.getByLabel('Cartons', { exact: true }).fill('3');
+    await page.getByLabel('Cones', { exact: true }).fill('72');
+    await page.getByLabel('Weight on the scale (kg)', { exact: true }).fill('136');
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('It will not be saved twice');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Saved', exact: true })).toBeVisible();
+    const after = await workspace(page);
+    expect(after.movements).toHaveLength(state.movements.length + 1);
+  });
+
+  test('after a lost reply, changing a number and saving does not book the delivery twice', async ({ page }) => {
+    await signIn(page);
+    const { lot, state } = await seededLot(page, 'LOT-1024');
+    await page.goto('/#/inventory/' + lot.id);
+    await page.getByRole('button', { name: 'Receive yarn', exact: true }).click();
+    let first = true;
+    await page.route('**/api/movements', async route => {
+      if (!first) return route.continue();
+      first = false; await route.fetch(); await route.abort('connectionreset');
+    });
+    await page.getByLabel('Cartons', { exact: true }).fill('3');
+    await page.getByLabel('Cones', { exact: true }).fill('72');
+    await page.getByLabel('Weight on the scale (kg)', { exact: true }).fill('136');
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('It will not be saved twice');
+    await page.getByRole('button', { name: 'Change', exact: true }).click();
+    await page.getByLabel('Weight on the scale (kg)', { exact: true }).fill('137');
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    // The server recognises the entry it already has and the worker is told to look, not to enter it again.
+    await expect(page.getByRole('alert')).toContainText('already saved a moment ago');
+    expect((await workspace(page)).movements).toHaveLength(state.movements.length + 1);
+  });
+
   test('an inspection note is saved and still there after signing in again', async ({ page }) => {
     await signIn(page);
     const { lot } = await seededLot(page, 'LOT-1022');
