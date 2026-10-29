@@ -110,7 +110,7 @@ function OrdersView({ state, open, setOpen, saved, serverTime, loading }: {
         {r.status === 'draft' && (open === 'send:' + r.id ? <SendQuote revision={r} onSaved={saved} onCancel={() => setOpen('')} />
           : <button className="button primary" onClick={() => setOpen('send:' + r.id)}><Send size={18} />{t('Send quote to buyer portal', 'کوٹیشن خریدار پورٹل کو بھیجیں')}</button>)}
       </div>)}
-      {!revisions.length && (open === 'quote:' + po.id ? <QuoteForm po={po} onSaved={saved} onCancel={() => setOpen('')} />
+      {!revisions.length && (open === 'quote:' + po.id ? <QuoteForm po={po} currency={state.currency} onSaved={saved} onCancel={() => setOpen('')} />
         : po.status === 'entered' && <button className="button primary" onClick={() => setOpen('quote:' + po.id)}><FileText size={18} />{t('Draft quote', 'کوٹیشن کا مسودہ')}</button>)}
       {approved && !order && <p className="live-warning">{t('Approved but the order is still confirming. Refresh in a moment.', 'منظور شدہ لیکن آرڈر ابھی مستقل ہو رہا ہے۔ تھوڑی دیر میں تازہ کریں۔')}</p>}
       {order && <div className="sales-order">
@@ -299,9 +299,9 @@ function PoForm({ buyers, onSaved, onCancel }: { buyers: Buyer[]; onSaved: (mess
   </AsyncForm>;
 }
 
-function QuoteForm({ po, onSaved, onCancel }: { po: Overview['pos'][number]; onSaved: (message?: string) => Promise<void>; onCancel: () => void }) {
+function QuoteForm({ po, currency, onSaved, onCancel }: { currency: string; po: Overview['pos'][number]; onSaved: (message?: string) => Promise<void>; onCancel: () => void }) {
   const { t } = useLanguage(); const [id] = useState(crypto.randomUUID());
-  const [price, setPrice] = useState(''), [currency, setCurrency] = useState('PKR'), [specifications, setSpecifications] = useState(po.specifications);
+  const [price, setPrice] = useState(''), [specifications, setSpecifications] = useState(po.specifications);
   const [delivery, setDelivery] = useState(localFactoryInput(po.requested_delivery_at)), [terms, setTerms] = useState(po.payment_terms), [note, setNote] = useState('');
   return <AsyncForm title={t('Draft quote revision 1', 'کوٹیشن ترمیم ۱ کا مسودہ')} detail={po.reference} submit={t('Save draft', 'مسودہ محفوظ کریں')} onCancel={onCancel}
     note={t('Saving a draft does not show it to the buyer. Send it after checking. Quoted terms freeze once saved; later changes need a new revision.', 'مسودہ محفوظ کرنے سے خریدار کو نہیں دکھے گا۔ جانچ کے بعد بھیجیں۔ شرائط محفوظ ہوتے ہی منجمد ہو جائیں گی؛ بعد کی تبدیلی کے لیے نئی ترمیم درکار ہے۔')}
@@ -310,7 +310,7 @@ function QuoteForm({ po, onSaved, onCancel }: { po: Overview['pos'][number]; onS
       await onSaved(t('Draft saved. Send it when the terms are checked.', 'مسودہ محفوظ۔ شرائط کی جانچ کے بعد بھیجیں۔'));
     }}>
     <div className="live-fields"><Field>{t('Unit price (per unit)', 'فی اکائی قیمت')}<input inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} required placeholder="1250.00" /></Field>
-      <Field>{t('Currency', 'کرنسی')}<select value={currency} onChange={e => setCurrency(e.target.value)}><option value="PKR">PKR</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option></select></Field></div>
+      <Field>{t('Currency', 'کرنسی')}<input value={currency} readOnly /></Field></div>
     <p className="live-muted">{t('Order quantity:', 'آرڈر کی مقدار:')} {quantity(po.quantity_milli)} {po.unit} — {t('the price multiplies exactly into the invoice total.', 'قیمت × مقدار انوائس کل پر بالکل درست ہو گی۔')}</p>
     <Field>{t('Specifications', 'تفصیلات')}<textarea value={specifications} onChange={e => setSpecifications(e.target.value)} required minLength={5} maxLength={4000} /></Field>
     <Field>{t('Promised delivery (PKT)', 'وعدہ شدہ ترسیل (پاکستان)')}<input type="datetime-local" value={delivery} onChange={e => setDelivery(e.target.value)} required /></Field>

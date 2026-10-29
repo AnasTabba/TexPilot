@@ -120,3 +120,21 @@ test('database guards cover direct currency writes, commercial inserts and thres
  h.env.DB.batch=async statements=>{h.env.DB.batch=batch;assert.equal((await changeCurrency(h)).status,200);return batch(statements);};
  assert.equal((await h.call(thresholds,{type:'purchase',value:100})).status,409);assert.equal(rows(h,'thresholds').length,0);assert.equal(rows(h,'threshold_history').length,0);assert.equal(rows(h,'erp_audit_events').length,1);
 });
+test('sales reads configured currency and drafts quotations after a currency change',async()=>{
+ const f=await portalFixture(),c=commercial(f,'quote');
+ assert.equal((await f.call('/erp/sales')).data.currency,'PKR');
+ assert.equal((await changeCurrency(f)).status,200);
+ await f.person('Sales','sales_manager');
+ const overview=await f.call('/erp/sales',undefined,'Sales');
+ assert.equal(overview.status,200);assert.equal(overview.data.currency,'USD');
+ const result=await f.call('/erp/sales/quotes',{id:crypto.randomUUID(),poId:c.id,priceMinor:100,currency:overview.data.currency,specifications:'Cotton yarn',requestedDeliveryAt:Date.now()+86400000,paymentTerms:'Net 30'},'Sales');
+ assert.equal(result.status,201);assert.equal(result.data.revision.currency,'USD');
+});
+test('quotation currency mismatch returns the currency error and rolls back audit',async()=>{
+ const f=await portalFixture(),c=commercial(f,'quote');
+ assert.equal((await changeCurrency(f)).status,200);
+ const before=rows(f,'erp_audit_events');
+ const result=await f.call('/erp/sales/quotes',{id:crypto.randomUUID(),poId:c.id,priceMinor:100,currency:'PKR',specifications:'Cotton yarn',requestedDeliveryAt:Date.now()+86400000,paymentTerms:'Net 30'});
+ assert.equal(result.status,409);assert.equal(result.data.error,'Use the factory currency. Reload to get the current currency.');
+ assert.equal(rows(f,'sales_quote_revisions').length,0);assert.deepEqual(rows(f,'erp_audit_events'),before);
+});

@@ -70,7 +70,7 @@ export interface SalesOverview {
   invoices: Invoice[]; dispatches: SalesDispatch[]; deliveries: SalesDelivery[]; corrections: DeliveryCorrection[];
   receivables: Receivable[]; payments: SalesPayment[]; reminders: SalesReminder[]; outbox: SalesOutboxMessage[];
   products: { id: string; sku: string; name: string }[]; finishedStock: FinishedStockOption[]; managers: Manager[];
-  serverTime: number; emailConfigured: boolean;
+  currency: string; serverTime: number; emailConfigured: boolean;
 }
 export interface BuyerIdentity { user: { id: string; name: string; email: string }; buyer: Buyer & { manager_name: string | null } }
 export interface BuyerWorkspace {

@@ -40,25 +40,24 @@ CREATE TABLE settings (
 );
 -- 0002 has no cancellations/pending awards; 0004 has no credit notes. Later owning
 -- migrations extend these guards when those accounting sources are introduced.
+CREATE VIEW currency_change_blockers AS
+ SELECT r.workspace_id FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id
+ WHERE r.status IN ('open','closed') AND b.status='submitted'
+ AND NOT EXISTS(SELECT 1 FROM supplier_purchase_orders p WHERE p.rfq_id=r.id AND p.status!='cancelled')
+ UNION
+ SELECT q.workspace_id FROM sales_quote_revisions q WHERE q.status IN ('draft','sent')
+ UNION
+ SELECT i.workspace_id FROM invoices i WHERE i.total_minor>
+ COALESCE((SELECT SUM(p.amount_minor) FROM sales_payments p WHERE p.invoice_id=i.id AND p.workspace_id=i.workspace_id AND p.currency=i.currency),0);
 CREATE TRIGGER settings_currency_insert BEFORE INSERT ON settings
 WHEN NEW.key='currency' AND json_extract(NEW.value_json,'$')!=COALESCE((SELECT json_extract(value_json,'$') FROM settings WHERE workspace_id=NEW.workspace_id AND key='currency'),'PKR')
 BEGIN
- SELECT RAISE(ABORT,'Close open bids and unaccepted quotations and settle unpaid invoices before changing currency.') WHERE EXISTS(SELECT 1 FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id
- WHERE r.workspace_id=NEW.workspace_id AND r.status IN ('open','closed') AND b.status='submitted'
- AND NOT EXISTS(SELECT 1 FROM supplier_purchase_orders p WHERE p.rfq_id=r.id AND p.status!='cancelled'))
- OR EXISTS(SELECT 1 FROM sales_quote_revisions q WHERE q.workspace_id=NEW.workspace_id AND q.status IN ('draft','sent'))
- OR EXISTS(SELECT 1 FROM invoices i WHERE i.workspace_id=NEW.workspace_id AND i.total_minor>
- COALESCE((SELECT SUM(p.amount_minor) FROM sales_payments p WHERE p.invoice_id=i.id AND p.workspace_id=i.workspace_id AND p.currency=i.currency),0));
+ SELECT RAISE(ABORT,'Close open bids and unaccepted quotations and settle unpaid invoices before changing currency.') WHERE EXISTS(SELECT 1 FROM currency_change_blockers WHERE workspace_id=NEW.workspace_id);
 END;
 CREATE TRIGGER settings_currency_update BEFORE UPDATE ON settings
 WHEN NEW.key='currency' AND json_extract(NEW.value_json,'$')!=COALESCE((SELECT json_extract(value_json,'$') FROM settings WHERE workspace_id=NEW.workspace_id AND key='currency'),'PKR')
 BEGIN
- SELECT RAISE(ABORT,'Close open bids and unaccepted quotations and settle unpaid invoices before changing currency.') WHERE EXISTS(SELECT 1 FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id
- WHERE r.workspace_id=NEW.workspace_id AND r.status IN ('open','closed') AND b.status='submitted'
- AND NOT EXISTS(SELECT 1 FROM supplier_purchase_orders p WHERE p.rfq_id=r.id AND p.status!='cancelled'))
- OR EXISTS(SELECT 1 FROM sales_quote_revisions q WHERE q.workspace_id=NEW.workspace_id AND q.status IN ('draft','sent'))
- OR EXISTS(SELECT 1 FROM invoices i WHERE i.workspace_id=NEW.workspace_id AND i.total_minor>
- COALESCE((SELECT SUM(p.amount_minor) FROM sales_payments p WHERE p.invoice_id=i.id AND p.workspace_id=i.workspace_id AND p.currency=i.currency),0));
+ SELECT RAISE(ABORT,'Close open bids and unaccepted quotations and settle unpaid invoices before changing currency.') WHERE EXISTS(SELECT 1 FROM currency_change_blockers WHERE workspace_id=NEW.workspace_id);
 END;
 CREATE TRIGGER settings_identity_immutable BEFORE UPDATE OF workspace_id,key ON settings
 WHEN NEW.workspace_id!=OLD.workspace_id OR NEW.key!=OLD.key BEGIN SELECT RAISE(ABORT,'setting identity is immutable'); END;

@@ -5,6 +5,7 @@
  * Daily reminder scheduling is exported as `salesScheduled(env, now)` for the Worker cron. */
 import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, recordId, allow, audit, role, reason as decisionReason } from './erp-utils.mjs';
 import { sha256 } from './auth.mjs';
+import { settingsOf } from './governance.mjs';
 
 /** Asia/Karachi due-date arithmetic assumes Pakistan's fixed UTC+5 offset with no daylight
  * saving; a future timezone-library switch must keep due dates stable for existing receivables. */
@@ -150,7 +151,7 @@ async function salesOverview(db, env, w) {
     all(db, "SELECT id,name,role FROM users WHERE workspace_id=? AND status='active' ORDER BY name COLLATE NOCASE LIMIT 200", w),
   ]);
   return json({ buyers, pos, revisions, orders, lines, invoices, dispatches, deliveries, corrections, receivables, payments, reminders, outbox, products, finishedStock, managers,
-    serverTime: Date.now(), emailConfigured: !!env.MAIL_API_KEY && !!env.MAIL_SENDER });
+    currency: (await settingsOf(db, w)).currency, serverTime: Date.now(), emailConfigured: !!env.MAIL_API_KEY && !!env.MAIL_SENDER });
 }
 
 export async function salesApi(request, env, member, path, data) {
@@ -265,7 +266,10 @@ export async function salesApi(request, env, member, path, data) {
       WHERE NOT EXISTS(SELECT 1 FROM sales_quote_revisions WHERE buyer_po_id=? AND status='approved')`, id, w, po.id, po.buyer_id, po.id,
       po.quantity_milli, po.unit, quote.price, quote.currency, quote.specifications, quote.delivery, quote.terms, quote.note, productId, member.user_id, now, now, po.id),
       audit(db, member, 'sales.quote_drafted', id, { po: po.id })]); }
-    catch { fail(409, 'A quote already exists for this order or it changed. Reload first.'); }
+    catch (error) {
+      if (String(error).includes('Use the factory currency.')) fail(409, 'Use the factory currency. Reload to get the current currency.');
+      fail(409, 'A quote already exists for this order or it changed. Reload first.');
+    }
     return json({ revision: await one(db, 'SELECT * FROM sales_quote_revisions WHERE id=?', id) }, 201);
   }
 
