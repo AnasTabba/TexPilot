@@ -55,7 +55,7 @@ export const PENDING_SOURCES = [{ objectType: 'approval', role: 'admin', sql: "S
   { objectType: 'stock_query', role: 'supervisor', sql: "SELECT q.id, q.workspace_id, p.name AS label, q.created_at AS since FROM stock_queries q JOIN products p ON p.id=q.product_id WHERE q.status='open' AND q.created_at <= ?" },
   { objectType: 'dispatch_approval', role: 'sales_manager', sql: `SELECT d.id, d.workspace_id, p.name || ' · ' || l.batch AS label, d.created_at AS since FROM dispatches d JOIN lots l ON l.id=d.lot_id JOIN products p ON p.id=l.product_id WHERE d.status='pending_approval' AND d.created_at <= ?` },
   { objectType: 'stock_issue', role: 'supervisor', sql: `SELECT i.id, i.workspace_id, p.name || ' · ' || l.batch AS label, i.created_at AS since FROM stock_issues i JOIN lots l ON l.id=i.lot_id JOIN products p ON p.id=l.product_id WHERE i.status='open' AND i.created_at <= ?` },
-  { objectType: 'dispatch_hold_notice', role: 'dispatch', sql: `SELECT r.id, r.workspace_id, p.name || ' · ' || l.batch AS label, r.created_at AS since FROM dispatch_requests r JOIN dispatches d ON d.id=r.dispatch_id JOIN lots l ON l.id=d.lot_id JOIN products p ON p.id=l.product_id WHERE r.kind='hold_notice' AND r.status='pending' AND r.created_at <= ?` }];
+  { objectType: 'dispatch_hold_notice', role: 'dispatch', sql: `SELECT r.id, r.workspace_id, p.name || ' · ' || l.batch AS label, r.created_at AS since FROM dispatch_requests r JOIN dispatches d ON d.id=r.dispatch_id JOIN lots l ON l.id=d.lot_id JOIN products p ON p.id=l.product_id WHERE r.kind='hold_notice' AND r.status='pending' AND d.status IN ('approved','on_hold') AND r.created_at <= ?` }];
 export async function remindersScheduled(env, now = Date.now()) {
   const db = env.DB;
   let checked = 0, created = 0;
