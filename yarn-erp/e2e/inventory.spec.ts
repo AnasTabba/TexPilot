@@ -39,7 +39,7 @@ test.describe('Shared inventory', () => {
     const after = await workspace(page);
     expect(after.balances.find((balance: { lot_id: string; stage: string }) => balance.lot_id === lot.id && balance.stage === 'raw')!.grams).toBe(rawBefore);
     expect(after.movements.filter((movement: { lot_id: string }) => movement.lot_id === lot.id)).toHaveLength(movementsBefore);
-    await page.goto('/#/activity');
+    await page.goto('/#/history');
     await expect(page.getByRole('button', { name: 'Reverse entry' })).toHaveCount(0);
   });
 

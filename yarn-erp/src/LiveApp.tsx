@@ -8,16 +8,14 @@ import { moveIcon } from './icons';
 import { Dashboard, Notifications, type Inbox } from './Notifications';
 import Profile from './Profile';
 import { portal } from './PortalCommon';
-import { COMMON, NAV } from './roles';
+import { COMMON, NAV, type Section } from './roles';
 import QualityScreens from './QualityScreens';
 import Review from './Review';
 import { SupervisorScreens } from './SupervisorScreens';
 import { parseHash } from './routes.ts';
 import SignIn, { Avatar } from './SignIn';
-import Team, { permissionInfo } from './Team';
-import SalesScreens from './SalesScreens';
-import DispatchScreens from './DispatchScreens';
-import PurchaseScreens from './PurchaseScreens';
+import { MODULES } from './ModuleViews';
+import AdminScreens from './AdminScreens';
 import { Menu, Package, Truck, Search, ChevronRight, ShieldAlert, ArrowRightLeft, ClipboardCheck, ScanBarcode, LogOut } from 'lucide-react';
 import BarcodeScanner from './BarcodeScanner';
 import Scanner from './Scanner';
@@ -30,12 +28,14 @@ type FormType = 'product' | 'finished' | 'adjust' | 'inspection';
 type Action = { type: FormType; lotId?: string; productId?: string };
 // Old pages that were filtered copies of the stock list (or of Home) now open Stock with that filter.
 type View = 'all' | 'quality' | 'production' | 'dispatch';
-const aliases: Record<string, [string, View]> = { materials: ['inventory', 'all'], production: ['inventory', 'production'], quality: ['inventory', 'quality'], reports: ['dashboard', 'all'], overview: ['dashboard', 'all'], settings: ['profile', 'all'] };
+const aliases: Record<string, [string, View]> = { materials: ['inventory', 'all'], production: ['inventory', 'production'], quality: ['inventory', 'quality'], overview: ['dashboard', 'all'] };
 const sections = [...new Set([...Object.values(NAV).flat(), ...COMMON])];
 const tabsOf = Object.fromEntries(sections.flatMap(section => section.tabs ? [[section.id, section.tabs.map(tab => tab.id)]] : []));
+const MODULE_KEYS = ['purchase', 'quality', 'supervisor', 'sales', 'dispatch'];
+const ROLE_OF_MODULE: Record<string, Role> = { purchase: 'purchase_manager', quality: 'quality_inspector', supervisor: 'supervisor', sales: 'sales_manager', dispatch: 'dispatch' };
 const routeDetailsFromHash = () => {
   const pieces = location.hash.replace(/^#\/?/, '').split('/');
-  const module = pieces[0] === 'modules' ? pieces[1] : '';
+  const module = pieces[0] === 'modules' && MODULE_KEYS.includes(pieces[1]) ? pieces[1] : '';
   const source = module ? '#/' + pieces.slice(2).join('/') : location.hash;
   const parsed = parseHash(source, tabsOf);
   const section = aliases[parsed.section]?.[0] ?? (sections.some(known => known.id === parsed.section) ? parsed.section : 'dashboard');
@@ -232,7 +232,7 @@ function LotDetail({ lot, state, onAction, onBack }: { lot: StockLot; state: Wor
   const NextIcon = next[2] ? actions[next[2]][1] : ShieldCheck;
   // Someone without the permission for the next step still sees it, with who can do it instead of a button.
   const nextAllowed = !!next[2] && allowed(next[2]);
-  const permissionName = next[2] ? permissionInfo.find(([id]) => id === actions[next[2]!][2])![1] : '';
+  const permissionName = next[2] ? actions[next[2]][2] : '';
   const whoCan = next[2] ? t(`Someone with “${permissionName}” access records this step.`, `یہ کام “${t(permissionName)}” کی اجازت رکھنے والا ممبر درج کرے گا۔`) : '';
   const others = (Object.keys(actions) as Step[]).filter(type => type !== next[2] && allowed(type));
   const notes = [...(evidence?.inspections || []).map(i => ({ id: i.id, at: i.created_at, kind: 'inspection' as const, i })), ...(evidence?.qualityEvents || []).map(e => ({ id: e.id, at: e.created_at, kind: 'quality' as const, e }))].sort((a, b) => b.at - a.at);
@@ -348,12 +348,11 @@ export default function LiveApp() {
   const me = workspace.member;
   const allow = (permission: Permission) => can(me, permission);
   const shown = [...NAV[me.role], ...COMMON];
-  const page = shown.some(section => section.id === route) ? route : 'dashboard';
-  const purchaseSections = ['dashboard', 'suppliers', 'rfqs', 'orders', 'claims', 'analytics'];
-  const ownerModule = routeInfo.module === 'purchase' || routeInfo.module === 'sales' || routeInfo.module === 'dispatch'
-    || (me.role === 'purchase_manager' && purchaseSections.includes(routeInfo.section))
-    || (me.role === 'sales_manager' && ['dashboard', 'buyers', 'buyer-rfqs', 'invoices', 'dispatch-requests', 'analytics'].includes(routeInfo.section))
-    || (me.role === 'dispatch' && ['dashboard', 'dispatches', 'new-dispatch', 'history'].includes(routeInfo.section));
+  const adminPage = me.role === 'admin' && route === 'history' ? 'movement-history' : route;
+  const page = shown.some(section => section.id === adminPage) || (me.role === 'admin' && ['movement-history', 'inventory'].includes(adminPage)) ? adminPage : 'dashboard';
+  // Owner screens render for their role at its own sections, and for an admin under #/modules/<module>/….
+  const ownerRole: Role | '' = routeInfo.module ? ROLE_OF_MODULE[routeInfo.module] : (['purchase_manager', 'sales_manager', 'dispatch'] as Role[]).includes(me.role) && NAV[me.role].some(section => section.id === routeInfo.section) ? me.role : '';
+  const ownerModule = !!ownerRole;
   const { tab: routeTab, id: routeItemId } = parseHash(location.hash, tabsOf);
   const reloadInbox = async () => { setInbox(await portal<Inbox>('/notifications')); };
   const selected = workspace.lots.find(l => l.id === selectedId);
@@ -405,11 +404,11 @@ export default function LiveApp() {
     } catch (error) { setError(errorMessage(error)); } finally { setExportBusy(false); }
   }
   const today = new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Karachi' }).format(Date.now());
-  const current = shown.find(section => section.id === page);
-  const pageTitle = action ? t("Stock entry") : selected ? t("Batch details") : t(current?.en || 'Dashboard', current?.ur);
+  const current = shown.find(section => section.id === page) ?? sections.find(section => section.id === page);
+  const pageTitle = action ? t("Stock entry") : selected ? t("Batch details") : page === 'movement-history' ? t('History','ہسٹری') : page === 'inventory' && me.role === 'admin' ? t('Stock','اسٹاک') : page === 'admin-activity' ? t('Activity','سرگرمیاں') : t(current?.en || 'Dashboard', current?.ur);
   // Counts that wait on the person: unread notifications, and sign-in requests for admins in Team.
   const badge = (id: string) => id === 'notifications' && inbox.unread > 0 ? <b className="yf-nav-count" aria-label={`, ${inbox.unread} ${t('unread', 'نہ پڑھی ہوئی')}`}>{inbox.unread}</b>
-    : id === 'team' && workspace.pending > 0 ? <b className="yf-nav-count" aria-label={`, ${workspace.pending} waiting`}>{workspace.pending}</b> : null;
+    : id === 'settings' && workspace.pending > 0 && me.role === 'admin' ? <b className="yf-nav-count" aria-label={`, ${workspace.pending} waiting`}>{workspace.pending}</b> : null;
   const brand = <a className="live-brand" href="#/dashboard"><Cone hue="#2f6fd6" size={30} />yarnflow</a>;
   const whoAmI = <div className="yf-me"><Avatar name={me.name} /><span><strong>{me.name}</strong><span>{t(...roleLabel[me.role])}</span></span><button className="live-icon-button" onClick={() => void signOut()} aria-label={`${t('Sign out')} ${me.name}`} title={t("Sign out")}><LogOut size={20} aria-hidden="true" /></button></div>;
   return <div className="live-app"><a className="skip-link" href="#live-main" onClick={event => { event.preventDefault(); document.getElementById('live-main')?.focus(); }}>{t("Skip to content")}</a>
@@ -421,16 +420,17 @@ export default function LiveApp() {
       {error && <div className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{t(error)}<button className="live-text-button" onClick={() => void refresh()}>{t("Retry connection")}</button></div>}
       {!online && <div className="live-warning" role="status"><WifiOff size={18} />{t("You are offline. Entries can be saved again once the connection is back.")}</div>}
       {notice && <div className="live-success" role="status"><CheckCheck size={19} /><span>{t(notice)}</span><button aria-label={t("Dismiss message")} className="live-icon-button" onClick={() => setNotice('')}><X size={17} /></button></div>}
-      {ownerModule ? ((routeInfo.module === 'purchase' || me.role === 'purchase_manager') ? <>{routeInfo.section === 'dashboard' && <Dashboard member={me} inbox={inbox} reload={reloadInbox} />}<PurchaseScreens member={me} section={routeInfo.section} tab={routeInfo.tab} id={routeInfo.id} navigate={navigate} onInventoryChanged={() => refresh(true)} /></> : (routeInfo.module === 'sales' || me.role === 'sales_manager') ? <SalesScreens member={me} section={routeInfo.section} tab={routeInfo.tab} id={routeInfo.id} navigate={navigate} /> : <DispatchScreens member={me} section={routeInfo.section} tab={routeInfo.tab} id={routeInfo.id} navigate={navigate} />) : action ? <InventoryForm key={`${action.type}:${action.lotId || ''}`} action={action} state={workspace} result={action.type === 'inspection' ? lastResult : null} onSaved={saved} onCancel={() => setAction(null)} /> : selected ? <LotDetail key={selected.id} lot={selected} state={workspace} onAction={setAction} onBack={() => navigate('inventory')} /> : <>
+      {ownerModule ? (() => { const Screen = MODULES[ownerRole as Role]!; return <>{ownerRole === 'purchase_manager' && routeInfo.section === 'dashboard' && me.role === 'purchase_manager' && <Dashboard member={me} inbox={inbox} reload={reloadInbox} />}<Screen member={me} section={routeInfo.section} tab={routeInfo.tab} id={routeInfo.id} navigate={navigate} state={workspace} onInventoryChanged={() => refresh(true)} /></>; })() : action ? <InventoryForm key={`${action.type}:${action.lotId || ''}`} action={action} state={workspace} result={action.type === 'inspection' ? lastResult : null} onSaved={saved} onCancel={() => setAction(null)} /> : selected ? <LotDetail key={selected.id} lot={selected} state={workspace} onAction={setAction} onBack={() => navigate('inventory')} /> : <>
       {page === 'dashboard' && (me.role === 'supervisor' ? <SupervisorScreens section="dashboard" member={me} state={workspace} /> : <Dashboard member={me} inbox={inbox} reload={reloadInbox} />)}
       {page === 'dashboard' && me.role === 'quality_inspector' && <QualityScreens section="dashboard" />}
       {page === 'notifications' && <Notifications member={me} inbox={inbox} reload={reloadInbox} />}
       {page === 'dispatch' && <DispatchPanel state={workspace} />}{page === 'inventory' && (me.role === 'supervisor' ? <SupervisorScreens section="inventory" member={me} state={workspace} /> : <section className="yf-stock-panel" aria-label={t("Stock")}><div className="yf-views" role="group" aria-label={t("Show")}>{views.map(([id, label, Icon]) => <button key={id} aria-pressed={view === id} onClick={() => setView(id)}><Icon size={20} aria-hidden="true" /><span>{t(label)}</span><b>{workspace.lots.filter(l => inView(l, id)).length}</b></button>)}</div><Field className="live-search-label">{t("Search")}<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder={t("Material, batch or supplier")} /></Field>{stockList()}</section>)}
-      {page==='help' && <section className="live-panel yf-help"><h2>{t("Common questions")}</h2>{[[t("How do I receive stock?"),t("The purchase manager registers an arrival, the inspector inspects it, and the supervisor accepts the report. Only then does the stock appear in the batch.")],[t("How does quality approval work?"),t("Record the care label and physical inspection. A QC decision is required before dispatch; a scan result alone never approves a batch.")],[t("How do corrections work?"),t("The supervisor adjusts or writes off stock with a reason. Large changes wait for admin approval, the original entries stay visible and stock cannot become negative.")],[t("Where is my data stored?"),t("In one shared database. Everyone who signs in sees the same stock, and every entry records who made it.")],[t("Who can do what?"),t("Everyone can view stock and use the scanner. The supervisor records finished goods and adjusts stock; materials are added by the supervisor or purchase manager.")],[t("How do new people join?"),t("Ask an admin to create your account. The admin chooses your role in Team and gives you your PIN.")],[t("Forgot your PIN?"),t("Ask an admin to set a new one in Team. Five wrong PINs lock a name for five minutes.")],[t("Phone and computer"),t("Open the same link on any phone or computer and sign in with your name and PIN. On iPhone, Share then Add to Home Screen makes it open like an app.")],[t("Camera and privacy"),t("Camera access is requested when you start a scan. The TexPilot service must be connected for model analysis.")]].map(([q,a])=><details key={q}><summary>{t(q)}</summary><p>{t(a)}</p></details>)}</section>}
+      {page==='help' && <section className="live-panel yf-help"><h2>{t("Common questions")}</h2>{[[t("How do I receive stock?"),t("The purchase manager registers an arrival, the inspector inspects it, and the supervisor accepts the report. Only then does the stock appear in the batch.")],[t("How does quality approval work?"),t("Record the care label and physical inspection. A QC decision is required before dispatch; a scan result alone never approves a batch.")],[t("How do corrections work?"),t("The supervisor adjusts or writes off stock with a reason. Large changes wait for admin approval, the original entries stay visible and stock cannot become negative.")],[t("Where is my data stored?"),t("In one shared database. Everyone who signs in sees the same stock, and every entry records who made it.")],[t("Who can do what?"),t("Everyone can view stock and use the scanner. The supervisor records finished goods and adjusts stock; materials are added by the supervisor or purchase manager.")],[t("How do new people join?"),t("Ask an admin to create your account. The admin chooses your role in Settings › Users and gives you a PIN.")],[t("Forgot your PIN?"),t("Ask an admin to set a new one in Settings › Users. Five wrong PINs lock a name for five minutes.")],[t("Phone and computer"),t("Open the same link on any phone or computer and sign in with your name and PIN. On iPhone, Share then Add to Home Screen makes it open like an app.")],[t("Camera and privacy"),t("Camera access is requested when you start a scan. The TexPilot service must be connected for model analysis.")]].map(([q,a])=><details key={q}><summary>{t(q)}</summary><p>{t(a)}</p></details>)}</section>}
       {page === 'scanner' && <><div className="live-segments yf-scan-tabs" aria-label={t("What to scan")}><button aria-pressed={scanTab === 'fabric'} onClick={() => setScanTab('fabric')}><Camera size={22} aria-hidden="true" /><span>{t("Fabric")}</span></button><button aria-pressed={scanTab === 'spec'} onClick={() => setScanTab('spec')}><Ruler size={22} aria-hidden="true" /><span>{t("Yarn count")}</span></button><button aria-pressed={scanTab === 'barcode'} onClick={() => setScanTab('barcode')}><ScanBarcode size={22} aria-hidden="true" /><span>{t("Stock label")}</span></button></div>{scanTab === 'spec' ? <SpecScan /> : scanTab === 'barcode' ? <><BarcodeScanner onFound={lookup} />{!!matches.length && <section className="live-panel"><h2>{t("Choose the batch")}</h2>{matches.map(lot => <button className="live-match" key={lot.id} onClick={() => { navigate('inventory', lot.id); }}><span>{lot.name} · {lot.batch}</span><ArrowRight size={18} /></button>)}</section>}</> : <><Scanner t={t} onInventory={() => navigate('inventory')} onResult={setLastResult} onMeasure={() => { setScanTab('spec'); scrollTo({ top: 0, behavior: 'smooth' }); }} />{lastResult && me.role !== 'quality_inspector' && <section className="live-panel"><h2>{t("Save this scan to a batch")}</h2><p>{t("Keeps the result in the batch's QC history. It does not approve the batch by itself.")}</p>{allow('inspect') ? <><button className="button primary" disabled={!workspace.lots.length} onClick={() => setAction({ type: 'inspection' })}><ClipboardCheck size={18} aria-hidden="true" />{t("Save to a batch")}</button>{!workspace.lots.length && <p>{t("Add a batch in Stock first.")}</p>}</> : <p className="live-muted">{t("Someone with “Inspections” access can save scans to a batch.")}</p>}</section>}</>}</>}
       {page === 'activity' && (me.role === 'supervisor' ? <SupervisorScreens section="history" member={me} state={workspace} /> : <section className="live-panel"><div className="live-panel-heading"><h2>{t("Stock movement register")}</h2><span>Asia/Karachi</span></div>{activityList([...workspace.movements, ...history.filter(h => !workspace.movements.some(m => m.id === h.id))])}{workspace.movements.length >= 100 && moreHistory && <button className="button" disabled={historyBusy} onClick={async () => { setHistoryBusy(true); try { const page = await api<{ movements: StockMovement[] }>('/movements?offset=' + (100 + history.length)); setHistory(previous => [...previous, ...page.movements]); setMoreHistory(page.movements.length === 100); } catch (error) { setError(errorMessage(error)); } finally { setHistoryBusy(false); } }}>{historyBusy ? t("Loading…") : t("Load earlier movements")}</button>}</section>)}
+      {page === 'movement-history' && <section className="live-panel"><div className="live-panel-heading"><h2>{t("Stock movement register")}</h2><span>Asia/Karachi</span></div>{activityList([...workspace.movements, ...history.filter(h => !workspace.movements.some(m => m.id === h.id))])}{workspace.movements.length >= 100 && moreHistory && <button className="button" disabled={historyBusy} onClick={async () => { setHistoryBusy(true); try { const page = await api<{ movements: StockMovement[] }>('/movements?offset=' + (100 + history.length)); setHistory(previous => [...previous, ...page.movements]); setMoreHistory(page.movements.length === 100); } catch (error) { setError(errorMessage(error)); } finally { setHistoryBusy(false); } }}>{historyBusy ? t("Loading…") : t("Load earlier movements")}</button>}</section>}
       {page === 'profile' && <Profile state={workspace} backupBusy={exportBusy} onBackup={() => void backup()} />}
-      {page==='team' && <Team me={me} onChanged={() => refresh(true)} />}
+            {me.role === 'admin' && ['dashboard','approvals','claims','admin-activity','reports','analytics','settings','modules'].includes(page) && <AdminScreens member={me} section={page} tab={routeInfo.tab} id={routeInfo.id} navigate={navigate} state={workspace} onInventoryChanged={() => refresh(true)} />}
       {page==='lots' && <QualityScreens section="lots" />}
       {page==='submissions' && <QualityScreens section="submissions" />}
       {page==='reviews' && <Review />}
@@ -439,6 +439,6 @@ export default function LiveApp() {
 
       </>}
     </main><footer className="live-sync" role="status"><CheckCheck size={17} aria-hidden="true"/><span>{t("All changes saved")}{savedAt ? ' · '+t('checked', 'چیک کیا')+' '+new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Karachi'}).format(savedAt) : ''}</span></footer></div>
-    <nav className="live-bottom-nav" aria-label={t("Phone navigation")}>{[...NAV[me.role].slice(0, 3), COMMON[0]].map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id, '', '', false)}><Icon size={23} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>)}<button onClick={()=>menuDialog.current?.showModal()} aria-label={workspace.pending > 0 ? `More pages, ${workspace.pending} waiting in Team` : t("More pages")}><Menu size={23} aria-hidden="true" /><span>{t("More")}</span>{workspace.pending > 0 && <b className="yf-nav-count" aria-hidden="true">{workspace.pending}</b>}</button></nav>
+    <nav className="live-bottom-nav" aria-label={t("Phone navigation")}>{[...NAV[me.role].slice(0, 3), COMMON[0]].map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id, '', '', false)}><Icon size={23} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>)}<button onClick={()=>menuDialog.current?.showModal()} aria-label={workspace.pending > 0 ? `More pages, ${workspace.pending} waiting in Settings` : t("More pages")}><Menu size={23} aria-hidden="true" /><span>{t("More")}</span>{workspace.pending > 0 && <b className="yf-nav-count" aria-hidden="true">{workspace.pending}</b>}</button></nav>
   </div>;
 }
