@@ -1,15 +1,16 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ChevronDown, RefreshCw, Ship } from 'lucide-react';
-import { InventoryError } from './inventory-client';
+import { InventoryError, type Member } from './inventory-client';
 import { portal } from './PortalCommon';
 import { errorMessage } from './forms';
 import { useLanguage } from './i18n';
 import { factoryTime } from './erp-client';
-import { trackingView, type Shipment, type TrackingStage } from './tracking';
+import { trackingView, type Shipment, type TrackingStage, type TrackingStatus } from './tracking';
+import { TrackingSettings } from './TrackingSettings';
 import './shipment-tracking.css';
 
-interface ShipmentsResponse { shipments: Shipment[]; tracking: { configured: boolean; provider: string } }
-interface TrackResponse { shipment?: Shipment; error?: string }
+interface ShipmentsResponse { shipments: Shipment[]; tracking: TrackingStatus }
+interface TrackResponse { shipment?: Shipment; error?: string; stageChanged?: { from: TrackingStage; to: TrackingStage } }
 
 const STAGE: Record<TrackingStage, { en: string; ur: string; colour: string; ink: string }> = {
   not_checked: { en: 'Not checked', ur: 'چیک نہیں ہوا', colour: '#8a8f98', ink: '#fff' },
@@ -75,15 +76,16 @@ function Route({ stage, progress, origin, destination }: { stage: TrackingStage;
   </div>;
 }
 
-function ShipmentCard({ shipment, error, busy, onCheck }: { shipment: Shipment; error: string; busy: boolean; onCheck: () => void }) {
+function ShipmentCard({ shipment, error, busy, moved, onCheck }: { shipment: Shipment; error: string; busy: boolean; moved: TrackingStage | null; onCheck: () => void }) {
   const { t } = useLanguage(); const [open, setOpen] = useState(false);
   const view = trackingView(shipment);
   const note = error || (shipment.status === 'error' ? shipment.last_error || '' : '');
-  return <article className="trk-card">
+  return <article className={`trk-card${moved ? ' is-flash' : ''}`}>
     <header className="trk-head">
       <div><code className="trk-bl">{shipment.bill_of_lading}</code><p className="trk-muted">{[shipment.reference ?? shipment.purchase_order_id, shipment.supplier_name].filter(Boolean).join(' · ')}</p></div>
       <StagePill stage={view.stage} />
     </header>
+    {moved && <p className="trk-moved" role="status">{t(`Moved to ${STAGE[moved].en}`, `${STAGE[moved].ur} میں منتقل`)}</p>}
     <Route stage={view.stage} progress={view.progress} origin={view.origin} destination={view.destination} />
     <ul className="trk-chips">
       {view.eta !== null && <li className="trk-chip">{t('ETA', 'متوقع')}: {factoryTime(view.eta)}</li>}
@@ -100,10 +102,17 @@ function ShipmentCard({ shipment, error, busy, onCheck }: { shipment: Shipment; 
   </article>;
 }
 
-export function ShipmentTracking() {
+/** `member` comes from LiveApp (`workspace.member`); without it the page is read-only for settings. */
+export function ShipmentTracking({ member }: { member?: Member } = {}) {
   const { language, t } = useLanguage();
   const { data, setData, forbidden, error: loadError } = useShipments();
   const [filter, setFilter] = useState('all'), [busy, setBusy] = useState(''), [errors, setErrors] = useState<Record<string, string>>({});
+  const [moved, setMoved] = useState<{ id: string; stage: TrackingStage } | null>(null);
+  useEffect(() => {
+    if (!moved) return;
+    const timer = setTimeout(() => setMoved(null), 3200);
+    return () => clearTimeout(timer);
+  }, [moved]);
   if (forbidden) return null;
 
   const check = async (id: string) => {
@@ -111,6 +120,7 @@ export function ShipmentTracking() {
     try {
       const result = await portal<TrackResponse>('/shipments/track', { id });
       if (result.shipment) setData(prev => prev && { ...prev, shipments: prev.shipments.map(s => s.id === id ? result.shipment! : s) });
+      if (result.stageChanged && Object.hasOwn(STAGE, result.stageChanged.to)) setMoved({ id, stage: result.stageChanged.to });
       if (result.error) setErrors(prev => ({ ...prev, [id]: result.error! }));
     } catch (failure) {
       setErrors(prev => ({ ...prev, [id]: errorMessage(failure, language) }));
@@ -120,7 +130,8 @@ export function ShipmentTracking() {
   const active = FILTERS.find(f => f.id === filter) ?? FILTERS[0];
   const shown = (data?.shipments ?? []).filter(s => active.match(trackingView(s).stage));
   return <section className="trk-wrap" aria-label={t('Shipment tracking', 'شپمنٹ ٹریکنگ')}>
-    <div className="yf-head"><div><h2>{t('Shipment tracking', 'شپمنٹ ٹریکنگ')}</h2><p>{t('Where each bill of lading is on its route, from the carrier’s latest update.', 'کیریئر کی تازہ ترین اطلاع کے مطابق ہر بل آف لیڈنگ کی راستے میں موجودہ حالت۔')}</p></div></div>
+    <div className="yf-head"><div><h2>{t('Shipment tracking', 'شپمنٹ ٹریکنگ')}</h2><p>{t('Where each bill of lading is on its route, from the carrier’s latest update.', 'کیریئر کی تازہ ترین اطلاع کے مطابق ہر بل آف لیڈنگ کی راستے میں موجودہ حالت۔')}{data?.tracking.enabled && <span className="trk-auto"> · {t(`Auto-refresh every ${data.tracking.refreshHours} h`, `ہر ${data.tracking.refreshHours} گھنٹے میں خودکار تازہ کاری`)}</span>}</p></div></div>
+    <TrackingSettings isAdmin={member?.admin === true} onStatus={status => setData(prev => prev && { ...prev, tracking: status })} />
     {data && !data.tracking.configured && <p className="trk-banner" role="status">{t('Tracking is not connected yet. Add the API key and it starts working.', 'ٹریکنگ ابھی منسلک نہیں ہے۔ API کی درج کریں تو یہ کام شروع کر دے گی۔')}</p>}
     {loadError && <p className="live-error" role="alert">{t(loadError)}</p>}
     {!data && !loadError && <p className="live-muted" role="status">{t('Loading shipments…', 'شپمنٹس لوڈ ہو رہی ہیں…')}</p>}
@@ -129,7 +140,7 @@ export function ShipmentTracking() {
     </div>}
     {data && !data.shipments.length && <div className="trk-empty"><Ship size={32} aria-hidden="true" /><h3>{t('No shipments yet', 'ابھی کوئی شپمنٹ نہیں')}</h3></div>}
     {data && data.shipments.length > 0 && !shown.length && <p className="live-muted">{t('Nothing in this view yet.', 'اس فلٹر میں ابھی کچھ نہیں۔')}</p>}
-    <div className="trk-list">{shown.map(s => <ShipmentCard key={s.id} shipment={s} error={errors[s.id] || ''} busy={busy === s.id} onCheck={() => void check(s.id)} />)}</div>
+    <div className="trk-list">{shown.map(s => <ShipmentCard key={s.id} shipment={s} error={errors[s.id] || ''} busy={busy === s.id} moved={moved?.id === s.id ? moved.stage : null} onCheck={() => void check(s.id)} />)}</div>
   </section>;
 }
 
@@ -161,7 +172,7 @@ export function ShipmentsWidget() {
     <p className="trk-w-count"><strong>{count}</strong><span>{t('on the water or on the road', 'سمندر یا سڑک پر')}</span></p>
     {error && <p className="live-error" role="alert">{t(error)}</p>}
     {onRoute.length > 0 && <ul className="trk-w-list">{onRoute.slice(0, 5).map(({ s, view }) => <li key={s.id}>
-      <button type="button" className="trk-w-row" onClick={() => { location.hash = '#/tracking'; }}>
+      <button type="button" className="trk-w-row" onClick={() => { location.hash = '#/procurement/tracking'; }}>
         <code className="trk-bl">{s.bill_of_lading}</code><StagePill stage={view.stage} />
         <span className="trk-w-bar" aria-hidden="true"><span style={{ '--p': view.progress } as CSSProperties} /></span>
       </button>

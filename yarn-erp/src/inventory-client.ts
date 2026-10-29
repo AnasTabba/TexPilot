@@ -30,7 +30,7 @@ export interface WorkspaceState {
   photos: { id: string; lot_id: string; content_type: string; size: number; actor_name: string; created_at: number }[];
   qualityEvents: { id: string; lot_id: string; status: Quality; note: string; actor_name: string; created_at: number }[];
   pending: number; serverTime: number; backend: string;
-  qcArrivals?: { id: string; product_id: string; reference: string; unit: 'kg' | 'tonne'; arrived_at: number; open_milli: number; supplier_name: string }[];
+  qcArrivals?: { id: string; product_id: string; reference: string; unit: 'kg' | 'tonne'; arrived_at: number; open_milli: number; supplier_name: string; draft_id?: string | null; draft_accepted?: number | null; draft_rejected?: number | null }[];
 }
 export class InventoryError extends Error {
   status: number;

@@ -15,12 +15,26 @@ interface Props { arrival: Arrival; isAdmin: boolean; onClose: () => void; onDon
  * No claim = draft accepting the open quantity (photo required), Yes claim = draft rejecting it with one issue
  * (the comment, severity major). Submitting hands the rest to the supervisor, as the Inspections page does.
  */
+/** Phone photos are often several MB; send a JPEG of at most 2000 px so uploads are quick and fit the photo store. */
+async function shrink(file: File): Promise<File> {
+  if (file.size < 1.5 * 1024 * 1024) return file;
+  try {
+    const image = await createImageBitmap(file), scale = Math.min(1, 2000 / Math.max(image.width, image.height));
+    const canvas = document.createElement('canvas'); canvas.width = Math.round(image.width * scale); canvas.height = Math.round(image.height * scale);
+    canvas.getContext('2d')!.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>(done => canvas.toBlob(done, 'image/jpeg', 0.85));
+    return blob ? new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file;
+  } catch { return file; }
+}
+
 export default function InspectArrival({ arrival, isAdmin, onClose, onDone }: Props) {
   const { t, language } = useLanguage();
   const dialog = useRef<HTMLDialogElement>(null);
   // Ids live as long as the dialog, so a retry after a failed step replays the same records instead of duplicating them.
-  const ids = useRef({ inspection: crypto.randomUUID(), issue: crypto.randomUUID(), photo: crypto.randomUUID() });
-  const [claim, setClaim] = useState(false), [comment, setComment] = useState(''), [reason, setReason] = useState('');
+  // A saved draft (its photo failed earlier) is resumed under its own id with its own choice.
+  const resuming = !!arrival.draft_id;
+  const ids = useRef({ inspection: arrival.draft_id || crypto.randomUUID(), issue: crypto.randomUUID(), photo: crypto.randomUUID() });
+  const [claim, setClaim] = useState((arrival.draft_rejected ?? 0) > 0), [comment, setComment] = useState(''), [reason, setReason] = useState('');
   const [file, setFile] = useState<File | null>(null), [preview, setPreview] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
   useEffect(() => { const d = dialog.current; if (d && !d.open) d.showModal(); }, []);
   useEffect(() => { if (!file) return; const url = URL.createObjectURL(file); setPreview(url); return () => URL.revokeObjectURL(url); }, [file]);
@@ -36,13 +50,13 @@ export default function InspectArrival({ arrival, isAdmin, onClose, onDone }: Pr
       const { inspection, issue, photo } = ids.current;
       // Admins act outside their role, and the server wants the reason on every step.
       const base = isAdmin ? { interventionReason: why } : {};
-      await api('/erp/qc/inspections', { id: inspection, lotId: arrival.id, acceptedMilli: claim ? 0 : open, rejectedMilli: claim ? open : 0, note: text, ...base });
+      if (!resuming) await api('/erp/qc/inspections', { id: inspection, lotId: arrival.id, acceptedMilli: claim ? 0 : open, rejectedMilli: claim ? open : 0, note: text, ...base });
       let target: Record<string, string> = { inspectionId: inspection };
       if (claim) {
         await api('/erp/qc/issues', { id: issue, inspectionId: inspection, type: 'Rejected at inspection', severity: 'major', description: text, ...base });
         target = { issueId: issue };
       }
-      if (file) await upload({ id: photo, ...target, ...(isAdmin ? { interventionReason: why } : {}) }, file);
+      if (file) await upload({ id: photo, ...target, ...(isAdmin ? { interventionReason: why } : {}) }, await shrink(file));
       await api('/erp/qc/inspections/submit', { id: inspection, ...base });
       await onDone(claim
         ? t(`Inspection of ${arrival.reference} submitted. The supervisor decides the rejection and any claim.`, `${arrival.reference} کا معائنہ جمع ہو گیا۔ مسترد کرنے اور کلیم کا فیصلہ سپروائزر کرے گا۔`)
@@ -68,9 +82,10 @@ export default function InspectArrival({ arrival, isAdmin, onClose, onDone }: Pr
         <div className="live-field">
           <span id="inspect-claim-label" className="inspect-arrival-label">{t('Raise a claim?', 'کیا کلیم دائر کریں؟')}</span>
           <div className="live-segments" role="group" aria-labelledby="inspect-claim-label">
-            <button type="button" aria-pressed={!claim} onClick={() => setClaim(false)}>{t('No', 'نہیں')}</button>
-            <button type="button" aria-pressed={claim} onClick={() => setClaim(true)}>{t('Yes', 'ہاں')}</button>
+            <button type="button" aria-pressed={!claim} disabled={resuming} onClick={() => setClaim(false)}>{t('No', 'نہیں')}</button>
+            <button type="button" aria-pressed={claim} disabled={resuming} onClick={() => setClaim(true)}>{t('Yes', 'ہاں')}</button>
           </div>
+          {resuming && <small className="live-muted">{t('Resuming the inspection saved earlier: add the photo and submit.', 'پہلے محفوظ کیا گیا معائنہ جاری ہے: تصویر شامل کر کے جمع کریں۔')}</small>}
           {claim && <small className="live-muted">{t('A claim rejects the whole open quantity as a major issue, for the supervisor to decide.', 'کلیم میں باقی پوری مقدار بڑے مسئلے کے طور پر مسترد ہوگی، جس کا فیصلہ سپروائزر کرے گا۔')}</small>}
         </div>
         <div className="live-field">

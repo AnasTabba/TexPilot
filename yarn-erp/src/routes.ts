@@ -24,6 +24,7 @@ export const eventTitle: Record<string, [string, string]> = {
   'dispatch.held': ['Dispatch on hold', 'ڈسپیچ روک دیا گیا'],
   'dispatch.hold_notice': ['Dispatch hold notice', 'ڈسپیچ روکنے کا نوٹس'],
   'shipment.dispatched': ['Supplier dispatched shipment', 'سپلائر نے کھیپ روانہ کی'],
+  'shipment.stage_changed': ['Shipment moved on its route', 'کھیپ اپنے راستے پر آگے بڑھی'],
   'po.created': ['Purchase order created', 'خریداری آرڈر بن گیا'],
   'stock.received': ['Finished stock received', 'تیار اسٹاک موصول ہوا'],
   'stock.adjusted': ['Stock adjusted', 'اسٹاک میں تبدیلی ہوئی'],

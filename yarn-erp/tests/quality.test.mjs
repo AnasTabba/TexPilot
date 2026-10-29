@@ -367,3 +367,18 @@ for (const [from, to] of [['open', 'confirmed'], ['open', 'dismissed'], ['open',
     assert.deepEqual(row(f, 'qc_issues', id), before);
   });
 }
+
+test('without an R2 binding, inspection photos are stored in D1 and a failed-photo draft stays on Stock', async () => {
+  const f = await fixture(); delete f.env.BUCKET;
+  const lotId = await lotOf(f), id = await draft(f, lotId, 100000, 0);
+  // Before the photo lands, the draft keeps the arrival listed with its full quantity so it can be resumed.
+  const waiting = (await f.call('/workspace', undefined, 'Qasim')).data.qcArrivals.find(a => a.id === lotId);
+  assert.deepEqual([waiting.draft_id, waiting.open_milli], [id, 100000]);
+  const bytes = Uint8Array.from([255, 216, 255, 224, ...new Array(3000).fill(7)]);
+  const photo = await f.upload({ id: crypto.randomUUID(), inspectionId: id }, 'Qasim', bytes, 'goods.jpg', 'image/jpeg');
+  assert.equal(photo.status, 201, photo.text);
+  const read = await f.call('/erp/qc/photos/' + photo.data.id, undefined, 'Saima');
+  assert.equal(read.status, 200);
+  assert.equal((await submit(f, id)).status, 200);
+  assert.equal((await f.call('/workspace', undefined, 'Qasim')).data.qcArrivals.some(a => a.id === lotId), false);
+});

@@ -62,3 +62,57 @@
   .trk-lane, .trk-btn, .trk-w-row { transition: none; }
   .trk-track.is-moving .trk-ship, .trk-spin, .trk-w-bar > span { animation: none; }
 }
+
+/* Connection settings panel (trk-set-) */
+.trk-set { border-radius: 20px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 1px 2px rgb(29 27 25 / 0.05); min-width: 0; }
+.trk-set-head { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 14px 18px; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: transform 160ms var(--ease-out); }
+.trk-set-head:active { transform: scale(0.97); }
+.trk-set-title { display: inline-flex; align-items: center; gap: 8px; }
+.trk-set-head > .trk-muted { flex: 1; min-width: 0; }
+.trk-set-head > svg { margin-left: auto; flex: none; transition: transform 200ms var(--ease-out); }
+.trk-set-head > svg.is-open { transform: rotate(180deg); }
+.trk-set-body { display: grid; gap: 18px; padding: 0 18px 18px; }
+.trk-set-note { margin: 0; padding: 12px 14px; border-radius: 14px; background: #f4efe2; color: #6b655c; font-size: 0.9rem; }
+.trk-set-status { display: grid; gap: 10px; }
+.trk-set-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; list-style: none; margin: 0; padding: 0; }
+.trk-set-chip { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 8px; align-content: start; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: #fff; font-size: 0.85rem; }
+.trk-set-chip > svg { grid-row: span 2; color: #6b655c; }
+.trk-set-chip > span { color: #6b655c; }
+.trk-set-chip > strong { grid-column: 2; color: var(--ink); overflow-wrap: anywhere; }
+.trk-set-chip.is-ok > svg { color: #1d6b3e; }
+.trk-set-chip.is-warn > svg { color: #b86b00; }
+.trk-set-gaps { grid-column: 1 / -1; margin: 4px 0 0; padding: 0 0 0 16px; color: #6b655c; font-size: 0.8rem; }
+.trk-set-meter-row { margin: 0; font-size: 0.85rem; color: #6b655c; }
+.trk-set-meter { height: 4px; border-radius: 999px; background: #efe8d7; overflow: hidden; }
+.trk-set-meter > span { display: block; height: 100%; width: 100%; border-radius: inherit; background: #0f8b8d; transform-origin: left center; transform: scaleX(var(--p)); transition: transform 500ms var(--ease-out); }
+.trk-set-meter[data-level="high"] > span { background: #f2a541; }
+.trk-set-meter[data-level="full"] > span { background: #e4572e; }
+
+.trk-set-form { display: grid; gap: 14px; }
+.trk-set-group { margin: 6px 0 0; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b655c; }
+.trk-set-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.trk-set-cell { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.trk-set-help { color: #6b655c; font-size: 0.78rem; }
+.trk-set-toggle, .trk-set-check { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.trk-set-toggle input, .trk-set-check input { margin: 0; flex: none; }
+.trk-set-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.trk-set-ok { display: inline-flex; align-items: center; gap: 6px; color: #1d6b3e; font-weight: 600; font-size: 0.9rem; }
+.trk-set-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
+.trk-set-summary > div { display: grid; gap: 2px; min-width: 0; }
+.trk-set-summary dt { color: #6b655c; font-size: 0.8rem; }
+.trk-set-summary dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Shipment card: stage moved after a check */
+.trk-moved { margin: 0; color: var(--ink); font-size: 0.88rem; font-weight: 600; }
+.trk-card.is-flash { animation: trk-flash 1.6s var(--ease-out); }
+@keyframes trk-flash {
+  0% { box-shadow: 0 0 0 4px rgb(79 91 213 / 0.45), 0 1px 2px rgb(29 27 25 / 0.05); }
+  100% { box-shadow: 0 0 0 16px rgb(79 91 213 / 0), 0 1px 2px rgb(29 27 25 / 0.05); }
+}
+@media (max-width: 640px) {
+  .trk-set-chips, .trk-set-grid, .trk-set-summary { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trk-set-head, .trk-set-head > svg, .trk-set-meter > span { transition: none; }
+  .trk-card.is-flash { animation: none; }
+}

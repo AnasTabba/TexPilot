@@ -11,10 +11,11 @@ import { buyerPortalApi } from './buyer-portal.mjs';
 import { notificationsApi } from './notify.mjs';
 import { approvalsApi } from './governance.mjs';
 import { trackingApi } from './tracking.mjs';
+import { d1Bucket } from './d1-bucket.mjs';
 import { qualityApi, approvalHandlers as qualityHandlers } from './quality.mjs';
 import { stockApi, approvalHandlers as stockHandlers } from './stock.mjs';
 import { readPhoto } from './photos.mjs';
-const erp = { admin: adminApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi, qc: qualityApi, stock: stockApi };
+const erp = { admin: adminApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi, tracking: trackingApi, qc: qualityApi, stock: stockApi };
 erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, { ...approvalHandlers, ...qualityHandlers, ...stockHandlers });
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
@@ -87,7 +88,12 @@ async function snapshot(db, member) {
     // Admins see how many account requests are waiting for them.
     member.admin ? first(db, "SELECT COUNT(*) AS n FROM users WHERE workspace_id=? AND status='pending' AND deactivated_at IS NULL", w).then(row => row.n) : 0,
     // Arrivals registered from Incoming stock wait for QC before they become stock; Stock lists them under Needs QC.
-    rows(db, "SELECT l.id,l.product_id,l.reference,l.unit,l.arrived_at,o.open_milli,s.name AS supplier_name FROM qc_lots l JOIN qc_lot_open o ON o.lot_id=l.id JOIN suppliers s ON s.id=l.supplier_id WHERE l.workspace_id=? AND l.status='awaiting_inspection' ORDER BY l.arrived_at DESC LIMIT 200", w),
+    // An unfinished draft (e.g. its photo failed) keeps the arrival listed so the inspection can be resumed.
+    rows(db, `SELECT l.id,l.product_id,l.reference,l.unit,l.arrived_at,o.open_milli+COALESCE(d.accepted_milli+d.rejected_milli,0) AS open_milli,s.name AS supplier_name,
+      d.id AS draft_id,d.accepted_milli AS draft_accepted,d.rejected_milli AS draft_rejected
+      FROM qc_lots l JOIN qc_lot_open o ON o.lot_id=l.id JOIN suppliers s ON s.id=l.supplier_id
+      LEFT JOIN qc_inspections d ON d.id=(SELECT id FROM qc_inspections WHERE lot_id=l.id AND status='draft' ORDER BY created_at DESC LIMIT 1)
+      WHERE l.workspace_id=? AND (l.status='awaiting_inspection' OR d.id IS NOT NULL) ORDER BY l.arrived_at DESC LIMIT 200`, w),
   ]);
   return { workspace, member, products, lots, balances, movements, members, inspections, qualityEvents, photos, pending, qcArrivals, serverTime: Date.now(), backend: 'Yarnflow / Cloudflare D1' };
 }
@@ -318,6 +324,8 @@ export async function signedIn(request, env) {
 }
 
 export async function inventoryApi(request, env) {
+  // Without an R2 binding, photos live in D1 (server/d1-bucket.mjs).
+  if (!env.BUCKET && env.DB) env = { ...env, BUCKET: d1Bucket(env.DB) };
   try { return await route(request, env); } catch (error) {
     if (error instanceof Problem || error instanceof ErpProblem) return json({ error: error.message }, error.status);
     console.error('Inventory request failed:', error instanceof Error ? error.message : 'unknown');

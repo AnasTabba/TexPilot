@@ -1073,31 +1073,68 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
   .live-print-label .live-qr { width: 55mm; height: 55mm; }
 }
 
-.yf-dash-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
-.yf-dash-grid > * { min-width: 0; }
-@media (max-width: 900px) { .yf-dash-grid { grid-template-columns: minmax(0, 1fr); } }
-.yf-dash-item { position: relative; min-width: 0; }
-.yf-dash-item[data-size="full"] { grid-column: 1 / -1; }
-.yf-dash-item.is-resizing { animation: yf-dash-settle 300ms var(--ease-out); }
-@keyframes yf-dash-settle { from { opacity: 0.6; transform: scale(0.985); } to { opacity: 1; transform: none; } }
-.yf-dash-size {
-  position: absolute; top: 12px; right: 12px; z-index: 2;
-  display: grid; place-items: center; width: 32px; height: 32px;
-  border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink-2); cursor: pointer;
-  transition: transform 160ms var(--ease-out), background-color 150ms ease, color 150ms ease;
+/* Dashboard: a 12-column grid of cards. Each card has a toolbar strip above it; cards in one row share a height. */
+.yf-dash-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px; grid-auto-flow: row dense; align-items: stretch; }
+.yf-dash-item { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); grid-column: span 12; min-width: 0; }
+.yf-dash-item[data-w="4"] { grid-column: span 4; }
+.yf-dash-item[data-w="6"] { grid-column: span 6; }
+.yf-dash-item[data-w="8"] { grid-column: span 8; }
+/* A widget that renders nothing for this role: drop its slot and toolbar too. */
+.yf-dash-item:has(.yf-dash-body:empty) { display: none; }
+
+.yf-dash-bar { display: flex; align-items: center; gap: 6px; height: 36px; margin-bottom: 6px; min-width: 0; }
+.yf-dash-grip, .yf-dash-tools button {
+  display: grid; place-items: center; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--ink-2); font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, transform 160ms var(--ease-out);
 }
-.yf-dash-size:hover { background: rgb(79 91 213 / 0.1); color: #4f5bd5; }
-.yf-dash-size:active { transform: scale(0.94); }
-.yf-dash-size:focus-visible { outline: 3px solid #4f5bd5; outline-offset: 2px; }
-.yf-dash-item .sw-head, .yf-dash-item .stw-head, .yf-dash-item .nw-head { padding-right: 40px; }
-@media (max-width: 900px) {
-  .yf-dash-grid { grid-template-columns: minmax(0, 1fr); }
-  .yf-dash-item[data-size] { grid-column: auto; }
-  .yf-dash-size { display: none; }
+.yf-dash-grip { width: 24px; cursor: grab; }
+.yf-dash-grip:active { cursor: grabbing; }
+.yf-dash-tools { display: flex; gap: 6px; margin-left: auto; }
+.yf-dash-tools button { width: 28px; border-color: var(--line); background: #fff; }
+.yf-dash-tools .yf-dash-width { width: auto; min-width: 34px; padding: 0 8px; }
+.yf-dash-grip:hover, .yf-dash-tools button:hover { background: rgb(79 91 213 / 0.1); color: #4f5bd5; }
+.yf-dash-grip:active, .yf-dash-tools button:active { transform: scale(0.94); }
+.yf-dash-grip:focus-visible, .yf-dash-tools button:focus-visible, .yf-dash-reset:focus-visible { outline: 3px solid #4f5bd5; outline-offset: 2px; }
+/* The name shows in the strip only while minimised; expanded cards already show it in their own header. */
+.yf-dash-title { display: none; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.95rem; font-weight: 700; color: var(--ink); }
+.yf-dash-item.is-min .yf-dash-title { display: block; }
+.yf-dash-item.is-min .yf-dash-bar {
+  margin-bottom: 0; padding: 0 6px 0 4px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+  box-shadow: 0 1px 2px rgb(29 27 25 / 0.05), 0 8px 24px rgb(29 27 25 / 0.06);
+}
+
+/* Minimise collapses the body row to 0 height, keeping the card's width. */
+.yf-dash-collapse { display: grid; grid-template-rows: 1fr; min-height: 0; transition: grid-template-rows 220ms var(--ease-out); }
+.yf-dash-item.is-min .yf-dash-collapse { grid-template-rows: 0fr; }
+/* Negative margins plus padding leave room for the card's shadow inside the clip. */
+.yf-dash-body { display: flex; flex-direction: column; min-height: 0; overflow: hidden; margin: 0 -10px -16px; padding: 0 10px 16px; }
+.yf-dash-body > * { flex: 1 1 auto; min-width: 0; }
+.yf-dash-item.is-min .yf-dash-body { margin: 0; padding: 0; }
+
+.yf-dash-item.is-dragging { opacity: 0.45; }
+.yf-dash-item::before { content: ""; position: absolute; z-index: 3; display: none; background: #4f5bd5; border-radius: 4px; pointer-events: none; }
+.yf-dash-item.is-drop-x-before::before, .yf-dash-item.is-drop-x-after::before { display: block; top: 0; bottom: 0; width: 4px; }
+.yf-dash-item.is-drop-x-before::before { left: -12px; }
+.yf-dash-item.is-drop-x-after::before { right: -12px; }
+.yf-dash-item.is-drop-y-before::before, .yf-dash-item.is-drop-y-after::before { display: block; left: 0; right: 0; height: 4px; }
+.yf-dash-item.is-drop-y-before::before { top: -12px; }
+.yf-dash-item.is-drop-y-after::before { bottom: -12px; }
+
+.yf-dash-foot { display: flex; justify-content: flex-end; margin-top: -28px; }
+.yf-dash-reset { padding: 4px 2px; border: 0; border-radius: 6px; background: none; color: #4f5bd5; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+.yf-dash-reset:hover { text-decoration: underline; }
+
+/* 760-1199px: 4 becomes half, 6 and up become full. Below 760px: everything full, width control hidden. */
+@media (max-width: 1199px) and (min-width: 760px) {
+  .yf-dash-grid > .yf-dash-item[data-w="4"] { grid-column: span 6; }
+  .yf-dash-grid > .yf-dash-item[data-w="6"], .yf-dash-grid > .yf-dash-item[data-w="8"] { grid-column: span 12; }
+}
+@media (max-width: 759px) {
+  .yf-dash-grid > .yf-dash-item { grid-column: 1 / -1; }
+  .yf-dash-tools .yf-dash-width { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .yf-dash-item.is-resizing { animation: none; }
-  .yf-dash-size, .yf-dash-size:active { transition: none; transform: none; }
+  .yf-dash-collapse, .yf-dash-grip, .yf-dash-tools button { transition: none; }
+  .yf-dash-grip:active, .yf-dash-tools button:active { transform: none; }
 }
-/* A widget the role cannot see renders nothing: drop its slot and size button too. */
-.yf-dash-item:not(:has(> :not(.yf-dash-size))) { display: none; }

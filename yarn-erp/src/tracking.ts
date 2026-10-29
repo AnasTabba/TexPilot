@@ -10,6 +10,33 @@ export interface Shipment {
   created_at: number;
   reference?: string;
   supplier_name?: string;
+  // Server-computed (GET /api/erp/shipments). Absent or null means "derive on the client".
+  stage?: TrackingStage | null;
+  eta?: number | null;
+  origin?: string | null;
+  destination?: string | null;
+  vessel?: string | null;
+  stage_changed_at?: number | null;
+  events?: TrackingEvent[];
+}
+
+export interface TrackingContract {
+  request: { number: string; type?: string; types?: Record<string, string>; carrier?: string; force?: string };
+  response: {
+    containers: string; containerNumber?: string; reference: string; events: string;
+    event: { time: string; title: string; code?: string; location?: string };
+    dataTimestamp?: string; eta?: string; origin?: string; destination?: string; vessel?: string; carrier?: string;
+  };
+}
+
+export interface TrackingSettings {
+  enabled: boolean; baseUrl: string; trackPath: string; contract: TrackingContract | null;
+  refreshHours: number; dailyBudget: number; verifiedBy: string | null; verifiedAt: number | null;
+}
+
+export interface TrackingStatus {
+  configured: boolean; keyConfigured: boolean; keyHint: string | null; provider: string; enabled: boolean;
+  refreshHours: number; dailyBudget: number; callsToday: number; contractGaps: string[];
 }
 
 export type TrackingStage = 'not_checked' | 'booked' | 'departed' | 'in_transit' | 'arrived' | 'delivered' | 'error';
@@ -55,23 +82,29 @@ function sortNewest(events: TrackingEvent[]) {
   });
 }
 
+/** Tolerant read of an event list: anything that is not an object is skipped. */
+function readEvents(list: unknown): TrackingEvent[] {
+  if (!Array.isArray(list)) return [];
+  const events: TrackingEvent[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const e = item as Record<string, unknown>;
+    events.push({ at: num(e.at), title: text(e.title), code: text(e.code), location: text(e.location) });
+  }
+  return sortNewest(events);
+}
+
+const isStage = (value: unknown): value is TrackingStage => typeof value === 'string' && Object.prototype.hasOwnProperty.call(PROGRESS, value);
+
 export function parseTrackingData(raw: unknown): TrackingData | null {
   if (typeof raw !== 'string' || !raw) return null;
   let value: unknown;
   try { value = JSON.parse(raw); } catch { return null; }
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const o = value as Record<string, unknown>;
-  const events: TrackingEvent[] = [];
-  if (Array.isArray(o.events)) {
-    for (const item of o.events) {
-      if (!item || typeof item !== 'object') continue;
-      const e = item as Record<string, unknown>;
-      events.push({ at: num(e.at), title: text(e.title), code: text(e.code), location: text(e.location) });
-    }
-  }
   return {
     containers: Array.isArray(o.containers) ? o.containers.map(text).filter(Boolean) : [],
-    events: sortNewest(events),
+    events: readEvents(o.events),
     reference: text(o.reference),
     dataAt: num(o.dataAt),
     empty: o.empty === true,
@@ -95,20 +128,22 @@ function stageOf(event: TrackingEvent, destination: string | null): TrackingStag
   return null;
 }
 
-export function trackingView(shipment: Pick<Shipment, 'status' | 'last_status_json' | 'last_error'>): TrackingView {
+/** Server values win when present; the stage is derived on the client only when the server sends none. */
+export function trackingView(shipment: Pick<Shipment, 'status' | 'last_status_json' | 'last_error'> & Partial<Shipment>): TrackingView {
   const data = parseTrackingData(shipment.last_status_json);
-  const events = data?.events ?? [];
+  const events = shipment.events !== undefined ? readEvents(shipment.events) : data?.events ?? [];
   const latest = events[0] ?? null;
   const locations = events.map(e => e.location).filter(Boolean);
-  const origin = data?.origin ?? locations[locations.length - 1] ?? null;
-  const destination = data?.destination ?? locations[0] ?? null;
+  const origin = str(shipment.origin) ?? data?.origin ?? locations[locations.length - 1] ?? null;
+  const destination = str(shipment.destination) ?? data?.destination ?? locations[0] ?? null;
 
-  let stage: TrackingStage;
-  if (data?.empty) stage = 'delivered';
-  else if (latest) stage = stageOf(latest, destination) ?? 'booked';
-  else if (shipment.status === 'error') stage = 'error';
-  else if (shipment.status === 'tracked') stage = 'booked';
-  else stage = 'not_checked';
+  let derived: TrackingStage;
+  if (data?.empty) derived = 'delivered';
+  else if (latest) derived = stageOf(latest, destination) ?? 'booked';
+  else if (shipment.status === 'error') derived = 'error';
+  else if (shipment.status === 'tracked') derived = 'booked';
+  else derived = 'not_checked';
+  const stage = isStage(shipment.stage) ? shipment.stage : derived;
 
-  return { stage, progress: PROGRESS[stage], lastEvent: latest, origin, destination, eta: data?.eta ?? null, vessel: data?.vessel ?? null, containers: data?.containers ?? [], events };
+  return { stage, progress: PROGRESS[stage], lastEvent: latest, origin, destination, eta: num(shipment.eta) ?? data?.eta ?? null, vessel: str(shipment.vessel) ?? data?.vessel ?? null, containers: data?.containers ?? [], events };
 }
