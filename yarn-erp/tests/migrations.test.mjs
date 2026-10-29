@@ -54,3 +54,14 @@ test('0013 counts live receipts as arrived, floors the PO quantity and accepts l
   assert.equal(sql.prepare("SELECT arrived_milli FROM po_arrived WHERE order_id='po'").get().arrived_milli, 10000);
   assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(), []);
 });
+
+test('purchasing backfills bid revision metadata and restores immutability', () => {
+  const sql = legacy();
+  sql.prepare("INSERT INTO supplier_bid_history(id,bid_id,version,snapshot,actor_id,created_at) VALUES('revision','bid',1,'{}','supplier-person',12345)").run();
+  upgrade(sql);
+  const row = sql.prepare("SELECT * FROM supplier_bid_history WHERE id='revision'").get();
+  assert.equal(row.created_by, 'supplier-person'); assert.equal(row.updated_at, 12345); assert.equal(row.status, 'recorded');
+  assert.equal(row.snapshot, '{}'); assert.equal(row.actor_id, 'supplier-person'); assert.equal(row.created_at, 12345);
+  assert.throws(() => sql.exec("UPDATE supplier_bid_history SET snapshot='changed' WHERE id='revision'"), /immutable bid revision/);
+  assert.throws(() => sql.exec("DELETE FROM supplier_bid_history WHERE id='revision'"), /immutable bid revision/);
+});

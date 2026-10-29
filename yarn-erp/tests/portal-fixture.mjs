@@ -120,8 +120,8 @@ export async function portalFixture(database) {
     return { status: response.status, data: response.headers.get('content-type')?.includes('json') ? JSON.parse(body) : null, text: body };
   }
   function setThreshold(type, value) {
-    const now = Date.now(), currency = ['purchase', 'claim'].includes(type) ? 'PKR' : null;
-    sql.prepare('INSERT INTO thresholds(workspace_id,type,value,currency,created_by,created_at,updated_by,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(workspace_id,type) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
+    const now = Date.now(), currency = ['purchase', 'claim'].includes(type) ? JSON.parse(sql.prepare("SELECT value_json FROM settings WHERE workspace_id=? AND key='currency'").get(workspaceId)?.value_json ?? '"PKR"') : null;
+    sql.prepare('INSERT INTO thresholds(workspace_id,type,value,currency,created_by,created_at,updated_by,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(workspace_id,type) DO UPDATE SET value=excluded.value,currency=excluded.currency,updated_at=excluded.updated_at')
       .run(workspaceId, type, value, currency, adminId, now, adminId, now);
   }
   return { sql, env, storage, workspaceId, adminId, person, insertSupplier, insertBid, insertPO, insertProduct, upload, setThreshold, login, call, member: async name => (await call('/workspace', undefined, name)).data.member, insertBuyer, insertBuyerRfq, acceptedQuote };
