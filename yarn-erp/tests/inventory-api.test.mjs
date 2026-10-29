@@ -84,7 +84,7 @@ const movement = (lotId, action = 'receive', grams = 10000, extra = {}) => ({
 
 test('PIN sign-in: wrong PINs lock the name for 5 minutes; signing out ends the session', async () => {
   const { send, login, call, cookies, sql } = await fixture();
-  assert.deepEqual((await send('/auth/people')).data.people, ['Anas', 'Fahad', 'Zuhair']);
+  assert.deepEqual((await send('/auth/people')).data.people.map(p => p.name), ['Anas', 'Fahad', 'Zuhair']);
   assert.equal((await login('Nobody')).status, 401);
   assert.equal((await login('anas', '12a4')).status, 422);
   for (let i = 0; i < 4; i++) assert.equal((await login('Fahad', '1111')).status, 401);

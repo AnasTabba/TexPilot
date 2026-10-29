@@ -240,8 +240,8 @@ const pinOf = value => { if (!validPin(value)) fail(422, 'The PIN must be exactl
 /** Sign in, sign out, and the names shown on the sign-in screen. */
 async function authRoute(request, db, path) {
   if (path === '/api/auth/people' && request.method === 'GET') {
-    const [workspace, people] = await Promise.all([first(db, 'SELECT name FROM workspaces ORDER BY created_at LIMIT 1'), rows(db, "SELECT name FROM users WHERE status='active' AND deactivated_at IS NULL AND portal_role IS NOT NULL ORDER BY name COLLATE NOCASE")]);
-    return json({ workspace: workspace?.name ?? 'Yarnflow', people: people.map(row => row.name) });
+    const [workspace, people] = await Promise.all([first(db, 'SELECT name FROM workspaces ORDER BY created_at LIMIT 1'), rows(db, "SELECT name,portal_role AS role FROM users WHERE status='active' AND deactivated_at IS NULL AND portal_role IS NOT NULL ORDER BY name COLLATE NOCASE")]);
+    return json({ workspace: workspace?.name ?? 'Yarnflow', people });
   }
   if (path === '/api/auth/logout' && request.method === 'POST') {
     const token = sessionToken(request);

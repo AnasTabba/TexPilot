@@ -10,7 +10,7 @@ test('an admin removes a regular member: sessions end, sign-in fails, and the pe
   assert.equal((await f.call('/workspace', undefined, null, { Cookie: signedIn.cookie })).status, 401);
   assert.equal((await f.login('Saima')).status, 403);
   assert.ok(!(await f.call(users)).data.users.some(p => p.id === id));
-  assert.ok(!(await f.call('/auth/people', undefined, null)).data.people.includes('Saima'));
+  assert.ok(!(await f.call('/auth/people', undefined, null)).data.people.map(p => p.name).includes('Saima'));
   const row = f.sql.prepare('SELECT removed_at,deactivated_at FROM users WHERE id=?').get(id);
   assert.ok(row.removed_at > 0 && row.deactivated_at === row.removed_at);
   assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM erp_audit_events WHERE action=? AND record_id=?').get('user.removed', id).n, 1);

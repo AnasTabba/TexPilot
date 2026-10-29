@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowLeft, ChevronRight, Delete, LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react';
 import { Cone } from './Cone';
 import { errorMessage } from './forms';
-import { inventoryRequest as api } from './inventory-client';
+import { inventoryRequest as api, roleLabel, type Role } from './inventory-client';
 import { LanguageSelect, useLanguage } from './i18n';
 
 export function Avatar({ name, large = false }: { name: string; large?: boolean }) {
@@ -14,12 +14,12 @@ type Step = { at: 'people' } | { at: 'pin'; name: string };
 /** Sign-in: choose your name, enter your 4-digit PIN. Admins create accounts. */
 export default function SignIn({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
   const { t } = useLanguage();
-  const [list, setList] = useState<{ workspace: string; people: string[] } | null>(null);
+  const [list, setList] = useState<{ workspace: string; people: { name: string; role: Role }[] } | null>(null);
   const [loadError, setLoadError] = useState(''); const [retry, setRetry] = useState(0);
   const [step, setStep] = useState<Step>({ at: 'people' });
   useEffect(() => {
     setLoadError('');
-    api<{ workspace: string; people: string[] }>('/auth/people').then(setList).catch(error => setLoadError(errorMessage(error)));
+    api<{ workspace: string; people: { name: string; role: Role }[] }>('/auth/people').then(setList).catch(error => setLoadError(errorMessage(error)));
   }, [retry]);
   const back = () => setStep({ at: 'people' });
   return <main className="yf-signin">
@@ -35,7 +35,7 @@ export default function SignIn({ onSignedIn }: { onSignedIn: () => Promise<void>
         <p>{t('Choose your name, then enter your PIN.', 'اپنا نام چنیں، پھر پن درج کریں۔')}</p>
         {loadError && <p className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{t(loadError)}<button className="live-text-button" onClick={() => setRetry(n => n + 1)}><RefreshCw size={16} aria-hidden="true" />{t('Retry', 'دوبارہ کوشش کریں')}</button></p>}
         {!list && !loadError && <p role="status" className="live-muted">{t('Loading names…', 'نام لوڈ ہو رہے ہیں…')}</p>}
-        {list && <ul className="yf-people">{list.people.map(name => <li key={name}><button className="yf-person" onClick={() => setStep({ at: 'pin', name })}><Avatar name={name} /><strong>{name}</strong><ChevronRight size={20} aria-hidden="true" /></button></li>)}</ul>}
+        {list && <ul className="yf-people">{list.people.map(({ name, role }) => <li key={name}><button className="yf-person" onClick={() => setStep({ at: 'pin', name })}><Avatar name={name} /><span><strong>{name}</strong><small>{t(...roleLabel[role])}</small></span><ChevronRight size={20} aria-hidden="true" /></button></li>)}</ul>}
         <div className="yf-portal-entries">
           <a className="live-text-button yf-supplier-entry" href="#/supplier">{t('Supplier sign in or register', 'سپلائر سائن اِن یا رجسٹریشن')}</a>
           <a className="live-text-button yf-supplier-entry" href="#/buyer">{t('Buyer sign in or register', 'خریدار سائن اِن یا رجسٹریشن')}</a>

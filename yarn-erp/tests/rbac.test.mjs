@@ -35,7 +35,7 @@ test('a deactivated user or one without a role cannot sign in; deactivation ends
   const denied = await f.login('Saima'); assert.equal(denied.status,403); assert.equal(denied.data.error,'This account is deactivated. Ask an admin.');
   await f.person('No Role',null);
   const noRole = await f.login('No Role'); assert.equal(noRole.status,403); assert.equal(noRole.data.error,'An admin must assign your role first.');
-  const names = (await f.call('/auth/people',undefined,null)).data.people; assert.ok(!names.includes('Saima')); assert.ok(!names.includes('No Role'));
+  const names = (await f.call('/auth/people',undefined,null)).data.people.map(p => p.name); assert.ok(!names.includes('Saima')); assert.ok(!names.includes('No Role'));
   assert.equal((await f.call(update,{id,active:true})).status,200); assert.equal((await f.login('Saima')).status,200);
 });
 test('a role change applies on the very next request', async () => {
