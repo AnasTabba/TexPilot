@@ -52,7 +52,7 @@ const bucket = {
   async get(key) { const path = objectPath(key); return existsSync(path) ? { body: readFileSync(path) } : null; },
   async delete(key) { rmSync(objectPath(key), { force: true }); },
 };
-const env = { DB, BUCKET: bucket, TEXPILOT_API_URL: process.env.TEXPILOT_API_URL, INVENTREE_URL: process.env.INVENTREE_URL, INVENTREE_TOKEN: process.env.INVENTREE_TOKEN };
+const env = { DB, BUCKET: bucket, TEXPILOT_API_URL: process.env.TEXPILOT_API_URL, INVENTREE_URL: process.env.INVENTREE_URL, INVENTREE_TOKEN: process.env.INVENTREE_TOKEN, DATALOOPLABS_API_KEY: process.env.DATALOOPLABS_API_KEY, DATALOOPLABS_CONTRACT: process.env.DATALOOPLABS_CONTRACT };
 const port = Number(process.env.PORT || 8788);
 const server = createServer(async (incoming, outgoing) => {
   try {

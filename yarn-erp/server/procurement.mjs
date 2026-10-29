@@ -1,4 +1,5 @@
 import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, website, recordId, allow, reason as decisionReason, role, viewer, audit } from './erp-utils.mjs';
+import { trackingConfigured, trackingStatus } from './tracking.mjs';
 import { sha256 } from './auth.mjs';
 import { settingsOf, needsApproval, approvalQueries } from './governance.mjs';
 import { notifyRole } from './notify.mjs';
@@ -175,7 +176,7 @@ export async function staffProcurement(request, env, member, path, data) {
     const bids = await all(db, 'SELECT b.*,s.name AS supplier_name FROM supplier_bids b JOIN suppliers s ON s.id=b.supplier_id JOIN procurement_rfqs r ON r.id=b.rfq_id WHERE r.workspace_id=? ORDER BY b.updated_at DESC LIMIT 500',w);
     const orders = await all(db, 'SELECT p.*,s.name AS supplier_name FROM supplier_purchase_orders p JOIN suppliers s ON s.id=p.supplier_id WHERE p.workspace_id=? ORDER BY p.created_at DESC LIMIT 100',w);
     const shipments = await all(db, 'SELECT * FROM procurement_shipments WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100',w);
-    return json({ rfqs:rfqs.map(r=>rfqView(r,now)),bids,orders:orders.map(o=>({...o,terms:JSON.parse(o.terms_snapshot)})),shipments,currency:(await settingsOf(db,w)).currency,tracking:{configured:false,provider:'DataLoopLabs',reason:'Tracking API contract and credit policy must be configured before a paid lookup.'} });
+    return json({ rfqs:rfqs.map(r=>rfqView(r,now)),bids,orders:orders.map(o=>({...o,terms:JSON.parse(o.terms_snapshot)})),shipments,currency:(await settingsOf(db,w)).currency,tracking:{...trackingStatus(env),reason:trackingConfigured(env)?'':'Tracking API key and provider contract must be configured before a lookup.'} });
   }
   if (path === '/api/erp/orders/pending-approvals' && !data) {
     viewer(member, 'purchase_manager');
