@@ -34,8 +34,8 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.stw-delta.up { color: #0f7a4f; background: #dff5ea; }
-.stw-delta.down { color: #b8401f; background: #fde4dc; }
+.stw-delta.up { color: var(--up); background: var(--up-bg); }
+.stw-delta.down { color: var(--down); background: var(--down-bg); }
 
 /* Bar chart */
 .stw-chart { position: relative; margin-top: 14px; }
@@ -155,9 +155,9 @@
 .stw-stage { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
 .stw-stage::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
 .stw-q { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
-.stw-q--approved { color: #1d6b3e; background: #e7f1e3; }
-.stw-q--hold { color: #b8401f; background: #fde4dc; }
-.stw-q--uninspected { color: #7f4d00; background: #f9eed3; }
+.stw-q--approved { color: var(--ok); background: var(--ok-bg); }
+.stw-q--hold { color: var(--down); background: var(--down-bg); }
+.stw-q--uninspected { color: var(--warn); background: var(--warn-bg); }
 .stw-empty td { border-bottom: 0; }
 .stw-empty-bar { display: block; height: 10px; border-radius: 999px; background: var(--sunken); }
 
