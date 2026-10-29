@@ -7,7 +7,10 @@ import { staffProcurement } from './procurement.mjs';
 import { receiving } from './receiving.mjs';
 import { salesApi } from './sales.mjs';
 import { buyerPortalApi } from './buyer-portal.mjs';
+import { approvalsApi } from './governance.mjs';
+const approvalHandlers = {};
 const erp = { admin: adminApi };
+erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, approvalHandlers);
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
 class Problem extends Error {
