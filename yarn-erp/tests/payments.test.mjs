@@ -27,3 +27,30 @@ test('payment retries are idempotent and validation refuses invalid values',asyn
 test('a payment that loses the balance race rolls back its audit',async()=>{const f=await setup(),batch=f.env.DB.batch;await f.login('Sana');f.env.DB.batch=async statements=>{f.env.DB.batch=batch;assert.equal((await pay(f,14750000)).status,201);return batch(statements);};assert.equal((await pay(f,1)).status,409);assert.equal(rows(f,'invoice_payments').length,1);assert.equal(rows(f,'erp_audit_events').filter(r=>r.action==='payment.recorded').length,1);});
 test('alerts losing a payment or duplicate race create no notification',async()=>{for(const winner of ['payment','alert']){const f=await setup(),batch=f.env.DB.batch;await f.login('Sana');f.env.DB.batch=async statements=>{f.env.DB.batch=batch;if(winner==='payment')assert.equal((await pay(f,14750000)).status,201);else assert.equal((await creditAlertsScheduled(f.env,due)).created,1);return batch(statements);};assert.equal((await creditAlertsScheduled(f.env,due)).created,0);assert.equal(rows(f,'credit_alerts').length,winner==='payment'?0:1);assert.equal(rows(f,'notifications').length,winner==='payment'?0:1);}});
 test('notification failure rolls back the alert for a later retry',async()=>{const f=await setup();f.sql.exec("CREATE TRIGGER fail_notice BEFORE INSERT ON notifications BEGIN SELECT RAISE(ABORT,'notice failed'); END");await assert.rejects(creditAlertsScheduled(f.env,due),/notice failed/);assert.equal(rows(f,'credit_alerts').length,0);assert.equal(rows(f,'notifications').length,0);f.sql.exec('DROP TRIGGER fail_notice');assert.equal((await creditAlertsScheduled(f.env,due)).created,1);});
+test('overview fetches alerts once and groups them by invoice with overdue days',async t=>{
+ const f=await setup(),q=await f.acceptedQuote(),now=due+DAY;
+ const second=(await noteSale(f.env.DB,await f.member('Sana'),{id:uuid(),revisionId:q.revisionId},t0-DAY)).invoice;
+ await creditAlertsScheduled(f.env,due-3*DAY);await creditAlertsScheduled(f.env,now);
+ const expected=rows(f,'credit_alerts').sort((a,b)=>a.created_at-b.created_at);
+ t.mock.method(Date,'now',()=>now);await f.login('Sana');
+ const prepare=f.env.DB.prepare,queries=[];
+ f.env.DB.prepare=sql=>{if(/SELECT.*FROM credit_alerts/is.test(sql))queries.push(sql);return prepare(sql);};
+ const response=await f.call('/erp/sales',undefined,'Sana');assert.equal(response.status,200);assert.equal(response.data.invoices.length,2);
+ for(const invoice of response.data.invoices){assert.deepEqual(invoice.alerts,expected.filter(a=>a.invoice_id===invoice.id).map(a=>({...a})));assert.equal(invoice.status,'overdue');assert.equal(invoice.days_to_due,invoice.id===second.id?-2:-1);}
+ assert.equal(queries.length,1,'one alert query regardless of invoice count');
+});
+test('legacy invoices have no due-day status and explain why payments are refused',async()=>{
+ const f=await setup(),q=await f.acceptedQuote(),id=uuid();
+ f.sql.prepare('INSERT INTO invoices(id,workspace_id,number,sales_order_id,revision_id,buyer_id,lines_json,total_minor,currency,issued_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,f.workspaceId,'LEGACY-1',f.invoice.sales_order_id,q.revisionId,q.buyerId,'[]',100,'PKR',t0-40*DAY);
+ const invoice=(await f.call('/erp/sales',undefined,'Sana')).data.invoices.find(i=>i.id===id);
+ assert.equal(invoice.status,'unpaid');assert.equal(invoice.days_to_due,null);assert.deepEqual(invoice.alerts,[]);
+ assert.equal(paymentStatus({...invoice,paid_minor:40},t0),'partially_paid');
+ const result=await pay(f,1,{invoiceId:id});assert.equal(result.status,409);assert.equal(result.data.error,'This invoice has no due date and cannot take payments.');
+ assert.equal(rows(f,'invoice_payments').length,0);assert.equal(rows(f,'erp_audit_events').filter(r=>r.action==='payment.recorded').length,0);
+});
+test('recorded payments and scheduled alerts carry required metadata',async()=>{
+ const f=await setup();assert.equal((await pay(f,100)).status,201);assert.equal((await creditAlertsScheduled(f.env,due)).created,1);
+ for(const [table,status,creator] of [['invoice_payments','recorded',(await f.member('Sana')).user_id],['credit_alerts','sent','system:credit_alerts']]){
+ const row=rows(f,table)[0];assert.ok(row.id);assert.equal(row.workspace_id,f.workspaceId);assert.equal(row.invoice_id,f.invoice.id);assert.equal(row.status,status);assert.equal(row.created_by,creator);assert.ok(row.created_at>0);assert.equal(row.updated_at,row.created_at);
+ }
+});

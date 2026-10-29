@@ -192,7 +192,7 @@ export async function creditAlertsScheduled(env, now = Date.now()) {
   return { checked, created };
 }
 
-async function salesOverview(db, w) {
+async function salesOverview(db, w, now) {
   const [buyers, rfqs, revisions, acceptances, orders, invoices, creditNotes, products, settings] = await Promise.all([
     all(db, "SELECT id,name,contact_name,email,phone,city,notes,assigned_manager_id,status,version,created_at,updated_at FROM buyers WHERE workspace_id=? AND status!='archived' ORDER BY name COLLATE NOCASE LIMIT 500", w),
     all(db, 'SELECT p.id,p.buyer_id,p.reference,p.specifications,p.quantity_milli,p.unit,p.requested_delivery_at,p.payment_terms,p.status,p.sent_revision_id,p.sent_version,p.created_at,p.updated_at,b.name AS buyer_name,b.status AS buyer_status FROM buyer_purchase_orders p JOIN buyers b ON b.id=p.buyer_id WHERE p.workspace_id=? ORDER BY p.created_at DESC LIMIT 200', w),
@@ -204,7 +204,12 @@ async function salesOverview(db, w) {
     all(db, 'SELECT id,sku,name FROM products WHERE workspace_id=? ORDER BY name', w),
     settingsOf(db, w),
   ]);
-  return json({ buyers, rfqs: rfqs.map(({ buyer_status, ...rfq }) => ({ ...rfq, state: rfqState(rfq.status, buyer_status) })), revisions, acceptances, orders, invoices: await Promise.all(invoices.map(async invoice => ({ ...balanceData(invoice, Date.now()), alerts: await all(db, 'SELECT * FROM credit_alerts WHERE invoice_id=? AND workspace_id=? ORDER BY created_at', invoice.id, w) }))), creditNotes, products, settings });
+  const alertsByInvoice = new Map();
+  for (const alert of await all(db, 'SELECT * FROM credit_alerts WHERE workspace_id=? AND invoice_id IN (SELECT value FROM json_each(?)) ORDER BY created_at', w, JSON.stringify(invoices.map(invoice => invoice.id)))) {
+    if (!alertsByInvoice.has(alert.invoice_id)) alertsByInvoice.set(alert.invoice_id, []);
+    alertsByInvoice.get(alert.invoice_id).push(alert);
+  }
+  return json({ buyers, rfqs: rfqs.map(({ buyer_status, ...rfq }) => ({ ...rfq, state: rfqState(rfq.status, buyer_status) })), revisions, acceptances, orders, invoices: invoices.map(invoice => ({ ...balanceData(invoice, now), alerts: alertsByInvoice.get(invoice.id) ?? [] })), creditNotes, products, settings });
 }
 
 export async function salesApi(request, env, member, path, data) {
@@ -213,7 +218,7 @@ export async function salesApi(request, env, member, path, data) {
 
   if (!data) {
     viewer(member, 'sales_manager');
-    if (path === '/api/erp/sales') return salesOverview(db, w);
+    if (path === '/api/erp/sales') return salesOverview(db, w, now);
     if (path.startsWith('/api/erp/sales/invoices/')) {
       const invoice = await one(db, 'SELECT i.*,o.reference AS order_reference,o.terms_snapshot FROM invoices i JOIN sales_orders o ON o.id=i.sales_order_id WHERE i.id=? AND i.workspace_id=?', recordId(path.split('/')[5]), w);
       if (!invoice) fail(404, 'Invoice not found.');
@@ -230,6 +235,7 @@ export async function salesApi(request, env, member, path, data) {
     const id = recordId(data.id), invoiceId = recordId(data.invoiceId), amount = integer(data.amountMinor, 'Payment amount'), received = date(data.receivedAt, 'Received date'), note = multiline(data.note ?? '', 'Note', 0, 2000);
     const invoice = await one(db, 'SELECT * FROM invoice_balances WHERE id=? AND workspace_id=?', invoiceId, w);
     if (!invoice) fail(404, 'Invoice not found.');
+    if (invoice.due_at === null) fail(409, 'This invoice has no due date and cannot take payments.');
     const result = async (payment, status) => json({ payment, invoice: balanceData(await one(db, 'SELECT * FROM invoice_balances WHERE id=? AND workspace_id=?', invoiceId, w), now) }, status);
     const replay = payment => {
       if (payment.workspace_id !== w || payment.invoice_id !== invoiceId || payment.amount_minor !== amount || payment.received_at !== received || payment.note !== note) fail(409, 'This request ID was used for different payment values.');
