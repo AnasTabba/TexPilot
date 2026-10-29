@@ -1,4 +1,5 @@
 import { test, expect, devices } from '@playwright/test';
+import { origin, signIn } from './helpers';
 test.use({ serviceWorkers: 'block', reducedMotion: 'reduce' });
 test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
 
@@ -42,8 +43,10 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await page.getByLabel('Specifications (count, composition, quality)', { exact: true }).fill('Combed ring-spun cotton, count 30/1, freight included');
   await page.getByLabel('Required quantity', { exact: true }).fill('100');
   await page.getByLabel('Delivery location', { exact: true }).fill('FAZ Textile Factory Karachi');
+  await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
   await page.getByRole('button', { name: 'Save draft RFQ' }).click();
   await page.getByRole('checkbox', { name: 'I checked the specifications' }).check();
+  await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
   await page.getByRole('button', { name: 'Publish RFQ', exact: true }).click();
   await expect(page.getByText('1 supplier portal recipients')).toBeVisible();
   await supplier.reload(); await supplierLogin();
@@ -55,6 +58,7 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await page.getByRole('button', { name: 'Review and accept bid' }).click();
   await page.getByRole('checkbox', { name: 'I accept this bid revision' }).check();
+  await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
   await page.getByRole('button', { name: 'Accept and create purchase order' }).click();
   await expect(page.locator('.erp-status').filter({ hasText: /^awarded$/ })).toBeVisible();
   await supplier.getByRole('button', { name: 'Refresh', exact: true }).click();
@@ -88,4 +92,44 @@ test('supplier register and login forms support Urdu without horizontal overflow
  await page.getByRole('button', { name: 'کمپنی رجسٹر کریں', exact: true }).click();
  await expect(page.getByLabel('کمپنی کا نام', { exact: true })).toBeVisible();
  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+});
+
+test('admin legacy purchasing forms require intervention on every mutation, and a large award waits for approval', async ({ page }) => {
+ await signIn(page);
+ const post = async (path: string, data: object) => { const r = await page.request.post('/api' + path, { data, headers: { Origin: origin } }); return { status: r.status(), body: await r.json() }; };
+ const supplierPassword = 'Secure supplier password 2026';
+ expect((await post('/portal/register', { company: 'Gate mill', contactName: 'Gate Contact', email: 'gate@factory.test', phone: '+923001234567', categories: ['cotton'], password: supplierPassword })).status).toBe(201);
+ const suppliers = await (await page.request.get('/api/erp/suppliers?status=pending')).json();
+ expect((await post('/erp/suppliers/review', { id: suppliers.suppliers[0].id, version: 1, status: 'approved', reason: 'Company checked', interventionReason: 'Purchase manager not set up yet' })).status).toBe(200);
+ expect((await post('/erp/admin/thresholds', { type: 'purchase', value: 1, interventionReason: 'Test the approval gate' })).status).toBe(200);
+ await page.goto('/#/procurement');
+ await page.getByRole('button', { name: 'RFQs and bids', exact: true }).click();
+ await page.getByRole('button', { name: 'New RFQ', exact: true }).click();
+ await page.getByLabel('RFQ title', { exact: true }).fill('Gate cotton order');
+ await page.getByLabel('Specifications (count, composition, quality)', { exact: true }).fill('Combed cotton 20/1 for the gate test');
+ await page.getByLabel('Required quantity', { exact: true }).fill('10');
+ await page.getByLabel('Delivery location', { exact: true }).fill('FAZ Textile Factory');
+ await page.getByRole('button', { name: 'Save draft RFQ' }).click();
+ expect((await (await page.request.get('/api/erp/procurement')).json()).rfqs).toHaveLength(0);
+ await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
+ await page.getByRole('button', { name: 'Save draft RFQ' }).click();
+ await expect(page.getByText('Saved.')).toBeVisible();
+ await page.getByRole('checkbox', { name: 'I checked the specifications' }).check();
+ await page.getByRole('button', { name: 'Publish RFQ', exact: true }).click();
+ expect((await (await page.request.get('/api/erp/procurement')).json()).rfqs[0].status).toBe('draft');
+ await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
+ await page.getByRole('button', { name: 'Publish RFQ', exact: true }).click();
+ await expect(page.getByText('1 supplier portal recipients')).toBeVisible();
+ expect((await post('/portal/login', { email: 'gate@factory.test', password: supplierPassword })).status).toBe(200);
+ const rfq = (await (await page.request.get('/api/erp/procurement')).json()).rfqs[0];
+ const bid = await post('/portal/bids', { id: crypto.randomUUID(), rfqId: rfq.id, version: 0, quantityMilli: rfq.quantity_milli, priceMinor: 125000, currency: 'PKR', paymentTerms: 'Net 30 after delivery', deliveryAt: Date.now() + 7 * 86400000, validUntil: Date.now() + 3 * 86400000, note: '' });
+ expect(bid.status).toBe(201);
+ await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+ await page.getByRole('button', { name: 'Review and accept bid' }).click();
+ await page.getByRole('checkbox', { name: 'I accept this bid revision' }).check();
+ await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
+ await page.getByRole('button', { name: 'Accept and create purchase order' }).click();
+ await expect(page.getByText('Sent to the admin for approval. The purchase order is created once approved.')).toBeVisible();
+ await expect(page.getByText('Waiting for admin approval.', { exact: false })).toBeVisible();
+ await expect(page.locator('.erp-status').filter({ hasText: /^open$/ })).toBeVisible();
 });

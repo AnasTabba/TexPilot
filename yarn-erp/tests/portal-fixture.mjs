@@ -80,7 +80,21 @@ export async function portalFixture(database) {
     await recordAcceptance(env.DB, { workspaceId, revisionId, version: 1, buyerId, acceptedBy: 'Buyer Contact', now });
     return { buyerId, rfqId, revisionId };
   }
-  return { sql, env, workspaceId, adminId, person, insertSupplier, login, call, member: async name => (await call('/workspace', undefined, name)).data.member, insertBuyer, insertBuyerRfq, acceptedQuote };
+  // A submitted bid for a published RFQ; the quantity defaults to the full RFQ quantity.
+  function insertBid({ rfqId, supplierId, priceMinor = 125000, quantityMilli }) {
+    const id = crypto.randomUUID(), now = Date.now();
+    quantityMilli ??= sql.prepare('SELECT quantity_milli FROM procurement_rfqs WHERE id=?').get(rfqId).quantity_milli;
+    const currency = sql.prepare("SELECT json_extract(value_json,'$') AS c FROM settings WHERE workspace_id=? AND key='currency'").get(workspaceId)?.c ?? 'PKR';
+    sql.prepare("INSERT INTO supplier_bids(id,rfq_id,supplier_id,quantity_milli,price_minor,currency,payment_terms,delivery_at,valid_until,note,version,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,1,'submitted',?,?,?)")
+      .run(id, rfqId, supplierId, quantityMilli, priceMinor, currency, '30 days after delivery', now + 7 * 86400000, now + 3 * 86400000, 'Freight included', 'supplier:' + supplierId, now, now);
+    return id;
+  }
+  function setThreshold(type, value) {
+    const now = Date.now(), currency = ['purchase', 'claim'].includes(type) ? JSON.parse(sql.prepare("SELECT value_json FROM settings WHERE workspace_id=? AND key='currency'").get(workspaceId)?.value_json ?? '"PKR"') : null;
+    sql.prepare('INSERT INTO thresholds(workspace_id,type,value,currency,created_by,created_at,updated_by,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(workspace_id,type) DO UPDATE SET value=excluded.value,currency=excluded.currency,updated_at=excluded.updated_at')
+      .run(workspaceId, type, value, currency, adminId, now, adminId, now);
+  }
+  return { sql, env, workspaceId, adminId, person, insertSupplier, insertBid, setThreshold, login, call, member: async name => (await call('/workspace', undefined, name)).data.member, insertBuyer, insertBuyerRfq, acceptedQuote };
 }
 
 // Deliberately uses the pre-portal schema, including real commercial and immutable data.

@@ -3,14 +3,14 @@ import { LOCK_AFTER, LOCK_MS, ROLE_PERMISSIONS, SESSION_MS, nameKey, pinHash, ra
 import { adminApi } from './admin.mjs';
 import { ErpProblem } from './erp-utils.mjs';
 import { supplierPortal } from './supplier-portal.mjs';
-import { staffProcurement } from './procurement.mjs';
+import { staffProcurement, approvalHandlers } from './procurement.mjs';
 import { receiving } from './receiving.mjs';
 import { salesApi } from './sales.mjs';
 import { buyerPortalApi } from './buyer-portal.mjs';
 import { notificationsApi } from './notify.mjs';
 import { approvalsApi } from './governance.mjs';
-const approvalHandlers = {};
-const erp = { admin: adminApi, notifications: notificationsApi, sales: salesApi };
+import { trackingApi } from './tracking.mjs';
+const erp = { admin: adminApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi };
 erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, approvalHandlers);
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();

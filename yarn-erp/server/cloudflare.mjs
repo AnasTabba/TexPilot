@@ -6,6 +6,7 @@ import { inventoryApi, signedIn } from './inventory.mjs';
 import { forwardToScanner } from './scanner-proxy.mjs';
 import { creditAlertsScheduled } from './sales.mjs';
 import { remindersScheduled } from './notify.mjs';
+import { purchasingScheduled } from './procurement.mjs';
 
 export default {
   async fetch(request, env) {
@@ -21,6 +22,6 @@ export default {
     }
   },
   async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(Promise.all([remindersScheduled(env), creditAlertsScheduled(env)]));
+    ctx.waitUntil(Promise.all([purchasingScheduled(env), remindersScheduled(env), creditAlertsScheduled(env)]));
   },
 };
