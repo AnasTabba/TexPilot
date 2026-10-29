@@ -102,7 +102,8 @@ async function snapshot(db, member) {
 async function saveMovement(db, member, data) {
   keys(data, ['id', 'lotId', 'action', 'grams', 'cartons', 'cones', 'stage', 'toStage', 'note']);
   allow(member, ...movementPermission.dispatch);
-  if (!STAGES.includes(data.stage)) fail(422, 'Choose a valid stock stage.');
+  // Only produced goods leave the factory.
+  if (data.stage !== 'finished') fail(422, 'Only finished stock can be dispatched.');
   const record = { id: id(data.id), lotId: id(data.lotId), action: 'dispatch', fromStage: data.stage, toStage: null,
     grams: integer(data.grams, 'Weight in grams', 1, 9_000_000_000_000),
     cartons: integer(data.cartons ?? 0, 'Cartons'), cones: integer(data.cones ?? 0, 'Cones'),

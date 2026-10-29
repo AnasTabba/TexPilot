@@ -67,11 +67,18 @@ async function fixture() {
     assert.equal((await portal.call('/erp/qc/reports/decide', { inspectionId, decision: 'accept' }, 'Saima')).status, 200);
     return { lot: { id: lotId } };
   }
-  return { call, send, login, cookieFor, addPerson, addOutsider, addLot, setup, received, sql, env, cookies };
+  // Only produced (finished) stock can be dispatched; this enters a finished-goods batch of exactly `grams`.
+  async function finished(grams = 10000) {
+    const product = await call('/products', { sku: 'FIN-' + crypto.randomUUID().slice(0, 8), name: 'Finished cotton', interventionReason: 'Catalogue setup for tests' });
+    const entry = await call('/erp/stock/finished', { id: crypto.randomUUID(), productId: product.data.id, batch: 'FIN-1', grams, cartons: 0, cones: 0, note: '', interventionReason: 'Supervisor is away today' });
+    assert.equal(entry.status, 201, JSON.stringify(entry.data));
+    return { lot: { id: entry.data.lotId } };
+  }
+  return { call, send, login, cookieFor, addPerson, addOutsider, addLot, setup, received, finished, sql, env, cookies };
 }
 const movement = (lotId, action = 'receive', grams = 10000, extra = {}) => ({
   id: crypto.randomUUID(), lotId, action, grams, cartons: 2, cones: 48,
-  stage: 'raw', note: 'Goods received', ...extra,
+  stage: action === 'dispatch' ? 'finished' : 'raw', note: 'Goods received', ...extra,
 });
 
 
@@ -106,8 +113,8 @@ test('two different devices read one durable stock ledger and barcode lookup', a
 });
 
 test('duplicate delivery is idempotent; reusing its key for different stock is rejected', async () => {
-  const { call, received } = await fixture();
-  const { lot } = await received();
+  const { call, finished } = await fixture();
+  const { lot } = await finished();
   const payload = movement(lot.id, 'dispatch', 4000, { cartons: 0, cones: 0 });
   assert.equal((await call('/movements', payload)).status, 201);
   assert.equal((await call('/movements', payload)).status, 200);
@@ -128,8 +135,8 @@ test('the old transfer, waste, reversal and batch writes are closed; balances st
 });
 
 test('stock cannot go negative, including concurrent dispatches', async () => {
-  const { call, received } = await fixture();
-  const { lot } = await received();
+  const { call, finished } = await fixture();
+  const { lot } = await finished();
   const responses = await Promise.all([
     call('/movements', movement(lot.id, 'dispatch', 7000, { cartons: 0, cones: 0 })),
     call('/movements', movement(lot.id, 'dispatch', 7000, { cartons: 0, cones: 0 })),
@@ -138,14 +145,13 @@ test('stock cannot go negative, including concurrent dispatches', async () => {
   const failed = await call('/movements', movement(lot.id, 'dispatch', 4000, { cartons: 0, cones: 0 }));
   assert.equal(failed.status, 409);
   const state = (await call('/workspace')).data;
-  assert.equal(state.balances.find(b => b.stage === 'raw').grams, 3000);
-  assert.equal(state.balances.some(b => b.stage === 'finished' && b.grams > 0), false);
+  assert.equal(state.balances.find(b => b.stage === 'finished').grams, 3000);
   assert.equal(state.movements.length, 2, 'the receipt and the one dispatch');
 });
 
 test('QC-approved stock can be dispatched by a dispatcher; the old QC toggle is closed to everyone', async () => {
-  const { call, received, addPerson } = await fixture();
-  const { lot } = await received();
+  const { call, finished, addPerson } = await fixture();
+  const { lot } = await finished();
   await addPerson('Store', 'dispatch');
   assert.equal((await call('/quality', { lotId: lot.id, status: 'hold', note: 'Manager inspected' })).status, 410);
   assert.equal((await call('/quality', { lotId: lot.id, status: 'approved', note: 'Looks fine' }, 'Store')).status, 410);
@@ -154,8 +160,8 @@ test('QC-approved stock can be dispatched by a dispatcher; the old QC toggle is 
 });
 
 test('the ledger is immutable and a decided QC receipt is never reversed', async () => {
-  const { call, received, sql } = await fixture();
-  const { lot } = await received();
+  const { call, finished, sql } = await fixture();
+  const { lot } = await finished();
   const dispatch = movement(lot.id, 'dispatch', 4000, { cartons: 0, cones: 0 });
   await call('/movements', dispatch);
   assert.equal((await call('/reversals', { id: crypto.randomUUID(), movementId: dispatch.id, note: 'Wrong dispatch' })).status, 410);
@@ -184,6 +190,7 @@ test('invalid quantities, unknown fields and forged provenance fail; old receipt
     assert.equal((await call('/movements', movement(lot.id, 'dispatch', grams))).status, 422);
   }
   assert.equal((await call('/movements', { ...movement(lot.id, 'dispatch'), by: 'Administrator' })).status, 422);
+  assert.equal((await call('/movements', movement(lot.id, 'dispatch', 1000, { stage: 'raw' }))).status, 422, 'only finished stock is dispatched');
   assert.equal((await call('/movements', movement(lot.id, 'receive'))).status, 410, 'raw stock enters only through a report decision');
 });
 

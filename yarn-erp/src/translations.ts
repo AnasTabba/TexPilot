@@ -21,7 +21,7 @@ export const urdu: Record<string, string> = {
   'Saved. Everyone on the team sees it now.': 'محفوظ ہوگیا۔ اب پوری ٹیم اسے دیکھ سکتی ہے۔',
   'Material': 'مٹیریل', 'Barcode': 'بارکوڈ', 'Not recorded': 'درج نہیں', 'Batch / dye lot': 'بیچ / ڈائی لاٹ', 'Supplier': 'سپلائر', 'Batch': 'بیچ',
   'Care label': 'کیئر لیبل', 'Receive into': 'اس مرحلے میں وصول کریں', 'From stage': 'موجودہ مرحلہ', 'To stage': 'اگلا مرحلہ',
-  'Weight': 'وزن', 'Cartons': 'کارٹن', 'Cones': 'کون', 'Notes': 'نوٹس', 'None': 'کوئی نہیں', 'Available:': 'دستیاب:', 'cartons ·': 'کارٹن ·', 'cones': 'کون',
+  'Weight': 'وزن', 'Cartons': 'کارٹن', 'Cones': 'کون', 'Notes': 'نوٹس', 'None': 'کوئی نہیں', 'Available:': 'دستیاب:', 'Finished stock left:': 'باقی تیار مال:', 'cartons': 'کارٹن', 'Only finished stock can be dispatched.': 'صرف تیار مال روانہ ہو سکتا ہے۔', 'Only finished, QC-approved stock can be dispatched': 'صرف تیار اور کوالٹی منظور مال روانہ ہو سکتا ہے', 'cartons ·': 'کارٹن ·', 'cones': 'کون',
   'A physical inspection and a reason are required. Approval allows dispatch; the original review remains in the audit history.': 'جسمانی معائنہ اور وجہ ضروری ہیں۔ منظوری کے بعد مال روانہ ہوسکتا ہے؛ اصل فیصلہ ہسٹری میں محفوظ رہتا ہے۔',
   'Review the entry, then save it for the whole team.': 'اندراج چیک کریں، پھر پوری ٹیم کے لیے محفوظ کریں۔',
   'Save QC decision': 'کوالٹی کا فیصلہ محفوظ کریں', 'Save inspection': 'معائنہ محفوظ کریں', 'Save entry': 'اندراج محفوظ کریں',
