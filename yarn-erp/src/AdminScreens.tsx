@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowLeft, ArrowUpRight, Check, ChevronDown, ClipboardCheck, RotateCw, Save, X } from 'lucide-react';
+import { AnalyticsSection, BarList, KpiStrip, StackedBar, firstCurrency, type BarRow, type Kpi, type Segment, type Tone } from './AnalyticsKit';
 import { Field, errorMessage } from './forms';
 import { useLanguage } from './i18n';
 import { inventoryRequest as api, roleLabel, type Member, type Role, type WorkspaceState } from './inventory-client';
@@ -348,26 +349,50 @@ function Analytics() {
   if (data.error) return <NextStep tone="warn" title={t('Analytics data is not available yet.', 'تجزیاتی ڈیٹا ابھی دستیاب نہیں۔')} reason={t(data.error)} action={<button className="button" onClick={data.reload}><RotateCw size={18} aria-hidden="true" />{t('Retry', 'دوبارہ کوشش کریں')}</button>} />;
   if (data.value === null) return <p className="live-muted" role="status">{t('Loading…', 'لوڈ ہو رہا ہے…')}</p>;
   const d = data.value;
-  const table = (title: [string, string], head: [string, string][], body: ReactNode[][]) => <section className="yf-section" key={title[0]}>
-    <h2>{t(...title)}</h2>
-    {body.length ? <div className="yf-table-wrap"><table className="yf-table"><thead><tr>{head.map(h => <th key={h[0]}>{t(...h)}</th>)}</tr></thead><tbody>{body.map((r, i) => <tr key={i}>{r.map((c, k) => <td key={k}>{c}</td>)}</tr>)}</tbody></table></div>
-      : <p className="live-empty">{t('No data for this period.', 'اس مدت کا کوئی ڈیٹا نہیں۔')}</p>}
-  </section>;
-  const counts = (x: any): ReactNode[][] => Object.entries(x || {}).map(([k, v]) => [<StatusTag status={k} />, String(v)]);
-  const byCurrency = (rows: any[] = [], key: string): ReactNode[][] => rows.map(r => [r.currency || '—', money(r[key], r.currency || undefined)]);
+  const buyers: any[] = d.sales?.byBuyer || [];
+  const payments: any[] = d.payments?.byCurrency || [];
+  const currency = firstCurrency(buyers, payments);
+  const sumBuyers = currency ? money(buyers.filter(row => row.currency === currency).reduce((sum, row) => sum + row.totalMinor, 0), currency) : null;
+  const owed = currency ? payments.find(row => row.currency === currency) : undefined;
+  const kpis: Kpi[] = [
+    { label: t('Sales total', 'کل فروخت'), value: sumBuyers },
+    { label: t('Outstanding', 'بقایا'), value: currency ? money(owed?.outstandingMinor ?? 0, currency) : null },
+    { label: t('Overdue', 'مدت گزر گئی'), value: currency ? money(owed?.overdueMinor ?? 0, currency) : null },
+    { label: t('Finished stock', 'تیار مال'), value: kg(d.inventory?.finishedGrams || 0) },
+  ];
   const roleText = (role: string) => (roleLabel[role as Role] ? t(...roleLabel[role as Role]) : role);
-  return <div className="yf-admin-sections">
-    {table(['Purchasing: RFQs by status', 'خریداری: RFQ بلحاظ حالت'], [['Status', 'حالت'], ['Count', 'تعداد']], counts(d.purchasing?.rfqs))}
-    {table(['Purchase orders by currency', 'خریداری آرڈر بلحاظ کرنسی'], [['Currency', 'کرنسی'], ['Total', 'کل']], byCurrency(d.purchasing?.totalsByCurrency, 'poTotalMinor'))}
-    {table(['Quality: claims', 'معیار: دعوے'], [['Outcome', 'نتیجہ'], ['Count', 'تعداد']], counts(d.quality?.claims))}
-    {table(['Claims by currency', 'دعوے بلحاظ کرنسی'], [['Currency', 'کرنسی'], ['Total', 'کل']], byCurrency(d.quality?.totalsByCurrency, 'claimMinor'))}
-    {table(['Inventory', 'اسٹاک'], [['Stage', 'مرحلہ'], ['Weight', 'وزن']], [
-      [t('Raw material', 'خام مال'), kg(d.inventory?.rawGrams || 0)], [t('Cops', 'کاپس'), kg(d.inventory?.copsGrams || 0)],
-      [t('Work in progress', 'زیرِ تیاری'), kg(d.inventory?.wipGrams || 0)], [t('Finished stock', 'تیار مال'), kg(d.inventory?.finishedGrams || 0)],
-    ])}
-    {table(['Sales: by buyer', 'فروخت: بلحاظ خریدار'], [['Buyer', 'خریدار'], ['Currency', 'کرنسی'], ['Total', 'کل']], (d.sales?.byBuyer || []).map((r: any) => [r.buyer, r.currency, money(r.totalMinor, r.currency)]))}
-    {table(['Payments outstanding', 'بقایا ادائیگیاں'], [['Currency', 'کرنسی'], ['Outstanding', 'بقایا'], ['Overdue', 'مدت گزر گئی']], (d.payments?.byCurrency || []).map((r: any) => [r.currency, money(r.outstandingMinor, r.currency), money(r.overdueMinor, r.currency)]))}
-    {table(['Dispatch', 'ڈسپیچ'], [['Status', 'حالت'], ['Count', 'تعداد']], counts(d.dispatch))}
-    {table(['Staff activity', 'عملے کی سرگرمی'], [['Person', 'شخص'], ['Role', 'کردار'], ['Actions', 'اعمال']], (d.users || []).map((r: any) => [r.name, roleText(r.role), String(r.actions)]))}
+  const rfqTone: Record<string, Tone> = { draft: 'stone', open: 'warn', closed: 'ink', awarded: 'ok', cancelled: 'bad' };
+  const dispatchTone: Record<string, Tone> = { pending_approval: 'warn', approved: 'kraft', on_hold: 'bad', dispatched: 'ink', delivered: 'ok' };
+  const segmentsOf = (counts: Record<string, number> | undefined, tones: Record<string, Tone>): Segment[] => Object.entries(counts || {}).map(([status, count]) => ({ key: status, label: <StatusTag status={status} />, value: Number(count), text: String(count), tone: tones[status] ?? 'stone' }));
+  const claimOutcomes: Segment[] = outcomes.map(([value, en, ur]) => ({ key: value, label: t(en, ur), value: Number(d.quality?.claims?.[value] ?? 0), text: String(d.quality?.claims?.[value] ?? 0), tone: value === 'return' ? 'bad' : value === 'replacement' ? 'warn' : 'kraft' }));
+  const stock: Segment[] = [
+    { key: 'raw', label: t('Raw material', 'خام مال'), value: d.inventory?.rawGrams || 0, text: kg(d.inventory?.rawGrams || 0), tone: 'kraft' },
+    { key: 'wip', label: t('Work in progress', 'زیرِ تیاری'), value: d.inventory?.wipGrams || 0, text: kg(d.inventory?.wipGrams || 0), tone: 'stone' },
+    { key: 'finished', label: t('Finished stock', 'تیار مال'), value: d.inventory?.finishedGrams || 0, text: kg(d.inventory?.finishedGrams || 0), tone: 'ink' },
+  ];
+  const people: BarRow[] = (d.users || []).map((row: any, i: number) => ({ key: `${row.name}-${i}`, label: row.name, sub: roleText(row.role), value: Number(row.actions), text: String(row.actions) }));
+  return <div className="ak-page">
+    <KpiStrip items={kpis} />
+    <div className="ak-grid">
+      <AnalyticsSection className="ak-money" title={t('Money', 'رقم')} note={t('Sales, balances and purchase values, each in its own currency. Amounts are never converted.', 'فروخت، بقایا اور خریداری کی قدریں، ہر کرنسی میں الگ۔ رقم کو تبدیل نہیں کیا جاتا۔')}>
+        <BarList rows={buyers.map(row => ({ key: `${row.buyer}-${row.currency}`, label: row.buyer, value: row.totalMinor, text: money(row.totalMinor, row.currency), group: row.currency }))} empty={t('No sales in this period.', 'اس مدت میں کوئی فروخت نہیں۔')} />
+        <BarList rows={payments.map(row => ({ key: `owed-${row.currency}`, label: t('Outstanding', 'بقایا'), sub: `${t('Overdue', 'مدت گزر گئی')}: ${money(row.overdueMinor, row.currency)}`, value: row.outstandingMinor, text: money(row.outstandingMinor, row.currency), group: row.currency }))} empty={t('No balances owed.', 'کوئی رقم بقایا نہیں۔')} />
+        <BarList rows={(d.purchasing?.totalsByCurrency || []).map((row: any) => ({ key: `po-${row.currency}`, label: t('Purchase orders', 'خریداری آرڈر'), value: row.poTotalMinor, text: money(row.poTotalMinor, row.currency), group: row.currency }))} empty={t('No purchase orders in this period.', 'اس مدت میں کوئی خریداری آرڈر نہیں۔')} />
+        <BarList rows={(d.quality?.totalsByCurrency || []).map((row: any) => ({ key: `claim-${row.currency}`, label: t('Claims decided', 'طے شدہ دعوے'), value: row.claimMinor, text: money(row.claimMinor, row.currency), group: row.currency }))} empty={t('No claims decided in this period.', 'اس مدت میں کوئی دعویٰ طے نہیں ہوا۔')} />
+      </AnalyticsSection>
+      <AnalyticsSection className="ak-ops" title={t('Operations', 'کاروبار')} note={t('Where requests, dispatches, claims and stock stand.', 'درخواستیں، ڈسپیچ، دعوے اور اسٹاک کہاں کھڑے ہیں۔')}>
+        <h3 className="ak-group-title">{t('Purchasing: RFQs by status', 'خریداری: RFQ بلحاظ حالت')}</h3>
+        <StackedBar segments={segmentsOf(d.purchasing?.rfqs, rfqTone)} />
+        <h3 className="ak-group-title">{t('Dispatch', 'ڈسپیچ')}</h3>
+        <StackedBar segments={segmentsOf(d.dispatch, dispatchTone)} />
+        <h3 className="ak-group-title">{t('Quality: claims', 'معیار: دعوے')}</h3>
+        <StackedBar segments={claimOutcomes} />
+        <h3 className="ak-group-title">{t('Inventory', 'اسٹاک')}</h3>
+        <StackedBar segments={stock} />
+      </AnalyticsSection>
+      <AnalyticsSection className="ak-people" title={t('People', 'عملہ')} note={t('Recorded actions by each team member in this period.', 'اس مدت میں ہر ٹیم ممبر کے ریکارڈ شدہ اعمال۔')}>
+        <BarList rows={people} empty={t('No staff activity in this period.', 'اس مدت میں عملے کی کوئی سرگرمی نہیں۔')} />
+      </AnalyticsSection>
+    </div>
   </div>;
 }

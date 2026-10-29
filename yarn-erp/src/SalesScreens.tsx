@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, BadgeCheck, Ban, Banknote, ChartNoAxesCombined, Download, FileText, Receipt, RefreshCw, Send, Truck } from 'lucide-react';
+import { AnalyticsSection, BarList, KpiStrip, StackedBar, firstCurrency, type BarRow, type Tone } from './AnalyticsKit';
 import { AsyncForm, Field } from './forms';
 import { useLanguage } from './i18n';
 import { InterventionField, NextStep, ReasonField, SectionTabs, StatusTag, kg, money } from './PortalCommon';
@@ -208,19 +209,40 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
     </div>;
   };
 
-  const analyticsView = () => <div className="erp-workspace"><section className="live-panel"><div className="erp-toolbar">
-      <Field>{t('From', 'سے')}<input type="date" value={from} onChange={event => setFrom(event.target.value)} /></Field>
-      <Field>{t('To', 'تک')}<input type="date" value={to} onChange={event => setTo(event.target.value)} /></Field>
-      <button className="button" onClick={() => void load()} disabled={loading}><ChartNoAxesCombined size={18} aria-hidden="true" />{t('Refresh analytics', 'تجزیہ تازہ کریں')}</button>
-    </div></section>
-    {!analytics ? <p role="status">{t('Choose a valid period to load analytics.', 'تجزیے کے لیے درست مدت منتخب کریں۔')}</p> : <>
-      <section className="live-panel"><h2>{t('Sales by month', 'ماہانہ فروخت')}</h2><AnalyticsTable rows={analytics.byPeriod.map(row => ({ label: row.period, currency: row.currency, amount: row.totalMinor }))} empty={t('No invoiced sales in this period.', 'اس مدت میں کوئی انوائس شدہ فروخت نہیں۔')} /></section>
-      <section className="live-panel"><h2>{t('Sales by buyer', 'خریدار کے لحاظ سے فروخت')}</h2><AnalyticsTable rows={analytics.byBuyer.map(row => ({ label: row.buyer, currency: row.currency, amount: row.totalMinor }))} empty={t('No buyer totals in this period.', 'اس مدت میں خریدار کا کوئی مجموعہ نہیں۔')} /></section>
-      <section className="live-panel"><h2>{t('Sales by product', 'مصنوعات کے لحاظ سے فروخت')}</h2><AnalyticsTable rows={analytics.byProduct.map(row => ({ label: row.product ?? t('Unassigned material', 'غیر مختص مواد'), currency: row.currency, amount: row.totalMinor }))} empty={t('No product totals in this period.', 'اس مدت میں مصنوعات کا کوئی مجموعہ نہیں۔')} /></section>
-      <section className="live-panel"><h2>{t('Payment status', 'ادائیگی کی حالت')}</h2><ul className="erp-facts">{Object.entries(analytics.paymentStatus).map(([status, count]) => <li key={status}><StatusTag status={status} /><strong>{count}</strong></li>)}</ul>
-        {analytics.overdueByCurrency.length ? <><h3>{t('Overdue by currency', 'کرنسی کے لحاظ سے واجب')}</h3><ul className="erp-facts">{analytics.overdueByCurrency.map(row => <li key={row.currency}><span>{row.currency}</span><strong>{money(row.overdueMinor, row.currency)}</strong></li>)}</ul></> : <p>{t('No overdue balance.', 'کوئی واجب رقم نہیں۔')}</p>}</section>
-    </>}
-  </div>;
+  const analyticsView = () => {
+    const currency = analytics ? firstCurrency(analytics.byPeriod, analytics.byBuyer, analytics.overdueByCurrency) : undefined;
+    const invoiced = analytics && currency ? money(analytics.byPeriod.filter(row => row.currency === currency).reduce((sum, row) => sum + row.totalMinor, 0), currency) : null;
+    const overdue = analytics && currency ? money(analytics.overdueByCurrency.find(row => row.currency === currency)?.overdueMinor ?? 0, currency) : null;
+    const paymentTone: Record<string, Tone> = { unpaid: 'stone', partially_paid: 'warn', paid: 'ok', overdue: 'bad' };
+    const grouped = (rows: { key: string; label: string; currency: string; amount: number }[]): BarRow[] => rows.map(row => ({ key: row.key, label: row.label, value: row.amount, text: money(row.amount, row.currency), group: row.currency }));
+    return <div className="ak-page">
+      <div className="ak-toolbar">
+        <Field>{t('From', 'سے')}<input type="date" value={from} onChange={event => setFrom(event.target.value)} /></Field>
+        <Field>{t('To', 'تک')}<input type="date" value={to} onChange={event => setTo(event.target.value)} /></Field>
+        <button className="button" onClick={() => void load()} disabled={loading}><ChartNoAxesCombined size={18} aria-hidden="true" />{t('Refresh analytics', 'تجزیہ تازہ کریں')}</button>
+      </div>
+      {!analytics ? <p role="status">{t('Choose a valid period to load analytics.', 'تجزیے کے لیے درست مدت منتخب کریں۔')}</p> : <>
+        <KpiStrip items={[
+          { label: t('Total invoiced', 'کل انوائس'), value: invoiced },
+          { label: t('Overdue', 'مدت گزر گئی'), value: overdue },
+          { label: t('Paid invoices', 'ادا شدہ انوائس'), value: String(analytics.paymentStatus.paid ?? 0) },
+          { label: t('Unpaid invoices', 'غیر ادا شدہ انوائس'), value: String(analytics.paymentStatus.unpaid ?? 0) },
+        ]} />
+        <AnalyticsSection title={t('Sales by month', 'ماہانہ فروخت')}>
+          <BarList rows={grouped(analytics.byPeriod.map(row => ({ key: `${row.period}-${row.currency}`, label: row.period, currency: row.currency, amount: row.totalMinor })))} empty={t('No invoiced sales in this period.', 'اس مدت میں کوئی انوائس شدہ فروخت نہیں۔')} />
+        </AnalyticsSection>
+        <AnalyticsSection title={t('Sales by buyer', 'خریدار کے لحاظ سے فروخت')}>
+          <BarList rows={grouped(analytics.byBuyer.map(row => ({ key: `${row.buyer}-${row.currency}`, label: row.buyer, currency: row.currency, amount: row.totalMinor })))} empty={t('No buyer totals in this period.', 'اس مدت میں خریدار کا کوئی مجموعہ نہیں۔')} />
+        </AnalyticsSection>
+        <AnalyticsSection title={t('Sales by product', 'مصنوعات کے لحاظ سے فروخت')}>
+          <BarList rows={grouped(analytics.byProduct.map((row, i) => ({ key: `${row.product}-${row.currency}-${i}`, label: row.product ?? t('Unassigned material', 'غیر مختص مواد'), currency: row.currency, amount: row.totalMinor })))} empty={t('No product totals in this period.', 'اس مدت میں مصنوعات کا کوئی مجموعہ نہیں۔')} />
+        </AnalyticsSection>
+        <AnalyticsSection title={t('Payment status', 'ادائیگی کی حالت')}>
+          <StackedBar segments={Object.entries(analytics.paymentStatus).map(([status, count]) => ({ key: status, label: <StatusTag status={status} />, value: Number(count), text: String(count), tone: paymentTone[status] ?? 'stone' }))} />
+        </AnalyticsSection>
+      </>}
+    </div>;
+  };
 
   return <div className="erp-workspace yf-sales-screens">
     {!online && <p role="status" className="live-warning">{t('Offline. Sales records cannot be changed until the connection returns.', 'آف لائن ہیں۔ رابطہ بحال ہونے تک فروخت کا ریکارڈ تبدیل نہیں ہو سکتا۔')}</p>}
@@ -334,13 +356,6 @@ function DispatchThread({ status, holdReason }: { status: DispatchRecord['status
     <ol>{nodes.map((node, i) => <li key={node} className={i <= index ? 'done' : ''} aria-current={node === status ? 'step' : undefined}><span aria-hidden="true">{i + 1}</span><StatusTag status={node} /></li>)}</ol>
     {status === 'on_hold' && <p className="live-warning"><StatusTag status="on_hold" /> · {holdReason}</p>}
   </div>;
-}
-
-function AnalyticsTable({ rows, empty }: { rows: { label: string; currency: string; amount: number }[]; empty: string }) {
-  const { t } = useLanguage();
-  return rows.length ? <div className="erp-table-wrap"><table className="erp-table"><thead><tr><th scope="col">{t('Group', 'گروپ')}</th><th scope="col">{t('Currency', 'کرنسی')}</th><th scope="col">{t('Total', 'کل')}</th></tr></thead>
-    <tbody>{rows.map((row, i) => <tr key={`${row.label}-${row.currency}-${i}`}><th scope="row">{row.label}</th><td>{row.currency}</td><td>{money(row.amount, row.currency)}</td></tr>)}</tbody></table></div>
-    : <p>{empty}</p>;
 }
 
 export default SalesScreens;

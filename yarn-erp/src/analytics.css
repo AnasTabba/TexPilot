@@ -1,0 +1,65 @@
+/* Analytics: one sheet, hairline dividers, no boxes. Bars are decoration; the figures beside them are the text. */
+.ak-page { display: grid; gap: 40px; min-width: 0; }
+.ak-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
+.ak-toolbar label { min-width: 0; }
+
+.ak-grid { display: grid; gap: 44px; min-width: 0; }
+.ak-section { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.ak-section > h2 { font-size: 20px; line-height: 1.25; font-weight: 700; letter-spacing: -0.015em; }
+.ak-note { margin: -6px 0 4px; color: var(--ink-2); font-size: 14px; }
+.ak-empty { margin: 0; padding: 10px 0; color: var(--ink-2); }
+.ak-group { display: grid; gap: 2px; min-width: 0; }
+.ak-group-title { margin-top: 8px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+
+/* Headline strip: 2 columns on phone, one row of hairline-separated figures on wide screens. */
+.ak-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 0; margin: 0; padding: 18px 0; border-block: 1px solid var(--line); }
+.ak-kpi { min-width: 0; padding-inline: 0 16px; }
+.ak-kpi:nth-child(2n) { padding-inline: 16px 0; border-inline-start: 1px solid var(--line); }
+.ak-kpi dt { color: var(--ink-2); font-size: 14px; }
+.ak-kpi dd { margin: 4px 0 0; font-size: clamp(24px, 3.2vw, 32px); font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+
+/* Ranked rows: label and value on one line, the thin track underneath. */
+.ak-bar-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.ak-bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label value" "track track"; column-gap: 16px; row-gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.ak-bar-label { grid-area: label; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ak-bar-label span { overflow-wrap: anywhere; }
+.ak-bar-label small { color: var(--ink-2); font-size: 13px; overflow-wrap: anywhere; }
+.ak-bar-value { grid-area: value; font-weight: 600; text-align: end; white-space: nowrap; }
+.ak-bar-track { grid-area: track; display: block; height: 6px; border-radius: var(--r-pill); background: var(--sunken); overflow: hidden; }
+.ak-bar-fill { display: block; height: 100%; min-width: 0; border-radius: inherit; background: var(--kraft); transition: width 320ms var(--ease-out); }
+
+/* Segmented bar and legend. */
+.ak-stack { display: grid; gap: 14px; min-width: 0; }
+.ak-stack-bar { display: flex; gap: 2px; height: 12px; border-radius: var(--r-pill); background: var(--sunken); overflow: hidden; }
+.ak-seg { flex: 1 1 0; flex-basis: 0; min-width: 4px; }
+.ak-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0 28px; margin: 0; }
+.ak-legend > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.ak-legend dt { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ak-legend dd { margin: 0; font-weight: 600; text-align: end; white-space: nowrap; }
+.ak-swatch { flex: none; width: 10px; height: 10px; border-radius: 50%; }
+
+/* Tones: one palette for bars, segments and swatches. */
+.ak-seg.is-ok, .ak-swatch.is-ok { background: var(--ok); }
+.ak-seg.is-warn, .ak-swatch.is-warn { background: var(--warn); }
+.ak-seg.is-bad, .ak-swatch.is-bad { background: var(--bad); }
+.ak-seg.is-kraft, .ak-swatch.is-kraft { background: var(--kraft); }
+.ak-seg.is-ink, .ak-swatch.is-ink { background: var(--ink-2); }
+.ak-seg.is-stone, .ak-swatch.is-stone { background: var(--line-strong); }
+
+/* Wide screens: money and operations side by side, people below operations, divided by one hairline. */
+@media (min-width: 720px) {
+  .ak-kpis { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 0; }
+  .ak-kpi, .ak-kpi:nth-child(2n) { padding-inline: 20px 0; border-inline-start: 1px solid var(--line); }
+  .ak-kpi:first-child { padding-inline-start: 0; border-inline-start: 0; }
+}
+@media (min-width: 1100px) {
+  .ak-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 0; }
+  .ak-money { padding-inline-end: 56px; }
+  .ak-people { grid-column: 1 / -1; }
+  .ak-ops { padding-inline-start: 56px; border-inline-start: 1px solid var(--line); }
+  .ak-people { padding-top: 32px; border-top: 1px solid var(--line); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ak-bar-fill { transition: none; }
+}
