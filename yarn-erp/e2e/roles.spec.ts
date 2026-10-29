@@ -50,3 +50,18 @@ test('My profile shows the role and switches language', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: 'میری پروفائل', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test('the InvenTree check is for admins only and reports in both languages', async ({ page }) => {
+  await signIn(page, 'Anas');
+  await page.goto('/#/profile');
+  await page.getByRole('button', { name: 'Check InvenTree' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'InvenTree is not deployed or connected' })).toBeVisible();
+  await page.getByRole('button', { name: /Switch language to Urdu/ }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'InvenTree لگا یا جڑا' })).toBeVisible();
+  await page.getByRole('button', { name: 'Switch language to English' }).click();
+  await page.getByRole('button', { name: 'Sign out Anas' }).click();
+  await signIn(page, 'Pervaiz');
+  await page.goto('/#/profile');
+  await expect(page.getByRole('heading', { level: 1, name: 'My profile', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Check InvenTree' })).toHaveCount(0);
+});
