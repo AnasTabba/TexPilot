@@ -153,8 +153,8 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
   await expectTarget(page.locator('.yf-back'), 'batch back');
   await expectScreenTargets(page, 'batch detail');
 
-  // A real confirmation notice: receive one kilogram, review, and save.
-  await page.getByRole('button', { name: 'Receive stock', exact: true }).click();
+  // A real confirmation notice: record one kilogram of waste, review, and save.
+  await page.getByRole('button', { name: 'Record waste', exact: true }).click();
   await page.getByLabel('Weight (kg)', { exact: true }).fill('1');
   await page.getByRole('button', { name: 'Review entry', exact: true }).click();
   await page.getByRole('button', { name: 'Save entry', exact: true }).click();

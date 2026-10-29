@@ -150,27 +150,17 @@ test.describe("desktop", () => {
     await page.getByLabel("Supplier (optional)", { exact: true }).fill("Test Mills");
     await reviewAndSave(page, "Save entry");
     await title(page, "Batch details");
-    await expect(page.getByRole("heading", { level: 3, name: "Receive the first delivery" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3, name: "Waiting for the first delivery" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Dispatch", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Receive stock", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Review quality", exact: true })).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Receive stock", exact: true }).click();
-    await page.getByLabel("Weight (kg)", { exact: true }).fill("100");
-    await page.getByLabel("Cartons", { exact: true }).fill("4");
-    await page.getByLabel("Cones", { exact: true }).fill("40");
-    await reviewAndSave(page, "Save entry");
-    await expect(page.getByRole("heading", { level: 3, name: "Inspect this batch" })).toBeVisible();
-
-    await page.getByRole("button", { name: "Add inspection", exact: true }).click();
-    await page.getByLabel("Notes", { exact: true }).fill("Shade and count match the order");
-    await reviewAndSave(page, "Save inspection");
-    await expect(page.getByRole("heading", { level: 3, name: "Record the QC decision" })).toBeVisible();
-    await expect(page.locator(".yf-timeline")).toContainText("Manual inspection");
-
-    await page.getByRole("button", { name: "Review quality", exact: true }).click();
-    await page.getByLabel("Inspection reason", { exact: true }).fill("Physical check passed");
-    await reviewAndSave(page, "Save QC decision");
+    // The rest of a batch's life runs on QC-approved stock that arrived through the inspection flow.
+    await page.goto("/#/inventory");
+    await page.locator(".live-lot-row", { hasText: "LOT-1024" }).click();
+    await title(page, "Batch details");
     await expect(page.locator(".yf-batch .live-panel-heading .live-quality")).toHaveText("QC approved");
-    await expect(page.getByRole("heading", { level: 3, name: "Move it into production" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3, name: "Dispatch finished stock" })).toBeVisible();
 
     await page.getByRole("button", { name: "Move stage", exact: true }).click();
     await page.getByLabel("Weight (kg)", { exact: true }).fill("40");
@@ -184,7 +174,7 @@ test.describe("desktop", () => {
     await page.getByRole("button", { name: "Record waste", exact: true }).click();
     await page.getByLabel("Weight (kg)", { exact: true }).fill("1");
     await reviewAndSave(page, "Save entry");
-    await expect(page.locator(".yf-flow")).toContainText("49");
+    await expect(page.locator(".yf-flow")).toContainText("6,699");
 
     // Undo opens the reversal form already filled in.
     await page.getByRole("button", { name: "Undo entry" }).click();

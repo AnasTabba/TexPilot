@@ -92,13 +92,13 @@ export async function portalFixture(database) {
     return id;
   }
   // An approved PO with one shipment, written straight to the tables (the award route has its own tests).
-  async function insertPO({ supplierId, priceMinor = 125000, quantityMilli = 100000, unit = 'kg' }) {
+  async function insertPO({ supplierId, priceMinor = 125000, quantityMilli = 100000, unit = 'kg', deliveryAt }) {
     const rfqId = crypto.randomUUID(), orderId = crypto.randomUUID(), shipmentId = crypto.randomUUID(), now = Date.now(), day = 86400000;
     sql.prepare(`INSERT INTO procurement_rfqs(id,workspace_id,reference,title,category_id,specifications,quantity_milli,unit,delivery_location,deadline_at,requested_delivery_at,status,request_hash,created_by,created_at,published_at,updated_at)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?,?)`).run(rfqId, workspaceId, `RFQ-${rfqId.slice(0, 8)}`, 'Cotton combed 30/1', 'cotton', 'Ring-spun 30/1', quantityMilli, unit, 'Karachi factory', now + day, now + 7 * day, rfqId, adminId, now, now, now);
     sql.prepare('INSERT INTO rfq_recipients(rfq_id,supplier_id,supplier_snapshot,delivered_at) VALUES(?,?,?,?)').run(rfqId, supplierId, '{}', now);
     const bidId = insertBid({ rfqId, supplierId, priceMinor, quantityMilli });
-    const terms = { rfq_id: rfqId, supplier_id: supplierId, price_minor: priceMinor, currency: 'PKR', quantity_milli: quantityMilli, unit, title: 'Cotton combed 30/1', specifications: 'Ring-spun 30/1' };
+    const terms = { rfq_id: rfqId, supplier_id: supplierId, price_minor: priceMinor, currency: 'PKR', delivery_at: deliveryAt ?? now + 7 * day, quantity_milli: quantityMilli, unit, title: 'Cotton combed 30/1', specifications: 'Ring-spun 30/1' };
     sql.prepare(`INSERT INTO supplier_purchase_orders(id,workspace_id,rfq_id,bid_id,supplier_id,reference,terms_snapshot,status,accepted_by,created_at,quantity_milli,total_minor,approval_status,version,updated_at,created_by)
       VALUES(?,?,?,?,?,?,?,'accepted',?,?,?,?,'approved',1,?,?)`).run(orderId, workspaceId, rfqId, bidId, supplierId, `PO-${orderId.slice(0, 8)}`, JSON.stringify(terms), adminId, now, quantityMilli, Math.round(priceMinor * quantityMilli / 1000), now, adminId);
     sql.prepare("UPDATE procurement_rfqs SET status='awarded' WHERE id=?").run(rfqId);
@@ -124,7 +124,28 @@ export async function portalFixture(database) {
     sql.prepare('INSERT INTO thresholds(workspace_id,type,value,currency,created_by,created_at,updated_by,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(workspace_id,type) DO UPDATE SET value=excluded.value,currency=excluded.currency,updated_at=excluded.updated_at')
       .run(workspaceId, type, value, currency, adminId, now, adminId, now);
   }
-  return { sql, env, storage, workspaceId, adminId, person, insertSupplier, insertBid, insertPO, insertProduct, upload, setThreshold, login, call, member: async name => (await call('/workspace', undefined, name)).data.member, insertBuyer, insertBuyerRfq, acceptedQuote };
+  // A lot of its own (or the given one), then an inspection with the photo and issue its quantities need, submitted for the supervisor. Creates the people and one approved supplier/PO on first use.
+  let submittedContext;
+  let reference = 0;
+  async function submitted({ acceptedMilli = 0, rejectedMilli = 0, lotId, lotQuantityMilli = 100000 } = {}) {
+    for (const [name, role] of [['Pervaiz', 'purchase_manager'], ['Qasim', 'quality_inspector'], ['Saima', 'supervisor']]) if (!sql.prepare('SELECT 1 FROM users WHERE name=?').get(name)) await person(name, role);
+    if (!submittedContext) {
+      const supplierId = await insertSupplier({ status: 'approved' });
+      submittedContext = { supplierId, ...await insertPO({ supplierId, quantityMilli: 100_000_000 }), productId: await insertProduct() };
+    }
+    const step = async (path, body, as) => { const result = await call(path, body, as); assert.ok(result.status < 300, `${path}: ${result.text}`); return result; };
+    if (!lotId) {
+      lotId = crypto.randomUUID();
+      await step('/erp/qc/lots', { id: lotId, orderId: submittedContext.orderId, shipmentId: submittedContext.shipmentId, productId: submittedContext.productId, reference: `LOT-${++reference}`, quantityMilli: lotQuantityMilli, arrivedAt: Date.now() - 1000 }, 'Pervaiz');
+    }
+    const inspectionId = crypto.randomUUID();
+    await step('/erp/qc/inspections', { id: inspectionId, lotId, acceptedMilli, rejectedMilli }, 'Qasim');
+    if (acceptedMilli) assert.equal((await upload({ id: crypto.randomUUID(), inspectionId }, 'Qasim')).status, 201);
+    if (rejectedMilli) await step('/erp/qc/issues', { id: crypto.randomUUID(), inspectionId, type: 'Shade variation', severity: 'major', description: 'Dye lot differs from the approved sample' }, 'Qasim');
+    await step('/erp/qc/inspections/submit', { id: inspectionId }, 'Qasim');
+    return { lotId, inspectionId, ...submittedContext };
+  }
+  return { sql, env, storage, submitted, workspaceId, adminId, person, insertSupplier, insertBid, insertPO, insertProduct, upload, setThreshold, login, call, member: async name => (await call('/workspace', undefined, name)).data.member, insertBuyer, insertBuyerRfq, acceptedQuote };
 }
 
 // Deliberately uses the pre-portal schema, including real commercial and immutable data.

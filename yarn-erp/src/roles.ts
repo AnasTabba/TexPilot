@@ -11,6 +11,7 @@ const stock: Section = { id: 'inventory', en: 'Stock', ur: 'اسٹاک', icon: C
 const history: Section = { id: 'activity', en: 'History', ur: 'ہسٹری', icon: History };
 const procurement: Section = { id: 'procurement', en: 'Procurement', ur: 'خریداری', icon: PackagePlus };
 const lots: Section = { id: 'lots', en: 'Inspections', ur: 'معائنے', icon: ClipboardCheck };
+const reviews: Section = { id: 'reviews', en: 'Review', ur: 'جائزہ', icon: ClipboardCheck };
 const team: Section = { id: 'team', en: 'Team', ur: 'ٹیم', icon: UsersRound };
 
 // Until a role's owner task lands, its users keep the legacy screens they had; Tasks 18-21 replace these lists.
@@ -20,7 +21,7 @@ export const NAV: Record<Role, Section[]> = {
   sales_manager: [dashboard],
   dispatch: [dashboard, stock, history],
   quality_inspector: [dashboard, lots, stock, history],
-  supervisor: [dashboard, stock, history],
+  supervisor: [dashboard, reviews, stock, history],
 };
 export const COMMON: Section[] = [
   { id: 'notifications', en: 'Notifications', ur: 'اطلاعات', icon: Bell },

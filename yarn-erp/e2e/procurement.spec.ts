@@ -120,6 +120,26 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
    const mine = await (await inspector.request.get('/api/erp/qc/inspections?mine=1&status=submitted')).json();
    expect(mine.inspections).toHaveLength(1); expect(mine.inspections[0].photos).toHaveLength(1);
   } finally { await inspectorContext.close(); }
+
+  // The supervisor accepts the report: only now does the accepted quantity become QC-approved raw stock. Confirming the rejection raises a claim.
+  const supervisorContext = await browser.newContext({ ...(info.project.name.includes('webkit') ? devices['iPhone 13'] : devices['Desktop Chrome']), baseURL, serviceWorkers: 'block', reducedMotion: 'reduce' });
+  const supervisor = await supervisorContext.newPage();
+  try {
+   await signIn(supervisor, 'Saima');
+   await supervisor.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /^Review/ }).click();
+   await expect(supervisor.getByRole('heading', { level: 1, name: 'Review', exact: true })).toBeVisible();
+   await supervisor.getByRole('button', { name: 'Accept report', exact: true }).click();
+   await expect(supervisor.getByRole('status').filter({ hasText: 'Report accepted' })).toBeVisible();
+   const stock = await (await supervisor.request.get('/api/workspace')).json();
+   const received = stock.lots.find((lot: { batch: string }) => lot.batch === 'ERP-RCV-001');
+   expect(received.quality).toBe('approved');
+   expect(stock.balances.find((b: { lot_id: string; stage: string }) => b.lot_id === received.id && b.stage === 'raw').grams).toBe(8000);
+   await supervisor.getByRole('button', { name: 'Confirm rejection', exact: true }).click();
+   await expect(supervisor.getByRole('status').filter({ hasText: 'Rejection confirmed' })).toBeVisible();
+   const claims = await (await page.request.get('/api/erp/qc/claims')).json();
+   expect(claims.claims).toHaveLength(1); expect(claims.claims[0]).toMatchObject({ rejected_milli: 2000, status: 'open' });
+   expect(await supervisor.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  } finally { await supervisorContext.close(); }
   for (const p of [page, supplier]) expect(await p.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
  } finally { await supplierContext.close(); }
 });

@@ -164,14 +164,14 @@ test('inspectors cannot add inventory or change catalogue items; the old receive
   const f = await fixture();
   assert.equal((await f.call('/products', { sku: 'NEW', name: 'New material' }, 'Qasim')).status, 403);
   assert.equal((await f.call('/lots', { productId: f.productId, batch: 'B1', supplier: 'Mill' }, 'Qasim')).status, 403);
-  assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: crypto.randomUUID(), action: 'receive', stage: 'raw', grams: 1000 }, 'Qasim')).status, 403);
+  assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: crypto.randomUUID(), action: 'receive', stage: 'raw', grams: 1000 }, 'Qasim')).status, 410);
   const legacy = (await f.call('/lots', { productId: f.productId, batch: 'OLD-1', supplier: 'Mill' }, 'Anas')).data;
-  assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: legacy.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: '' }, 'Pervaiz')).status, 403, 'the purchase manager registers QC lots instead');
-  assert.equal((await f.call('/quality', { lotId: legacy.id, status: 'approved', note: 'Inspector approves' }, 'Qasim')).status, 403);
+  assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: legacy.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: '' }, 'Pervaiz')).status, 410, 'raw stock enters only through a report decision');
+  assert.equal((await f.call('/quality', { lotId: legacy.id, status: 'approved', note: 'Inspector approves' }, 'Qasim')).status, 410);
   assert.equal((await f.call('/inspections', { id: crypto.randomUUID(), lotId: legacy.id, labelText: '', note: 'Looks fine', result: null }, 'Qasim')).status, 403);
   assert.equal((await f.call('/photos', { inspectionId: crypto.randomUUID() }, 'Qasim')).status, 403);
   assert.equal(count(f, 'movements'), 0); assert.equal(count(f, 'quality_events'), 0); assert.equal(count(f, 'inspections'), 0);
-  assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: legacy.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: '' }, 'Anas')).status, 201, 'admins keep the legacy write');
+  assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: legacy.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: '' }, 'Anas')).status, 410, 'not even admins receive raw stock outside a report decision');
   assert.equal((await f.call('/erp/receipts', { id: crypto.randomUUID(), orderId: f.orderId, productId: f.productId, batch: 'R', quantityMilli: 1000 }, 'Anas')).status, 410);
 });
 

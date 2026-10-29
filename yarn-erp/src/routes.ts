@@ -32,7 +32,7 @@ const destination: Record<string, Partial<Record<Role, string>>> = {
   rfq: { purchase_manager: 'rfqs' }, bid: { purchase_manager: 'rfqs' },
   purchase_order: { purchase_manager: 'orders' }, shipment: { purchase_manager: 'orders' },
   qc_lot: { quality_inspector: 'lots', supervisor: 'inventory' },
-  qc_inspection: { supervisor: 'reviews/reports', quality_inspector: 'submissions' },
+  qc_inspection: { supervisor: 'reviews/reports', quality_inspector: 'submissions' }, qc_rejection: { supervisor: 'reviews/rejections' },
   stock_query: { supervisor: 'requests/queries' }, stock_issue: { supervisor: 'requests/stock-issues' },
   inventory_adjustment: { supervisor: 'inventory' },
   buyer: { sales_manager: 'buyers' }, buyer_rfq: { sales_manager: 'buyer-rfqs' }, quotation: { sales_manager: 'buyer-rfqs' },

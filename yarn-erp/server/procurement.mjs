@@ -30,7 +30,16 @@ export async function suppliers(db, workspaceId, status, category) {
 }
 export async function supplierPerformance(db, supplierId) {
   const { average, n } = await one(db, 'SELECT AVG(rating) AS average, COUNT(*) AS n FROM supplier_ratings WHERE supplier_id=?', supplierId);
-  return { manualAverage: n ? Math.round(average * 100) / 100 : null, ratingCount: n };
+  // Final dispositions of settled lots only: accepted reports and deviation acceptances count as accepted, confirmed rejections as rejected.
+  // Returned or re-inspect quantities count as neither, and the lot stays out until its replacement inspection settles it, so nothing is counted twice.
+  const qc = await one(db, `SELECT COALESCE(SUM(CASE WHEN i.report_status='accepted' THEN i.accepted_milli END),0) + COALESCE(SUM(CASE WHEN i.rejection_status='dismissed' AND i.dismiss_outcome='accept_with_deviation' THEN i.rejected_milli END),0) AS accepted,
+    COALESCE(SUM(CASE WHEN i.rejection_status='confirmed' THEN i.rejected_milli END),0) AS rejected
+    FROM qc_inspections i JOIN qc_lots l ON l.id=i.lot_id WHERE l.supplier_id=? AND l.status='settled' AND i.status='submitted'`, supplierId);
+  const arrivals = await one(db, `SELECT COUNT(*) AS total, COALESCE(SUM(arrived_at<=due),0) AS on_time FROM (SELECT l.arrived_at, json_extract(p.terms_snapshot,'$.delivery_at') AS due FROM qc_lots l JOIN supplier_purchase_orders p ON p.id=l.purchase_order_id WHERE l.supplier_id=?) WHERE due IS NOT NULL`, supplierId);
+  const claims = { return: 0, replacement: 0, claim: 0 };
+  for (const row of await all(db, "SELECT outcome, COUNT(*) AS n FROM claims WHERE supplier_id=? AND status='decided' GROUP BY outcome", supplierId)) claims[row.outcome] = row.n;
+  return { manualAverage: n ? Math.round(average * 100) / 100 : null, ratingCount: n, qcPassRate: qc.accepted + qc.rejected ? qc.accepted / (qc.accepted + qc.rejected) : null,
+    onTimeRate: arrivals.total ? arrivals.on_time / arrivals.total : null, claims };
 }
 export function supplierData(data) {
   return { name: text(data.name, 'Company', 2, 120), contact: text(data.contactName, 'Contact name', 2, 80),

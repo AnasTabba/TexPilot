@@ -67,7 +67,7 @@ test('ratings are 1 to 5, kept as history and averaged on the profile', async ()
   const rate = (rating, extra = {}) => f.call('/erp/suppliers/rate', { id: crypto.randomUUID(), supplierId: s, rating, ...extra }, 'Pervaiz');
   assert.equal((await rate(4, { feedback: 'On time' })).status, 200); assert.equal((await rate(5)).status, 200);
   const profile = (await f.call('/erp/suppliers/' + s, undefined, 'Pervaiz')).data;
-  assert.deepEqual(profile.performance, { manualAverage: 4.5, ratingCount: 2 });
+  assert.deepEqual(profile.performance, { manualAverage: 4.5, ratingCount: 2, qcPassRate: null, onTimeRate: null, claims: { return: 0, replacement: 0, claim: 0 } });
   assert.deepEqual(profile.ratings.map(r => r.rating).sort(), [4, 5]); assert.equal(profile.ratings.find(r => r.rating === 4).created_by_name, 'Pervaiz');
   assert.equal(profile.supplier.id, s);
   assert.equal((await rate(6)).status, 422); assert.equal((await rate(0)).status, 422);

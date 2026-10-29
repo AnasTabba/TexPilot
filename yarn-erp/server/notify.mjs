@@ -47,7 +47,11 @@ export const PENDING_SOURCES = [{ objectType: 'approval', role: 'admin', sql: "S
   { objectType: 'buyer_rfq', role: 'sales_manager', sql: `SELECT p.id, p.workspace_id, p.reference AS label, p.created_at AS since FROM buyer_purchase_orders p JOIN buyers b ON b.id=p.buyer_id
     WHERE p.status='entered' AND b.status='active' AND p.created_at <= ? AND NOT EXISTS (SELECT 1 FROM sales_quote_revisions r WHERE r.buyer_po_id=p.id AND r.status='sent')` },
   { objectType: 'rfq', role: 'purchase_manager', sql: "SELECT id, workspace_id, reference AS label, COALESCE(closed_at, deadline_at) AS since FROM procurement_rfqs WHERE status='closed' AND cancelled_at IS NULL AND EXISTS(SELECT 1 FROM supplier_bids WHERE rfq_id=procurement_rfqs.id AND status='submitted') AND COALESCE(closed_at, deadline_at) <= ?" },
-  { objectType: 'qc_lot', role: 'quality_inspector', sql: "SELECT id, workspace_id, reference AS label, pending_since AS since FROM qc_lots WHERE status='awaiting_inspection' AND pending_since <= ?" }];
+  { objectType: 'qc_lot', role: 'quality_inspector', sql: "SELECT id, workspace_id, reference AS label, pending_since AS since FROM qc_lots WHERE status='awaiting_inspection' AND pending_since <= ?" },
+  // A report and a rejection of one inspection wait on the same people since the same moment, so each needs its own object type to keep its own reminder.
+  { objectType: 'qc_inspection', role: 'supervisor', sql: "SELECT i.id, i.workspace_id, l.reference AS label, i.submitted_at AS since FROM qc_inspections i JOIN qc_lots l ON l.id=i.lot_id WHERE i.report_status='pending' AND i.submitted_at <= ?" },
+  { objectType: 'qc_rejection', role: 'supervisor', sql: "SELECT i.id, i.workspace_id, l.reference AS label, i.submitted_at AS since FROM qc_inspections i JOIN qc_lots l ON l.id=i.lot_id WHERE i.rejection_status='pending' AND i.submitted_at <= ?" },
+  { objectType: 'claim', role: 'admin', sql: "SELECT c.id, c.workspace_id, l.reference AS label, c.updated_at AS since FROM claims c JOIN qc_lots l ON l.id=c.lot_id WHERE c.status='open' AND c.updated_at <= ?" }];
 export async function remindersScheduled(env, now = Date.now()) {
   const db = env.DB;
   let checked = 0, created = 0;

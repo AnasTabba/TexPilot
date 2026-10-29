@@ -152,8 +152,8 @@ test('goods receipts are closed and arrivals register QC lots without touching s
  assert.equal((await f.request('/erp/qc/lots',{...lot,quantityMilli:45000},f.manager)).status,409);
  assert.equal((await f.request('/erp/qc/lots',{...lot,id:crypto.randomUUID(),reference:'EXCESS',quantityMilli:70000},f.manager)).status,409);
  for(const t of ['goods_receipts','lots','movements','stock_deltas'])assert.equal(f.sql.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n,0,t);
- assert.equal((await f.staff('/movements',{id:crypto.randomUUID(),lotId:lot.id,action:'receive',stage:'raw',grams:1000,cartons:0,cones:0,note:'x'},)).status,404);
- assert.equal((await f.request('/movements',{id:crypto.randomUUID(),lotId:lot.id,action:'receive',stage:'raw',grams:1000,cartons:0,cones:0,note:'x'},f.manager)).status,403);
+ assert.equal((await f.staff('/movements',{id:crypto.randomUUID(),lotId:lot.id,action:'receive',stage:'raw',grams:1000,cartons:0,cones:0,note:'x'},)).status,410);
+ assert.equal((await f.request('/movements',{id:crypto.randomUUID(),lotId:lot.id,action:'receive',stage:'raw',grams:1000,cartons:0,cones:0,note:'x'},f.manager)).status,410);
 });
 test('receipt corrections reconcile the PO and cannot remove already used stock',async()=>{
  const f=await fixture(),supplier=await f.active(),r=await f.rfq(),{order}=await f.award(supplier,r);
@@ -166,7 +166,7 @@ test('receipt corrections reconcile the PO and cannot remove already used stock'
  assert.equal((await f.staff('/erp/receipts/reverse',reverse)).status,200);
  assert.equal((await f.staff('/erp/inbound')).data.orders[0].status,'accepted');
  const next=legacyReceipt(f,order,100000,'REV-002');
- await f.staff('/quality',{lotId:next,status:'approved',note:'Physical receipt quality checked'});
+ f.sql.prepare("UPDATE lots SET quality='approved' WHERE id=?").run(next);
  await f.staff('/movements',{id:crypto.randomUUID(),lotId:next,action:'transfer',stage:'raw',toStage:'wip',grams:1000,cartons:0,cones:0,note:'Production issue'});
  assert.equal((await f.staff('/erp/receipts/reverse',{id:crypto.randomUUID(),receiptId:next,reason:'Cannot reverse consumed stock'})).status,409);
  assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM receipt_reversals').get().n,1);

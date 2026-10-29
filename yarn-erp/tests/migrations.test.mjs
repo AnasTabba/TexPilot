@@ -65,3 +65,17 @@ test('purchasing backfills bid revision metadata and restores immutability', () 
   assert.throws(() => sql.exec("UPDATE supplier_bid_history SET snapshot='changed' WHERE id='revision'"), /immutable bid revision/);
   assert.throws(() => sql.exec("DELETE FROM supplier_bid_history WHERE id='revision'"), /immutable bid revision/);
 });
+
+test('0014 claims runs after the later migrations too (live order) and leaves lots and the blockers view alone', () => {
+  const sql = legacy();
+  const names = readdirSync(dir).filter(f => f.endsWith('.sql') && f >= '0004').sort();
+  migrate(sql, names.filter(f => f !== '0014_claims.sql'));
+  const view = sql.prepare("SELECT sql FROM sqlite_master WHERE name='currency_change_blockers'").get().sql;
+  const lots = sql.prepare('SELECT id,workspace_id,product_id,batch,supplier,quality,created_at FROM lots ORDER BY id').all();
+  migrate(sql, ['0014_claims.sql']);
+  assert.equal(sql.prepare("SELECT sql FROM sqlite_master WHERE name='currency_change_blockers'").get().sql, view);
+  assert.deepEqual(sql.prepare('SELECT id,workspace_id,product_id,batch,supplier,quality,created_at FROM lots ORDER BY id').all(), lots);
+  assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM lots WHERE inventory_type IS NOT NULL OR source IS NOT NULL').get().n, 0, 'existing lots keep NULL metadata');
+  assert.throws(() => sql.prepare("UPDATE lots SET source='other' WHERE id='lot1'").run(), /CHECK/);
+  assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(), []);
+});

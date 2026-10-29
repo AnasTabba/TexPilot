@@ -10,10 +10,10 @@ import { buyerPortalApi } from './buyer-portal.mjs';
 import { notificationsApi } from './notify.mjs';
 import { approvalsApi } from './governance.mjs';
 import { trackingApi } from './tracking.mjs';
-import { qualityApi } from './quality.mjs';
+import { qualityApi, approvalHandlers as qualityHandlers } from './quality.mjs';
 import { readPhoto } from './photos.mjs';
 const erp = { admin: adminApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi, qc: qualityApi };
-erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, approvalHandlers);
+erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, { ...approvalHandlers, ...qualityHandlers });
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
 class Problem extends Error {
@@ -95,6 +95,7 @@ async function saveMovement(db, member, data, reversal = false) {
     allow(member, 'reverse', 'reverse entries');
     const original = await first(db, 'SELECT * FROM movements WHERE id=? AND workspace_id=?', id(data.movementId), member.workspace_id);
     if (!original) fail(404, 'This movement was not found.');
+    if (original.action === 'receive' && await first(db, "SELECT id FROM lots WHERE id=? AND source='qc_lot'", original.lot_id)) fail(409, 'A QC receipt is part of a decided inspection and is never reversed. Record a reasoned stock adjustment that refers to the inspection instead.');
     if (await first(db,'SELECT id FROM goods_receipts WHERE movement_id=?',original.id)) fail(409,'Reverse this purchase receipt from Incoming stock so the purchase order stays reconciled.');
     if (original.action === 'reverse') fail(409, 'A reversal cannot be reversed.');
     record = { id: id(data.id), lotId: original.lot_id, action: 'reverse', fromStage: original.to_stage,
@@ -104,7 +105,6 @@ async function saveMovement(db, member, data, reversal = false) {
     keys(data, ['id', 'lotId', 'action', 'grams', 'cartons', 'cones', 'stage', 'toStage', 'note']);
     if (!['receive', 'dispatch', 'transfer', 'waste'].includes(data.action)) fail(422, 'Choose a valid stock movement.');
     allow(member, ...movementPermission[data.action]);
-    if (data.action === 'receive') useQc(member, 'purchase_manager', 'Receiving stock');
     if (!STAGES.includes(data.stage) || (data.action === 'transfer' && (!STAGES.includes(data.toStage) || data.stage === data.toStage))) fail(422, 'Choose different, valid stock stages.');
     record = { id: id(data.id), lotId: id(data.lotId), action: data.action,
       fromStage: data.action === 'receive' ? null : data.stage,
@@ -217,19 +217,10 @@ async function route(request, env) {
     catch { fail(409, 'This material already has that batch number. Use the existing lot.'); }
     return json(lot, 201);
   }
+  if (path === '/api/movements' && data?.action === 'receive') fail(410, 'Raw stock is received when the supervisor accepts an inspection report. Use POST /api/erp/qc/reports/decide.');
   if (path === '/api/movements' && data) return saveMovement(db, member, data);
   if (path === '/api/reversals' && data) return saveMovement(db, member, data, true);
-  if (path === '/api/quality' && data) {
-    allow(member, 'qc', 'record QC decisions'); useQc(member, 'quality_inspector', 'QC decisions'); keys(data, ['lotId', 'status', 'note']);
-    const lotId = id(data.lotId); const note = text(data.note, 'Inspection reason', 3, 1000);
-    if (!['approved', 'hold', 'uninspected'].includes(data.status)) fail(422, 'Choose a valid QC status.');
-    if (!await first(db, 'SELECT id FROM lots WHERE id=? AND workspace_id=?', lotId, w)) fail(404, 'Lot not found.');
-    await db.batch([
-      statement(db, 'UPDATE lots SET quality=? WHERE id=? AND workspace_id=?', data.status, lotId, w),
-      statement(db, 'INSERT INTO quality_events(id,workspace_id,lot_id,status,note,actor,actor_name,created_at) VALUES(?,?,?,?,?,?,?,?)', uuid(), w, lotId, data.status, note, userId, member.name, Date.now()),
-    ]);
-    return json({ saved: true });
-  }
+  if (path === '/api/quality' && data) fail(410, 'QC decisions are made on the inspection report. Use POST /api/erp/qc/reports/decide or /api/erp/qc/rejections/decide.');
   if (path === '/api/inspections' && data) {
     allow(member, 'inspect', 'record inspections'); useQc(member, 'quality_inspector', 'Inspections'); keys(data, ['id', 'lotId', 'labelText', 'note', 'result']);
     const inspectionId = id(data.id); const lotId = id(data.lotId);

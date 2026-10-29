@@ -7,7 +7,7 @@ test.use({ serviceWorkers: 'block' });
 test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
 
 test.describe('Shared inventory', () => {
-  test('material, batch, receipt, QC approval and dispatch work through the UI', async ({ page }) => {
+  test('a new batch waits for its first delivery; dispatch and undo work on QC-approved stock', async ({ page }) => {
     await signIn(page);
     await page.goto('/#/inventory');
     await page.getByRole('button', { name: 'New material', exact: true }).click();
@@ -22,17 +22,16 @@ test.describe('Shared inventory', () => {
     await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save entry', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Batch details', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Receive stock', exact: true }).click();
-    await page.getByLabel('Weight (kg)', { exact: true }).fill('10.250');
-    await page.getByLabel('Cartons', { exact: true }).fill('2');
-    await page.getByLabel('Cones', { exact: true }).fill('48');
-    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
-    await page.getByRole('button', { name: 'Save entry', exact: true }).click();
+    // A new batch has no stock: raw stock arrives only when the supervisor accepts an inspection report.
+    await expect(page.getByRole('heading', { level: 3, name: 'Waiting for the first delivery' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Receive stock', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Review quality', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Dispatch', exact: true })).toBeDisabled();
-    await page.getByRole('button', { name: 'Review quality', exact: true }).click();
-    await page.getByLabel('Inspection reason', { exact: true }).fill('Physical inspection matches care label');
-    await page.getByRole('button', { name: 'Review entry', exact: true }).click();
-    await page.getByRole('button', { name: 'Save QC decision', exact: true }).click();
+    // Dispatch and undo work on QC-approved stock that arrived through the inspection flow.
+    const { lot, state: seeded } = await seededLot(page, 'LOT-1024');
+    const rawOf = (state: { balances: { lot_id: string; stage: string; grams: number }[] }) => state.balances.find(balance => balance.lot_id === lot.id && balance.stage === 'raw')!.grams;
+    const movementsOf = (state: { movements: { lot_id: string }[] }) => state.movements.filter(movement => movement.lot_id === lot.id).length;
+    await page.goto('/#/inventory/' + lot.id);
     await page.getByRole('button', { name: 'Dispatch', exact: true }).click();
     await page.getByLabel('Weight (kg)', { exact: true }).fill('1.250');
     await page.getByLabel('Cartons', { exact: true }).fill('0');
@@ -41,18 +40,16 @@ test.describe('Shared inventory', () => {
     await page.getByRole('button', { name: 'Save entry', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Undo entry', exact: true })).toBeVisible();
     const state = await workspace(page);
-    const lot = state.lots.find((candidate: { batch: string }) => candidate.batch === 'DYE-001');
-    const raw = () => state.balances.find((balance: { lot_id: string; stage: string }) => balance.lot_id === lot.id && balance.stage === 'raw');
-    expect(raw().grams).toBe(9000);
-    expect(state.movements.filter((movement: { lot_id: string }) => movement.lot_id === lot.id)).toHaveLength(2);
+    expect(rawOf(state)).toBe(rawOf(seeded) - 1250);
+    expect(movementsOf(state)).toBe(movementsOf(seeded) + 1);
     await page.getByRole('button', { name: 'Undo entry', exact: true }).click();
     await expect(page.getByLabel('Reason', { exact: true })).toHaveValue('Correction after saving');
     await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save reversal', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Reversal saved. The original entry is preserved.' })).toBeVisible();
     const corrected = await workspace(page);
-    expect(corrected.balances.find((balance: { lot_id: string; stage: string }) => balance.lot_id === lot.id && balance.stage === 'raw').grams).toBe(10250);
-    expect(corrected.movements.filter((movement: { lot_id: string }) => movement.lot_id === lot.id)).toHaveLength(3);
+    expect(rawOf(corrected)).toBe(rawOf(seeded));
+    expect(movementsOf(corrected)).toBe(movementsOf(seeded) + 2);
   });
 
   test('another phone signs in with its own PIN and sees the same stock', async ({ browser, page }) => {
@@ -193,16 +190,20 @@ test.describe('Shared inventory', () => {
   });
 });
 
-test('the purchase manager and quality inspector cannot change stock through the old receive and QC writes', async ({ page }) => {
+test('nobody can change stock through the old receive and QC writes', async ({ page }) => {
   await page.request.post('/__test/reset');
   const { lot } = await seededLot(await (async () => { await signIn(page, 'Qasim'); return page; })(), 'LOT-1022');
   const before = await workspace(page);
   const write = async (path: string, data: object) => (await page.request.post('/api' + path, { data, headers: { Origin: origin } })).status();
-  expect(await write('/quality', { lotId: lot.id, status: 'approved', note: 'Inspector approves' })).toBe(403);
+  expect(await write('/quality', { lotId: lot.id, status: 'approved', note: 'Inspector approves' })).toBe(410);
   expect(await write('/inspections', { id: crypto.randomUUID(), lotId: lot.id, labelText: '', note: 'Old-style inspection', result: null })).toBe(403);
   await page.context().clearCookies();
   await signIn(page, 'Pervaiz');
-  expect(await write('/movements', { id: crypto.randomUUID(), lotId: lot.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: 'Old-style receipt' })).toBe(403);
+  expect(await write('/movements', { id: crypto.randomUUID(), lotId: lot.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: 'Old-style receipt' })).toBe(410);
+  await page.context().clearCookies();
+  await signIn(page, 'Anas');
+  expect(await write('/movements', { id: crypto.randomUUID(), lotId: lot.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: 'Admin old-style receipt' })).toBe(410);
+  expect(await write('/quality', { lotId: lot.id, status: 'hold', note: 'Admin old-style hold' })).toBe(410);
   const after = await workspace(page);
   expect(after.movements).toEqual(before.movements); expect(after.lots.find((l: { id: string }) => l.id === lot.id).quality).toBe(before.lots.find((l: { id: string }) => l.id === lot.id).quality);
 });
