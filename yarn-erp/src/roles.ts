@@ -41,10 +41,11 @@ export const NAV: Record<Role, Section[]> = {
 };
 export const COMMON: Section[] = [
   { id: 'notifications', en: 'Notifications', ur: 'اطلاعات', icon: Bell },
-  { id: 'profile', en: 'My profile', ur: 'میری پروفائل', icon: CircleUserRound },
   { id: 'scanner', en: 'Scan', ur: 'اسکین', icon: ScanSearch },
   { id: 'help', en: 'Help', ur: 'مدد', icon: CircleHelp },
 ];
+/** Not in the sidebar: opened by clicking your name, and by the settings icon for non-admins. */
+export const PROFILE: Section = { id: 'profile', en: 'My profile', ur: 'میری پروفائل', icon: CircleUserRound };
 
 /** Role modules an admin can open; each owner task adds its role here when its screens exist. */
 export const INSTALLED_MODULES: Role[] = [];

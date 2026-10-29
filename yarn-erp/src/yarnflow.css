@@ -774,11 +774,22 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
 .yf-avatar { display: inline-grid; flex: none; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--ink); color: #fff; font: 700 17px/1 var(--font); }
 .yf-avatar.is-large { width: 64px; height: 64px; font-size: 27px; }
 .live-sidebar .yf-avatar, .yf-mobile-menu .yf-avatar { background: var(--panel); color: var(--ink); }
-.yf-me { display: grid; grid-template-columns: 40px minmax(0, 1fr) 44px; align-items: center; gap: 10px; margin-top: 14px; padding: 16px 0 0 8px; border-top: 1px solid var(--rail-line); }
+.yf-me { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 10px; margin-top: 14px; padding: 16px 0 0 8px; border-top: 1px solid var(--rail-line); }
+/* The name is the link to your profile: same look as before, with a quiet hover and focus ring. */
+.yf-me-open { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 10px; min-width: 0; margin: 0 0 0 -6px; padding: 6px; border: 0; border-radius: var(--r-control); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background-color 150ms ease; }
+.yf-me-open:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .yf-me-open:hover { background: #2e281f; } }
 .yf-me strong { display: block; overflow: hidden; color: #fff; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
-.yf-me > span > span { display: block; color: var(--rail-muted); font-size: 14px; }
+.yf-me-open > span > span { display: block; color: var(--rail-muted); font-size: 14px; }
 .yf-me .live-icon-button { color: var(--rail-ink); }
 @media (hover: hover) and (pointer: fine) { .yf-me .live-icon-button:hover { background: #2e281f; color: #fff; } }
+
+/* Top-right actions: the desktop page heading row, and the phone top bar (see the 900px block). */
+.live-head-actions { display: flex; flex: none; align-items: center; gap: 4px; }
+.live-head-actions .live-icon-button { position: relative; color: var(--ink-2); }
+.live-topbar .live-head-actions .live-icon-button { color: var(--rail-ink); }
+.live-head-actions .live-icon-button .yf-nav-count { position: absolute; top: 2px; left: calc(50% + 4px); margin: 0; padding: 1px 6px; min-width: 18px; font-size: 11px; line-height: 16px; }
+@media (max-width: 900px) { .live-page-heading .live-head-actions { display: none; } }
 .yf-mobile-menu[open] { display: flex; flex-direction: column; }
 .yf-mobile-menu > .yf-me { display: grid; margin: auto 0 0; }
 .yf-nav-count { min-width: 24px; margin-left: auto; padding: 2px 8px; border-radius: var(--r-pill); background: var(--kraft); color: var(--ink); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }

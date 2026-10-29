@@ -1,7 +1,7 @@
 import { useLanguage } from './i18n';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AsyncForm, Field, errorMessage } from './forms';
-import { ArrowLeft, ArrowRight, Boxes, Camera, Check, CheckCheck, ClipboardList, Download, Factory, LoaderCircle, Plus, Printer, RefreshCw, Ruler, ScanLine, Settings2, ShieldCheck, WifiOff, X, CheckCircle2, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Boxes, Camera, Check, CheckCheck, ClipboardList, Download, Factory, LoaderCircle, Plus, Printer, RefreshCw, Ruler, ScanLine, Settings2, ShieldCheck, WifiOff, X, CheckCircle2, TriangleAlert, Bell, Settings } from 'lucide-react';
 import QRCode from 'qrcode';
 import { QualityBadge, StockFlow, movedName, when, yarnName } from './WorkspaceDashboard';
 import { moveIcon } from './icons';
@@ -9,7 +9,7 @@ import { Dashboard, Notifications, type Inbox, type Notice } from './Notificatio
 import { NoticeToast } from './NoticeToast';
 import Profile from './Profile';
 import { portal } from './PortalCommon';
-import { COMMON, NAV } from './roles';
+import { COMMON, NAV, PROFILE } from './roles';
 import Inspections from './Inspections';
 import InspectArrival, { type Arrival } from './InspectArrival';
 import ToProduction, { type ProductionJob } from './ToProduction';
@@ -35,7 +35,7 @@ type Action = { type: FormType; lotId?: string; productId?: string };
 // Old pages that were filtered copies of the stock list (or of Home) now open Stock with that filter.
 type View = 'all' | 'quality' | 'production' | 'dispatch';
 const aliases: Record<string, [string, View]> = { tracking: ['procurement', 'all'], materials: ['inventory', 'all'], production: ['inventory', 'production'], quality: ['inventory', 'quality'], dispatch: ['inventory', 'dispatch'], overview: ['dashboard', 'all'] };
-const sections = [...new Set([...Object.values(NAV).flat(), ...COMMON])];
+const sections = [...new Set([...Object.values(NAV).flat(), ...COMMON, PROFILE])];
 const tabsOf = Object.fromEntries(sections.flatMap(section => section.tabs ? [[section.id, section.tabs.map(tab => tab.id)]] : []));
 const routeFromHash = () => {
   const { section } = parseHash(location.hash, tabsOf);
@@ -316,7 +316,9 @@ export default function LiveApp() {
   const me = workspace.member;
   const allow = (permission: Permission) => can(me, permission);
   const shown = [...NAV[me.role], ...COMMON];
-  const page = shown.some(section => section.id === route) ? route : 'dashboard';
+  // Profile is reachable by route and by clicking the name, but not listed in the sidebar.
+  const pages = [...shown, PROFILE];
+  const page = pages.some(section => section.id === route) ? route : 'dashboard';
   const { tab: routeTab, id: routeId } = parseHash(hash, tabsOf);
   // Role screens navigate with paths like "buyers/pending" or "approvals/<id>".
   const go = (path: string, id = '') => { location.hash = '/' + path + (id ? '/' + id : ''); };
@@ -384,21 +386,28 @@ export default function LiveApp() {
     } catch (error) { setError(errorMessage(error)); } finally { setExportBusy(false); }
   }
   const today = new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Karachi' }).format(Date.now());
-  const current = shown.find(section => section.id === page);
+  const current = pages.find(section => section.id === page);
   const pageTitle = action ? t("Stock entry") : selected ? t("Batch details") : t(current?.en || 'Dashboard', current?.ur);
   // Counts that wait on the person: unread notifications, and sign-in requests for admins in Team.
   const badge = (id: string) => id === 'notifications' && inbox.unread > 0 ? <b className="yf-nav-count" aria-label={`, ${inbox.unread} ${t('unread', 'نہ پڑھی ہوئی')}`}>{inbox.unread}</b>
     : id === 'team' && workspace.pending > 0 ? <b className="yf-nav-count" aria-label={`, ${workspace.pending} waiting`}>{workspace.pending}</b> : null;
   const brand = <a className="live-brand" href="#/dashboard"><Cone hue="#2f6fd6" size={30} />yarnflow</a>;
-  const whoAmI = <div className="yf-me"><Avatar name={me.name} /><span><strong>{me.name}</strong><span>{t(...roleLabel[me.role])}</span></span><button className="live-icon-button" onClick={() => void signOut()} aria-label={`${t('Sign out')} ${me.name}`} title={t("Sign out")}><LogOut size={20} aria-hidden="true" /></button></div>;
+  const whoAmI = <div className="yf-me"><button className="yf-me-open" onClick={() => navigate('profile')} aria-label={t('Open my profile', 'میری پروفائل کھولیں')}><Avatar name={me.name} /><span><strong>{me.name}</strong><span>{t(...roleLabel[me.role])}</span></span></button><button className="live-icon-button" onClick={() => void signOut()} aria-label={`${t('Sign out')} ${me.name}`} title={t("Sign out")}><LogOut size={20} aria-hidden="true" /></button></div>;
+  // Settings is the admin screen; everyone else's settings (language) live on their profile.
+  const settingsPage = NAV[me.role].some(section => section.id === 'settings') ? 'settings' : 'profile';
+  const unread = inbox.unread;
+  const actionIcons = <>
+    <button className="live-icon-button" onClick={() => navigate('notifications')} aria-current={page === 'notifications' ? 'page' : undefined} aria-label={`${t('Notifications', 'اطلاعات')}${unread > 0 ? `, ${unread} ${t('unread', 'نہ پڑھی ہوئی')}` : ''}`} title={t('Notifications', 'اطلاعات')}><Bell size={22} aria-hidden="true" />{unread > 0 && <b className="yf-nav-count" aria-hidden="true">{unread}</b>}</button>
+    <button className="live-icon-button" onClick={() => navigate(settingsPage)} aria-current={page === settingsPage ? 'page' : undefined} aria-label={t('Settings', 'ترتیبات')} title={t('Settings', 'ترتیبات')}><Settings size={22} aria-hidden="true" /></button>
+  </>;
   return <div className="live-app"><a className="skip-link" href="#live-main" onClick={event => { event.preventDefault(); document.getElementById('live-main')?.focus(); }}>{t("Skip to content")}</a>
     <aside className="live-sidebar">{brand}<div className="live-factory">{workspace.workspace.name}<span>{t("Shared by the whole team")}</span></div><nav aria-label={t("Main navigation")}>{shown.map(({ id, en, ur, icon: Icon }) => [id === COMMON[0].id && <span className="yf-nav-gap" key="gap" />, <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={19} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>])}</nav>{whoAmI}</aside>
     {inspecting && <InspectArrival arrival={inspecting} isAdmin={me.role === 'admin'} onClose={() => setInspecting(null)} onDone={async message => { setInspecting(null); setNotice(message); await refresh(true); }} />}
     {producing && <ToProduction {...producing} isAdmin={me.role === 'admin'} onClose={() => setProducing(null)} onDone={async message => { setProducing(null); setNotice(message); await refresh(true); }} />}
     <dialog className="yf-mobile-menu" ref={menuDialog} onClick={e=>{if(e.target===e.currentTarget)menuDialog.current?.close();}} aria-label={t("Navigation menu")}><div>{brand}<button className="live-icon-button" onClick={()=>menuDialog.current?.close()} aria-label={t("Close navigation")}><X aria-hidden="true" /></button></div><nav aria-label={t("All pages")}>{shown.map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={22} aria-hidden="true" />{t(en, ur)}{badge(id)}</button>)}</nav>{whoAmI}</dialog>
-    <div className="live-main-shell"><header className="live-topbar">{brand}{shown.some(section => section.id === 'inventory') && <button className="live-icon-button" aria-label={t("Find a batch")} onClick={()=>{navigate('inventory');setTimeout(()=>document.querySelector<HTMLInputElement>('input[type="search"]')?.focus(),0);}}><Search size={22} aria-hidden="true" /></button>}</header>
+    <div className="live-main-shell"><header className="live-topbar">{brand}<div className="live-head-actions">{shown.some(section => section.id === 'inventory') && <button className="live-icon-button" aria-label={t("Find a batch")} onClick={()=>{navigate('inventory');setTimeout(()=>document.querySelector<HTMLInputElement>('input[type="search"]')?.focus(),0);}}><Search size={22} aria-hidden="true" /></button>}{actionIcons}</div></header>
     <main id="live-main" key={`${route}:${selected?.id || ''}:${action?.type || ''}`} className="live-content" data-page={action ? 'form' : selected ? 'batch' : page} tabIndex={-1}>
-      <div className="live-page-heading"><div><h1>{pageTitle}</h1><p hidden={!!(action || selected) || !['dashboard', 'inventory', 'scanner', 'activity', 'notifications', 'help', 'lots', 'team', 'procurement', 'profile'].includes(page)}>{page === 'dashboard' && !action && !selected ? `${workspace.workspace.name} · ${today}` : page === 'inventory' ? t("Your materials and their batches, from delivery to dispatch.") : page === 'scanner' ? t("Photograph a fabric, measure its yarn, or scan a stock label.") : page === 'activity' ? t("Every stock movement, oldest records kept.") : page === 'notifications' ? t('What needs your attention, newest first.', 'جن چیزوں پر توجہ چاہیے، تازہ ترین پہلے۔') : page === 'help' ? t("Answers to common questions.") : page === 'lots' ? t("Arrived lots waiting for you, and your inspection drafts.", "آپ کے منتظر آمد شدہ لاٹس اور معائنے کے مسودے۔") : page === 'team' ? t("Who can sign in, and what each person can record.") : page === 'procurement' ? t("Buying from suppliers: directory, bids, orders and incoming stock.", "سپلائرز سے خریداری: ڈائریکٹری، بولیاں، آرڈر اور آنے والا اسٹاک۔") : page === 'profile' ? t("Your access, and the records everyone shares.") : ''}</p></div></div>
+      <div className="live-page-heading"><div><h1>{pageTitle}</h1><p hidden={!!(action || selected) || !['dashboard', 'inventory', 'scanner', 'activity', 'notifications', 'help', 'lots', 'team', 'procurement', 'profile'].includes(page)}>{page === 'dashboard' && !action && !selected ? `${workspace.workspace.name} · ${today}` : page === 'inventory' ? t("Your materials and their batches, from delivery to dispatch.") : page === 'scanner' ? t("Photograph a fabric, measure its yarn, or scan a stock label.") : page === 'activity' ? t("Every stock movement, oldest records kept.") : page === 'notifications' ? t('What needs your attention, newest first.', 'جن چیزوں پر توجہ چاہیے، تازہ ترین پہلے۔') : page === 'help' ? t("Answers to common questions.") : page === 'lots' ? t("Arrived lots waiting for you, and your inspection drafts.", "آپ کے منتظر آمد شدہ لاٹس اور معائنے کے مسودے۔") : page === 'team' ? t("Who can sign in, and what each person can record.") : page === 'procurement' ? t("Buying from suppliers: directory, bids, orders and incoming stock.", "سپلائرز سے خریداری: ڈائریکٹری، بولیاں، آرڈر اور آنے والا اسٹاک۔") : page === 'profile' ? t("Your access, and the records everyone shares.") : ''}</p></div><div className="live-head-actions">{actionIcons}</div></div>
       {error && <div className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{t(error)}<button className="live-text-button" onClick={() => void refresh()}>{t("Retry connection")}</button></div>}
       {!online && <div className="live-warning" role="status"><WifiOff size={18} />{t("You are offline. Entries can be saved again once the connection is back.")}</div>}
       {notice && <div className="live-success" role="status"><CheckCheck size={19} /><span>{t(notice)}</span><button aria-label={t("Dismiss message")} className="live-icon-button" onClick={() => setNotice('')}><X size={17} /></button></div>}

@@ -102,7 +102,7 @@ test.describe("desktop", () => {
     await page.goto("/#/dashboard");
     await title(page, "Dashboard");
     const nav = page.getByRole("navigation", { name: "Main navigation" });
-    for (const [label, h1] of [["Stock", "Stock"], ["Scan", "Scan"], ["History", "History"], ["Team", "Team"], ["My profile", "My profile"], ["Notifications", "Notifications"], ["Help", "Help"], ["Dashboard", "Dashboard"]]) {
+    for (const [label, h1] of [["Stock", "Stock"], ["Scan", "Scan"], ["History", "History"], ["Team", "Team"], ["Notifications", "Notifications"], ["Help", "Help"], ["Dashboard", "Dashboard"]]) {
       await nav.getByRole("button", { name: label, exact: true }).click();
       await title(page, h1);
       await expect(nav.getByRole("button", { name: label, exact: true })).toHaveAttribute("aria-current", "page");
@@ -284,7 +284,7 @@ test.describe("phone", () => {
     await expect(sheet).toBeVisible();
     await expect(sheet.getByRole("button", { name: "Team" })).toBeVisible();
     await expect(sheet.locator(".yf-me")).toContainText("Anas");
-    await sheet.getByRole("button", { name: "My profile" }).click();
+    await sheet.getByRole("button", { name: "Open my profile" }).click();
     await title(page, "My profile");
     await expect(sheet).toBeHidden();
     await bar.getByRole("button", { name: "More pages" }).click();
