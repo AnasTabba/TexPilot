@@ -1,5 +1,5 @@
 export interface SupplierCategory { id: string; name: string; urdu_name: string }
-export type SupplierStatus = 'directory' | 'pending' | 'approved' | 'rejected' | 'suspended' | 'archived';
+export type SupplierStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
 export interface Supplier {
  id: string; name: string; contact_name: string; email: string; phone: string; city: string; website: string;
  source_url: string; source_checked_at: number | null; status: SupplierStatus; version: number; categories: string[];

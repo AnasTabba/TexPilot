@@ -75,6 +75,7 @@ export function liveShapedRows(sql) {
   }
   insert('quality_events', { id: 'quality1', workspace_id: 'factory', lot_id: 'lot1', status: 'approved', note: 'Original inspection', actor: 'Anas', actor_name: 'Anas', created_at: now });
   insert('suppliers', { id: 'mill', workspace_id: 'factory', name: 'Legacy mill', contact_name: 'Contact', email: 'mill@example.test', phone: '+923001234567', city: 'Karachi', website: 'https://example.test/', source_url: 'https://example.test/contact', source_checked_at: now, status: 'approved', request_hash: 'supplier-hash', created_at: now, updated_at: now });
+  insert('supplier_registration_reviews', { id: 'review', supplier_id: 'mill', version: 2, status: 'approved', reason: 'Company checked', actor_id: 'Anas', created_at: now });
   insert('supplier_users', { id: 'supplier-person', supplier_id: 'mill', email: 'mill@example.test', name: 'Contact', password_hash: 'legacy-password-hash', password_salt: 'legacy-password-salt', created_at: now });
   insert('procurement_rfqs', { id: 'rfq', workspace_id: 'factory', reference: 'RFQ-001', title: 'Cotton', category_id: 'cotton', specifications: '30/1 combed', quantity_milli: 10000, unit: 'kg', delivery_location: 'Karachi factory', deadline_at: future, requested_delivery_at: future, status: 'open', request_hash: 'rfq-hash', created_by: 'Anas', created_at: now, published_at: now });
   insert('rfq_recipients', { rfq_id: 'rfq', supplier_id: 'mill', supplier_snapshot: '{"name":"Legacy mill"}', delivered_at: now });

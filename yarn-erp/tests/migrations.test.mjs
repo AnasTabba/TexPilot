@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { migrate, liveShapedRows, dir, legacyMigrations, portalFixture } from './portal-fixture.mjs';
-const tables = ['users','sessions','products','lots','movements','stock_deltas','balances','quality_events','suppliers','supplier_users','procurement_rfqs','supplier_bids','supplier_purchase_orders','procurement_shipments','goods_receipts','erp_audit_events'];
+const tables = ['users','sessions','products','lots','movements','stock_deltas','balances','quality_events','suppliers','supplier_registration_reviews','supplier_users','procurement_rfqs','supplier_bids','supplier_purchase_orders','procurement_shipments','goods_receipts','erp_audit_events'];
 function legacy() { const sql = new DatabaseSync(':memory:'); sql.exec('PRAGMA foreign_keys=ON'); migrate(sql, legacyMigrations); liveShapedRows(sql); return sql; }
 const upgrade = sql => migrate(sql, readdirSync(dir).filter(f => f.endsWith('.sql') && f >= '0004').sort());
 test('every migration after 0003 applies on live-shaped data without losing a row', () => {

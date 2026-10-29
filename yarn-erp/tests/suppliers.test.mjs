@@ -89,10 +89,31 @@ test('a supplier pending over 24 hours reminds purchase managers', async () => {
 });
 test('a profile edit that loses a race writes no audit, category or field change', async () => {
   const f = await fixture(), s = await f.insertSupplier({ status: 'approved' }), batch = f.env.DB.batch;
+  await f.member('Pervaiz'); // sign in first: login itself uses db.batch
   f.env.DB.batch = async statements => { f.sql.prepare('UPDATE suppliers SET version=version+1 WHERE id=?').run(s); return batch(statements); };
   const before = f.sql.prepare('SELECT COUNT(*) AS n FROM erp_audit_events').get().n;
   assert.equal((await f.call('/erp/suppliers/profile', { id: s, version: 1, city: 'Lahore', categories: ['dyes'] }, 'Pervaiz')).status, 409);
   assert.equal(f.sql.prepare('SELECT city FROM suppliers WHERE id=?').get(s).city, 'Karachi');
   assert.deepEqual(f.sql.prepare('SELECT category_id FROM supplier_category_links WHERE supplier_id=?').all(s).map(c => c.category_id), ['cotton']);
   assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM erp_audit_events').get().n, before);
+});
+test('a review that loses a race to a profile edit writes no review, audit, category or session change', async () => {
+  const f = await fixture(), s = await f.insertSupplier({}), batch = f.env.DB.batch;
+  const user = crypto.randomUUID(), now = Date.now();
+  f.sql.prepare('INSERT INTO supplier_users(id,supplier_id,email,name,password_hash,password_salt,created_at) VALUES(?,?,?,?,?,?,?)').run(user, s, 'x@mill.test', 'X', 'h', 's', now);
+  f.sql.prepare('INSERT INTO supplier_sessions(token_hash,user_id,created_at,expires_at) VALUES(?,?,?,?)').run('tok', user, now, now + 1e6);
+  await f.member('Pervaiz'); // sign in first: login itself uses db.batch
+  f.env.DB.batch = async statements => { f.sql.prepare('UPDATE suppliers SET version=version+1 WHERE id=?').run(s); return batch(statements); };
+  const audits = f.sql.prepare('SELECT COUNT(*) AS n FROM erp_audit_events').get().n;
+  const rr = await f.call('/erp/suppliers/review', { id: s, status: 'approved', version: 1, categories: ['dyes'] }, 'Pervaiz'); assert.equal(rr.status, 409);
+  assert.equal(status(f, s), 'pending');
+  assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM supplier_registration_reviews').get().n, 0);
+  assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM erp_audit_events').get().n, audits);
+  assert.deepEqual(f.sql.prepare('SELECT category_id FROM supplier_category_links WHERE supplier_id=?').all(s).map(c => c.category_id), ['cotton']);
+  assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM supplier_sessions').get().n, 1);
+});
+test('more than nine categories are refused with a clear message', async () => {
+  const f = await fixture(), s = await f.insertSupplier({});
+  const r = await review(f, s, 'approved', { categories: Array.from({ length: 10 }, (_, i) => 'c' + i) });
+  assert.equal(r.status, 422); assert.match(r.text, /at most 9/);
 });

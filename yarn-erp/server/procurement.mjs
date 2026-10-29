@@ -3,7 +3,8 @@ import { sha256 } from './auth.mjs';
 
 export const categories = db => all(db, 'SELECT * FROM supplier_categories ORDER BY sort_order');
 export async function categoryIds(db, value) {
-  if (!Array.isArray(value) || !value.length || value.length > 9 || value.some(v => typeof v !== 'string')) fail(422, 'Choose at least one yarn category.');
+  if (Array.isArray(value) && value.length > 9) fail(422, 'Choose at most 9 categories.');
+  if (!Array.isArray(value) || !value.length || value.some(v => typeof v !== 'string')) fail(422, 'Choose at least one yarn category.');
   const ids = [...new Set(value)]; const valid = await categories(db);
   if (ids.some(id => !valid.some(c => c.id === id))) fail(422, 'Choose valid yarn categories.');
   return ids;
@@ -37,7 +38,7 @@ export async function staffProcurement(request, env, member, path, data) {
   const db = env.DB; const w = member.workspace_id; const now = Date.now();
   if (path === '/api/erp/categories') return json({ categories: await categories(db) });
   if (path.startsWith('/api/erp/suppliers')) {
-    const listed = async id => { const s = await one(db, `SELECT ${supplierFields} FROM suppliers WHERE id=? AND workspace_id=? AND status IN ('pending','approved','rejected','suspended')`, id, w); if (!s) fail(404, 'Supplier not found.'); return s; };
+    const listed = async id => { const s = await one(db, `SELECT ${supplierFields} FROM suppliers WHERE id=? AND workspace_id=? AND status IN (${LISTED.map(() => '?').join(',')})`, id, w, ...LISTED); if (!s) fail(404, 'Supplier not found.'); return s; };
     if (!data) {
       viewer(member, 'purchase_manager');
       if (path === '/api/erp/suppliers') { const q = new URL(request.url).searchParams; return json({ suppliers: await suppliers(db, w, q.get('status'), q.get('category')) }); }
@@ -59,7 +60,9 @@ export async function staffProcurement(request, env, member, path, data) {
       const reason = ['rejected','suspended'].includes(data.status) || data.reason !== undefined ? decisionReason(data.reason, 'Review reason') : ''; const version = integer(data.version, 'Version');
       const ids = await categoryIds(db, data.categories ?? (await supplierView(db,s)).categories);
       if(s.version!==version) fail(409,'Supplier changed. Reload before reviewing.');
-      try { await db.batch([query(db, 'UPDATE suppliers SET status=?,version=version+1,updated_at=? WHERE id=? AND workspace_id=? AND version=?', data.status,now,s.id,w,version),
+      const token = crypto.randomUUID(); // see the profile route: request_hash carries a one-time token the guard re-checks
+      try { await db.batch([query(db, 'UPDATE suppliers SET status=?,request_hash=?,version=version+1,updated_at=? WHERE id=? AND workspace_id=? AND version=?', data.status,token,now,s.id,w,version),
+        query(db, 'SELECT json(\'!\') WHERE NOT EXISTS(SELECT 1 FROM suppliers WHERE id=? AND request_hash=?)', s.id, token),
         query(db,'INSERT INTO supplier_registration_reviews(id,supplier_id,version,status,reason,actor_id,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',crypto.randomUUID(),s.id,version+1,data.status,reason,member.user_id,member.user_id,now,now),
         ...categoryQueries(db,s.id,ids), query(db, 'DELETE FROM supplier_sessions WHERE user_id IN (SELECT id FROM supplier_users WHERE supplier_id=?)', s.id),
         audit(db,member,`supplier.${data.status}`,s.id,{reason,categories:ids,previousStatus:s.status},'staff',{reason,before:{status:s.status},after:{status:data.status},intervention})]); }
