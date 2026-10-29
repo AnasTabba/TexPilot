@@ -335,3 +335,34 @@ test('lists filter by status and an inspector sees only their own drafts', async
   assert.equal((await f.call('/erp/qc/inspections?status=nope', undefined, 'Qasim')).status, 422);
   assert.equal((await f.call('/erp/qc/inspections', undefined, 'Pervaiz')).status, 403);
 });
+
+
+test('draft issues cannot change disposition or timestamps', async () => {
+  const f = await fixture(), inspectionId = await draft(f, await lotOf(f), 0, 100000), id = await issue(f, inspectionId);
+  const before = row(f, 'qc_issues', id);
+  for (const status of ['open', 'confirmed', 'dismissed', 'escalated']) {
+    assert.throws(() => f.sql.prepare('UPDATE qc_issues SET status=?,updated_at=1 WHERE id=?').run(status, id), /Invalid issue status change/);
+    assert.deepEqual(row(f, 'qc_issues', id), before);
+  }
+});
+
+for (const [from, to] of [['open', 'confirmed'], ['open', 'dismissed'], ['open', 'escalated'], ['escalated', 'confirmed'], ['escalated', 'dismissed']]) {
+  test(`submitted issue ${from} to ${to} commits once and a lost race rolls back the whole batch`, async () => {
+    const f = await fixture(), inspectionId = await draft(f, await lotOf(f), 0, 100000), id = await issue(f, inspectionId);
+    assert.equal((await submit(f, inspectionId)).status, 200);
+    if (from === 'escalated') f.sql.prepare("UPDATE qc_issues SET status='escalated' WHERE id=?").run(id);
+    const transition = () => f.env.DB.prepare('UPDATE qc_issues SET status=?,updated_at=2 WHERE id=?').bind(to, id);
+    // Both callers saw the same starting state; the second unconditional update must abort.
+    await f.env.DB.batch([transition()]);
+    const before = row(f, 'qc_issues', id);
+    assert.equal(before.status, to);
+    const auditId = crypto.randomUUID();
+    await assert.rejects(f.env.DB.batch([
+      f.env.DB.prepare("INSERT INTO erp_audit_events(id,workspace_id,actor_id,actor_type,action,record_id,detail_json,created_at) VALUES(?,?,?,'staff','issue.decided',?,'{}',1)").bind(auditId, f.workspaceId, f.adminId, id),
+      transition(),
+    ]), /Invalid issue status change/);
+    assert.equal(count(f, 'erp_audit_events', 'id=?', auditId), 0);
+    assert.throws(() => f.sql.prepare("UPDATE qc_issues SET status='open' WHERE id=?").run(id), /Invalid issue status change/);
+    assert.deepEqual(row(f, 'qc_issues', id), before);
+  });
+}

@@ -134,8 +134,9 @@ END;
 CREATE TRIGGER qc_issue_transitions BEFORE UPDATE ON qc_issues BEGIN
  SELECT RAISE(ABORT, 'Issue evidence is frozen.') WHERE NEW.id != OLD.id OR NEW.workspace_id != OLD.workspace_id OR NEW.inspection_id != OLD.inspection_id OR NEW.type != OLD.type
   OR NEW.severity != OLD.severity OR NEW.description != OLD.description OR NEW.created_by != OLD.created_by OR NEW.created_at != OLD.created_at;
- SELECT RAISE(ABORT, 'Invalid issue status change.') WHERE NOT (NEW.status != OLD.status AND ((OLD.status = 'open' AND NEW.status IN ('confirmed','dismissed','escalated')) OR (OLD.status = 'escalated' AND NEW.status IN ('confirmed','dismissed')))
-  AND EXISTS (SELECT 1 FROM qc_inspections WHERE id = OLD.inspection_id AND status = 'submitted'));
+ SELECT RAISE(ABORT, 'Invalid issue status change.') WHERE NEW.status = OLD.status
+  OR NOT EXISTS (SELECT 1 FROM qc_inspections WHERE id = OLD.inspection_id AND status = 'submitted')
+  OR NOT ((OLD.status = 'open' AND NEW.status IN ('confirmed','dismissed','escalated')) OR (OLD.status = 'escalated' AND NEW.status IN ('confirmed','dismissed')));
 END;
 CREATE TRIGGER qc_issue_no_delete BEFORE DELETE ON qc_issues BEGIN SELECT RAISE(ABORT, 'issues preserve the audit trail'); END;
 

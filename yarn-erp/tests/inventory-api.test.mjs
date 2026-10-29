@@ -259,3 +259,14 @@ test('batch evidence and data export retain older inspections beyond the workspa
   assert.equal(page1.photos.length + page2.photos.length, 1050);
   assert.equal(page2.nextOffset, null);
 });
+
+
+test('quality inspectors cannot use the retired quality, inspection or photo writes', async () => {
+  const f = await fixture();
+  await f.addPerson('QC regression', 'quality_inspector');
+  // /quality is retired for every role (410); the inspection and photo writes are closed to inspectors (403).
+  for (const [path, status] of [['/quality', 410], ['/inspections', 403], ['/photos', 403]]) {
+    assert.equal((await f.call(path, { id: crypto.randomUUID() }, 'QC regression')).status, status);
+  }
+  for (const table of ['quality_events', 'inspections', 'inspection_photos']) assert.equal(f.sql.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n, 0);
+});

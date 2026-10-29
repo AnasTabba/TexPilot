@@ -1,5 +1,10 @@
 /** Fixed interface copy only. Names, notes, model classes and ledger identifiers stay intact. */
 export const urdu: Record<string, string> = {
+  'Attach bill of lading': 'بل آف لیڈنگ منسلک کریں',
+  'Save bill of lading': 'بل آف لیڈنگ محفوظ کریں',
+  'Bill of lading number': 'بل آف لیڈنگ نمبر',
+  'Bill of lading attached.': 'بل آف لیڈنگ منسلک ہو گیا۔',
+  'Attach the shipment before registering its arrival for inspection.': 'معائنے کے لیے آمد درج کرنے سے پہلے کھیپ منسلک کریں۔',
   'Procurement': 'خریداری',
   'QC approval is required before issuing raw stock or dispatching. Held lots cannot move.': 'خام مال پروڈکشن میں دینے یا روانہ کرنے سے پہلے کوالٹی منظوری درکار ہے۔ روکے گئے بیچ منتقل نہیں ہو سکتے۔',
   'The TexPilot scanner could not be reached. Please try again shortly.': 'TexPilot اسکینر سے رابطہ نہیں ہوسکا۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔',

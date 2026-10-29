@@ -1,3 +1,4 @@
+import { integrationApi } from './integration.mjs';
 /** Shared inventory API: PIN sessions (server/auth.mjs) give identity, D1 supplies durable SQL. */
 import { LOCK_AFTER, LOCK_MS, ROLE_PERMISSIONS, SESSION_MS, nameKey, pinHash, randomHex, sessionCookie, sessionToken, sha256, validPin } from './auth.mjs';
 import { adminApi } from './admin.mjs';
@@ -145,6 +146,7 @@ async function route(request, env) {
   const db = env.DB;
   if (!db) fail(503, 'The shared database is not connected. No stock was saved.');
   if (!['GET', 'POST'].includes(request.method)) fail(405, 'Method not allowed.');
+  if (path.startsWith('/api/integration/v1/')) return integrationApi(request, env, path);
   if (request.method === 'POST') {
     const origin = request.headers.get('Origin');
     if (origin !== url.origin || request.headers.get('Sec-Fetch-Site') === 'cross-site') fail(403, 'Open Yarnflow directly before saving.');

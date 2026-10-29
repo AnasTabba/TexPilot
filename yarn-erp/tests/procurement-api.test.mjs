@@ -157,18 +157,20 @@ test('goods receipts are closed and arrivals register QC lots without touching s
 });
 test('receipt corrections reconcile the PO and cannot remove already used stock',async()=>{
  const f=await fixture(),supplier=await f.active(),r=await f.rfq(),{order}=await f.award(supplier,r);
+ const attached=await f.staff('/erp/shipments',{id:crypto.randomUUID(),orderId:order.id,billOfLading:'REV-BL-001',interventionReason:'Correct historical receipt'});assert.equal(attached.status,201);
  const receipt=legacyReceipt(f,order,100000,'REV-001');
  f.sql.prepare("UPDATE supplier_purchase_orders SET status='received' WHERE id=?").run(order.id);
  assert.equal((await f.staff('/erp/inbound')).data.orders[0].status,'received');
  assert.equal((await f.staff('/reversals',{id:crypto.randomUUID(),movementId:receipt,note:'Correct delivery'})).status,409,'generic reversal cannot bypass PO reconciliation');
- const reverse={id:crypto.randomUUID(),receiptId:receipt,reason:'Wrong supplier delivery was booked'};
+ assert.equal((await f.staff('/erp/receipts/reverse',{id:crypto.randomUUID(),receiptId:receipt,reason:'Correct historical receipt'})).status,422);
+ const reverse={id:crypto.randomUUID(),receiptId:receipt,interventionReason:'Correct historical receipt',reason:'Wrong supplier delivery was booked'};
  assert.equal((await f.staff('/erp/receipts/reverse',reverse)).status,200);
  assert.equal((await f.staff('/erp/receipts/reverse',reverse)).status,200);
- assert.equal((await f.staff('/erp/inbound')).data.orders[0].status,'accepted');
+ assert.equal((await f.staff('/erp/inbound')).data.orders[0].status,'dispatched');
  const next=legacyReceipt(f,order,100000,'REV-002');
  f.sql.prepare("UPDATE lots SET quality='approved' WHERE id=?").run(next);
  await f.staff('/movements',{id:crypto.randomUUID(),lotId:next,action:'transfer',stage:'raw',toStage:'wip',grams:1000,cartons:0,cones:0,note:'Production issue'});
- assert.equal((await f.staff('/erp/receipts/reverse',{id:crypto.randomUUID(),receiptId:next,reason:'Cannot reverse consumed stock'})).status,409);
+ assert.equal((await f.staff('/erp/receipts/reverse',{id:crypto.randomUUID(),receiptId:next,interventionReason:'Correct historical receipt',reason:'Cannot reverse consumed stock'})).status,409);
  assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM receipt_reversals').get().n,1);
 });
 test('tonne lots keep the order unit and the inventory role never receives supplier rates',async()=>{

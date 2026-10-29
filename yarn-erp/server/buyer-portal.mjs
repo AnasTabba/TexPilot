@@ -4,7 +4,7 @@
 import { all, one, query, json, fail, text, multiline, keys, email, recordId, readJson, audit, date } from './erp-utils.mjs';
 import { randomHex, sha256 } from './auth.mjs';
 import { passwordHash } from './supplier-portal.mjs';
-import { recordAcceptance, invoiceFileResponse, buyerData } from './sales.mjs';
+import { recordAcceptance, invoiceFileResponse, buyerData, buyerRfqData } from './sales.mjs';
 import { notifyRole } from './notify.mjs';
 
 const COOKIE = 'yf_buyer_session';
@@ -100,11 +100,7 @@ export async function buyerPortalApi(request, env, path) {
   if (path === '/api/buyer/pos' && data) {
     keys(data, ['id', 'reference', 'specifications', 'quantityMilli', 'unit', 'requestedDeliveryAt', 'paymentTerms']);
     const id = recordId(data.id);
-    const po = { reference: text(data.reference, 'PO reference', 2, 100), specifications: multiline(data.specifications, 'Specifications', 5, 4000),
-      quantity: Number.isSafeInteger(data.quantityMilli) && data.quantityMilli > 0 && data.quantityMilli <= 1_000_000_000 ? data.quantityMilli : fail(422, 'Quantity must be a whole number of thousandths.'),
-      unit: ['kg', 'metre', 'piece'].includes(data.unit) ? data.unit : fail(422, 'Choose kg, metre or piece.'),
-      delivery: date(data.requestedDeliveryAt, 'Requested delivery'), terms: multiline(data.paymentTerms, 'Payment terms', 3, 1000) };
-    if (po.delivery <= now) fail(422, 'Requested delivery must be in the future.');
+    const po = buyerRfqData(data, now);
     const digest = await sha256(JSON.stringify(po));
     const previous = await one(db, 'SELECT * FROM buyer_purchase_orders WHERE id=?', id);
     if (previous) { if (previous.buyer_id !== buyerId || previous.request_hash !== digest) fail(409, 'This request ID was used for different PO values.'); return json({ po: previous }); }

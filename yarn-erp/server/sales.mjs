@@ -30,11 +30,19 @@ const taxOf = (subtotalMinor, rateBp) => Number((BigInt(subtotalMinor) * BigInt(
 const guard = (db, condition, ...args) => query(db, `INSERT INTO buyers(id) SELECT 'guard' WHERE NOT (${condition})`, ...args);
 const REPLACED = 'This quotation was replaced. Accept the latest revision.';
 const NOT_APPROVED = 'Respond only to RFQs from approved buyers.';
-const rfqState = (status, buyerStatus) => status === 'cancelled' ? 'closed' : status === 'confirmed' ? 'sold' : status === 'quoted' ? 'quoted' : buyerStatus === 'pending' ? 'awaiting_buyer_approval' : 'open';
+export const rfqState = (status, buyerStatus) => status === 'cancelled' ? 'closed' : status === 'confirmed' ? 'sold' : status === 'quoted' ? 'quoted' : buyerStatus === 'pending' ? 'awaiting_buyer_approval' : 'open';
 
 export function buyerData(data) {
   return { name: text(data.name, 'Buyer name', 2, 120), contact: text(data.contactName, 'Contact name', 2, 80),
     email: email(data.email), phone: phone(data.phone), city: text(data.city ?? '', 'City', 0, 100), notes: multiline(data.notes ?? '', 'Notes', 0, 2000) };
+}
+
+export function buyerRfqData(data, now) {
+  const po = { reference: text(data.reference, 'PO reference', 2, 100), specifications: multiline(data.specifications, 'Specifications', 5, 4000),
+    quantity: integer(data.quantityMilli, 'Quantity'), unit: ['kg', 'metre', 'piece'].includes(data.unit) ? data.unit : fail(422, 'Choose kg, metre or piece.'),
+    delivery: date(data.requestedDeliveryAt, 'Requested delivery'), terms: multiline(data.paymentTerms, 'Payment terms', 3, 1000) };
+  if (po.delivery <= now) fail(422, 'Requested delivery must be in the future.');
+  return po;
 }
 
 /** The invoice document. A print-ready standalone HTML file: no PDF dependency is added in this
@@ -74,9 +82,10 @@ export function invoiceFileResponse(invoice, order, buyer, factoryName) {
  * revision and the buyer must still be approved; both are enforced again inside the committing
  * transaction, so a resend or suspension that wins the race refuses the acceptance. The sale and
  * its invoice are noted separately by the sales manager (`noteSale`). */
-export async function recordAcceptance(db, { workspaceId, revisionId, version, buyerId, acceptedBy, note = '', now }) {
+export async function recordAcceptance(db, { workspaceId, revisionId, version, buyerId, acceptedBy, note = '', now, actor = { user_id: `buyer:${buyerId}`, workspace_id: workspaceId, role: 'buyer' } }) {
+  if (actor.workspace_id !== workspaceId || actor.role !== 'buyer' || !actor.user_id) fail(403, 'Buyer identity does not match.');
   const replay = acceptance => {
-    if (acceptance.version !== version || acceptance.note !== note) fail(409, 'This quotation was already accepted with different details.');
+    if (acceptance.version !== version || acceptance.note !== note || acceptance.accepted_by !== acceptedBy) fail(409, 'This quotation was already accepted with different details.');
     return { acceptance, already: true };
   };
   const revision = await one(db, 'SELECT * FROM sales_quote_revisions WHERE id=? AND workspace_id=? AND buyer_id=?', revisionId, workspaceId, buyerId);
@@ -89,9 +98,9 @@ export async function recordAcceptance(db, { workspaceId, revisionId, version, b
   try {
     await db.batch([
       query(db, 'INSERT INTO quotation_acceptances(id,workspace_id,revision_id,buyer_id,version,accepted_by,created_by,note,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',
-        id, workspaceId, revisionId, buyerId, version, acceptedBy, `buyer:${buyerId}`, note, now, now),
+        id, workspaceId, revisionId, buyerId, version, acceptedBy, actor.user_id, note, now, now),
       query(db, "UPDATE sales_quote_revisions SET status='approved',updated_at=? WHERE id=? AND status='sent'", now, revisionId),
-      audit(db, { workspace_id: workspaceId, user_id: buyerId }, 'quotation.accepted', revisionId, { version, acceptedBy, buyer: buyerId }, 'buyer', { objectType: 'quotation' }),
+      audit(db, { ...actor, user_id: actor.user_id === `buyer:${buyerId}` ? buyerId : actor.user_id }, 'quotation.accepted', revisionId, { version, acceptedBy, buyer: buyerId }, 'buyer', { objectType: 'quotation' }),
     ]);
   } catch {
     const raced = await one(db, 'SELECT * FROM quotation_acceptances WHERE revision_id=?', revisionId);
@@ -270,7 +279,11 @@ export async function salesApi(request, env, member, path, data) {
       ? await all(db, "SELECT id,reference FROM buyer_purchase_orders WHERE buyer_id=? AND status='entered'", buyer.id) : [];
     // A lost review must abort before session revocation or audit insertion.
     const guardQuery = query(db, 'INSERT INTO buyers(id) SELECT ? WHERE NOT EXISTS (SELECT 1 FROM buyers WHERE id=? AND workspace_id=? AND version=?)', buyer.id, buyer.id, w, version);
-    try { await db.batch([guardQuery, query(db, 'UPDATE buyers SET status=?,version=version+1,updated_at=? WHERE id=? AND workspace_id=? AND version=?', data.status, now, buyer.id, w, version),
+    // Pending intake can arrive after the held list was read. Refuse this review so its retry
+    // includes every RFQ and no received notification is silently lost.
+    const heldGuard = buyer.status === 'pending' && data.status === 'active'
+      ? [guard(db, "(SELECT COUNT(*) FROM buyer_purchase_orders WHERE buyer_id=? AND status='entered')=?", buyer.id, held.length)] : [];
+    try { await db.batch([guardQuery, ...heldGuard, query(db, 'UPDATE buyers SET status=?,version=version+1,updated_at=? WHERE id=? AND workspace_id=? AND version=?', data.status, now, buyer.id, w, version),
       ...(data.status !== 'active' ? [query(db, 'DELETE FROM buyer_sessions WHERE user_id IN (SELECT id FROM buyer_users WHERE buyer_id=?)', buyer.id)] : []),
       ...(data.status === 'rejected' ? [query(db, "UPDATE buyer_purchase_orders SET status='cancelled',updated_at=? WHERE buyer_id=? AND status IN ('entered','quoted')", now, buyer.id)] : []),
       ...held.map(rfq => notifyRole(db, w, 'sales_manager', 'buyer_rfq.received', 'buyer_rfq', rfq.id, rfq.reference)),
