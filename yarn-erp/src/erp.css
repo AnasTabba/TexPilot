@@ -24,5 +24,5 @@
 .erp-portal-main { max-width:1100px; margin:auto; padding:32px 24px 64px; }.erp-portal-main.is-auth { max-width:720px; }
 .erp-portal-main>.live-panel { margin-block:24px; }.erp-portal-main .live-form { margin-block:20px; }.erp-approval { display:grid;gap:20px; }
 @media(max-width:640px) {
- .erp-facts { grid-template-columns:1fr; }.erp-portal-header { gap:12px; flex-wrap:wrap; padding:12px 18px; }.erp-portal-header>span { font-size:14px; }.erp-portal-main { padding:24px 16px 48px; }.erp-bid { padding:16px; }.erp-toolbar>.live-segments { width:100%; }.erp-toolbar>.live-segments>button { flex:1; padding-inline:10px; font-size:14px; }.erp-record .button { max-width:100%; overflow-wrap:anywhere; }.erp-workspace .yf-head { align-items:flex-start; flex-wrap:wrap; }
+ .erp-facts { grid-template-columns:1fr; }.erp-portal-header { gap:12px; flex-wrap:wrap; padding:12px 18px; }.erp-portal-header>span { font-size:14px; }.erp-portal-main { padding:24px 16px 48px; }.erp-bid { padding:16px; }.erp-toolbar>.live-segments { width:100%; }.erp-toolbar>.live-segments { grid-template-columns:repeat(2,minmax(0,1fr)); }.erp-toolbar>.live-segments>button { flex:1; padding-inline:10px; font-size:15px; }.erp-record .button { max-width:100%; overflow-wrap:anywhere; }.erp-workspace .yf-head { align-items:flex-start; flex-wrap:wrap; }
 }

@@ -73,7 +73,7 @@ test.describe("desktop", () => {
     await page.getByLabel("Name", { exact: true }).fill("Bilal");
     await page.getByLabel("4-digit PIN", { exact: true }).fill("1357");
     await page.getByLabel("Type it again").fill("1375");
-    await page.getByLabel("Role", { exact: true }).selectOption({ label: "Supervisor" });
+    await page.getByRole("group", { name: "Role" }).getByRole("button", { name: /^Supervisor/ }).click();
     await page.getByRole("button", { name: "Add person", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("The two PINs are different.");
     await page.getByLabel("Type it again").fill("1357");

@@ -207,7 +207,7 @@ test.describe('Shared inventory', () => {
     const phoneNavigation = page.getByRole('navigation', { name: 'Phone navigation' });
     if (await phoneNavigation.isVisible()) {
       const button = phoneNavigation.getByRole('button', { name: 'Stock', exact: true });
-      await expect(button.getByText('Stock', { exact: true })).toHaveCSS('font-size', '14px');
+      await expect(button.getByText('Stock', { exact: true })).toHaveCSS('font-size', '15px');
     }
     try {
       await page.screenshot({ path: testInfo.outputPath('inventory.png'), fullPage: true });

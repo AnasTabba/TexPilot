@@ -5,6 +5,8 @@ import { Avatar } from './SignIn';
 import { when } from './WorkspaceDashboard';
 import { inventoryRequest as api, roleLabel, type Role, type Member, type Permission } from './inventory-client';
 import { translate, useLanguage } from './i18n';
+import { useFloor, type FloorKey } from './copy';
+import { ChoiceCards } from './ui';
 
 interface Person { id: string; name: string; role: Role | null; status: 'active' | 'pending' | 'deactivated'; created_at: number; locked: boolean }
 
@@ -27,7 +29,9 @@ export const permissionInfo: [Permission, string, string, LucideIcon][] = [
 export const accessSummary = (role: Role, language: 'en' | 'ur' = 'en') => translate(language, ...roleLabel[role]);
 function RolePicker({ value, onChange, disabled = false }: { value: Role; onChange: (value: Role) => void; disabled?: boolean }) {
   const { t } = useLanguage();
-  return <Field>{t('Role', 'کردار')}<select value={value} disabled={disabled} onChange={e => onChange(e.target.value as Role)}>{(Object.keys(roleLabel) as Role[]).map(role => <option key={role} value={role}>{t(...roleLabel[role])}</option>)}</select></Field>;
+  // Every role visible at once, each with the work it unlocks, instead of a dropdown of job titles.
+  const say = useFloor();
+  return <ChoiceCards label={t('Role', 'کردار')} value={value} onChange={v => { if (!disabled) onChange(v); }} options={(Object.keys(roleLabel) as Role[]).map(role => ({ id: role, label: t(...roleLabel[role]), detail: say(`role_${role}` as FloorKey), disabled }))} />;
 }
 
 /** Admins only: who can sign in, and what each person can record. */

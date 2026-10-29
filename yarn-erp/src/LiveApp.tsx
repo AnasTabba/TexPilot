@@ -21,7 +21,8 @@ import { roleLabel, can, InventoryError, inventoryRequest as api, stageName, tim
 import { accessSummary, permissionInfo } from './Team';
 
 type FormType = 'product' | 'lot' | 'receive' | 'dispatch' | 'transfer' | 'waste' | 'quality' | 'inspection';
-type Action = { type: FormType; lotId?: string; productId?: string; preset?: Preset };
+// `then`: a new batch made for a delivery goes straight on to receiving it.
+type Action = { type: FormType; lotId?: string; productId?: string; preset?: Preset; then?: Preset };
 const tabs = [
   ['overview', 'Home', House], ['inventory', 'Stock', ConeIcon], ['scanner', 'Scan', ScanSearch],
   ['activity', 'History', History], ['procurement', 'Procurement', PackagePlus], ['team', 'Team', UsersRound], ['settings', 'Settings', Settings], ['help', 'Help', CircleHelp],
@@ -251,7 +252,7 @@ export default function LiveApp() {
   function navigate(to: string, lotId = '') { menuDialog.current?.close(); const alias = aliases[to]; if (alias) { to = alias[0]; setView(alias[1]); } else if (to === 'inventory' && !lotId) setView('all'); location.hash = '/' + to + (lotId ? '/' + lotId : ''); setRoute(to); setSelectedId(lotId); setAction(null); setPicking(null); setDone(null); setMatches([]); setQuery(''); setNotice(''); window.scrollTo(0, 0); }
   async function savedEntry(preset: Preset, sentence: string, lotId: string, movementId: string) { setAction(null); navigate('inventory', lotId); setDone({ sentence, lotId, movementId, preset }); await refresh(); }
   function undo(movementId: string) { const movement = state?.movements.find(m => m.id === movementId); if (movement) { navigate('activity'); setReverse(movement); setReason(t("Correction after saving")); reverseId.current = crypto.randomUUID(); } }
-  async function saved(message: string, lotId?: string, movementId?: string) { setAction(null); if (lotId) navigate('inventory', lotId); setNotice(message); setUndoId(movementId || ''); await refresh(); }
+  async function saved(message: string, lotId?: string, movementId?: string) { const then = action?.then; setAction(null); if (lotId) navigate('inventory', lotId); setNotice(message); setUndoId(movementId || ''); await refresh(); if (then && lotId) { setNotice(''); setAction({ type: presetInfo[then].movement, lotId, preset: then }); } }
   if (loading || endingSession) return <main className="live-loading" aria-busy="true"><Cone hue="#2f6fd6" size={48} /><h1>{endingSession ? t('Signing out…', 'سائن آؤٹ ہو رہا ہے…') : t("Opening inventory…")}</h1><p>{endingSession ? t('Your PIN is needed to open the workspace again.', 'ورک اسپیس دوبارہ کھولنے کے لیے پن درج کرنا ہوگا۔') : t("Loading inventory records.")}</p></main>;
   if (!state && authNeeded) return <SignIn onSignedIn={async () => {
     await logoutRequest.current;
@@ -333,7 +334,7 @@ export default function LiveApp() {
       ]} />}
       {notice && <div className="live-success" role="status"><CheckCheck size={19} /><span>{t(notice)}</span>{undoId && allow('reverse') && <button className="live-text-button" onClick={() => undo(undoId)}>{t("Undo entry")}</button>}<button aria-label={t("Dismiss message")} className="live-icon-button" onClick={() => setNotice('')}><X size={17} /></button></div>}
       {picking ? <BatchPicker preset={picking} state={workspace} onBack={() => setPicking(null)}
-          onNewBatch={picking === 'receive' && allow('catalog') ? () => { setPicking(null); setAction({ type: 'lot' }); } : undefined}
+          onNewBatch={picking === 'receive' && allow('catalog') ? () => { setPicking(null); setAction({ type: 'lot', then: 'receive' }); } : undefined}
           onPick={lotId => { const job = picking; setPicking(null); if (job === 'qc') { navigate('inventory', lotId); setAction({ type: 'quality', lotId }); } else setAction({ type: presetInfo[job].movement, lotId, preset: job }); }} />
       : stockJob && action?.lotId ? <StockEntry key={`${stockJob}:${action.lotId}`} preset={stockJob} lotId={action.lotId} state={workspace} onCancel={() => setAction(null)} onSaved={(sentence, lotId, movementId) => savedEntry(stockJob, sentence, lotId, movementId)} />
       : action ? <InventoryForm key={`${action.type}:${action.lotId || ''}`} action={action} state={workspace} result={action.type === 'inspection' ? lastResult : null} onSaved={saved} onCancel={() => setAction(null)} /> : selected ? <LotDetail key={selected.id} lot={selected} state={workspace} onAction={setAction} onBack={() => navigate('inventory')} /> : <>
