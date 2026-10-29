@@ -43,7 +43,7 @@ const balance = (f, lotId) => one(f, "SELECT grams FROM balances WHERE lot_id=? 
   assert.equal(balance(f, lotId), 5000);
   assert.equal(one(f, 'SELECT status FROM sales_orders WHERE id=?', sale.order.id).status, 'partially_dispatched');
   assert.equal(count(f, 'sales_dispatches'), 1);
-  assert.equal((await f.call('/movements', { id: uuid(), action: 'dispatch' }, 'Danish')).status, 410);
+  assert.equal((await f.call('/movements', { id: uuid(), action: 'dispatch' }, 'Danish')).status, 404);
 });
 
 test('holds require reasons, terms and sales-manager notices; held requests can be resubmitted', async () => {

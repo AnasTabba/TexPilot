@@ -312,7 +312,7 @@ test('all legacy stage balances remain readable but new writes use raw or finish
     assert.equal(refused.status, 422); assert.equal(refused.data.error, 'Legacy cops/WIP stock is read-only; an authorized migration is required.');
   }
   assert.equal((await adjust(f, lotId, -100, { stage: 'packed' })).status, 422);
-  for (const action of ['transfer', 'waste']) assert.equal((await f.call('/movements', { id: uuid(), lotId, action, stage: 'cops', toStage: 'raw', grams: 100, cartons: 0, cones: 0, note: 'x' }, 'Anas')).status, 410);
+  for (const action of ['transfer', 'waste']) assert.equal((await f.call('/movements', { id: uuid(), lotId, action, stage: 'cops', toStage: 'raw', grams: 100, cartons: 0, cones: 0, note: 'x' }, 'Anas')).status, 404);
   assert.deepEqual(all(f, 'SELECT * FROM balances ORDER BY stage'), before); assert.equal(count(f, 'inventory_adjustments'), 0);
   // raw legacy stock is adjustable through the new route
   assert.equal((await adjust(f, lotId, -100, { stage: 'raw' })).status, 201); assert.equal(grams(f, lotId, 'raw'), 900);
@@ -357,9 +357,12 @@ test('reasoned admin compensation preserves the original decision', async () => 
 test('the superseded stock writes are closed and the catalogue belongs to supervisor and purchasing', async () => {
   const f = await fixture(), productId = await f.insertProduct(), lotId = await f.addFinished({ grams: 5000 }), before = tables(f);
   for (const as of ['Anas', 'Saima', 'Danish']) {
-    assert.equal((await f.call('/lots', { productId, batch: 'NEW-' + as, supplier: '' }, as)).status, 410, as);
-    for (const action of ['transfer', 'waste', 'receive']) assert.equal((await f.call('/movements', { id: uuid(), lotId, action, stage: 'finished', toStage: 'raw', grams: 100, cartons: 0, cones: 0, note: 'x' }, as)).status, 410, `${as} ${action}`);
-    assert.equal((await f.call('/reversals', { id: uuid(), movementId: before.movements[0].id, note: 'Undo it' }, as)).status, 410, as);
+    assert.equal((await f.call('/lots', { productId, batch: 'NEW-' + as, supplier: '' }, as)).status, 404, as);
+    for (const action of ['transfer', 'waste', 'receive']) assert.equal((await f.call('/movements', { id: uuid(), lotId, action, stage: 'finished', toStage: 'raw', grams: 100, cartons: 0, cones: 0, note: 'x' }, as)).status, 404, `${as} ${action}`);
+    assert.equal((await f.call('/reversals', { id: uuid(), movementId: before.movements[0].id, note: 'Undo it' }, as)).status, 404, as);
+    for (const route of ['/quality', '/inspections']) assert.equal((await f.call(route, { id: uuid(), lotId }, as)).status, 404, `${as} ${route}`);
+    assert.equal((await f.call('/photos', {}, as)).status, 404, as);
+    assert.equal((await f.call('/erp/stock/raw', { id: uuid(), productId, batch: 'R', grams: 1000 }, as)).status, 404, as);
   }
   assert.deepEqual(tables(f), before);
   assert.equal((await f.call('/products', { sku: 'A', name: 'Material A' }, 'Saima')).status, 201);
@@ -367,7 +370,7 @@ test('the superseded stock writes are closed and the catalogue belongs to superv
   for (const as of ['Qasim', 'Sana', 'Danish']) assert.equal((await f.call('/products', { sku: 'C', name: 'Material C' }, as)).status, 403, as);
   assert.equal((await f.call('/products', { sku: 'D', name: 'Material D' }, 'Anas')).status, 422);
   assert.equal((await f.call('/products', { sku: 'D', name: 'Material D', interventionReason: 'Supervisor is away today' }, 'Anas')).status, 201);
-  assert.equal((await f.call('/movements', { id: uuid(), lotId, action: 'dispatch', stage: 'finished', grams: 100, cartons: 0, cones: 0, note: 'Temporary path' }, 'Danish')).status, 410, 'immediate dispatch is closed');
+  assert.equal((await f.call('/movements', { id: uuid(), lotId, action: 'dispatch', stage: 'finished', grams: 100, cartons: 0, cones: 0, note: 'Temporary path' }, 'Danish')).status, 404, 'immediate dispatch is closed');
 });
 
 test('0015 applies before or after the later migrations and keeps every row', () => {
