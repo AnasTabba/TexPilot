@@ -131,48 +131,59 @@ test('password attempts lock the supplier identity and duplicate registration ca
  assert.equal((await a.login()).status,429);
 });
 
-test('purchase receipts create quarantined QR lots and exact ledger stock; QC gates raw issue',async()=>{
+// A goods receipt as it was written before QC lots replaced the receiving route; the routes that correct history still read it.
+function legacyReceipt(f,order,qty,batch){
+ const w=f.sql.prepare('SELECT id FROM workspaces').get().id,id=crypto.randomUUID(),now=Date.now(),product=crypto.randomUUID();
+ f.sql.prepare('INSERT INTO products(id,workspace_id,sku,name,created_at) VALUES(?,?,?,?,?)').run(product,w,'SKU-'+batch,'Cotton '+batch,now);
+ f.sql.prepare("INSERT INTO lots(id,workspace_id,product_id,batch,supplier,quality,created_at) VALUES(?,?,?,?,'Mill','uninspected',?)").run(id,w,product,batch,now);
+ f.sql.prepare("INSERT INTO movements(id,workspace_id,lot_id,action,from_stage,to_stage,grams,cartons,cones,note,actor,actor_name,reverses,request_hash,created_at) VALUES(?,?,?,'receive',NULL,'raw',?,2,40,'Receipt',?,?,NULL,?,?)").run(id,w,id,qty,'u','u','h'+id,now);
+ f.sql.prepare('INSERT INTO goods_receipts(id,workspace_id,purchase_order_id,product_id,lot_id,movement_id,quantity_milli,grams,supplier_lot,request_hash,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(id,w,order.id,product,id,id,qty,qty,'',id,'u',now);
+ f.sql.prepare("INSERT INTO stock_deltas(id,movement_id,lot_id,stage,grams,cartons,cones) VALUES(?,?,?,'raw',?,2,40)").run(crypto.randomUUID(),id,id,qty);
+ return id;
+}
+test('goods receipts are closed and arrivals register QC lots without touching stock',async()=>{
  const f=await fixture(),supplier=await f.active(),r=await f.rfq(),{order}=await f.award(supplier,r);
- const product=(await f.staff('/products',{sku:'COT-30',name:'Cotton combed 30/1'})).data;
+ const product=(await f.staff('/products',{sku:'COT-30',name:'Cotton combed 30/1'})).data,shipment=crypto.randomUUID(),w=f.sql.prepare('SELECT id FROM workspaces').get().id;
+ f.sql.prepare('INSERT INTO shipments(id,workspace_id,purchase_order_id,bill_of_lading,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(shipment,w,order.id,'BL-1','u',1,1);
  const d={id:crypto.randomUUID(),orderId:order.id,productId:product.id,batch:'RECEIPT-001',quantityMilli:40000,cartons:2,cones:40,supplierLot:'SUP-LOT-A'};
- const first=await f.staff('/erp/receipts',d);assert.equal(first.status,201,JSON.stringify(first.data));
- assert.equal((await f.staff('/erp/receipts',d)).status,200);
- assert.equal((await f.staff('/erp/receipts',{...d,quantityMilli:45000})).status,409);
- const state=(await f.staff('/workspace')).data;assert.equal(state.lots[0].quality,'uninspected');assert.equal(state.balances[0].grams,40000);
- const transfer={id:crypto.randomUUID(),lotId:d.id,action:'transfer',stage:'raw',toStage:'wip',grams:10000,cartons:0,cones:0,note:'Issue approved material'};
- assert.equal((await f.staff('/movements',transfer)).status,409);
- await f.staff('/quality',{lotId:d.id,status:'approved',note:'Physically inspected receipt'});
- assert.equal((await f.staff('/movements',transfer)).status,201);
- assert.equal((await f.staff('/erp/receipts',{...d,id:crypto.randomUUID(),batch:'EXCESS',quantityMilli:70000})).status,409);
- assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM goods_receipts').get().n,1);
- assert.equal((await f.staff('/lookup?code='+encodeURIComponent('YF:'+d.id))).data.lotId,d.id);
+ const closed=await f.staff('/erp/receipts',d);assert.equal(closed.status,410);assert.match(closed.data.error,/QC lots/);
+ const lot={id:crypto.randomUUID(),orderId:order.id,shipmentId:shipment,productId:product.id,reference:'LOT-001',quantityMilli:40000,supplierLot:'SUP-LOT-A',arrivedAt:Date.now()};
+ assert.equal((await f.request('/erp/qc/lots',lot,f.manager)).status,201);
+ assert.equal((await f.request('/erp/qc/lots',{...lot,quantityMilli:45000},f.manager)).status,409);
+ assert.equal((await f.request('/erp/qc/lots',{...lot,id:crypto.randomUUID(),reference:'EXCESS',quantityMilli:70000},f.manager)).status,409);
+ for(const t of ['goods_receipts','lots','movements','stock_deltas'])assert.equal(f.sql.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n,0,t);
+ assert.equal((await f.staff('/movements',{id:crypto.randomUUID(),lotId:lot.id,action:'receive',stage:'raw',grams:1000,cartons:0,cones:0,note:'x'},)).status,404);
+ assert.equal((await f.request('/movements',{id:crypto.randomUUID(),lotId:lot.id,action:'receive',stage:'raw',grams:1000,cartons:0,cones:0,note:'x'},f.manager)).status,403);
 });
 test('receipt corrections reconcile the PO and cannot remove already used stock',async()=>{
  const f=await fixture(),supplier=await f.active(),r=await f.rfq(),{order}=await f.award(supplier,r);
- const product=(await f.staff('/products',{sku:'COT-30',name:'Cotton combed 30/1'})).data;
- const receipt={id:crypto.randomUUID(),orderId:order.id,productId:product.id,batch:'REV-001',quantityMilli:100000,cartons:2,cones:40,supplierLot:'SUP-A'};
- assert.equal((await f.staff('/erp/receipts',receipt)).status,201);
+ const attached=await f.staff('/erp/shipments',{id:crypto.randomUUID(),orderId:order.id,billOfLading:'REV-BL-001',interventionReason:'Correct historical receipt'});assert.equal(attached.status,201);
+ const receipt=legacyReceipt(f,order,100000,'REV-001');
+ f.sql.prepare("UPDATE supplier_purchase_orders SET status='received' WHERE id=?").run(order.id);
  assert.equal((await f.staff('/erp/inbound')).data.orders[0].status,'received');
- assert.equal((await f.staff('/reversals',{id:crypto.randomUUID(),movementId:receipt.id,note:'Correct delivery'})).status,409,'generic reversal cannot bypass PO reconciliation');
- const reverse={id:crypto.randomUUID(),receiptId:receipt.id,reason:'Wrong supplier delivery was booked'};
+ assert.equal((await f.staff('/reversals',{id:crypto.randomUUID(),movementId:receipt,note:'Correct delivery'})).status,409,'generic reversal cannot bypass PO reconciliation');
+ assert.equal((await f.staff('/erp/receipts/reverse',{id:crypto.randomUUID(),receiptId:receipt,reason:'Correct historical receipt'})).status,422);
+ const reverse={id:crypto.randomUUID(),receiptId:receipt,interventionReason:'Correct historical receipt',reason:'Wrong supplier delivery was booked'};
  assert.equal((await f.staff('/erp/receipts/reverse',reverse)).status,200);
  assert.equal((await f.staff('/erp/receipts/reverse',reverse)).status,200);
- assert.equal((await f.staff('/erp/inbound')).data.orders[0].status,'accepted');
- const next={...receipt,id:crypto.randomUUID(),batch:'REV-002'};assert.equal((await f.staff('/erp/receipts',next)).status,201);
- await f.staff('/quality',{lotId:next.id,status:'approved',note:'Physical receipt quality checked'});
- await f.staff('/movements',{id:crypto.randomUUID(),lotId:next.id,action:'transfer',stage:'raw',toStage:'wip',grams:1000,cartons:0,cones:0,note:'Production issue'});
- assert.equal((await f.staff('/erp/receipts/reverse',{id:crypto.randomUUID(),receiptId:next.id,reason:'Cannot reverse consumed stock'})).status,409);
+ assert.equal((await f.staff('/erp/inbound')).data.orders[0].status,'dispatched');
+ const next=legacyReceipt(f,order,100000,'REV-002');
+ await f.staff('/quality',{lotId:next,status:'approved',note:'Physical receipt quality checked'});
+ await f.staff('/movements',{id:crypto.randomUUID(),lotId:next,action:'transfer',stage:'raw',toStage:'wip',grams:1000,cartons:0,cones:0,note:'Production issue'});
+ assert.equal((await f.staff('/erp/receipts/reverse',{id:crypto.randomUUID(),receiptId:next,interventionReason:'Correct historical receipt',reason:'Cannot reverse consumed stock'})).status,409);
  assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM receipt_reversals').get().n,1);
 });
-test('tonne receipt quantities convert to grams exactly and inventory role does not receive supplier rates',async()=>{
+test('tonne lots keep the order unit and the inventory role never receives supplier rates',async()=>{
  const f=await fixture(),supplier=await f.active();const r=await f.rfq();
  f.sql.prepare("UPDATE procurement_rfqs SET quantity_milli=1000,unit='tonne' WHERE id=?").run(r.id);
  const modified=f.sql.prepare('SELECT * FROM procurement_rfqs WHERE id=?').get(r.id),{order}=await f.award(supplier,modified);
- const product=(await f.staff('/products',{sku:'BULK-COT',name:'Bulk Cotton'})).data;
- const workspace=f.sql.prepare('SELECT id FROM workspaces').get().id,row=await userRow({workspaceId:workspace,name:'Inventory manager',pin:'2468',role:'supervisor'});f.sql.prepare(row.sql).run(...row.args);
+ const product=(await f.staff('/products',{sku:'BULK-COT',name:'Bulk Cotton'})).data,shipment=crypto.randomUUID(),w=f.sql.prepare('SELECT id FROM workspaces').get().id;
+ f.sql.prepare('INSERT INTO shipments(id,workspace_id,purchase_order_id,bill_of_lading,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(shipment,w,order.id,'BL-T','u',1,1);
+ const row=await userRow({workspaceId:w,name:'Inventory manager',pin:'2468',role:'supervisor'});f.sql.prepare(row.sql).run(...row.args);
  const c=(await f.request('/auth/login',{name:'Inventory manager',pin:'2468'})).cookie;
  assert.equal((await f.request('/erp/procurement',undefined,c)).status,403);
+ const lot=await f.request('/erp/qc/lots',{id:crypto.randomUUID(),orderId:order.id,shipmentId:shipment,productId:product.id,reference:'TONNE-001',quantityMilli:500,arrivedAt:Date.now()},f.manager);
+ assert.equal(lot.status,201,JSON.stringify(lot.data));assert.equal(lot.data.unit,'tonne');
  const overview=await f.request('/erp/inbound',undefined,c);assert.equal(overview.status,200);assert.equal(JSON.stringify(overview.data).includes('price_minor'),false);
- const receipt=await f.request('/erp/receipts',{id:crypto.randomUUID(),orderId:order.id,productId:product.id,batch:'TONNE-001',quantityMilli:500,cartons:0,cones:0,supplierLot:''},c);
- assert.equal(receipt.status,201,JSON.stringify(receipt.data));assert.equal(receipt.data.receipt.grams,500000);
+ assert.equal(overview.data.orders[0].arrived_milli,500);
 });

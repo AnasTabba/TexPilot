@@ -247,22 +247,21 @@ test('PO quantity never falls below arrived quantity', async () => {
   const f = await fixture(), { rfqId, bidId } = await setup(f), order = (await award(f, bidId)).data.order;
   const change = (quantityMilli, version) => f.call('/erp/orders/quantity', { id: order.id, version, quantityMilli }, 'Pervaiz');
   const arrive = async quantityMilli => {
-    const product = (await f.call('/products', { sku: 'COT-' + quantityMilli, name: 'Cotton ' + quantityMilli }, 'Anas')).data;
-    const receipt = await f.call('/erp/receipts', { id: crypto.randomUUID(), orderId: order.id, productId: product.id, batch: 'RCV-' + quantityMilli, quantityMilli, cartons: 0, cones: 0, supplierLot: '' }, 'Anas');
-    assert.equal(receipt.status, 201, receipt.text);
+    const productId = await f.insertProduct(), shipmentId = crypto.randomUUID(), now = Date.now();
+    f.sql.prepare('INSERT INTO shipments(id,workspace_id,purchase_order_id,bill_of_lading,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(shipmentId, f.workspaceId, order.id, 'BL-' + quantityMilli, f.adminId, now, now);
+    const lot = await f.call('/erp/qc/lots', { id: crypto.randomUUID(), orderId: order.id, shipmentId, productId, reference: 'RCV-' + quantityMilli, quantityMilli, arrivedAt: now }, 'Pervaiz');
+    assert.equal(lot.status, 201, lot.text);
   };
-  // a reduction raised before the goods arrive is refused when the admin approves it after they did
-  f.setThreshold('purchase', 1);
-  assert.equal((await change(50000, 1)).status, 202);
+  // goods that arrived cannot be reduced away, immediately or through the approval gate
   await arrive(60000);
-  const raised = approval(f, 'po_change');
-  assert.equal((await decide(f, raised.id)).status, 409);
-  assert.equal(approval(f, 'po_change').status, 'pending'); assert.deepEqual([po(f, rfqId).quantity_milli, po(f, rfqId).approval_status], [100000, 'pending_admin']);
-  assert.equal(audits(f, 'po.quantity_changed').length, 0);
-  assert.equal((await decide(f, raised.id, 'reject', 'Anas', 'Goods already arrived against this order')).status, 200);
-  f.setThreshold('purchase', 10 ** 12);
   assert.equal((await change(50000, 1)).status, 409); assert.equal(po(f, rfqId).quantity_milli, 100000);
-  assert.equal((await change(60000, 1)).status, 200); assert.equal(po(f, rfqId).quantity_milli, 60000);
+  f.setThreshold('purchase', 1);
+  assert.equal((await change(50000, 1)).status, 409); assert.equal(approval(f, 'po_change'), undefined); assert.equal(po(f, rfqId).approval_status, 'approved');
+  // a reduction that stays at or above the arrived quantity still works, and fully covered goods mark the order received
+  f.setThreshold('purchase', 10 ** 12);
+  assert.equal((await change(60000, 1)).status, 200); assert.equal(po(f, rfqId).quantity_milli, 60000); assert.equal(po(f, rfqId).status, 'received');
+  // the database refuses the same write however it is made
+  assert.throws(() => f.sql.prepare('UPDATE supplier_purchase_orders SET quantity_milli=50000 WHERE id=?').run(order.id), /already arrived/);
 });
 test('purchase managers read only their workspace pending awards', async () => {
   const f = await fixture(), { rfqId, bidId } = await setup(f); f.setThreshold('purchase', 12500000);

@@ -20,7 +20,7 @@ test("model responses choose illustrations; abstentions ignore candidates and la
   await page.route("**/api/v1/scan", route => route.fulfill({ json: result }));
   await page.context().setExtraHTTPHeaders({ "x-yarnflow-test-user": "artwork-" + crypto.randomUUID() });
   // The scanner lives behind the shared PIN sign-in now.
-  await signIn(page);
+  await signIn(page, "Qasim");
   await page.goto("/#/scanner");
   await page.locator("input[type=file]").first().setInputFiles("src/assets/fabrics/denim.webp");
   const analyze = page.getByRole("button", { name: "Analyze material", exact: true });
@@ -29,6 +29,8 @@ test("model responses choose illustrations; abstentions ignore candidates and la
   // Garment first, with its picture; then one row per composition answer.
   await expect(page.locator('.scan-garment-hero [data-artwork-kind="garment"]')).toHaveAttribute("data-artwork-id", "dress");
   await expect(page.locator(".scan-garment-hero h3")).toHaveText("Dress");
+  await expect(page.getByRole("heading", { name: "Save this scan to a batch" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save to a batch", exact: true })).toHaveCount(0);
   const fabricArt = page.locator('.scan-rows [data-artwork-kind="structure"]');
   await expect(fabricArt).toHaveAttribute("data-artwork-id", "velvet");
   // Composition: the taught mix head's exact mix.

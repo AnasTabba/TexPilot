@@ -11,7 +11,9 @@ import { buyerPortalApi } from './buyer-portal.mjs';
 import { notificationsApi } from './notify.mjs';
 import { approvalsApi } from './governance.mjs';
 import { trackingApi } from './tracking.mjs';
-const erp = { admin: adminApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi };
+import { qualityApi } from './quality.mjs';
+import { readPhoto } from './photos.mjs';
+const erp = { admin: adminApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi, qc: qualityApi };
 erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, approvalHandlers);
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
@@ -64,6 +66,8 @@ const first = (db, sql, ...args) => db.prepare(sql).bind(...args).first();
 const statement = (db, sql, ...args) => db.prepare(sql).bind(...args);
 // Admins can do everything; everyone else needs the permission an admin gave them. Scanning needs none.
 const allow = (member, permission, what) => { if (!member.admin && !member.permissions.includes(permission)) fail(403, `You don't have permission to ${what}. Ask an admin.`); };
+// Quality inspectors record inspections, photos and issues through /api/erp/qc/*, and the purchase manager registers arrivals as QC lots; the old stock writes stay for admins and supervisors.
+const useQc = (member, role, what) => { if (member.role === role) fail(403, `${what} now goes through the lot inspection flow. The old stock record is read-only for your role.`); };
 const adminOnly = member => { if (!member.admin) fail(403, 'Only an admin can do this.'); };
 const movementPermission = { receive: ['receive', 'receive stock'], transfer: ['produce', 'move stock between stages'], dispatch: ['dispatch', 'dispatch stock'], waste: ['waste', 'record waste'] };
 
@@ -101,6 +105,7 @@ async function saveMovement(db, member, data, reversal = false) {
     keys(data, ['id', 'lotId', 'action', 'grams', 'cartons', 'cones', 'stage', 'toStage', 'note']);
     if (!['receive', 'dispatch', 'transfer', 'waste'].includes(data.action)) fail(422, 'Choose a valid stock movement.');
     allow(member, ...movementPermission[data.action]);
+    if (data.action === 'receive') useQc(member, 'purchase_manager', 'Receiving stock');
     if (!STAGES.includes(data.stage) || (data.action === 'transfer' && (!STAGES.includes(data.toStage) || data.stage === data.toStage))) fail(422, 'Choose different, valid stock stages.');
     record = { id: id(data.id), lotId: id(data.lotId), action: data.action,
       fromStage: data.action === 'receive' ? null : data.stage,
@@ -163,37 +168,17 @@ async function route(request, env) {
     return new Response(object.body, { headers: { 'Content-Type': photo.content_type, 'Cache-Control': 'private,no-store', 'X-Content-Type-Options': 'nosniff' } });
   }
   if (path === '/api/photos' && request.method === 'POST') {
-    allow(member, 'inspect', 'record inspections');
+    allow(member, 'inspect', 'record inspections'); useQc(member, 'quality_inspector', 'Inspection photos');
     if (!env.BUCKET) fail(503, 'Photo storage is unavailable. The inspection note is saved; retry the photo after reconnecting.');
-    // Bound the whole multipart payload before parsing it, including chunked uploads.
-    const reader = request.body?.getReader(); const chunks = []; let size = 0;
-    if (!reader) fail(422, 'Choose a photo first.');
-    while (true) {
-      const { done, value } = await reader.read(); if (done) break;
-      size += value.length;
-      if (size > 11 * 1024 * 1024) { await reader.cancel(); fail(413, 'Choose a photo smaller than 10 MB.'); }
-      chunks.push(value);
-    }
-    const payload = new Uint8Array(size); let offset = 0;
-    for (const chunk of chunks) { payload.set(chunk, offset); offset += chunk.length; }
-    const form = await new Request(request.url, { method: 'POST', headers: { 'Content-Type': request.headers.get('Content-Type') || '' }, body: payload }).formData().catch(() => fail(422, 'The upload is not a valid photo form.'));
+    const { form, bytes, type, digest } = await readPhoto(request);
     const inspectionId = id(form.get('inspectionId'));
     const inspection = await first(db, 'SELECT * FROM inspections WHERE id=? AND workspace_id=?', inspectionId, member.workspace_id);
     if (!inspection) fail(404, 'Save an inspection in your workspace before attaching a photo.');
-    const file = form.get('photo');
-    if (!(file instanceof File) || file.size === 0 || file.size > 10 * 1024 * 1024) fail(422, 'Choose a JPEG, PNG or WebP photo up to 10 MB.');
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
-    const png = [137,80,78,71,13,10,26,10].every((value, index) => bytes[index] === value);
-    const webp = new TextDecoder().decode(bytes.slice(0,4)) === 'RIFF' && new TextDecoder().decode(bytes.slice(8,12)) === 'WEBP';
-    const type = jpeg ? 'image/jpeg' : png ? 'image/png' : webp ? 'image/webp' : null;
-    if (!type) fail(422, 'Unsupported photo. Use JPEG, PNG or WebP; HEIC is not supported.');
-    const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
     const previous = await first(db, 'SELECT * FROM inspection_photos WHERE id=?', inspectionId);
     if (previous) { if (previous.content_hash !== digest) fail(409, 'This inspection already has a different photo. Create another inspection to preserve the evidence.'); return json({ id: inspectionId }); }
     const key = `${member.workspace_id}/${inspectionId}/${digest}`;
     await env.BUCKET.put(key, bytes, { httpMetadata: { contentType: type } });
-    try { await statement(db, 'INSERT INTO inspection_photos(id,workspace_id,lot_id,object_key,content_type,content_hash,size,actor_name,created_at) VALUES(?,?,?,?,?,?,?,?,?)', inspectionId, member.workspace_id, inspection.lot_id, key, type, digest, file.size, member.name, Date.now()).run(); }
+    try { await statement(db, 'INSERT INTO inspection_photos(id,workspace_id,lot_id,object_key,content_type,content_hash,size,actor_name,created_at) VALUES(?,?,?,?,?,?,?,?,?)', inspectionId, member.workspace_id, inspection.lot_id, key, type, digest, bytes.length, member.name, Date.now()).run(); }
     catch (error) {
       const raced = await first(db, 'SELECT * FROM inspection_photos WHERE id=?', inspectionId);
       if (raced?.content_hash === digest) return json({ id: inspectionId });
@@ -202,6 +187,7 @@ async function route(request, env) {
     }
     return json({ id: inspectionId }, 201);
   }
+  if (path === '/api/erp/qc/photos' && request.method === 'POST') return qualityApi(request, env, member, path, null);
   const data = request.method === 'POST' ? await body(request) : null;
   const w = member.workspace_id;
   if (path === '/api/erp/inbound' || path.startsWith('/api/erp/receipts')) return receiving(request, env, member, path, data);
@@ -236,7 +222,7 @@ async function route(request, env) {
   if (path === '/api/movements' && data) return saveMovement(db, member, data);
   if (path === '/api/reversals' && data) return saveMovement(db, member, data, true);
   if (path === '/api/quality' && data) {
-    allow(member, 'qc', 'record QC decisions'); keys(data, ['lotId', 'status', 'note']);
+    allow(member, 'qc', 'record QC decisions'); useQc(member, 'quality_inspector', 'QC decisions'); keys(data, ['lotId', 'status', 'note']);
     const lotId = id(data.lotId); const note = text(data.note, 'Inspection reason', 3, 1000);
     if (!['approved', 'hold', 'uninspected'].includes(data.status)) fail(422, 'Choose a valid QC status.');
     if (!await first(db, 'SELECT id FROM lots WHERE id=? AND workspace_id=?', lotId, w)) fail(404, 'Lot not found.');
@@ -247,7 +233,7 @@ async function route(request, env) {
     return json({ saved: true });
   }
   if (path === '/api/inspections' && data) {
-    allow(member, 'inspect', 'record inspections'); keys(data, ['id', 'lotId', 'labelText', 'note', 'result']);
+    allow(member, 'inspect', 'record inspections'); useQc(member, 'quality_inspector', 'Inspections'); keys(data, ['id', 'lotId', 'labelText', 'note', 'result']);
     const inspectionId = id(data.id); const lotId = id(data.lotId);
     if (!await first(db, 'SELECT id FROM lots WHERE id=? AND workspace_id=?', lotId, w)) fail(404, 'Lot not found.');
     const labelText = text(data.labelText ?? '', 'Care label', 0, 4000);
