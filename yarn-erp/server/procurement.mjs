@@ -1,4 +1,4 @@
-import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, website, recordId, allow, reason as decisionReason, role, viewer, audit } from './erp-utils.mjs';
+import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, website, recordId, reason as decisionReason, role, viewer, audit } from './erp-utils.mjs';
 import { trackingConfigured, trackingStatus } from './tracking.mjs';
 import { sha256 } from './auth.mjs';
 import { settingsOf, needsApproval, approvalQueries } from './governance.mjs';
@@ -354,34 +354,3 @@ export async function submitBid(db, supplier, actor, data, now) {
   return { bid:await one(db,'SELECT * FROM supplier_bids WHERE id=? AND supplier_id=?',id,sid), created:true };
 }
 
-export async function supplierOperations(request, env, user, path, data) {
-  const db=env.DB; const sid=user.supplier_id; const now=Date.now();
-  if (user.status!=='approved') fail(403,'An admin must approve your supplier account before you can use RFQs or orders.');
-  if(path==='/api/portal/workspace'&&!data) {
-    const rfqs=await all(db, "SELECT r.* FROM procurement_rfqs r JOIN rfq_recipients x ON x.rfq_id=r.id WHERE x.supplier_id=? ORDER BY r.created_at DESC LIMIT 100",sid);
-    const bids=await all(db,'SELECT * FROM supplier_bids WHERE supplier_id=? ORDER BY updated_at DESC LIMIT 100',sid);
-    const orders=await all(db,'SELECT * FROM supplier_purchase_orders WHERE supplier_id=? ORDER BY created_at DESC LIMIT 100',sid);
-    const shipments=await all(db,'SELECT * FROM procurement_shipments WHERE supplier_id=? ORDER BY created_at DESC LIMIT 100',sid);
-    return json({rfqs,bids,orders:orders.map(o=>({...o,terms:JSON.parse(o.terms_snapshot)})),shipments});
-  }
-  if(path==='/api/portal/bids'&&data) {
-    const result = await submitBid(db, { id: sid, workspace_id: user.workspace_id, status: user.status }, { user_id: user.user_id, workspace_id: user.workspace_id, role: 'supplier' }, data, now);
-    return json({ bid: result.bid }, result.created && data.version === 0 ? 201 : 200);
-  }
-  if(path==='/api/portal/dispatches'&&data) {
-    keys(data,['id','orderId','billOfLading','carrier','containers','quantityMilli','dispatchedAt','note']);
-    const order=await one(db,'SELECT * FROM supplier_purchase_orders WHERE id=? AND supplier_id=? AND workspace_id=?',recordId(data.orderId),sid,user.workspace_id);
-    if(!order) fail(404,'Purchase order not found.');
-    const id=recordId(data.id), bl=text(data.billOfLading,'Bill of lading',3,100), carrier=text(data.carrier,'Carrier',2,100), qty=integer(data.quantityMilli,'Dispatched quantity'), dispatched=date(data.dispatchedAt,'Dispatch date'), note=multiline(data.note??'','Note',0,2000);
-    if(dispatched>now+60000) fail(422,'Dispatch date cannot be in the future.');
-    if(!Array.isArray(data.containers)||data.containers.length>100||data.containers.some(c=>typeof c!=='string'||! /^[A-Z]{4}[0-9]{7}$/.test(c))) fail(422,'Use container numbers with four capital letters and seven digits, or leave the list empty.');
-    const containers=[...new Set(data.containers)]; const digest=await sha256(JSON.stringify({order:order.id,bl,carrier,qty,dispatched,note,containers}));
-    const previous=await one(db,'SELECT * FROM procurement_shipments WHERE id=?',id);
-    if(previous) {if(previous.supplier_id!==sid||previous.request_hash!==digest) fail(409,'This request ID was used for different values.');return json({shipment:previous});}
-    try {await db.batch([query(db,'INSERT INTO procurement_shipments(id,workspace_id,purchase_order_id,supplier_id,bill_of_lading,carrier,containers_json,quantity_milli,dispatched_at,note,request_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',id,user.workspace_id,order.id,sid,bl,carrier,JSON.stringify(containers),qty,dispatched,note,digest,now),
-      query(db,"UPDATE supplier_purchase_orders SET status='dispatched' WHERE id=?",order.id),audit(db,user,'shipment.dispatched',id,{order:order.id,billOfLading:bl},'supplier')]);}
-    catch {fail(409,'This dispatch exceeds the order quantity or the order is no longer dispatchable. Reload first.');}
-    return json({shipment:await one(db,'SELECT * FROM procurement_shipments WHERE id=?',id)},201);
-  }
-  fail(404,'Supplier portal route not found.');
-}

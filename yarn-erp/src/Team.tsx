@@ -3,27 +3,11 @@ import { ArrowRightLeft, ChevronDown, ClipboardCheck, KeyRound, Package, Package
 import { AsyncForm, Field, errorMessage } from './forms';
 import { Avatar } from './SignIn';
 import { when } from './WorkspaceDashboard';
-import { inventoryRequest as api, roleLabel, type Role, type Member, type Permission } from './inventory-client';
+import { inventoryRequest as api, roleLabel, type Role, type Member } from './inventory-client';
 import { translate, useLanguage } from './i18n';
 
 interface Person { id: string; name: string; role: Role | null; status: 'active' | 'pending' | 'deactivated'; created_at: number; locked: boolean }
 
-// The same icons as the batch actions they unlock.
-export const permissionInfo: [Permission, string, string, LucideIcon][] = [
-  ['receive', 'Receive deliveries', 'Book stock in when it arrives', PackagePlus],
-  ['produce', 'Move between stages', 'Raw to work in progress to finished', ArrowRightLeft],
-  ['dispatch', 'Dispatch', 'Send approved stock to customers', Truck],
-  ['waste', 'Record waste', 'Write off damaged or lost stock', Trash2],
-  ['catalog', 'Materials and batches', 'Add new yarns and their batches', Package],
-  ['inspect', 'Inspections', 'Record care labels and scan evidence', ClipboardCheck],
-  ['qc', 'QC decisions', 'Approve a batch or put it on hold', ShieldCheck],
-  ['reverse', 'Reverse entries', 'Correct a saved entry, with a reason', Undo2],
-  ['suppliers', 'Supplier directory', 'Maintain supplier contacts and categories', UserCheck],
-  ['procure', 'Procurement', 'Create RFQs, review bids and accept purchase orders', PackagePlus],
-  ['sales', 'Sales orders', 'Manage buyers, quotations and invoices', Truck],
-  ['production', 'Production planning', 'Plan machines, shifts and production batches', ArrowRightLeft],
-  ['payments', 'Customer payments', 'Record payments and manage receivables', ClipboardCheck],
-];
 export const accessSummary = (role: Role, language: 'en' | 'ur' = 'en') => translate(language, ...roleLabel[role]);
 function RolePicker({ value, onChange, disabled = false }: { value: Role; onChange: (value: Role) => void; disabled?: boolean }) {
   const { t } = useLanguage();

@@ -294,32 +294,6 @@ test('a number clash skips the clashing number once', async () => {
   assert.equal((await note()).invoice.number, 'INV-2026-0003');
 });
 
-test('the buyer portal records acceptance and leaves the sale to the sales manager', async () => {
-  const f = await setup(), password = 'A strong buyer password 2026', email = 'hina@buyer.test';
-  const registered = await f.call('/buyer/register', { company: 'Hina Fabrics', contactName: 'Hina Khan', email, phone: '+923331234567', city: 'Lahore', password }, null);
-  assert.equal(registered.status, 201);
-  const buyerId = one(f, 'SELECT buyer_id FROM buyer_users WHERE email=?', email).buyer_id;
-  assert.equal(one(f, 'SELECT created_by FROM buyers WHERE id=?', buyerId).created_by.startsWith('buyer:'), true);
-  assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM notifications WHERE event='buyer.pending' AND user_id=?").get(f.sana.user_id).n, 1);
-  assert.equal((await f.call(`${sales}/buyers/review`, { id: buyerId, status: 'active', version: 1 }, 'Sana')).status, 200);
-  const login = await f.call('/buyer/login', { email, password }, null), cookie = login.headers.get('set-cookie').split(';')[0];
-  const rfq = await f.call('/buyer/pos', { id: uuid(), reference: 'PO-HINA-1', specifications: 'Combed cotton single jersey, 180 GSM', quantityMilli: 100000, unit: 'kg', requestedDeliveryAt: Date.now() + 21 * DAY, paymentTerms: 'Net 30' }, null, { Cookie: cookie });
-  assert.equal(rfq.status, 201, JSON.stringify(rfq.data));
-  assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM notifications WHERE event='buyer_rfq.received' AND object_id=?").get(rfq.data.po.id).n, 1);
-  const revision = await sentQuote(f, rfq.data.po.id);
-  const approve = body => f.call('/buyer/approve', body, null, { Cookie: cookie });
-  const first = await approve({ revisionId: revision.id, version: revision.version, note: 'Approved as quoted' });
-  assert.equal(first.status, 200, JSON.stringify(first.data)); assert.equal(first.data.already, false);
-  assert.equal(count(f, 'SELECT 1 FROM sales_orders'), 0); assert.equal(count(f, 'SELECT 1 FROM invoices'), 0);
-  const stored = one(f, 'SELECT * FROM quotation_acceptances WHERE revision_id=?', revision.id);
-  assert.deepEqual([stored.accepted_by, stored.created_by, stored.note], ['Hina Khan', `buyer:${buyerId}`, 'Approved as quoted']);
-  assert.equal((await approve({ revisionId: revision.id, version: revision.version, note: 'Approved as quoted' })).data.already, true);
-  assert.equal((await approve({ revisionId: revision.id, version: revision.version, note: 'Another note' })).status, 409);
-  assert.equal((await approve({ revisionId: revision.id, version: 9 })).status, 409);
-  assert.equal(count(f, 'SELECT 1 FROM quotation_acceptances'), 1);
-  assert.equal((await f.call(`${sales}/sales`, { id: uuid(), revisionId: revision.id }, 'Sana')).status, 201);
-});
-
 test('pending buyers and open RFQs from approved buyers are reminded to the sales manager', async () => {
   const f = await setup(), pendingId = await f.insertBuyer(), held = await f.insertBuyerRfq({ buyerId: pendingId });
   const buyerId = await f.insertBuyer({ status: 'active' }), open = await f.insertBuyerRfq({ buyerId }), quoted = await f.insertBuyerRfq({ buyerId });
@@ -347,29 +321,3 @@ test('the 0004 audit rebuild keeps every row and admits the buyer actor', () => 
   assert.throws(() => sql.prepare('UPDATE erp_audit_events SET action=?').run('x'), /immutable audit/);
 });
 
-test('buyers only see and act on their own records', async () => {
-  const f = await setup(), password = 'A strong buyer password 2026';
-  const portal = async (company, email) => {
-    assert.equal((await f.call('/buyer/register', { company, contactName: `${company} Contact`, email, phone: '+923331234567', city: 'Lahore', password }, null)).status, 201);
-    const buyerId = one(f, 'SELECT buyer_id FROM buyer_users WHERE email=?', email).buyer_id;
-    assert.equal((await f.call(`${sales}/buyers/review`, { id: buyerId, status: 'active', version: 1 }, 'Sana')).status, 200);
-    const cookie = (await f.call('/buyer/login', { email, password }, null)).headers.get('set-cookie').split(';')[0];
-    return { buyerId, get: path => f.call(path, undefined, null, { Cookie: cookie }), post: (path, body) => f.call(path, body, null, { Cookie: cookie }), cookie };
-  };
-  const a = await portal('Hina Fabrics', 'hina@buyer.test'), b = await portal('Zain Textiles', 'zain@buyer.test');
-  const rfq = await a.post('/buyer/pos', { id: uuid(), reference: 'PO-A-1', specifications: 'Combed cotton single jersey, 180 GSM', quantityMilli: 100000, unit: 'kg', requestedDeliveryAt: Date.now() + 21 * DAY, paymentTerms: 'Net 30' });
-  assert.equal(rfq.status, 201);
-  const revision = await sentQuote(f, rfq.data.po.id);
-  assert.equal((await a.post('/buyer/approve', { revisionId: revision.id, version: 1 })).status, 200);
-  const { invoice } = (await f.call(`${sales}/sales`, { id: uuid(), revisionId: revision.id }, 'Sana')).data;
-  const own = (await a.get('/buyer/workspace')).data;
-  assert.deepEqual([own.pos.length, own.revisions.length, own.orders.length, own.invoices.length], [1, 1, 1, 1]);
-  assert.equal((await a.get(`/buyer/invoices/${invoice.id}`)).status, 200);
-  const other = await b.get('/buyer/workspace');
-  assert.equal(other.status, 200);
-  for (const key of ['pos', 'revisions', 'orders', 'invoices', 'dispatches', 'receivables', 'payments']) assert.deepEqual(other.data[key], [], key);
-  assert.equal((await b.get(`/buyer/invoices/${invoice.id}`)).status, 404);
-  assert.equal((await b.post('/buyer/approve', { revisionId: revision.id, version: 1 })).status, 404);
-  assert.equal((await f.call('/buyer/workspace', undefined, null)).status, 401, 'no session');
-  assert.equal(count(f, 'SELECT 1 FROM quotation_acceptances WHERE buyer_id=?', b.buyerId), 0);
-});

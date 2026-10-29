@@ -4,8 +4,6 @@ import "@fontsource-variable/figtree";
 // The true italic face for elegant display headings (no synthetic slant).
 import "@fontsource-variable/figtree/wght-italic.css";
 import LiveApp from "./LiveApp";
-import SupplierPortal from './SupplierPortal';
-import { useEffect, useState } from 'react';
 import { LanguageProvider } from "./i18n";
 import "./yarnflow.css";
 // crypto.randomUUID exists only on HTTPS and localhost; phones testing over the LAN use plain
@@ -15,15 +13,9 @@ if (typeof crypto.randomUUID !== "function")
     "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
       (+c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (+c / 4)))).toString(16),
     ) as ReturnType<Crypto["randomUUID"]>;
-function Application() {
-  const isSupplierPortal = () => /^#\/supplier(?:\/|$)/.test(location.hash);
-  const [supplier, setSupplier] = useState(isSupplierPortal);
-  useEffect(() => { const route = () => { setSupplier(isSupplierPortal()); }; addEventListener('hashchange', route); return () => removeEventListener('hashchange', route); }, []);
-  return supplier ? <SupplierPortal /> : <LiveApp />;
-}
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <LanguageProvider><Application /></LanguageProvider>
+    <LanguageProvider><LiveApp /></LanguageProvider>
   </React.StrictMode>,
 );
 if ("serviceWorker" in navigator && import.meta.env.PROD)

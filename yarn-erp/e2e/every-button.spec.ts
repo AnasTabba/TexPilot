@@ -207,7 +207,6 @@ test.describe("desktop", () => {
     await page.goto("/#/profile");
     const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download backup" }).click()]);
     expect(JSON.parse(await (await import("node:fs/promises")).readFile((await download.path())!, "utf8")).products).toHaveLength(4);
-    await expect(page.locator(".yf-access li.is-on")).toHaveCount(13);
     await expect(page.locator(".yf-counts")).toContainText("Materials4");
     await expect(page.locator(".yf-counts")).toContainText("People8");
 

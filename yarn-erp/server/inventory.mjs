@@ -1,12 +1,10 @@
 import { integrationApi } from './integration.mjs';
 /** Shared inventory API: PIN sessions (server/auth.mjs) give identity, D1 supplies durable SQL. */
-import { LOCK_AFTER, LOCK_MS, ROLE_PERMISSIONS, SESSION_MS, nameKey, pinHash, randomHex, sessionCookie, sessionToken, sha256, validPin } from './auth.mjs';
+import { LOCK_AFTER, LOCK_MS, SESSION_MS, nameKey, pinHash, randomHex, sessionCookie, sessionToken, sha256, validPin } from './auth.mjs';
 import { adminApi } from './admin.mjs';
 import { ErpProblem, role } from './erp-utils.mjs';
-import { supplierPortal } from './supplier-portal.mjs';
 import { staffProcurement, approvalHandlers } from './procurement.mjs';
 import { salesApi } from './sales.mjs';
-import { buyerPortalApi } from './buyer-portal.mjs';
 import { notificationsApi } from './notify.mjs';
 import { approvalsApi } from './governance.mjs';
 import { trackingApi } from './tracking.mjs';
@@ -63,7 +61,6 @@ const rows = async (db, sql, ...args) => (await db.prepare(sql).bind(...args).al
 const first = (db, sql, ...args) => db.prepare(sql).bind(...args).first();
 const statement = (db, sql, ...args) => db.prepare(sql).bind(...args);
 // Admins can do everything; everyone else needs the permission an admin gave them. Scanning needs none.
-const allow = (member, permission, what) => { if (!member.admin && !member.permissions.includes(permission)) fail(403, `You don't have permission to ${what}. Ask an admin.`); };
 // Quality inspectors record inspections, photos and issues through /api/erp/qc/*, and the purchase manager registers arrivals as QC lots; the old stock writes stay for admins and supervisors.
 const useQc = (member, role, what) => { if (member.role === role) fail(403, `${what} now goes through the lot inspection flow. The old stock record is read-only for your role.`); };
 const adminOnly = member => { if (!member.admin) fail(403, 'Only an admin can do this.'); };
@@ -100,8 +97,6 @@ async function route(request, env) {
     if (origin !== url.origin || request.headers.get('Sec-Fetch-Site') === 'cross-site') fail(403, 'Open Yarnflow directly before saving.');
   }
   if (path.startsWith('/api/auth/')) return authRoute(request, db, path);
-  if (path.startsWith('/api/portal/')) return supplierPortal(request, env, path);
-  if (path.startsWith('/api/buyer/')) return buyerPortalApi(request, env, path);
   const member = await currentMember(db, request);
   if (!member) fail(401, 'Sign in with your name and PIN.');
   const userId = member.user_id;
@@ -116,7 +111,7 @@ async function route(request, env) {
     return new Response(object.body, { headers: { 'Content-Type': photo.content_type, 'Cache-Control': 'private,no-store', 'X-Content-Type-Options': 'nosniff' } });
   }
   if (path === '/api/photos' && request.method === 'POST') {
-    allow(member, 'inspect', 'record inspections'); useQc(member, 'quality_inspector', 'Inspection photos');
+    useQc(member, 'quality_inspector', 'Inspection photos');
     if (!env.BUCKET) fail(503, 'Photo storage is unavailable. The inspection note is saved; retry the photo after reconnecting.');
     const { form, bytes, type, digest } = await readPhoto(request);
     const inspectionId = id(form.get('inspectionId'));
@@ -165,7 +160,7 @@ async function route(request, env) {
   if (path === '/api/reversals' && data) fail(410, 'Reversals are closed. Record a reasoned stock adjustment with POST /api/erp/stock/adjustments.');
   if (path === '/api/quality' && data) fail(410, 'QC decisions are made on the inspection report. Use POST /api/erp/qc/reports/decide or /api/erp/qc/rejections/decide.');
   if (path === '/api/inspections' && data) {
-    allow(member, 'inspect', 'record inspections'); useQc(member, 'quality_inspector', 'Inspections'); keys(data, ['id', 'lotId', 'labelText', 'note', 'result']);
+    useQc(member, 'quality_inspector', 'Inspections'); keys(data, ['id', 'lotId', 'labelText', 'note', 'result']);
     const inspectionId = id(data.id); const lotId = id(data.lotId);
     if (!await first(db, 'SELECT id FROM lots WHERE id=? AND workspace_id=?', lotId, w)) fail(404, 'Lot not found.');
     const labelText = text(data.labelText ?? '', 'Care label', 0, 4000);
@@ -231,7 +226,7 @@ async function currentMember(db, request) {
   if (!token) return null;
   const user = await first(db, "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.status='active' AND u.deactivated_at IS NULL AND u.portal_role IS NOT NULL", await sha256(token), Date.now());
   if (!user) return null;
-  return { user_id: user.id, workspace_id: user.workspace_id, name: user.name, role: user.portal_role, admin: user.portal_role === 'admin', permissions: ROLE_PERMISSIONS[user.portal_role] };
+  return { user_id: user.id, workspace_id: user.workspace_id, name: user.name, role: user.portal_role, admin: user.portal_role === 'admin' };
 }
 const pinOf = value => { if (!validPin(value)) fail(422, 'The PIN must be exactly 4 digits.'); return value; };
 /** Sign in, sign out, and the names shown on the sign-in screen. */

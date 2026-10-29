@@ -1,7 +1,7 @@
 /** Sales API for the factory staff side: buyer review, quotations, noted sales, invoices and credit
  * notes. Exported as `salesApi(request,env,member,path,data)` for `/api/erp/sales/*`.
- * The buyer-facing counterpart lives in server/buyer-portal.mjs under `/api/buyer/*`; buyers
- * register and submit RFQs there, and staff never create buyers or enter RFQs for them. */
+ * Buyers register and submit RFQs through the token integration API; staff never create buyers
+ * or enter RFQs for them. */
 import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, recordId, audit, role, viewer, reason as decisionReason } from './erp-utils.mjs';
 import { sha256 } from './auth.mjs';
 import { settingsOf } from './governance.mjs';

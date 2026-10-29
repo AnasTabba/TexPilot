@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { CheckCheck, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { errorMessage } from './forms';
 import { LanguageSelect, useLanguage } from './i18n';
-import { can, inventoryRequest, roleLabel, type WorkspaceState } from './inventory-client';
-import { accessSummary, permissionInfo } from './Team';
+import { inventoryRequest, roleLabel, type WorkspaceState } from './inventory-client';
+import { accessSummary } from './Team';
 
 /** Admin-only: asks the server whether the optional InvenTree link answers. */
 function InventreeCheck() {
@@ -29,7 +29,6 @@ export default function Profile({ state, backupBusy, onBackup }: { state: Worksp
     <section className="live-panel yf-language-settings"><h2>{t('Language', 'زبان')}</h2><LanguageSelect /></section>
     <section className="live-panel"><h2>{t('Your role', 'آپ کا کردار')}</h2><p><strong>{me.name}</strong> · {t(...roleLabel[me.role])}</p>
       <p>{accessSummary(me.role, language)}{t('. Everyone can view stock and use the scanner.')}</p>
-      <ul className="yf-access">{permissionInfo.map(([id, label, , Icon]) => <li key={id} className={can(me, id) ? 'is-on' : ''}><Icon size={20} aria-hidden="true" /><span>{t(label)}</span>{can(me, id) ? <CheckCheck size={18} aria-label={t('Allowed')} /> : <span className="live-muted">{t('Ask an admin')}</span>}</li>)}</ul>
       {me.admin && <><h3 className="live-subheading">{t('Backup')}</h3><p>{t("Everyone's entries live in one shared database. Download a copy for your records.")}</p><div className="live-actions"><button className="button primary" onClick={onBackup} disabled={backupBusy}><Download size={20} aria-hidden="true" />{backupBusy ? t('Preparing backup…') : t('Download backup')}</button></div></>}
     </section>
     {me.admin && <InventreeCheck />}

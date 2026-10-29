@@ -104,3 +104,17 @@ test('the InvenTree check is for admins only and reports in both languages', asy
   await expect(page.getByRole('heading', { level: 1, name: 'My profile', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Check InvenTree' })).toHaveCount(0);
 });
+
+test('removed external portal hashes never render portal screens', async ({ page }) => {
+  for (const hash of ['#/supplier', '#/buyer']) {
+    await page.goto('/' + hash);
+    await expect(page.getByRole('heading', { name: /signing in/ })).toBeVisible();
+    await expect(page.getByText(/Register your company|Supplier sign in|Buyer sign in|Request approval/)).toHaveCount(0);
+  }
+  await signIn(page, 'Anas');
+  for (const hash of ['#/supplier', '#/buyer']) {
+    await page.goto('/' + hash);
+    await expect(page.getByRole('heading', { level: 1, name: 'Dashboard', exact: true })).toBeVisible();
+    await expect(page.getByText(/Register your company|Supplier sign in|Buyer sign in|Request approval/)).toHaveCount(0);
+  }
+});
