@@ -182,11 +182,15 @@ input:disabled, select:disabled, textarea:disabled { background: var(--sunken); 
   font: 600 16px var(--font);
   text-align: left;
   cursor: pointer;
-  transition: color 150ms ease;
+  /* Text changes colour only once the gliding pill has mostly left (or reached) the item, so a label is never
+     ink on the ink rail or paper on the paper pill while the pill is moving. */
+  transition: color 90ms ease 120ms;
 }
 .live-sidebar nav button svg { width: 22px; height: 22px; }
 /* The white pill glides to the current page (LiveApp measures --glide-*); the item turns paper as it lands. */
-.live-sidebar nav button.active, .live-bottom-nav button.active { background: var(--panel); color: var(--ink); transition: color 150ms ease, background-color 0s linear 260ms; }
+.live-sidebar nav button.active, .live-bottom-nav button.active { background: var(--panel); color: var(--ink); transition: color 90ms ease 120ms, background-color 0s linear 260ms; }
+/* Before the first measurement there is no pill to wait for. */
+.live-sidebar nav:not([data-glide]) button, .live-bottom-nav:not([data-glide]) button { transition: none; }
 @media (hover: hover) and (pointer: fine) { .live-sidebar nav button:not(.active):hover { background: #2e281f; color: #fff; } }
 .live-sidebar nav::before, .live-bottom-nav::before {
   content: "";
@@ -290,7 +294,7 @@ input:disabled, select:disabled, textarea:disabled { background: var(--sunken); 
   color: var(--ink-2);
   font: 600 16px var(--font);
   cursor: pointer;
-  transition: transform 160ms var(--ease-out), color 150ms ease, background-color 200ms var(--ease-out);
+  transition: transform 160ms var(--ease-out), color 90ms ease 110ms, background-color 200ms var(--ease-out);
 }
 .live-segments button:active { transform: scale(0.97); }
 .live-segments button[aria-pressed="true"] { background: transparent; color: var(--panel); }

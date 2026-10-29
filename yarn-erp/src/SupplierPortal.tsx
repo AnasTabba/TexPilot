@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Segments } from './ui';
 import { LogOut, RefreshCw, ShieldCheck } from 'lucide-react';
 import { AsyncForm, Field, errorMessage } from './forms';
 import { inventoryRequest as api, InventoryError } from './inventory-client';
@@ -27,7 +28,7 @@ export default function SupplierPortal() {
    {error && <p className="live-error" role="alert">{t(error)}<button className="live-text-button" onClick={() => void load()}>{t('Retry', 'دوبارہ کوشش کریں')}</button></p>}
    {notice && <p className="live-success" role="status">{notice}</p>}
    {loading ? <p role="status">{t('Opening your portal…', 'آپ کا پورٹل کھل رہا ہے…')}</p> : !identity ? <>
-    <div className="live-segments" aria-label={t('Supplier account', 'سپلائر اکاؤنٹ')}><button aria-pressed={mode !== 'register'} onClick={() => setMode('login')}>{t('Supplier sign in', 'سپلائر سائن اِن')}</button><button aria-pressed={mode === 'register'} onClick={() => setMode('register')}>{t('Register company', 'کمپنی رجسٹر کریں')}</button></div>
+    <Segments label={t('Supplier account', 'سپلائر اکاؤنٹ')} value={mode === 'register' ? 'register' : 'login'} onChange={setMode} options={[{ id: 'login', label: t('Supplier sign in', 'سپلائر سائن اِن') }, { id: 'register', label: t('Register company', 'کمپنی رجسٹر کریں') }]} />
     {mode === 'sent' && <p className="live-success" role="status">{t('Registration saved. Sign in to check your approval status.', 'رجسٹریشن محفوظ ہو گئی۔ منظوری کی حالت دیکھنے کے لیے سائن اِن کریں۔')}</p>}
     {mode === 'register' ? config?.registrationAvailable ? <SupplierRegistration categories={config.categories} onSent={() => setMode('sent')} /> : <p>{t('Registration is not available. Contact the factory admin.', 'رجسٹریشن دستیاب نہیں ہے۔ فیکٹری ایڈمن سے رابطہ کریں۔')}</p> : <SupplierLogin onSignedIn={load} />}
     <a href="#/overview" className="button">{t('Factory team sign in', 'فیکٹری ٹیم سائن اِن')}</a>
