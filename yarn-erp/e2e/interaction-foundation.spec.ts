@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
+import { enterStock } from './helpers';
 
 // These checks measure what the browser actually lays out: control boxes, scroll widths,
 // resolved safe-area padding, and reduced-motion state. They do not read the stylesheet text.
@@ -153,13 +154,10 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
   await expectScreenTargets(page, 'batch detail');
 
   // A real confirmation notice: receive one kilogram, review, and save.
-  await page.getByRole('button', { name: 'Receive stock', exact: true }).click();
-  await page.getByLabel('Weight (kg)', { exact: true }).fill('1');
-  await page.getByRole('button', { name: 'Review entry', exact: true }).click();
-  await page.getByRole('button', { name: 'Save entry', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Saved. Everyone on the team sees it now.' })).toBeVisible();
-  await expectTarget(page.locator('.live-success .live-icon-button'), 'notice dismiss');
-  await expectTarget(page.locator('.live-success .live-text-button'), 'notice Undo');
+  await page.getByRole('button', { name: 'Receive yarn', exact: true }).click();
+  await enterStock(page, { kg: '1' });
+  await expectTarget(page.locator('.yf-saved > .live-icon-button'), 'saved dismiss');
+  await expectTarget(page.getByRole('button', { name: 'Undo', exact: true }), 'saved Undo');
 
   await openPage(page, '#/activity', 'History');
   const historyActions = page.locator('.live-history .live-text-button');
@@ -169,7 +167,8 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
   await openPage(page, '#/team', 'Team');
   await expectScreenTargets(page, 'Team');
   await openPage(page, '#/settings', 'Settings');
-  await expectTarget(page.locator('.yf-language'), 'settings language switch');
+  await expectTarget(page.locator('.yf-settings .yf-language'), 'settings language switch');
+  for (const button of await page.locator('.live-topbar .yf-language button').all()) await expectTarget(button, 'top bar language choice');
   await expectScreenTargets(page, 'Settings');
 
   await openPage(page, '#/scanner', 'Scan');

@@ -1049,6 +1049,158 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
   }
 }
 
+/* ── Floor work: big buttons, big numbers, one sentence to check ─────────────────────────────────── */
+/* Daily work on Home: one tap per job, icon and word together. */
+.yf-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; margin-bottom: 32px; }
+.yf-tile { display: grid; align-content: start; justify-items: start; gap: 6px; min-height: 128px; padding: 18px; border: 1px solid var(--line); border-radius: 22px; background: var(--panel); color: var(--ink); font: inherit; text-align: start; cursor: pointer; box-shadow: 0 1px 0 rgb(29 27 25 / 4%); transition: transform 160ms var(--ease-out), border-color 150ms ease, background-color 150ms ease; touch-action: manipulation; }
+.yf-tile:active { transform: scale(0.97); }
+.yf-tile-icon { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 4px; border-radius: 16px; background: var(--ink); color: var(--panel); }
+.yf-tile strong { font-size: 19px; line-height: 1.2; font-weight: 700; }
+.yf-tile small { color: var(--ink-2); font-size: 16px; line-height: 1.3; }
+@media (hover: hover) and (pointer: fine) { .yf-tile:hover { border-color: var(--control); background: var(--raised); } }
+.yf-tile:focus-visible, .yf-choice:focus-visible, .yf-pick-row:focus-visible, .yf-action:focus-visible, .yf-reasons button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* Choice cards replace dropdowns: every option visible, the chosen one inked with a tick. */
+.yf-choices { min-width: 0; margin: 0 0 20px; padding: 0; border: 0; }
+.yf-choices legend { margin-bottom: 10px; padding: 0; font-size: 17px; font-weight: 700; }
+.yf-choices > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.yf-choices.cols-1 > div { grid-template-columns: 1fr; }
+.yf-choices.cols-3 > div { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.yf-choice { position: relative; display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 12px 44px 12px 16px; border: 2px solid var(--line-strong); border-radius: 18px; background: var(--panel); color: var(--ink); font: inherit; text-align: start; cursor: pointer; touch-action: manipulation; transition: border-color 150ms ease, background-color 150ms ease, transform 160ms var(--ease-out); }
+[dir="rtl"] .yf-choice { padding: 12px 16px 12px 44px; }
+.yf-choice:active:not(:disabled) { transform: scale(0.98); }
+.yf-choice > svg { flex: none; color: var(--ink-2); }
+.yf-choice strong { display: block; font-size: 18px; line-height: 1.25; }
+.yf-choice small { display: block; margin-top: 2px; color: var(--ink-2); font-size: 16px; line-height: 1.35; }
+.yf-choice-tick { position: absolute; inset-inline-end: 12px; top: 50%; display: grid; place-items: center; width: 26px; height: 26px; margin-top: -13px; border: 2px solid var(--line-strong); border-radius: 50%; color: transparent; }
+.yf-choice[aria-pressed="true"] { border-color: var(--ink); background: var(--raised); box-shadow: inset 0 0 0 1px var(--ink); }
+.yf-choice[aria-pressed="true"] .yf-choice-tick { border-color: var(--ink); background: var(--ink); color: var(--panel); }
+.yf-choice[aria-pressed="true"] > svg { color: var(--ink); }
+.yf-choice.is-good[aria-pressed="true"] { border-color: var(--ok); background: var(--ok-bg); box-shadow: inset 0 0 0 1px var(--ok); }
+.yf-choice.is-good[aria-pressed="true"] .yf-choice-tick { border-color: var(--ok); background: var(--ok); }
+.yf-choice.is-bad[aria-pressed="true"] { border-color: var(--bad); background: var(--bad-bg); box-shadow: inset 0 0 0 1px var(--bad); }
+.yf-choice.is-bad[aria-pressed="true"] .yf-choice-tick { border-color: var(--bad); background: var(--bad); }
+.yf-choice.is-warn[aria-pressed="true"] { border-color: var(--warn); background: var(--warn-bg); box-shadow: inset 0 0 0 1px var(--warn); }
+.yf-choice.is-warn[aria-pressed="true"] .yf-choice-tick { border-color: var(--warn); background: var(--warn); }
+.yf-choice:disabled { border-style: dashed; background: var(--sunken); color: var(--ink-2); cursor: not-allowed; }
+.yf-choices[aria-invalid="true"] .yf-choice:not(:disabled) { border-color: var(--bad); }
+
+/* Quick reasons: one tap fills the note. */
+.yf-reasons { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 16px; }
+.yf-reasons button { min-height: 48px; padding: 0 18px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--panel); color: var(--ink); font: 600 16px var(--font); cursor: pointer; touch-action: manipulation; }
+.yf-reasons button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--panel); }
+
+/* A stock entry: the batch on top, where the yarn goes, then the three numbers large. */
+.yf-entry .live-panel-heading h2 { font-size: 26px; }
+/* A form's close button stays in its corner; the title wraps beside it instead of pushing it below. */
+.live-form > .live-panel-heading { flex-wrap: nowrap; }
+.live-form > .live-panel-heading > div { flex: 1; min-width: 0; }
+/* The page title already names the job, so the form inside does not repeat it. */
+.live-content[data-page="entry"] > .live-page-heading { display: none; }
+.yf-entry-batch { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 20px; padding: 14px 16px; border-radius: 18px; background: var(--raised); }
+.yf-entry-batch > div { display: grid; flex: 1 1 160px; min-width: 0; }
+.yf-entry-batch strong { font-size: 19px; line-height: 1.25; }
+.yf-entry-batch span { color: var(--ink-2); font-size: 16px; }
+.yf-entry-icon { display: grid; flex: none; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: var(--ink); color: var(--panel); }
+.yf-entry-route { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 18px; }
+.yf-entry-route strong { font-weight: 700; }
+.yf-entry-route .live-text-button { margin-inline-start: auto; font-size: 16px; }
+.yf-entry-have { margin: -6px 0 18px; padding: 12px 16px; border-radius: 14px; background: var(--ground); color: var(--ink); font-size: 17px; font-weight: 600; }
+.yf-draft-offer { flex-direction: column; align-items: stretch; margin-bottom: 18px; }
+.yf-draft-offer .live-actions { margin: 8px 0 0; }
+.yf-qty-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; min-width: 0; margin: 0 0 20px; padding: 0; border: 0; }
+.yf-qty-grid legend { margin-bottom: 10px; padding: 0; font-size: 17px; font-weight: 700; }
+.yf-qty { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.yf-qty.is-big { grid-column: 1 / -1; }
+.yf-qty label { font-size: 17px; font-weight: 700; }
+.yf-qty input { min-height: 64px; padding: 0 16px; border-width: 2px; font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.yf-qty.is-big input { font-size: 34px; }
+.yf-qty input[aria-invalid="true"] { border-color: var(--bad); background: var(--bad-bg); }
+.yf-qty-help { margin: 0; color: var(--ink-2); font-size: 16px; }
+.yf-qty .live-field-error, .yf-choices .live-field-error { margin: 0; font-size: 16px; font-weight: 600; }
+
+/* The check before saving: big numbers, then the sentence that goes in the register. */
+.yf-sentence { display: grid; gap: 14px; }
+.live-review .yf-big-numbers, .yf-big-numbers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.live-review .yf-big-numbers > div, .yf-big-numbers > div { display: grid; justify-items: center; gap: 2px; padding: 14px 6px; border-radius: 16px; background: var(--panel); }
+.yf-big-numbers dd { margin: 0; font-size: 34px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.yf-big-numbers dt { color: var(--ink-2); font-size: 16px; font-weight: 600; }
+.yf-sentence > p:not(.live-warning) { margin: 0; font-size: 20px; line-height: 1.45; font-weight: 600; }
+.yf-entry .live-review > p { font-size: 17px; }
+
+/* Saved: a tick big enough to see from arm's length, the sentence, and the next step. */
+.yf-saved { position: relative; display: flex; gap: 16px; margin-bottom: 24px; padding: 20px 56px 20px 20px; border: 2px solid var(--ok); border-radius: 22px; background: var(--ok-bg); color: var(--ink); outline: none; animation: yf-enter 280ms var(--ease-out) backwards; }
+[dir="rtl"] .yf-saved { padding: 20px 20px 20px 56px; }
+.yf-saved-tick { display: grid; flex: none; place-items: center; width: 60px; height: 60px; border-radius: 50%; background: var(--ok); color: #fff; }
+.yf-saved h2 { color: var(--ok); font-size: 24px; }
+.yf-saved-sentence { margin: 6px 0 4px; font-size: 19px; font-weight: 600; line-height: 1.4; }
+.yf-saved p { color: var(--ink-2); font-size: 16px; }
+.yf-saved .live-actions { margin-top: 14px; }
+.yf-saved > .live-icon-button { position: absolute; top: 8px; inset-inline-end: 8px; color: var(--ok); }
+
+/* Choosing a batch: whole rows to tap, and a plain reason on any batch that cannot take the job. */
+.yf-picker-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.yf-picker-head h2 { font-size: 24px; }
+.yf-picker-head p { margin-top: 2px; color: var(--ink-2); font-size: 17px; }
+.yf-pick-list { display: grid; gap: 10px; margin: 0 0 18px; padding: 0; list-style: none; }
+.yf-pick-row { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 72px; padding: 12px 16px; border: 1px solid var(--line-strong); border-radius: 18px; background: var(--panel); color: var(--ink); font: inherit; text-align: start; cursor: pointer; touch-action: manipulation; transition: transform 160ms var(--ease-out), background-color 150ms ease; }
+.yf-pick-row:active:not(:disabled) { transform: scale(0.98); }
+.yf-pick-row:disabled { background: var(--sunken); color: var(--ink-2); cursor: not-allowed; }
+.yf-pick-row.is-new { margin-bottom: 10px; border: 2px dashed var(--control); background: transparent; }
+.yf-pick-plus { display: grid; flex: none; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--ink); color: var(--panel); font-size: 24px; font-weight: 700; }
+.yf-pick-name { display: grid; flex: 1; min-width: 0; }
+.yf-pick-name strong { font-size: 18px; line-height: 1.25; }
+.yf-pick-name span { color: var(--ink-2); font-size: 16px; }
+.yf-pick-name em { color: var(--warn); font-size: 16px; font-style: normal; font-weight: 700; }
+.yf-pick-kg { flex: none; font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.yf-pick-kg small { color: var(--ink-2); font-size: 15px; font-weight: 500; }
+@media (hover: hover) and (pointer: fine) { .yf-pick-row:hover:not(:disabled), .yf-choice:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--raised); } }
+
+/* Batch page: every job as a big button, and the reason when a job cannot be done yet. */
+.yf-other-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 20px; }
+.yf-action { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 16px; border: 1px solid var(--line-strong); border-radius: 18px; background: var(--panel); color: var(--ink); font: 600 17px/1.25 var(--font); text-align: start; cursor: pointer; touch-action: manipulation; }
+.yf-action > svg { flex: none; }
+.yf-action small { display: block; color: var(--warn); font-size: 15px; font-weight: 700; }
+.yf-action:disabled { border-style: dashed; background: var(--sunken); color: var(--ink-2); cursor: not-allowed; }
+.yf-action:active:not(:disabled) { transform: scale(0.98); }
+@media (hover: hover) and (pointer: fine) { .yf-action:hover:not(:disabled) { background: var(--raised); } }
+
+/* The footer says what is really true: up to date, offline, or not reachable. */
+.live-sync.is-offline, .live-sync.is-error { color: var(--bad); font-weight: 600; }
+.live-topbar .yf-language { margin-inline-start: auto; background: var(--rail-line); color: var(--rail-soft); }
+.live-topbar .yf-language-globe { display: none; }
+
+/* Readable at arm's length on a dusty phone: nothing below 15 px, labels and body 16–17 px, targets 48 px. */
+.live-field > label { font-size: 17px; }
+.live-field-error { font-size: 16px; }
+.live-muted, .live-form-note, .live-panel-heading > span, .yf-head > span, .yf-row > div > span, .yf-stock-group header span, .live-lot-name span, .yf-timeline li > div > span, .yf-side time, .yf-cartons, .yf-stage, .live-review dt, .live-sync { font-size: 16px; }
+.yf-steps li { font-size: 15px; }
+.live-quality { font-size: 15px; }
+.live-icon-button, .icon-button { width: 48px; height: 48px; }
+.live-text-button, .text-button { min-height: 48px; font-size: 16px; }
+.button { min-height: 52px; font-size: 17px; }
+.live-form .live-actions .button.primary, .yf-saved .button.primary { min-height: 56px; padding: 0 28px; }
+.yf-language button { min-width: 48px; min-height: 48px; }
+input[type="checkbox"], input[type="radio"] { width: 24px; height: 24px; min-height: 24px; }
+/* The scanner fills a short screen with the camera; its buttons keep the 48 px minimum, not the larger form size. */
+/* The scanner's settings button keeps its 48 px target without making its row taller than the 44 px badge row. */
+.scan-topline .live-icon-button { margin-block: -2px; }
+/* On the shortest phones the scanner's subtitle gives its line to the camera button. */
+@media (max-width: 640px) and (max-height: 600px) { .live-content[data-page="scanner"] .live-page-heading p { display: none; } }
+@media (max-height: 820px) { .scan-camera-controls .button, .barcode-panel .live-actions .button, .spec-form .button { min-height: 48px; font-size: 16px; } }
+@media (max-width: 640px) {
+  .yf-steps li:not(.current) { font-size: 0; }
+  .yf-steps li:not(.current) > span { font-size: 13px; }
+  .yf-steps li.current { flex: 2.4; font-size: 15px; }
+  .yf-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .yf-tile { min-height: 132px; padding: 14px; }
+  .yf-choices:not(.cols-1) > div { grid-template-columns: 1fr; }
+  .yf-big-numbers dd { font-size: 28px; }
+  .yf-saved { flex-direction: column; }
+  .live-form .live-actions { display: grid; grid-template-columns: 1fr; }
+  .live-form .live-actions .button { width: 100%; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* A near-zero animation still applies its translated start frame before the first paint. */
   *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }

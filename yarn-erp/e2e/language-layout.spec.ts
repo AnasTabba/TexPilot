@@ -25,7 +25,7 @@ test('Urdu selection persists through sign-in, navigation and reload', async ({ 
   // A reload keeps both the session and current route.
   await expect(page.getByRole('heading', { name: 'اسکین', exact: true })).toBeVisible();
   await page.goto('/#/settings');
-  await page.getByRole('button', { name: 'Switch language to English' }).click();
+  await page.locator('.yf-settings').getByRole('button', { name: 'Switch language to English' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
 });

@@ -3,6 +3,7 @@ import { Cone, materialHue } from './Cone';
 import { moveIcon, stageIcon } from './icons';
 import { qualityName, stageName, stockStages, weight, type Quality, type StockBalance, type WorkspaceState } from './inventory-client';
 import { useLanguage } from './i18n';
+import type { ReactNode } from 'react';
 
 export function QualityBadge({ value }: { value: Quality }) {
   const { t } = useLanguage();
@@ -18,7 +19,7 @@ const dateFormats = { en: new Intl.DateTimeFormat('en-GB', dateOptions), ur: new
 export const when = { format: (value: number | Date, language: 'en' | 'ur' = 'en') => dateFormats[language].format(value) };
 export const movedName: Record<string, string> = { receive: 'Received', dispatch: 'Dispatched', transfer: 'Moved', waste: 'Waste recorded', reverse: 'Reversed' };
 const movedUrdu: Record<string, string> = { receive: 'وصول ہوا', dispatch: 'ڈسپیچ ہوا', transfer: 'منتقل ہوا', waste: 'ضائع شدہ مال درج ہوا', reverse: 'اندراج واپس ہوا' };
-const stageUrdu = { raw: 'خام مال', wip: 'زیرِ تیاری', finished: 'تیار مال', cops: 'کاپس' };
+const stageUrdu = { raw: 'خام مال گودام', wip: 'پروڈکشن فلور', finished: 'تیار مال', cops: 'کاپس' };
 
 /** Stock moving through the mill: one node per stage on a thread that keeps flowing toward dispatch. */
 export function StockFlow({ balances, compact = false }: { balances: StockBalance[]; compact?: boolean }) {
@@ -41,7 +42,7 @@ export function StockFlow({ balances, compact = false }: { balances: StockBalanc
 }
 
 /** Home: the one thing to do next, then stock flowing through its stages, materials, and the latest movements. */
-export default function WorkspaceDashboard({ state, navigate }: { state: WorkspaceState; navigate: (route: string, lotId?: string) => void }) {
+export default function WorkspaceDashboard({ state, navigate, daily }: { state: WorkspaceState; navigate: (route: string, lotId?: string) => void; daily?: ReactNode }) {
   const { language, t } = useLanguage();
   const hue = (productId: string) => materialHue(state.products, productId);
   const product = (productId: string) => state.products.find(p => p.id === productId);
@@ -56,6 +57,7 @@ export default function WorkspaceDashboard({ state, navigate }: { state: Workspa
   const others = waiting.length - 1;
   const recent = state.movements.slice(0, 5);
   return <div className="yf-home">
+    {daily}
     <section className={`yf-next ${next ? next.quality : state.products.length ? 'clear' : 'empty'}`} aria-labelledby="yf-next-title">
       <span className="yf-next-icon">{next ? next.quality === 'hold' ? <TriangleAlert size={26} aria-hidden="true" /> : <ClipboardCheck size={26} aria-hidden="true" /> : <CircleCheckBig size={26} aria-hidden="true" />}</span>
       <div className="yf-next-text">
