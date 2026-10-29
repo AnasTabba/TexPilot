@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Camera, CheckCheck, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { Camera, CheckCheck, LoaderCircle, Trash2, TriangleAlert } from 'lucide-react';
 import { errorMessage } from './forms';
 import { useLanguage } from './i18n';
 import { quantity } from './erp-client';
@@ -87,6 +87,18 @@ export default function InspectArrival({ arrival, isAdmin, onClose, onDone }: Pr
     } finally { setBusy(false); }
   }
 
+  // A resumed draft that should not be kept: deleting it returns the arrival to the inspection queue untouched.
+  async function deleteDraft() {
+    if (busy) return;
+    const why = reason.trim();
+    if (isAdmin && why.length < 5) { setError(t('Give a reason of at least 5 characters for this admin action.', 'ایڈمن کارروائی کی کم از کم 5 حروف کی وجہ لکھیں۔')); return; }
+    setBusy(true); setError('');
+    try {
+      await api('/erp/qc/inspections/delete', { id: arrival.draft_id, ...(isAdmin ? { interventionReason: why } : {}) });
+      await onDone(t(`The draft of ${arrival.reference} was deleted. The arrival waits for inspection.`, `${arrival.reference} کا مسودہ حذف ہو گیا۔ آمد معائنے کا منتظر ہے۔`));
+    } catch (e) { setError(errorMessage(e, language)); } finally { setBusy(false); }
+  }
+
   return <dialog ref={dialog} className="inspect-arrival" aria-labelledby="inspect-arrival-title" onClose={onClose}
     onCancel={e => { if (busy) e.preventDefault(); }} onClick={e => { if (e.target === e.currentTarget && !busy) dialog.current?.close(); }}>
     <form className="inspect-arrival-form" onSubmit={save} noValidate>
@@ -147,6 +159,7 @@ export default function InspectArrival({ arrival, isAdmin, onClose, onDone }: Pr
       {error && <p className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{error}</p>}
       <div className="live-actions">
         <button className="button primary" disabled={busy}>{busy ? <LoaderCircle className="live-spinning" size={20} aria-hidden="true" /> : <CheckCheck size={20} aria-hidden="true" />}{busy ? t('Saving…', 'محفوظ ہو رہا ہے…') : t('Submit inspection', 'معائنہ جمع کریں')}</button>
+        {resuming && <button type="button" className="button" disabled={busy} onClick={() => void deleteDraft()}><Trash2 size={18} aria-hidden="true" />{t('Delete draft', 'مسودہ حذف کریں')}</button>}
         <button type="button" className="button" disabled={busy} onClick={() => dialog.current?.close()}>{t('Cancel', 'منسوخ کریں')}</button>
       </div>
     </form>

@@ -4,6 +4,8 @@ import { approvalQueries, needsApproval, settingsOf } from './governance.mjs';
 import { notifyRole, notifyUser } from './notify.mjs';
 import { readPhoto } from './photos.mjs';
 import { movementQueries } from './stock-ledger.mjs';
+import { reversalQueries } from './receiving.mjs';
+import { sha256 } from './auth.mjs';
 
 const SEVERITIES = ['minor', 'major', 'critical'], LOT_STATUSES = ['awaiting_inspection', 'under_review', 'settled'], INSPECTION_STATUSES = ['draft', 'submitted'];
 const QUANTITY = 'More than the uninspected quantity.';
@@ -68,7 +70,7 @@ const CLAIM_FIELDS = 'c.id,c.lot_id,c.inspection_id,c.supplier_id,c.purchase_ord
 const CLAIM_JOINS = 'FROM claims c JOIN qc_lots l ON l.id=c.lot_id JOIN suppliers s ON s.id=c.supplier_id JOIN products m ON m.id=l.product_id JOIN supplier_purchase_orders p ON p.id=c.purchase_order_id';
 const claimView = (db, id, workspaceId) => one(db, `SELECT ${CLAIM_FIELDS} ${CLAIM_JOINS} WHERE c.id=? AND c.workspace_id=?`, id, workspaceId);
 const issuesOf = (db, inspectionId) => all(db, 'SELECT id,type,severity,description,status,created_at FROM qc_issues WHERE inspection_id=? ORDER BY created_at,id', inspectionId);
-const inspectionEvidence = async (db, list) => { for (const i of list) { i.photos = await all(db, `SELECT ${PHOTO_FIELDS} FROM qc_photos WHERE inspection_id=? OR issue_id IN (SELECT id FROM qc_issues WHERE inspection_id=?) ORDER BY taken_at,id`, i.id, i.id); i.issues = await issuesOf(db, i.id); } return list; };
+const inspectionEvidence = async (db, list) => { for (const i of list) { i.photos = await all(db, `SELECT ${PHOTO_FIELDS} FROM qc_photos WHERE (inspection_id=? OR issue_id IN (SELECT id FROM qc_issues WHERE inspection_id=?)) AND NOT EXISTS(SELECT 1 FROM qc_corrections c WHERE c.kind='photo_voided' AND c.target_id=qc_photos.id) ORDER BY taken_at,id`, i.id, i.id); i.issues = await issuesOf(db, i.id); } return list; };
 
 const describeInspection = async (db, request) => {
   const i = await one(db, 'SELECT i.*,l.reference,l.unit,m.name AS product_name,s.name AS supplier_name FROM qc_inspections i JOIN qc_lots l ON l.id=i.lot_id JOIN products m ON m.id=l.product_id JOIN suppliers s ON s.id=l.supplier_id WHERE i.id=? AND i.workspace_id=?', request.payload.inspectionId, request.workspace_id);
@@ -112,6 +114,41 @@ const lotRow = (db, id, w) => one(db, `SELECT ${LOT_FIELDS} FROM qc_lots l WHERE
 const inspectionRow = (db, id, w) => one(db, 'SELECT * FROM qc_inspections WHERE id=? AND workspace_id=?', id, w);
 const same = (row, expected) => Object.entries(expected).every(([k, v]) => row[k] === v);
 
+// Corrections keep their reason (3-500 characters). The role that made the step may correct it; anyone else is refused unless an admin, whose reason then serves as the intervention and must be at least 5 characters.
+function correction(member, data, ...roles) {
+  const own = roles.includes(member.role);
+  if (!own && member.role !== 'admin') fail(403, 'Your role cannot do this. Ask an admin.');
+  const why = multiline(data?.reason, 'Reason', 3, 500);
+  if (!own && why.length < 5) fail(422, 'An admin correction needs a reason of at least 5 characters.');
+  return { why, intervention: own ? null : why };
+}
+// A correction ID replays only when its action and client-supplied reason also match.
+async function replayed(db, id, workspaceId, target, kind, reason, detail = {}) {
+  const done = await one(db, 'SELECT workspace_id,target_id,kind,reason,detail_json FROM qc_corrections WHERE id=?', id);
+  if (!done) return false;
+  const savedDetail = JSON.parse(done.detail_json);
+  if (done.workspace_id !== workspaceId || done.target_id !== target || done.kind !== kind || done.reason !== reason
+      || Object.entries(detail).some(([key, value]) => savedDetail[key] !== value))
+    fail(409, 'This correction ID was used for another change.');
+  return true;
+}
+const recordCorrection = (db, member, id, kind, target, why, detail, now) => query(db, 'INSERT INTO qc_corrections(id,workspace_id,kind,target_id,reason,detail_json,actor_id,created_at) VALUES(?,?,?,?,?,?,?,?)',
+  id, member.workspace_id, kind, target, why, JSON.stringify(detail), member.user_id, now);
+// Stock side of undoing a decision: the reversing ledger entry, refused once the lot's ledger has moved past the receipt.
+async function receiptReversal(db, member, inspectionId, source, why, now) {
+  const receipt = await one(db, "SELECT id,lot_id,grams,cartons,cones,rowid AS seq FROM movements WHERE request_hash=? AND action='receive' AND workspace_id=?", `source:${inspectionId}:${source}`, member.workspace_id);
+  if (!receipt) fail(409, 'The stock for this decision was not found, so the decision cannot be undone.');
+  if (await one(db, 'SELECT 1 AS moved FROM movements WHERE lot_id=? AND rowid>? LIMIT 1', receipt.lot_id, receipt.seq)) fail(409, 'Stock from this decision has already moved, so the decision cannot be undone.');
+  return reversalQueries(db, member, { id: crypto.randomUUID(), lotId: receipt.lot_id, movementId: receipt.id, grams: receipt.grams, cartons: receipt.cartons, cones: receipt.cones, reason: why, digest: await sha256(`reverse:${receipt.id}`) }, now);
+}
+// Quantity an undone decision would put back on the lot: refused when another inspection has taken it since.
+async function uninspectedAtLeast(db, lotId, milli) {
+  const open = await one(db, 'SELECT open_milli FROM qc_lot_open WHERE lot_id=?', lotId);
+  return (open?.open_milli ?? 0) >= milli;
+}
+// Photos and issues of a draft, deleted with it; their stored objects are removed after the batch commits.
+const removeObjects = (env, photos) => Promise.all(photos.map(p => env.BUCKET?.delete(p.object_key).catch(() => {})));
+
 export async function qualityApi(request, env, member, path, data) {
   const db = env.DB, w = member.workspace_id, now = Date.now(), base = '/api/erp/qc';
   if (request.method === 'GET') {
@@ -120,7 +157,10 @@ export async function qualityApi(request, env, member, path, data) {
       viewer(member, 'quality_inspector', 'supervisor', 'purchase_manager');
       const status = q.get('status');
       if (status && !LOT_STATUSES.includes(status)) fail(422, 'Choose awaiting_inspection, under_review or settled.');
-      const lots = await all(db, `SELECT ${LOT_FIELDS},m.name AS product_name,s.name AS supplier_name,p.reference AS order_reference,o.open_milli
+      const lots = await all(db, `SELECT ${LOT_FIELDS},m.name AS product_name,s.name AS supplier_name,p.reference AS order_reference,o.open_milli,
+        (SELECT COUNT(*) FROM qc_inspections x WHERE x.lot_id=l.id) AS inspection_count,
+        (SELECT created_at FROM qc_corrections c WHERE c.kind='lot_cancelled' AND c.target_id=l.id) AS cancelled_at,
+        (SELECT reason FROM qc_corrections c WHERE c.kind='lot_cancelled' AND c.target_id=l.id) AS cancel_reason
         FROM qc_lots l JOIN products m ON m.id=l.product_id JOIN suppliers s ON s.id=l.supplier_id JOIN supplier_purchase_orders p ON p.id=l.purchase_order_id JOIN qc_lot_open o ON o.lot_id=l.id
         WHERE l.workspace_id=? AND (? IS NULL OR l.status=?) ORDER BY l.arrived_at DESC,l.id LIMIT 200`, w, status, status);
       return json({ lots });
@@ -155,7 +195,7 @@ export async function qualityApi(request, env, member, path, data) {
     }
     if (path.startsWith(base + '/photos/')) {
       viewer(member, 'quality_inspector', 'supervisor', 'purchase_manager');
-      const photo = await one(db, 'SELECT * FROM qc_photos WHERE id=? AND workspace_id=?', recordId(path.slice((base + '/photos/').length)), w);
+      const photo = await one(db, "SELECT * FROM qc_photos WHERE id=? AND workspace_id=? AND NOT EXISTS(SELECT 1 FROM qc_corrections c WHERE c.kind='photo_voided' AND c.target_id=qc_photos.id)", recordId(path.slice((base + '/photos/').length)), w);
       if (!photo) fail(404, 'This photo was not found in your workspace.');
       if (!env.BUCKET) fail(503, 'Photo storage is unavailable.');
       const object = await env.BUCKET.get(photo.object_key);
@@ -180,8 +220,8 @@ export async function qualityApi(request, env, member, path, data) {
     if (!await one(db, 'SELECT id FROM shipments WHERE id=? AND workspace_id=? AND purchase_order_id=?', shipmentId, w, orderId)) fail(404, 'Shipment not found on this purchase order.');
     try {
       await db.batch([
-        query(db, "INSERT INTO qc_lots(id,workspace_id,purchase_order_id,shipment_id,supplier_id,product_id,reference,quantity_milli,unit,supplier_lot,arrived_at,pending_since,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'awaiting_inspection',?,?,?)",
-          id, w, orderId, shipmentId, order.supplier_id, productId, reference, quantity, order.unit, supplierLot, arrivedAt, now, member.user_id, now, now),
+        query(db, "INSERT INTO qc_lots(id,workspace_id,purchase_order_id,shipment_id,supplier_id,product_id,reference,quantity_milli,unit,supplier_lot,arrived_at,pending_since,status,created_by,created_at,updated_at,po_status_before) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'awaiting_inspection',?,?,?,?)",
+          id, w, orderId, shipmentId, order.supplier_id, productId, reference, quantity, order.unit, supplierLot, arrivedAt, now, member.user_id, now, now, order.status),
         query(db, "UPDATE supplier_purchase_orders SET status='received',updated_at=? WHERE id=? AND status IN ('accepted','dispatched') AND (SELECT arrived_milli FROM po_arrived WHERE order_id=?)>=quantity_milli", now, orderId, orderId),
         notifyRole(db, w, 'quality_inspector', 'lot.ready', 'qc_lot', id, reference),
         audit(db, member, 'lot.arrived', id, { order: orderId, shipment: shipmentId, quantity_milli: quantity, unit: order.unit }, 'staff', { objectType: 'lot', intervention })]);
@@ -203,6 +243,7 @@ export async function qualityApi(request, env, member, path, data) {
     const previous = await one(db, 'SELECT * FROM qc_inspections WHERE id=?', id);
     if (previous) { if (previous.workspace_id !== w || !same(previous, expected)) fail(409, 'Inspection ID was used for other values.'); return json(previous); }
     if (!await lotRow(db, lotId, w)) fail(404, 'Lot not found.');
+    if (await one(db, "SELECT 1 AS x FROM qc_corrections WHERE kind='lot_cancelled' AND target_id=?", lotId)) fail(409, 'This arrival was cancelled. Register it again first.');
     try {
       await db.batch([
         query(db, "INSERT INTO qc_inspections(id,workspace_id,lot_id,accepted_milli,rejected_milli,note,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,'draft',?,?,?)", id, w, lotId, accepted, rejected, note, member.user_id, now, now),
@@ -330,6 +371,182 @@ export async function qualityApi(request, env, member, path, data) {
     }
     try { await db.batch(statements); } catch (error) { return decisionFailed(error, db, id, 'rejection_status'); }
     return json(await inspectionRow(db, id, w));
+  }
+  if (path === base + '/lots/cancel') {
+    keys(data, ['id', 'lotId', 'reason']);
+    const { why, intervention } = correction(member, data, 'purchase_manager');
+    const id = recordId(data.id), lotId = recordId(data.lotId);
+    const lot = await one(db, 'SELECT * FROM qc_lots WHERE id=? AND workspace_id=?', lotId, w);
+    if (!lot) fail(404, 'Lot not found.');
+    if (await replayed(db, id, w, lotId, 'lot_cancelled', why)) return json(await lotRow(db, lotId, w));
+    if (await one(db, "SELECT 1 AS x FROM qc_corrections WHERE kind='lot_cancelled' AND target_id=?", lotId)) fail(409, 'This arrival was already cancelled.');
+    const inspections = await one(db, "SELECT COALESCE(SUM(status='submitted'),0) AS submitted, COUNT(*) AS total FROM qc_inspections WHERE lot_id=?", lotId);
+    if (inspections.submitted) fail(409, 'An inspection of this arrival was already submitted, so the arrival cannot be cancelled.');
+    if (inspections.total) fail(409, 'This arrival has a draft inspection. Delete the draft first, then cancel the arrival.');
+    try {
+      await db.batch([
+        recordCorrection(db, member, id, 'lot_cancelled', lotId, why, { reference: lot.reference }, now),
+        // The reference is the lot's unique key: renaming it releases the reference for the correct arrival.
+        query(db, "UPDATE qc_lots SET reference=?,status='settled',updated_at=? WHERE id=?", `cancelled:${lotId}:${lot.reference}`, now, lotId),
+        query(db, "UPDATE supplier_purchase_orders SET status=COALESCE(?,CASE WHEN EXISTS(SELECT 1 FROM shipments WHERE purchase_order_id=supplier_purchase_orders.id) THEN 'dispatched' ELSE 'accepted' END),updated_at=? WHERE id=? AND status='received'", lot.po_status_before, now, lot.purchase_order_id),
+        audit(db, member, 'lot.undone', lotId, { order: lot.purchase_order_id, reference: lot.reference }, 'staff', { objectType: 'lot', before: { status: lot.status }, after: { status: 'cancelled' }, reason: why, intervention })]);
+    } catch { fail(409, 'The arrival changed. Reload and check it.'); }
+    return json(await lotRow(db, lotId, w));
+  }
+  if (path === base + '/inspections/update') {
+    const intervention = role(member, data, 'quality_inspector');
+    keys(data, ['id', 'acceptedMilli', 'rejectedMilli', 'note', 'interventionReason']);
+    const id = recordId(data.id), accepted = integer(data.acceptedMilli, 'Accepted quantity', 0), rejected = integer(data.rejectedMilli, 'Rejected quantity', 0);
+    const note = multiline(data.note ?? '', 'Note', 0, 2000);
+    if (accepted + rejected === 0) fail(422, 'Record an accepted or a rejected quantity.');
+    const inspection = await inspectionRow(db, id, w);
+    if (!inspection) fail(404, 'Inspection not found.');
+    if (inspection.status !== 'draft') fail(409, 'Only a draft can be edited. Reopen the inspection first if it is still undecided.');
+    if (inspection.accepted_milli === accepted && inspection.rejected_milli === rejected && inspection.note === note) return json(inspection);
+    const before = { accepted_milli: inspection.accepted_milli, rejected_milli: inspection.rejected_milli, note: inspection.note }, after = { accepted_milli: accepted, rejected_milli: rejected, note };
+    try {
+      await db.batch([expectState(db, 'status', id, 'draft'),
+        query(db, 'UPDATE qc_inspections SET accepted_milli=?,rejected_milli=?,note=?,updated_at=? WHERE id=?', accepted, rejected, note, now, id),
+        lotStatusQuery(db, inspection.lot_id, now),
+        audit(db, member, 'inspection.edited', id, { lot: inspection.lot_id }, 'staff', { objectType: 'inspection', before, after, intervention })]);
+    } catch (error) { fail(409, error.message.includes(QUANTITY) ? QUANTITY : 'This inspection changed. Reload and check it.'); }
+    return json(await inspectionRow(db, id, w));
+  }
+  if (path === base + '/inspections/delete') {
+    const intervention = role(member, data, 'quality_inspector');
+    keys(data, ['id', 'interventionReason']);
+    const id = recordId(data.id), inspection = await inspectionRow(db, id, w);
+    if (!inspection) fail(404, 'Inspection not found.');
+    if (inspection.status !== 'draft') fail(409, 'Only a draft can be deleted. A submitted inspection stays on record; reopen it while it is undecided.');
+    const photos = await all(db, 'SELECT id,object_key FROM qc_photos WHERE inspection_id=? OR issue_id IN (SELECT id FROM qc_issues WHERE inspection_id=?)', id, id);
+    try {
+      await db.batch([
+        query(db, 'DELETE FROM qc_photos WHERE inspection_id=? OR issue_id IN (SELECT id FROM qc_issues WHERE inspection_id=?)', id, id),
+        query(db, 'DELETE FROM qc_issues WHERE inspection_id=?', id),
+        query(db, "DELETE FROM qc_inspections WHERE id=? AND status='draft'", id),
+        lotStatusQuery(db, inspection.lot_id, now),
+        audit(db, member, 'inspection.deleted', id, { lot: inspection.lot_id, photos: photos.length }, 'staff', { objectType: 'inspection', before: { status: 'draft', accepted_milli: inspection.accepted_milli, rejected_milli: inspection.rejected_milli }, intervention })]);
+    } catch { fail(409, 'This inspection was submitted first, so it cannot be deleted.'); }
+    await removeObjects(env, photos);
+    return json({ deleted: true, id });
+  }
+  if (path === base + '/issues/update') {
+    const intervention = role(member, data, 'quality_inspector');
+    keys(data, ['id', 'type', 'severity', 'description', 'interventionReason']);
+    const id = recordId(data.id), issue = await one(db, 'SELECT * FROM qc_issues WHERE id=? AND workspace_id=?', id, w);
+    if (!issue) fail(404, 'Issue not found.');
+    const inspection = await inspectionRow(db, issue.inspection_id, w);
+    if (inspection.status !== 'draft') fail(409, 'Issues can be changed only on a draft. Reopen the inspection first if it is still undecided.');
+    const kind = text(data.type, 'Issue type', 2, 80), description = multiline(data.description, 'Description', 5, 2000);
+    if (!SEVERITIES.includes(data.severity)) fail(422, 'Choose minor, major or critical.');
+    if (issue.type === kind && issue.severity === data.severity && issue.description === description) return json(issue);
+    try {
+      await db.batch([expectState(db, 'status', inspection.id, 'draft'),
+        query(db, 'UPDATE qc_issues SET type=?,severity=?,description=?,updated_at=? WHERE id=?', kind, data.severity, description, now, id),
+        audit(db, member, 'issue.edited', id, { inspection: inspection.id }, 'staff', { objectType: 'issue', before: { type: issue.type, severity: issue.severity, description: issue.description }, after: { type: kind, severity: data.severity, description }, intervention })]);
+    } catch { fail(409, 'This inspection changed. Reload and check it.'); }
+    return json(await one(db, 'SELECT * FROM qc_issues WHERE id=?', id));
+  }
+  if (path === base + '/issues/delete') {
+    const intervention = role(member, data, 'quality_inspector');
+    keys(data, ['id', 'interventionReason']);
+    const id = recordId(data.id), issue = await one(db, 'SELECT * FROM qc_issues WHERE id=? AND workspace_id=?', id, w);
+    if (!issue) fail(404, 'Issue not found.');
+    const inspection = await inspectionRow(db, issue.inspection_id, w);
+    if (inspection.status !== 'draft') fail(409, 'Issues can be removed only from a draft. Reopen the inspection first if it is still undecided.');
+    const photos = await all(db, 'SELECT id,object_key FROM qc_photos WHERE issue_id=?', id);
+    try {
+      await db.batch([query(db, 'DELETE FROM qc_photos WHERE issue_id=?', id), query(db, "DELETE FROM qc_issues WHERE id=? AND status='open'", id),
+        audit(db, member, 'issue.deleted', id, { inspection: inspection.id, photos: photos.length }, 'staff', { objectType: 'issue', before: { type: issue.type, severity: issue.severity, description: issue.description }, intervention })]);
+    } catch { fail(409, 'This issue was decided first, so it cannot be removed.'); }
+    await removeObjects(env, photos);
+    return json({ deleted: true, id });
+  }
+  if (path === base + '/inspections/reopen') {
+    keys(data, ['id', 'inspectionId', 'reason']);
+    const { why, intervention } = correction(member, data, 'quality_inspector');
+    const id = recordId(data.id), inspectionId = recordId(data.inspectionId);
+    if (await replayed(db, id, w, inspectionId, 'inspection_reopened', why)) return json(await inspectionRow(db, inspectionId, w));
+    const inspection = await inspectionRow(db, inspectionId, w);
+    if (!inspection) fail(404, 'Inspection not found.');
+    if (inspection.status !== 'submitted') fail(409, 'Only a submitted inspection can be reopened.');
+    if ((inspection.report_status ?? 'pending') !== 'pending' || (inspection.rejection_status ?? 'pending') !== 'pending') fail(409, 'The supervisor has already decided this inspection. Ask the supervisor to undo the decision first.');
+    try {
+      await db.batch([
+        query(db, "UPDATE qc_inspections SET status='draft',submitted_at=NULL,report_status=NULL,rejection_status=NULL,updated_at=? WHERE id=? AND status='submitted'", now, inspectionId),
+        recordCorrection(db, member, id, 'inspection_reopened', inspectionId, why, {}, now),
+        lotStatusQuery(db, inspection.lot_id, now),
+        audit(db, member, 'inspection.reopened', inspectionId, { lot: inspection.lot_id }, 'staff', { objectType: 'inspection', before: { status: 'submitted' }, after: { status: 'draft' }, reason: why, intervention })]);
+    } catch { fail(409, 'The supervisor decided this inspection first. Reload and check it.'); }
+    return json(await inspectionRow(db, inspectionId, w));
+  }
+  if (path === base + '/reports/undo') {
+    keys(data, ['id', 'inspectionId', 'reason']);
+    const { why, intervention } = correction(member, data, 'supervisor');
+    const id = recordId(data.id), inspectionId = recordId(data.inspectionId);
+    if (await replayed(db, id, w, inspectionId, 'decision_undone', why, { side: 'report' })) return json(await inspectionRow(db, inspectionId, w));
+    const inspection = await inspectionRow(db, inspectionId, w);
+    if (!inspection) fail(404, 'Inspection not found.');
+    const from = inspection.report_status;
+    if (inspection.status !== 'submitted' || !['accepted', 'returned'].includes(from)) fail(409, 'Only an accepted or returned report can be undone.');
+    let stock = [];
+    if (from === 'accepted') stock = await receiptReversal(db, member, inspectionId, 'accepted', why, now);
+    else if (!await uninspectedAtLeast(db, inspection.lot_id, inspection.accepted_milli)) fail(409, 'The lot has been inspected again, so this report cannot go back to pending.');
+    try {
+      await db.batch([expectState(db, 'report_status', inspectionId, from),
+        query(db, "UPDATE qc_inspections SET report_status='pending',report_reason=NULL,updated_at=? WHERE id=?", now, inspectionId),
+        ...stock,
+        recordCorrection(db, member, id, 'decision_undone', inspectionId, why, { side: 'report', from }, now),
+        lotStatusQuery(db, inspection.lot_id, now),
+        audit(db, member, 'inspection.undone', inspectionId, { lot: inspection.lot_id, side: 'report', from }, 'staff', { objectType: 'inspection', before: { report_status: from }, after: { report_status: 'pending' }, reason: why, intervention })]);
+    } catch { fail(409, 'This decision changed. Reload and check it.'); }
+    return json(await inspectionRow(db, inspectionId, w));
+  }
+  if (path === base + '/rejections/undo') {
+    keys(data, ['id', 'inspectionId', 'reason']);
+    const { why, intervention } = correction(member, data, 'supervisor');
+    const id = recordId(data.id), inspectionId = recordId(data.inspectionId);
+    if (await replayed(db, id, w, inspectionId, 'decision_undone', why, { side: 'rejected' })) return json(await inspectionRow(db, inspectionId, w));
+    const inspection = await inspectionRow(db, inspectionId, w);
+    if (!inspection) fail(404, 'Inspection not found.');
+    const from = inspection.rejection_status;
+    if (inspection.status !== 'submitted' || !['confirmed', 'dismissed'].includes(from)) fail(409, from === 'escalated'
+      ? 'This rejection waits for the admin. The admin can reject the escalation, and the dismissal can then be undone.'
+      : 'Only a confirmed or dismissed rejection can be undone.');
+    let stock = [];
+    if (from === 'confirmed') {
+      if (await one(db, 'SELECT 1 AS x FROM claims WHERE inspection_id=?', inspectionId)) fail(409, 'A claim was raised for this rejection, so the decision cannot be undone.');
+    } else if (inspection.dismiss_outcome === 'accept_with_deviation') stock = await receiptReversal(db, member, inspectionId, 'deviation', why, now);
+    else if (!await uninspectedAtLeast(db, inspection.lot_id, inspection.rejected_milli)) fail(409, 'The lot has been inspected again, so this rejection cannot go back to pending.');
+    try {
+      await db.batch([expectState(db, 'rejection_status', inspectionId, from),
+        query(db, "UPDATE qc_inspections SET rejection_status='pending',rejection_reason=NULL,dismiss_outcome=NULL,updated_at=? WHERE id=?", now, inspectionId),
+        recordCorrection(db, member, id, 'decision_undone', inspectionId, why, { side: 'rejected', from, dismissOutcome: inspection.dismiss_outcome }, now),
+        query(db, "UPDATE qc_issues SET status='open',updated_at=? WHERE inspection_id=? AND status!='open'", now, inspectionId),
+        ...stock,
+        lotStatusQuery(db, inspection.lot_id, now),
+        audit(db, member, 'inspection.undone', inspectionId, { lot: inspection.lot_id, side: 'rejected', from }, 'staff', { objectType: 'inspection', before: { rejection_status: from }, after: { rejection_status: 'pending' }, reason: why, intervention })]);
+    } catch { fail(409, 'This decision changed. Reload and check it.'); }
+    return json(await inspectionRow(db, inspectionId, w));
+  }
+  if (path === base + '/photos/void') {
+    keys(data, ['id', 'photoId', 'reason']);
+    const { why, intervention } = correction(member, data, 'quality_inspector');
+    const id = recordId(data.id), photoId = recordId(data.photoId);
+    if (await replayed(db, id, w, photoId, 'photo_voided', why)) return json({ voided: true, id: photoId });
+    const photo = await one(db, 'SELECT * FROM qc_photos WHERE id=? AND workspace_id=?', photoId, w);
+    if (!photo) fail(404, 'Photo not found.');
+    const inspection = photo.inspection_id
+      ? await inspectionRow(db, photo.inspection_id, w)
+      : await one(db, 'SELECT i.* FROM qc_issues x JOIN qc_inspections i ON i.id=x.inspection_id WHERE x.id=?', photo.issue_id);
+    if (inspection.status !== 'draft') fail(409, 'Photos can be voided only on a draft. Reopen the inspection first if it is still undecided.');
+    if (await one(db, "SELECT 1 AS x FROM qc_corrections WHERE kind='photo_voided' AND target_id=?", photoId)) fail(409, 'This photo was already voided.');
+    try {
+      await db.batch([expectState(db, 'status', inspection.id, 'draft'),
+        recordCorrection(db, member, id, 'photo_voided', photoId, why, { inspection: inspection.id }, now),
+        audit(db, member, 'photo.voided', photoId, { inspection: inspection.id, lot: photo.lot_id }, 'staff', { objectType: 'photo', reason: why, intervention })]);
+    } catch { fail(409, 'This photo was already voided or the inspection was submitted. Reload and check it.'); }
+    return json({ voided: true, id: photoId });
   }
   if (path === base + '/claims/decide') {
     role(member, data, 'admin');

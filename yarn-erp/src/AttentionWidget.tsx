@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
-import { AlertCircle, BellRing, Check, CheckCircle2, Factory, LoaderCircle } from 'lucide-react';
+import { AlertCircle, BellRing, Check, CheckCircle2, Factory, LoaderCircle, RotateCcw } from 'lucide-react';
 import { errorMessage } from './forms';
 import { useLanguage } from './i18n';
 import { portal } from './PortalCommon';
@@ -27,6 +27,8 @@ export function AttentionWidget({ member, onChanged }: { member: Member; onChang
   const [busyId, setBusyId] = useState('');
   const [rejecting, setRejecting] = useState<{ id: string; text: string } | null>(null);
   const [producing, setProducing] = useState<ProductionJob | null>(null);
+  // The decision made here can be undone from this card until another decision replaces it.
+  const [last, setLast] = useState<{ inspectionId: string; decision: 'accept' | 'reject' } | null>(null), [undoing, setUndoing] = useState(false), [undoText, setUndoText] = useState('');
 
   const load = useCallback(async () => {
     try { setData(await portal<Attention>('/stock/attention')); setError(''); }
@@ -57,10 +59,22 @@ export function AttentionWidget({ member, onChanged }: { member: Member; onChang
     setBusyId(inspectionId); setError(''); setNotice('');
     try {
       await portal('/qc/reports/decide', { inspectionId, decision, ...(decision === 'reject' ? { reason: why } : {}), ...(isAdmin ? { interventionReason: admin } : {}) });
-      setRejecting(null);
+      setRejecting(null); setLast({ inspectionId, decision }); setUndoing(false); setUndoText('');
       await changed(decision === 'accept'
         ? t('QC report accepted. The stock is now in raw material.', 'QC رپورٹ قبول ہو گئی۔ اسٹاک اب خام مال میں ہے۔')
         : t('QC report rejected.', 'QC رپورٹ مسترد ہو گئی۔'));
+    } catch (caught) { setError(errorMessage(caught, language)); }
+    finally { setBusyId(''); }
+  }
+
+  // Undo the decision just made: the report goes back to waiting for a decision. Refused by the server once its stock has moved on.
+  async function undoLast() {
+    if (!last) return;
+    setBusyId(last.inspectionId); setError(''); setNotice('');
+    try {
+      await portal('/qc/reports/undo', { id: crypto.randomUUID(), inspectionId: last.inspectionId, reason: undoText.trim() });
+      setLast(null); setUndoing(false); setUndoText('');
+      await changed(t('Decision undone. The report is waiting for a decision again.', 'فیصلہ واپس ہو گیا۔ رپورٹ دوبارہ فیصلے کے انتظار میں ہے۔'));
     } catch (caught) { setError(errorMessage(caught, language)); }
     finally { setBusyId(''); }
   }
@@ -82,6 +96,19 @@ export function AttentionWidget({ member, onChanged }: { member: Member; onChang
     </div>}
     {error && <p className="live-error" role="alert"><AlertCircle size={18} aria-hidden="true" />{error}</p>}
     {notice && <p className="live-success" role="status">{notice}</p>}
+    {last && <div className="att-reason" role="group" aria-label={t('Undo the last decision', 'آخری فیصلہ واپس لیں')}>
+      {!undoing
+        ? <button className="button" disabled={!!busyId} onClick={() => setUndoing(true)}><RotateCcw size={18} aria-hidden="true" />{t('Undo this decision', 'یہ فیصلہ واپس لیں')}</button>
+        : <form onSubmit={event => { event.preventDefault(); void undoLast(); }}>
+          <label htmlFor="att-undo-reason">{t('Reason for undoing (at least 3 characters)', 'واپس لینے کی وجہ (کم از کم 3 حروف)')}</label>
+          <input id="att-undo-reason" className="att-input" value={undoText} maxLength={500} onChange={e => setUndoText(e.target.value)} />
+          <small className="att-muted">{t('Accepted stock goes back out of raw material. Refused if it has already moved or been used.', 'قبول شدہ اسٹاک خام مال سے واپس ہوگا۔ اگر یہ حرکت یا استعمال ہو چکا ہو تو منظور نہیں ہوگا۔')}</small>
+          <div className="att-row-actions">
+            <button type="submit" className="button primary" disabled={undoText.trim().length < 3 || !!busyId}>{t('Undo decision', 'فیصلہ واپس لیں')}</button>
+            <button type="button" className="button" disabled={!!busyId} onClick={() => setUndoing(false)}>{t('Cancel', 'منسوخ کریں')}</button>
+          </div>
+        </form>}
+    </div>}
     {!data && !error && <p className="att-muted" role="status">{t('Checking…', 'جانچ ہو رہی ہے…')}</p>}
     {data && total === 0 && <div className="att-empty"><CheckCircle2 size={28} aria-hidden="true" /><p>{t('Nothing needs attention', 'کسی چیز کو توجہ کی ضرورت نہیں')}</p></div>}
 
