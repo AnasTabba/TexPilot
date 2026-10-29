@@ -38,7 +38,7 @@ export async function trackingApi(request, env, member, path, data) {
   if (path === '/api/erp/shipments' && data) {
     const intervention = role(member, data, 'purchase_manager');
     keys(data, ['id', 'orderId', 'billOfLading', 'interventionReason']);
-    const id = recordId(data.id), orderId = recordId(data.orderId), bl = text(data.billOfLading, 'Bill of lading', 3, 100).toUpperCase().replace(/\s+/g, '');
+    const id = recordId(data.id), orderId = recordId(data.orderId), bl = text(String(data.billOfLading ?? '').toUpperCase().replace(/\s+/g, ''), 'Bill of lading', 3, 100);
     const order = await one(db, 'SELECT id,status,approval_status,bill_of_lading FROM supplier_purchase_orders WHERE id=? AND workspace_id=?', orderId, w);
     if (!order) fail(404, 'Purchase order not found.');
     const same = row => row.purchase_order_id === orderId && row.bill_of_lading === bl;
@@ -61,10 +61,12 @@ export async function trackingApi(request, env, member, path, data) {
     return json({ shipment: await shipmentOf(db, id, w) }, 201);
   }
   if (path === '/api/erp/shipments/track' && data) {
-    role(member, data, 'purchase_manager');
+    const intervention = role(member, data, 'purchase_manager');
     keys(data, ['id', 'interventionReason']);
     const shipment = await shipmentOf(db, recordId(data.id), w);
     if (!shipment) fail(404, 'Shipment not found.');
+    // Only an admin override is audited; the purchase manager's own lookups are not decisions.
+    const tracked = (sh, why) => why ? [audit(db, member, 'shipment.tracked', sh.id, { orderId: sh.purchase_order_id }, 'staff', { objectType: 'shipment', intervention: why })] : [];
     let result;
     try {
       // ponytail: one paid provider call per Track press; add the credit budget from the erp-tracking worktree if billing matters
@@ -74,10 +76,10 @@ export async function trackingApi(request, env, member, path, data) {
       if (error.kind === 'not_configured') return json({ shipment, error: 'Tracking is not configured: API key missing.' });
       if (error.kind === 'contract_unavailable') return json({ shipment, error: 'Tracking is not configured: provider contract unavailable.' });
       const message = sanitizeTrackingPayload(error.message, env);
-      await query(db, `UPDATE shipments SET last_error=?,status=CASE WHEN last_status_json IS NULL THEN 'error' ELSE status END,updated_at=? WHERE id=? AND workspace_id=?`, message, now, shipment.id, w).run();
+      await db.batch([query(db, `UPDATE shipments SET last_error=?,status=CASE WHEN last_status_json IS NULL THEN 'error' ELSE status END,updated_at=? WHERE id=? AND workspace_id=?`, message, now, shipment.id, w), ...tracked(shipment, intervention)]);
       return json({ shipment: await shipmentOf(db, shipment.id, w), error: message });
     }
-    await query(db, "UPDATE shipments SET status='tracked',last_status_json=?,last_checked_at=?,last_error=NULL,updated_at=? WHERE id=? AND workspace_id=?", JSON.stringify(result), now, now, shipment.id, w).run();
+    await db.batch([query(db, "UPDATE shipments SET status='tracked',last_status_json=?,last_checked_at=?,last_error=NULL,updated_at=? WHERE id=? AND workspace_id=?", JSON.stringify(result), now, now, shipment.id, w), ...tracked(shipment, intervention)]);
     return json({ shipment: await shipmentOf(db, shipment.id, w) });
   }
   fail(404, 'Shipment route not found.');

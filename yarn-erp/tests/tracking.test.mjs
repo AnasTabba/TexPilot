@@ -135,3 +135,28 @@ test('tracking preserves request errors', async () => {
   assert.equal((await track(other, id)).status, 404);
   assert.equal(calls, 0); assert.equal(row(f, id).status, 'not_checked'); assert.equal(row(f, id).last_checked_at, null);
 });
+const trackAudits = f => f.sql.prepare("SELECT * FROM erp_audit_events WHERE action='shipment.tracked'").all();
+test('an admin Track audits the intervention reason; a purchase manager Track does not', async () => {
+  const f = await fixture(), { id } = await attach(f); stub(() => ok(GOOD));
+  assert.equal((await track(f, id)).status, 200); assert.equal(trackAudits(f).length, 0);
+  assert.equal((await f.call('/erp/shipments/track', { id }, 'Anas')).status, 422); // admin needs a reason
+  const r = await f.call('/erp/shipments/track', { id, interventionReason: 'Pervaiz is away today' }, 'Anas');
+  assert.equal(r.status, 200, r.text);
+  const [a, ...rest] = trackAudits(f); assert.equal(rest.length, 0); assert.equal(a.intervention_reason, 'Pervaiz is away today'); assert.equal(a.object_type, 'shipment'); assert.equal(a.record_id, id);
+  stub(() => new Response('down', { status: 503 }));
+  await f.call('/erp/shipments/track', { id, interventionReason: 'Retry for the supplier' }, 'Anas');
+  assert.equal(trackAudits(f).length, 2);
+});
+test('a failed audit write leaves the cache untouched', async () => {
+  const f = await fixture(), { id } = await attach(f); stub(() => ok(GOOD));
+  f.sql.exec("CREATE TRIGGER no_audit BEFORE INSERT ON erp_audit_events WHEN NEW.action='shipment.tracked' BEGIN SELECT RAISE(ABORT,'audit down'); END");
+  await f.call('/erp/shipments/track', { id, interventionReason: 'Pervaiz is away today' }, 'Anas').catch(() => {});
+  assert.equal(row(f, id).status, 'not_checked'); assert.equal(row(f, id).last_status_json, null); assert.equal(trackAudits(f).length, 0);
+});
+test('a bill of lading shorter than 3 characters after stripping spaces is refused', async () => {
+  const f = await fixture(); assert.equal((await attach(f, ' a b ')).status, 422);
+});
+test('a slow provider is reported as an ambiguous timeout', async () => {
+  const { trackUnit } = await import('../server/datalooplabs.mjs'), account = { base_url: 'https://provider.test/v1', track_path: '/t', contract_verified_at: 1, contract_json: JSON.stringify({ request: JSON.parse(CONTRACT).request, response: JSON.parse(CONTRACT).response }) };
+  await assert.rejects(trackUnit({ DATALOOPLABS_API_KEY: KEY }, account, { identifier: 'MSCUBL1234', identifier_type: 'bol' }, { timeoutMs: 20, fetch: (u, i) => new Promise((_, rej) => i.signal.addEventListener('abort', () => rej(new Error('aborted'))) ) }), e => e.kind === 'ambiguous_timeout');
+});
