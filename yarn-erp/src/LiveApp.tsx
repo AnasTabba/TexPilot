@@ -248,6 +248,7 @@ export default function LiveApp() {
   const [inbox, setInbox] = useState<Inbox>({ notifications: [], unread: 0 });
   const [chatUnread, setChatUnread] = useState(0);
   const [toast, setToast] = useState<Notice | null>(null); const inboxSeen = useRef<number | null>(null);
+  const workspaceSnapshot = useRef('');
   const dismissToast = useCallback(() => setToast(null), []);
   const [history, setHistory] = useState<StockMovement[]>([]); const [moreHistory, setMoreHistory] = useState(true);
   const [historyBusy, setHistoryBusy] = useState(false); 
@@ -260,7 +261,7 @@ export default function LiveApp() {
     sessionLocked.current = true; requestSequence.current++;
     menuDialog.current?.close(); setState(null); setAuthNeeded(true); setLoading(false); setRefreshing(false);
     setError(''); setNotice(''); setAction(null); setHistory([]); setMoreHistory(true);
-    setLastResult(null); setMatches([]); setQuery(''); setIntegration(''); setInbox({ notifications: [], unread: 0 }); inboxSeen.current = null; setToast(null);
+    setLastResult(null); setMatches([]); setQuery(''); setIntegration(''); setInbox({ notifications: [], unread: 0 }); inboxSeen.current = null; workspaceSnapshot.current = ''; setToast(null);
     if (!preserveRoute) location.hash = '/dashboard';
     if (logoutRequest.current) return logoutRequest.current;
     setEndingSession(true);
@@ -281,16 +282,18 @@ export default function LiveApp() {
     try {
       const result = await api<WorkspaceState>('/workspace');
       if (sequence !== requestSequence.current || sessionLocked.current) return;
-      setState(result); setAuthNeeded(false); setSavedAt(Date.now()); setError('');
+      const snapshot = JSON.stringify(result);
+      if (snapshot !== workspaceSnapshot.current) { workspaceSnapshot.current = snapshot; setState(result); }
+      setAuthNeeded(false); setSavedAt(Date.now()); setError('');
       // The inbox rides the same refresh; a failed read keeps the last count rather than blocking the workspace.
-      void portal<Inbox>('/notifications').then(next => { if (sequence === requestSequence.current && !sessionLocked.current) setInbox(next); }, () => {});
+      void portal<Inbox>('/notifications').then(next => { if (sequence === requestSequence.current && !sessionLocked.current) setInbox(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next); }, () => {});
     } catch (error) {
       if (sequence !== requestSequence.current) return;
       if (error instanceof InventoryError && error.status === 401) { sessionLocked.current = true; setState(null); setAuthNeeded(true); }
       setError(errorMessage(error));
     } finally { if (sequence === requestSequence.current) { setLoading(false); setRefreshing(false); } }
   }, []);
-  useEffect(() => { void refresh(); const interval = setInterval(() => { if (!document.hidden) void refresh(true); }, 10000); const focus = () => { if (!document.hidden) void refresh(true); }; window.addEventListener('focus', focus); document.addEventListener('visibilitychange', focus); return () => { clearInterval(interval); requestSequence.current++; window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus); }; }, [refresh]);
+  useEffect(() => { void refresh(); const interval = setInterval(() => { if (!document.hidden) void refresh(true); }, 30000); const focus = () => { if (!document.hidden) void refresh(true); }; window.addEventListener('focus', focus); document.addEventListener('visibilitychange', focus); return () => { clearInterval(interval); requestSequence.current++; window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus); }; }, [refresh]);
   // Other people's changes raise notices: poll the inbox lightly, toast when unread rises, and refresh the workspace so the new data shows. Skipped while hidden or signed out.
   useEffect(() => {
     const check = () => {
@@ -298,8 +301,8 @@ export default function LiveApp() {
       const sequence = requestSequence.current;
       void portal<Inbox>('/notifications').then(next => {
         if (sequence !== requestSequence.current || sessionLocked.current) return;
-        const previous = inboxSeen.current; inboxSeen.current = next.unread; setInbox(next);
-        void portal<{ unread: number }>('/chat').then(chat => setChatUnread(chat.unread), () => {});
+        const previous = inboxSeen.current; inboxSeen.current = next.unread; setInbox(current => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+        void portal<{ unread: number }>('/chat/unread').then(chat => setChatUnread(current => current === chat.unread ? current : chat.unread), () => {});
         if (previous !== null && next.unread > previous) { setToast(next.notifications.find(n => n.status === 'unread') ?? null); void refresh(true); }
       }, () => { /* A failed poll keeps the last inbox; the next tick retries. */ });
     };
@@ -310,25 +313,57 @@ export default function LiveApp() {
   }, [refresh]);
   // The chat badge shows as soon as someone signs in, not only after the first 20 s poll.
   const signedInId = state?.member.user_id;
-  useEffect(() => { if (signedInId) void portal<{ unread: number }>('/chat').then(chat => setChatUnread(chat.unread), () => {}); }, [signedInId]);
+  useEffect(() => { if (signedInId) void portal<{ unread: number }>('/chat/unread').then(chat => setChatUnread(current => current === chat.unread ? current : chat.unread), () => {}); }, [signedInId]);
   useEffect(() => { const update = () => { menuDialog.current?.close(); const alias = aliases[location.hash.split('/')[1]]; if (alias) setView(alias[1]); setRoute(routeFromHash()); setHash(location.hash); setSelectedId(lotFromHash()); setAction(null); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
   useEffect(() => { const network = () => { setOnline(navigator.onLine); void refresh(true); }; window.addEventListener('online', network); window.addEventListener('offline', network); return () => { window.removeEventListener('online', network); window.removeEventListener('offline', network); }; }, [refresh]);
   // A form or reversal opens at its top, not wherever the page was scrolled to when it was asked for.
   useLayoutEffect(() => { if (action) window.scrollTo({ top: 0, behavior: 'instant' }); }, [action]);
   // The white pill in both navs glides to the current tab (yarnflow.css reads --glide-*); segmented controls glide the same way.
   useLayoutEffect(() => {
-    // Re-measure whenever a nav changes size: the window, and the web font arriving after first paint.
-    const watch = new ResizeObserver(() => place());
-    const place = () => document.querySelectorAll<HTMLElement>('.live-sidebar nav, .live-bottom-nav, .live-segments').forEach(nav => {
-      watch.observe(nav);
+    const selector = '.live-sidebar nav, .live-bottom-nav, .live-segments';
+    const known = new Map<HTMLElement, string>();
+    const pending = new Set<HTMLElement>();
+    let frame = 0;
+    const watch = new ResizeObserver(entries => entries.forEach(entry => place(entry.target as HTMLElement)));
+    const flush = () => {
+      frame = 0;
+      pending.forEach(nav => {
+        if (!nav.isConnected) return;
+        const tab = nav.querySelector<HTMLElement>('.active, button[aria-pressed="true"]');
+        if (tab) {
+          nav.style.setProperty('--glide-w', `${tab.offsetWidth}px`); nav.style.setProperty('--glide-h', `${tab.offsetHeight}px`);
+          nav.style.setProperty('--glide-x', `${tab.offsetLeft}px`); nav.style.setProperty('--glide-y', `${tab.offsetTop}px`);
+        }
+        nav.dataset.glide = 'on';
+      });
+      pending.clear();
+    };
+    const place = (nav: HTMLElement) => {
       const tab = nav.querySelector<HTMLElement>('.active, button[aria-pressed="true"]');
-      nav.style.setProperty('--glide-w', (tab?.offsetWidth || 0) + 'px'); nav.style.setProperty('--glide-h', (tab?.offsetHeight || 0) + 'px');
-      if (tab) { nav.style.setProperty('--glide-x', tab.offsetLeft + 'px'); nav.style.setProperty('--glide-y', tab.offsetTop + 'px'); }
-      requestAnimationFrame(() => { nav.dataset.glide = 'on'; });
+      const signature = tab ? `${nav.childElementCount}:${tab.offsetWidth}:${tab.offsetHeight}:${tab.offsetLeft}:${tab.offsetTop}` : `${nav.childElementCount}:none`;
+      if (known.get(nav) === signature && nav.dataset.glide === 'on') return;
+      known.set(nav, signature);
+      pending.add(nav);
+      if (!frame) frame = requestAnimationFrame(flush);
+    };
+    const discover = () => {
+      const current = new Set(document.querySelectorAll<HTMLElement>(selector));
+      known.forEach((_signature, nav) => { if (!current.has(nav)) { known.delete(nav); pending.delete(nav); watch.unobserve(nav); } });
+      current.forEach(nav => { if (!known.has(nav)) watch.observe(nav); place(nav); });
+    };
+    const flips = new MutationObserver(records => {
+      for (const record of records) {
+        const target = record.target instanceof Element ? record.target : record.target.parentElement;
+        const nav = target?.closest<HTMLElement>(selector);
+        if (nav) { place(nav); continue; }
+        if (record.type === 'attributes') continue;
+        const containsNav = (node: Node) => node instanceof Element && (node.matches(selector) || !!node.querySelector(selector));
+        if ([...record.addedNodes, ...record.removedNodes].some(containsNav)) discover();
+      }
     });
-    // Tabs inside a page (Procurement, Sales, the portals) switch without a route change, and segmented controls mount after this runs: follow those too.
-    const flips = new MutationObserver(place); flips.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-pressed', 'class'] });
-    place(); return () => { watch.disconnect(); flips.disconnect(); };
+    flips.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-pressed', 'class'] });
+    discover();
+    return () => { watch.disconnect(); flips.disconnect(); if (frame) cancelAnimationFrame(frame); };
   }, []);
   function navigate(to: string, lotId = '') { menuDialog.current?.close(); const alias = aliases[to]; if (alias) { to = alias[0]; setView(alias[1]); } else if (to === 'inventory' && !lotId) setView('all'); location.hash = '/' + to + (lotId ? '/' + lotId : ''); setRoute(to); setSelectedId(lotId); setAction(null); setMatches([]); setQuery(''); setNotice(''); window.scrollTo({ top: 0, behavior: 'instant' }); }
   async function saved(message: string, lotId?: string) { setAction(null); if (lotId) navigate('inventory', lotId); setNotice(message); await refresh(); }
