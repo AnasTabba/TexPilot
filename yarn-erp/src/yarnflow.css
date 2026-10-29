@@ -889,6 +889,7 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
 .yf-signin-step > .live-form .live-panel-heading { margin-bottom: clamp(8px, 2cqh, 18px); }
 .yf-signin-step > .live-form .live-actions { margin-top: clamp(10px, 2.4cqh, 20px); }
 .yf-signin-ask, .yf-supplier-entry { justify-self: start; display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; }
+.yf-portal-entries { display: flex; flex-wrap: wrap; gap: 0 28px; }
 .yf-signin-back { justify-self: start; display: inline-flex; align-items: center; gap: 6px; }
 .yf-signin-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: var(--warn-bg); color: var(--warn); }
 .yf-signin-sent .button { justify-self: start; margin-top: 10px; }

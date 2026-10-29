@@ -36,7 +36,10 @@ export default function SignIn({ onSignedIn }: { onSignedIn: () => Promise<void>
         {loadError && <p className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{t(loadError)}<button className="live-text-button" onClick={() => setRetry(n => n + 1)}><RefreshCw size={16} aria-hidden="true" />{t('Retry', 'دوبارہ کوشش کریں')}</button></p>}
         {!list && !loadError && <p role="status" className="live-muted">{t('Loading names…', 'نام لوڈ ہو رہے ہیں…')}</p>}
         {list && <ul className="yf-people">{list.people.map(name => <li key={name}><button className="yf-person" onClick={() => setStep({ at: 'pin', name })}><Avatar name={name} /><strong>{name}</strong><ChevronRight size={20} aria-hidden="true" /></button></li>)}</ul>}
-        <a className="live-text-button yf-supplier-entry" href="#/supplier">{t('Supplier sign in or register', 'سپلائر سائن اِن یا رجسٹریشن')}</a>
+        <div className="yf-portal-entries">
+          <a className="live-text-button yf-supplier-entry" href="#/supplier">{t('Supplier sign in or register', 'سپلائر سائن اِن یا رجسٹریشن')}</a>
+          <a className="live-text-button yf-supplier-entry" href="#/buyer">{t('Buyer sign in or register', 'خریدار سائن اِن یا رجسٹریشن')}</a>
+        </div>
       </div>}
       {step.at === 'pin' && <PinPad key={step.name} name={step.name} onBack={back} onSignedIn={onSignedIn} />}
     </section>

@@ -27,7 +27,6 @@ const invoices: Section = { id: 'invoices', en: 'Invoices', ur: 'انوائسز'
 const dispatchRequests: Section = { id: 'dispatch-requests', en: 'Dispatch requests', ur: 'ڈسپیچ درخواستیں', icon: Truck, tabs: [{ id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'all', en: 'All', ur: 'سب' }] };
 const dispatches: Section = { id: 'dispatches', en: 'Dispatches', ur: 'ڈسپیچز', icon: Truck, tabs: [{ id: 'all', en: 'All', ur: 'سب' }, { id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'approved', en: 'Approved', ur: 'منظور شدہ' }, { id: 'on_hold', en: 'On hold', ur: 'روکی گئی' }, { id: 'dispatched', en: 'Dispatched', ur: 'روانہ' }, { id: 'delivered', en: 'Delivered', ur: 'پہنچائی گئی' }] };
 const newDispatch: Section = { id: 'new-dispatch', en: 'New dispatch', ur: 'نئی ڈسپیچ', icon: PackagePlus };
-const dispatchHistory: Section = { id: 'history', en: 'History', ur: 'ہسٹری', icon: History };
 const requests: Section = { id: 'requests', en: 'Requests', ur: 'درخواستیں', icon: ClipboardList, tabs: [{ id: 'queries', en: 'Stock queries', ur: 'اسٹاک کی درخواستیں' }, { id: 'stock-issues', en: 'Stock issues', ur: 'اسٹاک کے مسائل' }] };
 const report: Section = { id: 'report', en: 'Report', ur: 'رپورٹ', icon: FileText };
 
@@ -35,8 +34,8 @@ export const NAV: Record<Role, Section[]> = {
   admin: [dashboard, scan, approvals, claims, stock, procurement, buyers, adminActivity, reports, analytics, team],
   purchase_manager: [dashboard, scan, procurement],
   sales_manager: [dashboard, scan, buyers, buyerRfqs, invoices, dispatchRequests, analytics],
-  dispatch: [dashboard, scan, dispatches, newDispatch, dispatchHistory],
-  quality_inspector: [dashboard, scan, lots, stock, history],
+  dispatch: [dashboard, scan, dispatches, newDispatch],
+  quality_inspector: [dashboard, scan, lots, stock],
   supervisor: [dashboard, scan, reviews, stock, requests, report, history],
 };
 export const COMMON: Section[] = [
