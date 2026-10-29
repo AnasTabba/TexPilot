@@ -57,7 +57,7 @@ test.describe('Shared inventory', () => {
 
   test('another phone signs in with its own PIN and sees the same stock', async ({ browser, page }) => {
     await signIn(page);
-    await apiPost(page, '/erp/admin/users', { name: 'Nadia', pin: '1357', role: 'supervisor' });
+    await apiPost(page, '/erp/admin/users', { name: 'Nadia', pin: '1357', role: 'dispatch' });
     await page.goto('/#/inventory');
     await expect(page.getByRole('button', { name: /Batch LOT-1024/ })).toBeVisible();
     const friend = await browser.newContext({ baseURL: origin, viewport: { width: 390, height: 844 } });

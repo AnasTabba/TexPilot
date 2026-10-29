@@ -131,8 +131,9 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
   await page.goto('/');
   await page.waitForSelector('.yf-people');
 
-  await expectTarget(page.locator('.yf-language'), 'sign-in language switch');
-  await expectTarget(page.locator('.yf-signin-ask'), 'ask for an account');
+  for (const button of await page.locator('.yf-language button').all()) await expectTarget(button, 'sign-in language choice');
+  for (const button of await page.locator('.yf-person').all()) await expectTarget(button, 'sign-in person');
+  await expectTarget(page.locator('.yf-supplier-entry'), 'supplier sign-in link');
   await page.getByRole('button', { name: 'Anas', exact: true }).click();
   await expectTarget(page.locator('.yf-signin-back'), 'back to people');
   await expectTarget(page.locator('.yf-keypad button').first(), 'PIN keypad key');

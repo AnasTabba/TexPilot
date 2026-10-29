@@ -50,7 +50,7 @@ export function LanguageSelect() {
   const { language, setLanguage } = useLanguage();
   return <div className="yf-language" role="group" aria-label="Language" dir="ltr">
     <span className="yf-language-globe"><Globe2 size={17} aria-hidden="true" /></span>
-    <button type="button" aria-pressed={language === 'en'} aria-label="Switch language to English" onClick={() => setLanguage('en')}>EN</button>
-    <button type="button" aria-pressed={language === 'ur'} aria-label="Switch language to Urdu" onClick={() => setLanguage('ur')}>اردو</button>
+    <button type="button" aria-pressed={language === 'en'} aria-label="EN — Switch language to English" onClick={() => setLanguage('en')}>EN</button>
+    <button type="button" aria-pressed={language === 'ur'} aria-label="اردو — Switch language to Urdu" onClick={() => setLanguage('ur')}>اردو</button>
   </div>;
 }
