@@ -1,0 +1,5 @@
+.buyer-rating-history { list-style:none; margin:8px 0 0; padding:0; display:grid; gap:0; }
+.buyer-rating-history li { padding:12px 0; border-top:1px solid var(--line); }
+.buyer-rating-history p { margin:6px 0 0; }
+.buyer-rating-scores { display:flex; gap:14px; flex-wrap:wrap; font-size:14px; margin-top:4px; }
+.buyer-rating-scores strong { font-weight:600; }

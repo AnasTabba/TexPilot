@@ -17,8 +17,9 @@ import { stockApi, approvalHandlers as stockHandlers } from './stock.mjs';
 import { readPhoto } from './photos.mjs';
 import { analyticsApi } from './analytics.mjs';
 import { dispatchApi, approvalHandlers as dispatchHandlers } from './dispatch.mjs';
+import { buyerRatingsApi } from './buyer-ratings.mjs';
 import { chatApi } from './chat.mjs';
-const erp = { admin: adminApi, analytics: analyticsApi, notifications: notificationsApi, sales: salesApi, shipments: trackingApi, tracking: trackingApi, qc: qualityApi, stock: stockApi, dispatch: dispatchApi, chat: chatApi };
+const erp = { admin: adminApi, analytics: analyticsApi, notifications: notificationsApi, sales: salesApi, products: salesApi, shipments: trackingApi, tracking: trackingApi, qc: qualityApi, stock: stockApi, dispatch: dispatchApi, 'buyer-ratings': buyerRatingsApi, chat: chatApi };
 erp.approvals = (rq, env, m, p, d) => approvalsApi(rq, env, m, p, d, { ...approvalHandlers, ...qualityHandlers, ...stockHandlers, ...dispatchHandlers });
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
@@ -157,9 +158,9 @@ async function route(request, env) {
     return json({ inspections, qualityEvents, photos, nextOffset: [inspections, qualityEvents, photos].some(items => items.length === 100) ? offset + 100 : null });
   }
   if (path === '/api/products' && data) {
-    role(member, data, 'supervisor', 'purchase_manager'); keys(data, ['sku', 'name', 'barcode', 'interventionReason']);
-    const item = { id: uuid(), sku: text(data.sku, 'SKU', 1, 80), name: text(data.name, 'Material name', 2, 160), barcode: data.barcode ? text(data.barcode, 'Barcode', 1, 120) : null };
-    try { await statement(db, 'INSERT INTO products(id,workspace_id,sku,name,barcode,created_at) VALUES(?,?,?,?,?,?)', item.id, w, item.sku, item.name, item.barcode, Date.now()).run(); }
+    role(member, data, 'supervisor', 'purchase_manager'); keys(data, ['sku', 'name', 'barcode', 'productType', 'interventionReason']);
+    const item = { id: uuid(), sku: text(data.sku, 'SKU', 1, 80), name: text(data.name, 'Material name', 2, 160), barcode: data.barcode ? text(data.barcode, 'Barcode', 1, 120) : null, product_type: data.productType == null ? null : text(data.productType, 'Product type', 1, 60) };
+    try { await statement(db, 'INSERT INTO products(id,workspace_id,sku,name,barcode,product_type,created_at) VALUES(?,?,?,?,?,?,?)', item.id, w, item.sku, item.name, item.barcode, item.product_type, Date.now()).run(); }
     catch { fail(409, 'That SKU or barcode already exists in this workspace.'); }
     return json(item, 201);
   }
