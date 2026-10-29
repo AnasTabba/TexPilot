@@ -33,8 +33,8 @@ export async function salesBlock(db, workspaceId, [from, to], now) {
     WHERE workspace_id=? AND issued_at BETWEEN ? AND ? GROUP BY period, currency ORDER BY period, currency`, workspaceId, from, to);
   const byBuyer = await all(db, `SELECT b.name AS buyer, v.currency, SUM(${NET}) AS totalMinor FROM invoice_balances v
     JOIN buyers b ON b.id=v.buyer_id WHERE v.workspace_id=? AND v.issued_at BETWEEN ? AND ? GROUP BY v.buyer_id, v.currency ORDER BY b.name, v.currency`, workspaceId, from, to);
-  // One row per invoice-product pair: a multi-line invoice attributes the same net under each named product.
-  const byProductRows = await all(db, `SELECT p.name AS product, v.currency, SUM(${NET}) AS totalMinor FROM sales_order_lines l
+  // One row per distinct invoice-product pair: repeated lines of one product count the invoice once; a multi-product invoice attributes the same net under each named product.
+  const byProductRows = await all(db, `SELECT p.name AS product, v.currency, SUM(${NET}) AS totalMinor FROM (SELECT DISTINCT sales_order_id, product_id FROM sales_order_lines) l
     JOIN sales_orders o ON o.id=l.sales_order_id JOIN invoice_balances v ON v.sales_order_id=o.id LEFT JOIN products p ON p.id=l.product_id
     WHERE v.workspace_id=? AND v.issued_at BETWEEN ? AND ? GROUP BY p.name, v.currency ORDER BY p.name IS NULL, p.name, v.currency`, workspaceId, from, to);
   const settled = await one(db, `SELECT COALESCE(SUM(${PAID}),0) AS paid, COALESCE(SUM(${OWED} AND ${OVERDUE}),0) AS overdue,
@@ -103,10 +103,11 @@ export async function analyticsApi(request, env, member, path) {
   if (path === '/api/erp/analytics/purchase') {
     viewer(member, 'purchase_manager');
     const statusCounts = await rfqStatusCounts(db, workspaceId, range, now);
-    const bids = (await one(db, 'SELECT COUNT(*) AS n FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id WHERE r.workspace_id=? AND r.created_at BETWEEN ? AND ?', workspaceId, ...range)).n;
+    // Draft and cancelled RFQs never took bids in earnest, so they stay out of the bid average.
+    const bids = (await one(db, "SELECT COUNT(*) AS n FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id WHERE r.workspace_id=? AND r.created_at BETWEEN ? AND ? AND r.status!='draft' AND r.cancelled_at IS NULL", workspaceId, ...range)).n;
     const suppliers = (await all(db, `SELECT id, name FROM suppliers WHERE workspace_id=?
       AND status IN ('pending','approved','rejected','suspended') ORDER BY name COLLATE NOCASE LIMIT 500`, workspaceId));
-    const rfqs = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
+    const rfqs = Object.values(statusCounts).reduce((sum, count) => sum + count, 0) - statusCounts.draft - statusCounts.cancelled;
     return json({ suppliers: await Promise.all(suppliers.map(async supplier => ({ ...supplier, ...await supplierPerformance(db, supplier.id) }))),
       bidding: { rfqs, bids,
         averageBidsPerRfq: rfqs ? Math.round(bids / rfqs * 100) / 100 : null,
@@ -119,7 +120,7 @@ export async function analyticsApi(request, env, member, path) {
       purchasing: { rfqs: statusCounts, awards: statusCounts.awarded,
         // PO money groups by the frozen terms currency, never the currently configured factory currency.
         totalsByCurrency: await all(db, `SELECT json_extract(terms_snapshot,'$.currency') AS currency, SUM(total_minor) AS poTotalMinor
-          FROM supplier_purchase_orders WHERE workspace_id=? AND created_at BETWEEN ? AND ? GROUP BY currency ORDER BY currency`, workspaceId, ...range) },
+          FROM supplier_purchase_orders WHERE workspace_id=? AND status!='cancelled' AND created_at BETWEEN ? AND ? GROUP BY currency ORDER BY currency`, workspaceId, ...range) },
       quality: await qualityBlock(db, workspaceId, range),
       inventory: await inventoryBlock(db, workspaceId, range),
       sales: await salesBlock(db, workspaceId, range, now),
