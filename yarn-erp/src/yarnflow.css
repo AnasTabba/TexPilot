@@ -1071,6 +1071,30 @@ html[dir="rtl"] .yf-signin-rail .live-brand { direction: ltr; }
 }
 
 .yf-dash-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
-.yf-dash-wide { grid-column: 1 / -1; min-width: 0; }
 .yf-dash-grid > * { min-width: 0; }
 @media (max-width: 900px) { .yf-dash-grid { grid-template-columns: minmax(0, 1fr); } }
+.yf-dash-item { position: relative; min-width: 0; }
+.yf-dash-item[data-size="full"] { grid-column: 1 / -1; }
+.yf-dash-item.is-resizing { animation: yf-dash-settle 300ms var(--ease-out); }
+@keyframes yf-dash-settle { from { opacity: 0.6; transform: scale(0.985); } to { opacity: 1; transform: none; } }
+.yf-dash-size {
+  position: absolute; top: 12px; right: 12px; z-index: 2;
+  display: grid; place-items: center; width: 32px; height: 32px;
+  border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink-2); cursor: pointer;
+  transition: transform 160ms var(--ease-out), background-color 150ms ease, color 150ms ease;
+}
+.yf-dash-size:hover { background: rgb(79 91 213 / 0.1); color: #4f5bd5; }
+.yf-dash-size:active { transform: scale(0.94); }
+.yf-dash-size:focus-visible { outline: 3px solid #4f5bd5; outline-offset: 2px; }
+.yf-dash-item .sw-head, .yf-dash-item .stw-head, .yf-dash-item .nw-head { padding-right: 40px; }
+@media (max-width: 900px) {
+  .yf-dash-grid { grid-template-columns: minmax(0, 1fr); }
+  .yf-dash-item[data-size] { grid-column: auto; }
+  .yf-dash-size { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yf-dash-item.is-resizing { animation: none; }
+  .yf-dash-size, .yf-dash-size:active { transition: none; transform: none; }
+}
+/* A widget the role cannot see renders nothing: drop its slot and size button too. */
+.yf-dash-item:not(:has(> :not(.yf-dash-size))) { display: none; }
