@@ -1,8 +1,8 @@
 import { all, one, query, json, fail, keys, recordId, role, viewer } from './erp-utils.mjs';
 import { settingsOf } from './governance.mjs';
+import { ROLES } from './auth.mjs';
 
 export const EVENTS = ['supplier.pending','buyer.pending','buyer_rfq.received','bid.received','bidding.closed','award.pending_approval','lot.ready','inspection.submitted','inspection.decided','approval.pending','approval.decided','claim.created','claim.decided','stock_query.created','stock_issue.raised','payment.due_soon','payment.due_today','payment.overdue','dispatch.approval_requested','dispatch.approved','dispatch.held','dispatch.hold_notice','reminder'];
-const ROLES = ['admin','purchase_manager','quality_inspector','supervisor','sales_manager','dispatch'];
 // SQL generates a different UUID for every recipient of an INSERT SELECT.
 const UUID = "lower(hex(randomblob(4))||'-'||hex(randomblob(2))||'-4'||substr(hex(randomblob(2)),2)||'-8'||substr(hex(randomblob(2)),2)||'-'||hex(randomblob(6)))";
 const COLUMNS = 'id,workspace_id,user_id,role,event,object_type,object_id,label,status,created_by,created_at,updated_at,read_at,since';
