@@ -5,6 +5,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { inventoryApi } from '../server/inventory.mjs';
 import { sqliteBinding } from '../server/sqlite.mjs';
 import { seedRows, userRow } from '../server/auth.mjs';
+import { settingsOf } from '../server/governance.mjs';
+import { recordAcceptance } from '../server/sales.mjs';
 
 export const dir = new URL('../drizzle/', import.meta.url);
 export const legacyMigrations = ['0000_inventory.sql','0001_users.sql','0002_procurement.sql','0003_purchase_receipts.sql'];
@@ -46,7 +48,32 @@ export async function portalFixture(database) {
     const row = await userRow({ workspaceId, name, role, pin: '2468', createdBy: adminId });
     sql.prepare(row.sql).run(...row.args); return row.args[0];
   }
-  return { sql, env, workspaceId, adminId, person, login, call, member: async name => (await call('/workspace', undefined, name)).data.member };
+  async function insertBuyer({ status = 'pending' } = {}) {
+    const id = crypto.randomUUID(), now = Date.now();
+    sql.prepare('INSERT INTO buyers(id,workspace_id,name,contact_name,email,phone,city,notes,status,version,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,1,?,?,?)')
+      .run(id, workspaceId, `Buyer ${id.slice(0, 8)}`, 'Buyer Contact', `${id.slice(0, 8)}@buyer.test`, '+923001234567', 'Lahore', '', status, 'buyer:self-registered', now, now);
+    return id;
+  }
+  async function insertBuyerRfq({ buyerId, quantityMilli = 100000, unit = 'kg' }) {
+    const id = crypto.randomUUID(), now = Date.now();
+    sql.prepare(`INSERT INTO buyer_purchase_orders(id,workspace_id,buyer_id,reference,specifications,quantity_milli,unit,requested_delivery_at,payment_terms,status,source,request_hash,created_by,actor_type,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,?,'entered','buyer_portal',?,?,'buyer',?,?)`)
+      .run(id, workspaceId, buyerId, `RFQ-${id.slice(0, 8)}`, 'Combed cotton single jersey, 180 GSM', quantityMilli, unit, now + 21 * 86400000, 'Net 30 days after delivery', id, `buyer:${buyerId}`, now, now);
+    return id;
+  }
+  // An approved buyer, a sent quotation and its recorded acceptance, ready for noteSale.
+  async function acceptedQuote({ priceMinor = 125000, creditDays = 30 } = {}) {
+    const buyerId = await insertBuyer({ status: 'active' }), rfqId = await insertBuyerRfq({ buyerId });
+    const revisionId = crypto.randomUUID(), now = Date.now(), { currency } = await settingsOf(env.DB, workspaceId);
+    sql.prepare(`INSERT INTO sales_quote_revisions(id,workspace_id,buyer_po_id,buyer_id,version,quantity_milli,unit,price_minor,currency,specifications,requested_delivery_at,payment_terms,credit_days,status,created_by,created_at,updated_at)
+      SELECT ?,workspace_id,id,buyer_id,1,quantity_milli,unit,?,?,specifications,requested_delivery_at,payment_terms,?,'draft',?,?,? FROM buyer_purchase_orders WHERE id=?`)
+      .run(revisionId, priceMinor, currency, creditDays, adminId, now, now, rfqId);
+    sql.prepare("UPDATE sales_quote_revisions SET status='sent' WHERE id=?").run(revisionId);
+    sql.prepare("UPDATE buyer_purchase_orders SET status='quoted',sent_revision_id=?,sent_version=1 WHERE id=?").run(revisionId, rfqId);
+    await recordAcceptance(env.DB, { workspaceId, revisionId, version: 1, buyerId, acceptedBy: 'Buyer Contact', now });
+    return { buyerId, rfqId, revisionId };
+  }
+  return { sql, env, workspaceId, adminId, person, login, call, member: async name => (await call('/workspace', undefined, name)).data.member, insertBuyer, insertBuyerRfq, acceptedQuote };
 }
 
 // Deliberately uses the pre-portal schema, including real commercial and immutable data.

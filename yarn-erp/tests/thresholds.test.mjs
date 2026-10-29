@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { portalFixture } from './portal-fixture.mjs';
 import { THRESHOLDS, DEFAULT_SETTINGS, thresholdOf, settingsOf } from '../server/governance.mjs';
+import { noteSale, recordAcceptance } from '../server/sales.mjs';
 const thresholds='/erp/admin/thresholds', settings='/erp/admin/settings';
 const rows=(f,table)=>f.sql.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all();
 test('only admin sets each of the four thresholds; history records who, old, new and when',async()=>{
@@ -115,26 +116,45 @@ test('database guards cover direct currency writes, commercial inserts and thres
  assert.equal((await changeCurrency(f,'PKR')).status,200);
  assert.throws(()=>f.sql.exec(`UPDATE settings SET value_json='"USD"' WHERE key='currency'`),/Close open bids/);
  assert.throws(()=>f.sql.exec(`UPDATE supplier_bids SET currency='USD'`),/factory currency/);
- const g=await portalFixture(),invoice=commercial(g,'invoice');assert.equal((await changeCurrency(g)).status,200);assert.throws(invoice.write,/factory currency/);
+ const g=await portalFixture(),invoice=commercial(g,'invoice');assert.equal((await changeCurrency(g)).status,200);assert.throws(()=>insert(g,'invoices',{id:invoice.id,workspace_id:g.workspaceId,number:invoice.id,sales_order_id:invoice.id,revision_id:invoice.id,buyer_id:invoice.id,lines_json:'[]',total_minor:100,currency:'USD',issued_at:Date.now()}),/accepted quotation currency/);invoice.write();assert.equal(g.sql.prepare('SELECT currency FROM invoices WHERE id=?').get(invoice.id).currency,'PKR');
  const h=await portalFixture(),batch=h.env.DB.batch;await h.login('Anas');
  h.env.DB.batch=async statements=>{h.env.DB.batch=batch;assert.equal((await changeCurrency(h)).status,200);return batch(statements);};
  assert.equal((await h.call(thresholds,{type:'purchase',value:100})).status,409);assert.equal(rows(h,'thresholds').length,0);assert.equal(rows(h,'threshold_history').length,0);assert.equal(rows(h,'erp_audit_events').length,1);
 });
 test('sales reads configured currency and drafts quotations after a currency change',async()=>{
  const f=await portalFixture(),c=commercial(f,'quote');
- assert.equal((await f.call('/erp/sales')).data.currency,'PKR');
+ assert.equal((await f.call('/erp/sales')).data.settings.currency,'PKR');
  assert.equal((await changeCurrency(f)).status,200);
  await f.person('Sales','sales_manager');
  const overview=await f.call('/erp/sales',undefined,'Sales');
- assert.equal(overview.status,200);assert.equal(overview.data.currency,'USD');
- const result=await f.call('/erp/sales/quotes',{id:crypto.randomUUID(),poId:c.id,priceMinor:100,currency:overview.data.currency,specifications:'Cotton yarn',requestedDeliveryAt:Date.now()+86400000,paymentTerms:'Net 30'},'Sales');
+ assert.equal(overview.status,200);assert.equal(overview.data.settings.currency,'USD');
+ const result=await f.call('/erp/sales/quotes',{id:crypto.randomUUID(),poId:c.id,priceMinor:100,specifications:'Cotton yarn',requestedDeliveryAt:Date.now()+86400000,paymentTerms:'Net 30',creditDays:30},'Sales');
  assert.equal(result.status,201);assert.equal(result.data.revision.currency,'USD');
 });
-test('quotation currency mismatch returns the currency error and rolls back audit',async()=>{
- const f=await portalFixture(),c=commercial(f,'quote');
- assert.equal((await changeCurrency(f)).status,200);
- const before=rows(f,'erp_audit_events');
- const result=await f.call('/erp/sales/quotes',{id:crypto.randomUUID(),poId:c.id,priceMinor:100,currency:'PKR',specifications:'Cotton yarn',requestedDeliveryAt:Date.now()+86400000,paymentTerms:'Net 30'});
+test('a currency change racing a quotation returns the currency error and rolls back its audit',async()=>{
+ const f=await portalFixture(),c=commercial(f,'quote');await f.login('Anas');
+ const before=rows(f,'erp_audit_events'),batch=f.env.DB.batch;
+ f.env.DB.batch=async statements=>{f.env.DB.batch=batch;assert.equal((await changeCurrency(f)).status,200);return batch(statements);};
+ const result=await f.call('/erp/sales/quotes',{id:crypto.randomUUID(),poId:c.id,priceMinor:100,specifications:'Cotton yarn',requestedDeliveryAt:Date.now()+86400000,paymentTerms:'Net 30',creditDays:30,interventionReason:'Covering for the sales manager'});
  assert.equal(result.status,409);assert.equal(result.data.error,'Use the factory currency. Reload to get the current currency.');
- assert.equal(rows(f,'sales_quote_revisions').length,0);assert.deepEqual(rows(f,'erp_audit_events'),before);
+ assert.equal(rows(f,'sales_quote_revisions').length,0);assert.equal(rows(f,'erp_audit_events').length,before.length+1);assert.equal(rows(f,'erp_audit_events').at(-1).action,'setting.changed');
+});
+test('credit notes settle an invoice for currency changes; superseded and cancelled quotations do not block',async()=>{
+ const f=await portalFixture();await f.person('Sales','sales_manager');const sales=await f.member('Sales');
+ const q=await f.acceptedQuote(),{invoice}=await noteSale(f.env.DB,sales,{id:crypto.randomUUID(),revisionId:q.revisionId});
+ const credit=amountMinor=>f.call('/erp/sales/credit-notes',{id:crypto.randomUUID(),invoiceId:invoice.id,amountMinor,reason:'Goods returned'},'Sales');
+ assert.equal((await changeCurrency(f)).status,409);
+ assert.equal((await credit(invoice.total_minor-1)).status,201);assert.equal((await changeCurrency(f)).status,409);
+ assert.equal((await credit(1)).status,201);
+ // v1 stays "sent" after v2 replaces it; once v2 is accepted neither blocks, and a cancelled RFQ's draft never does.
+ const buyerId=await f.insertBuyer({status:'active'}),rfqId=await f.insertBuyerRfq({buyerId}),revisions=[];
+ for(const price of [100,200]){const draft=await f.call('/erp/sales/quotes',{id:crypto.randomUUID(),poId:rfqId,priceMinor:price,specifications:'Cotton yarn',requestedDeliveryAt:Date.now()+86400000,paymentTerms:'Net 30',creditDays:30},'Sales');
+  assert.equal((await f.call('/erp/sales/quotes/send',{id:draft.data.revision.id},'Sales')).status,200);revisions.push(draft.data.revision);}
+ assert.equal((await changeCurrency(f)).status,409);
+ await recordAcceptance(f.env.DB,{workspaceId:f.workspaceId,revisionId:revisions[1].id,version:2,buyerId,acceptedBy:'Buyer Contact',now:Date.now()});
+ const other=await f.insertBuyer({status:'active'}),otherRfq=await f.insertBuyerRfq({buyerId:other});
+ assert.equal((await f.call('/erp/sales/quotes',{id:crypto.randomUUID(),poId:otherRfq,priceMinor:100,specifications:'Cotton yarn',requestedDeliveryAt:Date.now()+86400000,paymentTerms:'Net 30',creditDays:30},'Sales')).status,201);
+ assert.equal((await changeCurrency(f)).status,409,'a live draft blocks');
+ assert.equal((await f.call('/erp/sales/buyers/review',{id:other,status:'rejected',version:1,reason:'Company could not be verified'},'Sales')).status,200);
+ assert.equal((await changeCurrency(f)).status,200);
 });
