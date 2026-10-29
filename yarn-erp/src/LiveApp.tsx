@@ -248,18 +248,20 @@ export default function LiveApp() {
   // A form or reversal opens at its top, not wherever the page was scrolled to when it was asked for.
   useLayoutEffect(() => { if (action) window.scrollTo(0, 0); }, [action]);
   // The white pill in both navs glides to the current tab (yarnflow.css reads --glide-*); segmented controls glide the same way.
-  const shellReady = !loading && !!state?.member;
   useLayoutEffect(() => {
+    // Re-measure whenever a nav changes size: the window, and the web font arriving after first paint.
+    const watch = new ResizeObserver(() => place());
     const place = () => document.querySelectorAll<HTMLElement>('.live-sidebar nav, .live-bottom-nav, .live-segments').forEach(nav => {
+      watch.observe(nav);
       const tab = nav.querySelector<HTMLElement>('.active, button[aria-pressed="true"]');
       nav.style.setProperty('--glide-w', (tab?.offsetWidth || 0) + 'px'); nav.style.setProperty('--glide-h', (tab?.offsetHeight || 0) + 'px');
       if (tab) { nav.style.setProperty('--glide-x', tab.offsetLeft + 'px'); nav.style.setProperty('--glide-y', tab.offsetTop + 'px'); }
       requestAnimationFrame(() => { nav.dataset.glide = 'on'; });
     });
-    // Re-measure whenever a nav changes size: the window, and the web font arriving after first paint.
-    const watch = new ResizeObserver(place); document.querySelectorAll('.live-sidebar nav, .live-bottom-nav, .live-segments').forEach(n => watch.observe(n));
-    place(); return () => watch.disconnect();
-  }, [route, scanTab, shellReady]);
+    // Tabs inside a page (Procurement, Sales, the portals) switch without a route change, and segmented controls mount after this runs: follow those too.
+    const flips = new MutationObserver(place); flips.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-pressed', 'class'] });
+    place(); return () => { watch.disconnect(); flips.disconnect(); };
+  }, []);
   function navigate(to: string, lotId = '') { menuDialog.current?.close(); const alias = aliases[to]; if (alias) { to = alias[0]; setView(alias[1]); } else if (to === 'inventory' && !lotId) setView('all'); location.hash = '/' + to + (lotId ? '/' + lotId : ''); setRoute(to); setSelectedId(lotId); setAction(null); setMatches([]); setQuery(''); setNotice(''); window.scrollTo(0, 0); }
   async function saved(message: string, lotId?: string) { setAction(null); if (lotId) navigate('inventory', lotId); setNotice(message); await refresh(); }
   if (loading || endingSession) return <main className="live-loading" aria-busy="true"><Cone hue="#2f6fd6" size={48} /><h1>{endingSession ? t('Signing out…', 'سائن آؤٹ ہو رہا ہے…') : t("Opening inventory…")}</h1><p>{endingSession ? t('Your PIN is needed to open the workspace again.', 'ورک اسپیس دوبارہ کھولنے کے لیے پن درج کرنا ہوگا۔') : t("Loading inventory records.")}</p></main>;

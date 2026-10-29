@@ -197,3 +197,15 @@ test('admin legacy purchasing forms require intervention on every mutation, and 
  await expect(page.getByText('Waiting for admin approval.', { exact: false })).toBeVisible();
  await expect(page.locator('.erp-status').filter({ hasText: /^open$/ })).toBeVisible();
 });
+
+test('the dark pill follows the procurement tab that is pressed', async ({ page }) => {
+ await signIn(page, 'Anas');
+ await page.goto(origin + '/#/procurement');
+ const tabs = page.locator('.live-segments[aria-label="Procurement views"]');
+ await tabs.getByRole('button', { name: 'RFQs and bids' }).click();
+ await expect(tabs.getByRole('button', { name: 'RFQs and bids' })).toHaveAttribute('aria-pressed', 'true');
+ await expect.poll(() => tabs.evaluate(nav => {
+  const pressed = nav.querySelector<HTMLElement>('button[aria-pressed="true"]')!;
+  return nav.style.getPropertyValue('--glide-x') === pressed.offsetLeft + 'px' && nav.style.getPropertyValue('--glide-w') === pressed.offsetWidth + 'px';
+ })).toBe(true);
+});
