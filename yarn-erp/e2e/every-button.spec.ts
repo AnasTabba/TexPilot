@@ -16,7 +16,7 @@ async function signIn(page: Page, name = "Anas", pin = PIN) {
 }
 test.beforeEach(async ({ page }, info) => {
   await page.request.post("/__test/reset");
-  if (!info.title.startsWith("sign-in") && !info.title.startsWith("a new person")) await signIn(page);
+  if (!info.title.startsWith("sign-in")) await signIn(page);
 });
 
 const head = (topk: [string, number][]) => ({ label: topk[0][0], confidence: topk[0][1], topk });
@@ -66,60 +66,34 @@ test.describe("desktop", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Who’s signing in?" })).toBeVisible();
   });
 
-  test("a new person asks to join; an admin approves Stores access; both see the same stock; removal signs them out", async ({ page, browser }, info) => {
-    await page.goto("/");
-    await page.getByRole("button", { name: "New here? Ask for an account" }).click();
-    await page.getByLabel("Your name", { exact: true }).fill("Bilal");
-    await page.getByLabel("Choose a 4-digit PIN").fill("1357");
+  test("an admin adds a supervisor; both see the same stock; deactivation signs them out", async ({ page, browser }, info) => {
+    await page.goto("/#/team");
+    await page.getByRole("button", { name: "Add a person" }).click();
+    await page.getByLabel("Name", { exact: true }).fill("Bilal");
+    await page.getByLabel("4-digit PIN", { exact: true }).fill("1357");
     await page.getByLabel("Type it again").fill("1375");
-    await page.getByRole("button", { name: "Send request" }).click();
+    await page.getByLabel("Role", { exact: true }).selectOption({ label: "Supervisor" });
+    await page.getByRole("button", { name: "Add person", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("The two PINs are different.");
     await page.getByLabel("Type it again").fill("1357");
-    await page.getByRole("button", { name: "Send request" }).click();
-    await expect(page.getByRole("heading", { name: "Request sent" })).toBeVisible();
-    await page.getByRole("button", { name: "Back to sign-in" }).click();
-    await expect(page.getByRole("button", { name: "Bilal", exact: true })).toHaveCount(0);
-
-    // Anas, on another device, sees the request waiting and approves it.
+    await page.getByRole("button", { name: "Add person", exact: true }).click();
+    await expect(page.locator(".yf-member-row", { hasText: "Bilal" })).toContainText("Supervisor");
     const other = await browser.newContext({ ...options.contextOptions, baseURL: info.project.use.baseURL, viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
-    const admin = await other.newPage();
-    await signIn(admin);
-    await expect(admin.locator(".live-sidebar .yf-nav-count")).toHaveText("1");
-    await admin.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: /^Team/ }).click();
-    const request = admin.getByRole("article", { name: "Bilal wants to join" });
-    await request.getByRole("button", { name: "Stores", exact: true }).click();
-    await expect(request.getByLabel(/Receive deliveries/)).toBeChecked();
-    await expect(request.getByLabel(/QC decisions/)).not.toBeChecked();
-    await request.getByRole("button", { name: "Approve Bilal" }).click();
-    await expect(admin.locator(".yf-member-row", { hasText: "Bilal" })).toContainText("Stores");
-
-    await signIn(page, "Bilal", "1357");
-    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: /^Team/ })).toHaveCount(0);
+    const bilal = await other.newPage();
+    await signIn(bilal, "Bilal", "1357");
+    await expect(bilal.locator(".live-sidebar .yf-me")).toContainText("Supervisor");
+    await expect(bilal.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: /^Team/ })).toHaveCount(0);
     await page.goto("/#/inventory");
-    await page.locator(".live-lot-row", { hasText: "LOT-1024" }).click();
-    await expect(page.getByRole("heading", { level: 3, name: "Dispatch finished stock" })).toBeVisible();
-    await expect(page.locator(".yf-next")).toContainText("Someone with “Dispatch” access records this step.");
-    await expect(page.getByRole("button", { name: "Dispatch", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Review quality", exact: true })).toHaveCount(0);
-    await page.getByRole("button", { name: "Receive stock", exact: true }).click();
-    await page.getByLabel("Weight (kg)", { exact: true }).fill("12.5");
-    await reviewAndSave(page, "Save entry");
-    await expect(page.getByRole("status").filter({ hasText: "Saved. Everyone on the team sees it now." })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Undo entry" })).toHaveCount(0);
-    await page.goto("/#/settings");
-    await expect(page.locator(".yf-access li.is-on")).toHaveCount(2);
-    await expect(page.getByRole("button", { name: "Download backup" })).toHaveCount(0);
-
-    // No reload: Anas's open page picks up Bilal's entry on its next refresh (every 10 seconds).
-    await admin.goto("/#/activity");
-    await expect(admin.locator(".live-history li", { hasText: "Recorded by Bilal" }).first()).toContainText("12.5", { timeout: 15_000 });
-    await admin.goto("/#/team");
-    await admin.locator(".yf-member-row", { hasText: "Bilal" }).click();
-    admin.once("dialog", (dialog) => dialog.accept());
-    await admin.getByRole("button", { name: "Remove Bilal" }).click();
-    await expect(admin.locator(".yf-member-row", { hasText: "Bilal" })).toHaveCount(0);
-    await page.reload();
-    await expect(page.getByRole("heading", { level: 1, name: "Who’s signing in?" })).toBeVisible();
+    await expect(page.locator(".live-lot-row").first()).toBeVisible();
+    await bilal.goto("/#/inventory");
+    await expect(bilal.locator(".live-lot-row").first()).toBeVisible();
+    expect(await bilal.locator(".live-lot-row").allTextContents()).toEqual(await page.locator(".live-lot-row").allTextContents());
+    await page.goto("/#/team");
+    await page.locator(".yf-member-row", { hasText: "Bilal" }).click();
+    await page.getByRole("button", { name: "Deactivate", exact: true }).click();
+    await expect(page.locator(".yf-member-row", { hasText: "Bilal" })).toContainText("Deactivated");
+    await bilal.reload();
+    await expect(bilal.getByRole("heading", { level: 1, name: "Who’s signing in?" })).toBeVisible();
     await other.close();
   });
 

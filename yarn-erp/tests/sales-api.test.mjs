@@ -1,3 +1,4 @@
+import { liveShapedRows } from './portal-fixture.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -6,7 +7,7 @@ import { salesApi, salesScheduled, dueAt, PKT_OFFSET_MS } from '../server/sales.
 import { buyerPortalApi as portal } from '../server/buyer-portal.mjs';
 import { ErpProblem } from '../server/erp-utils.mjs';
 import { sqliteBinding } from '../server/sqlite.mjs';
-import { seedRows, userRow } from '../server/auth.mjs';
+import { ROLE_PERMISSIONS, seedRows, userRow } from '../server/auth.mjs';
 import { inventoryApi } from '../server/inventory.mjs';
 import { sha256 } from '../server/auth.mjs';
 
@@ -33,14 +34,14 @@ async function fixture() {
   const env = { DB: sqliteBinding(sql) };
   const workspaceId = sql.prepare('SELECT id FROM workspaces').get().id;
   const adminId = sql.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get().id;
-  const admin = { user_id: adminId, workspace_id: workspaceId, name: 'Anas', role: 'owner', admin: true, permissions: [] };
-  const member = async (name, permissions) => {
-    const row = await userRow({ workspaceId, name, pin: '2468', permissions });
+  const admin = { user_id: adminId, workspace_id: workspaceId, name: 'Anas', role: 'admin', admin: true, permissions: ROLE_PERMISSIONS.admin };
+  const member = async (name, role) => {
+    const row = await userRow({ workspaceId, name, pin: '2468', role });
     sql.prepare(row.sql).run(...row.args);
     const id = sql.prepare('SELECT id FROM users WHERE name=?').get(name).id;
-    return { user_id: id, workspace_id: workspaceId, name, role: 'operator', admin: false, permissions };
+    return { user_id: id, workspace_id: workspaceId, name, role, admin: role === 'admin', permissions: ROLE_PERMISSIONS[role] };
   };
-  const manager = await member('Sam Sales', ['sales', 'payments', 'dispatch']);
+  const manager = await member('Sam Sales', 'sales_manager');
   async function staff(path, data, by = admin) {
     const response = await routed(salesApi(new Request(origin + path, { method: data === undefined ? 'GET' : 'POST' }), env, by, path, data));
     const type = response.headers.get('content-type') ?? '';
@@ -98,7 +99,7 @@ async function fixture() {
     sql.prepare('INSERT INTO balances(lot_id,stage,grams,cartons,cones) VALUES(?,?,?,?,?)').run(lotId, stage, grams, 0, 0);
     return { productId, lotId };
   }
-  async function dispatch(order, lotId, quantityMilli, at = Date.now() - 3600000, by = manager, expectedStatus = 201) {
+  async function dispatch(order, lotId, quantityMilli, at = Date.now() - 3600000, by = admin, expectedStatus = 201) {
     const response = await staff('/api/erp/sales/dispatches', { id: crypto.randomUUID(), orderId: order.id, lotId, stage: 'finished', quantityMilli, grams: quantityMilli, cartons: 0, cones: 0, carrier: 'TCS Roadline', packages: [], documentsNote: '', dispatchedAt: at }, by);
     assert.equal(response.status, expectedStatus, JSON.stringify(response.data));
     if (expectedStatus !== 201) return response;
@@ -211,7 +212,7 @@ test('partial dispatch, delivery and payment keep exact cumulative amounts', asy
   assert.equal(one.receivable.amount_minor, 7500000, '60% of PKR 125,000.00');
   assert.equal((await f.staff('/api/erp/sales/deliveries', { id: crypto.randomUUID(), dispatchId: first.id, deliveryDate: Date.now() - 600000 })).status, 200, 're-delivery is idempotent');
   assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM receivables').get().n, 1);
-  assert.equal((await f.dispatch(order, lotId, 60000, Date.now() - 3600000, f.manager, 409)).status, 409, 'cannot exceed the ordered quantity');
+  assert.equal((await f.dispatch(order, lotId, 60000, Date.now() - 3600000, f.admin, 409)).status, 409, 'cannot exceed the ordered quantity');
   const second = await f.dispatch(order, lotId, 40000);
   assert.equal(f.sql.prepare('SELECT status FROM sales_orders WHERE id=?').get(order.id).status, 'dispatched');
   const two = await f.deliver(second);
@@ -261,17 +262,16 @@ test('role and organization isolation: staff matrix, buyer scoping, no cross-dom
   const f = await fixture();
   const { buyer: b, revision, order, invoice, lotId } = await f.confirmedOrder(60000, 125000);
   const disp = await f.dispatch(order, lotId, 60000);
-  // Permission matrix: a receive-only clerk cannot use sales routes; a payments member cannot quote; a sales member cannot pay.
-  const clerk = await f.member('Kamran Clerk', ['receive']);
+  // Role matrix: purchase and dispatch roles cannot perform sales or payment writes.
+  const clerk = await f.member('Kamran Clerk', 'purchase_manager');
   assert.equal((await f.staff('/api/erp/sales', undefined, clerk)).status, 403);
   assert.equal((await f.staff('/api/erp/sales/buyers', { id: crypto.randomUUID(), name: 'X Co', contactName: 'X Contact', email: 'x@x.test', phone: '+923201234567', city: '', notes: '' }, clerk)).status, 403);
-  const biller = await f.member('Bilal Biller', ['payments']);
+  const biller = await f.member('Bilal Biller', 'sales_manager');
   assert.equal((await f.staff('/api/erp/sales', undefined, biller)).status, 200, 'payments sees the overview');
-  assert.equal((await f.staff('/api/erp/sales/quotes', { id: crypto.randomUUID(), poId: f.sql.prepare('SELECT id FROM buyer_purchase_orders LIMIT 1').get().id, priceMinor: 125000, currency: 'PKR', specifications: 'Cotton yarn 30/1', requestedDeliveryAt: Date.now() + DAY, paymentTerms: 'Net 30' }, biller)).status, 403, 'payments cannot draft quotes');
-  const seller = await f.member('Sana Sales', ['sales']);
+  assert.equal((await f.staff('/api/erp/sales/quotes', { id: crypto.randomUUID(), poId: f.sql.prepare('SELECT id FROM buyer_purchase_orders LIMIT 1').get().id, priceMinor: 125000, currency: 'PKR', specifications: 'Cotton yarn 30/1', requestedDeliveryAt: Date.now() + DAY, paymentTerms: 'Net 30' }, await f.member('Dispatch Only', 'dispatch'))).status, 403, 'dispatch cannot draft quotes');
   const openReceivable = f.sql.prepare('SELECT id FROM receivables WHERE status=?').get('open') ?? f.sql.prepare('SELECT id FROM receivables').get();
-  if (openReceivable) assert.equal((await f.staff('/api/erp/sales/payments', { id: crypto.randomUUID(), receivableId: openReceivable.id, amountMinor: 1000 }, seller)).status, 403, 'sales cannot record payments');
-  const mover = await f.member('Mujeeb Mover', ['dispatch']);
+  if (openReceivable) assert.equal((await f.staff('/api/erp/sales/payments', { id: crypto.randomUUID(), receivableId: openReceivable.id, amountMinor: 1000 }, clerk)).status, 403, 'purchase manager cannot record payments');
+  const mover = await f.member('Mujeeb Mover', 'dispatch');
   const second = await f.confirmedOrder(50000, 125000);
   assert.ok((await f.dispatch(second.order, second.lotId, 50000, Date.now() - 7200000, mover)).id, 'dispatch permission is enough to dispatch');
   // Buyer scoping: another buyer sees none of this buyer's records.
@@ -348,8 +348,8 @@ test('immutable documents, ledger rules and honest outbox states', async () => {
 test('erp_audit_events actor_type extension rehearsal: rows preserved, buyer admitted, CHECK intact', async () => {
   const sql = new DatabaseSync(':memory:');
   sql.exec('PRAGMA foreign_keys=ON');
-  applyMigrations(sql, ['0000_inventory.sql', '0001_users.sql', '0002_procurement.sql', '0003_receiving.sql']);
-  for (const row of await seedRows('2468')) sql.prepare(row.sql).run(...row.args);
+  applyMigrations(sql, ['0000_inventory.sql', '0001_users.sql', '0002_procurement.sql', '0003_purchase_receipts.sql']);
+  liveShapedRows(sql);
   const workspaceId = sql.prepare('SELECT id FROM workspaces').get().id;
   const staffId = sql.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get().id;
   const insert = sql.prepare("INSERT INTO erp_audit_events(id,workspace_id,actor_id,actor_type,action,record_id,detail_json,created_at) VALUES(?,?,?,?,?,?,?,?)");

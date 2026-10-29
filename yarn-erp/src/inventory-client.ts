@@ -14,7 +14,13 @@ export interface Inspection {
 }
 // What an admin can let each person record. Admins can do all of it; scanning and viewing need none.
 export type Permission = 'receive' | 'produce' | 'dispatch' | 'catalog' | 'inspect' | 'qc' | 'waste' | 'reverse' | 'suppliers' | 'procure' | 'sales' | 'production' | 'payments';
-export interface Member { user_id: string; name: string; role: 'owner' | 'operator'; admin: boolean; permissions: Permission[] }
+export type Role = 'admin' | 'purchase_manager' | 'quality_inspector' | 'supervisor' | 'sales_manager' | 'dispatch';
+export const roleLabel: Record<Role, [string, string]> = {
+  admin: ['Admin', 'ایڈمن'], purchase_manager: ['Purchase Manager', 'خریداری مینیجر'],
+  quality_inspector: ['Quality Inspector', 'کوالٹی انسپکٹر'], supervisor: ['Supervisor', 'سپروائزر'],
+  sales_manager: ['Sales Manager', 'سیلز مینیجر'], dispatch: ['Dispatch', 'ڈسپیچ'],
+};
+export interface Member { user_id: string; name: string; role: Role; admin: boolean; permissions: Permission[] }
 export interface WorkspaceState {
   workspace: { id: string; name: string };
   member: Member;

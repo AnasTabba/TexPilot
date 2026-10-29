@@ -1,11 +1,13 @@
 /** Shared inventory API: PIN sessions (server/auth.mjs) give identity, D1 supplies durable SQL. */
-import { LOCK_AFTER, LOCK_MS, PERMISSIONS, SESSION_MS, nameKey, pinHash, randomHex, sessionCookie, sessionToken, sha256, userRow, validPin } from './auth.mjs';
+import { LOCK_AFTER, LOCK_MS, ROLE_PERMISSIONS, SESSION_MS, nameKey, pinHash, randomHex, sessionCookie, sessionToken, sha256, validPin } from './auth.mjs';
+import { adminApi } from './admin.mjs';
 import { ErpProblem } from './erp-utils.mjs';
 import { supplierPortal } from './supplier-portal.mjs';
 import { staffProcurement } from './procurement.mjs';
 import { receiving } from './receiving.mjs';
 import { salesApi } from './sales.mjs';
 import { buyerPortalApi } from './buyer-portal.mjs';
+const erp = { admin: adminApi };
 const STAGES = ['raw', 'wip', 'finished', 'cops'];
 const uuid = () => crypto.randomUUID();
 class Problem extends Error {
@@ -68,12 +70,12 @@ async function snapshot(db, member) {
     rows(db, 'SELECT * FROM lots WHERE workspace_id=? ORDER BY created_at DESC,id DESC', w),
     rows(db, 'SELECT b.* FROM balances b JOIN lots l ON l.id=b.lot_id WHERE l.workspace_id=?', w),
     rows(db, 'SELECT * FROM movements WHERE workspace_id=? ORDER BY created_at DESC,id DESC LIMIT 100', w),
-    rows(db, "SELECT name,role,created_at AS joined_at FROM users WHERE workspace_id=? AND status='active' ORDER BY created_at", w),
+    rows(db, "SELECT name,portal_role AS role,created_at AS joined_at FROM users WHERE workspace_id=? AND status='active' AND deactivated_at IS NULL AND portal_role IS NOT NULL ORDER BY created_at", w),
     rows(db, 'SELECT * FROM inspections WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100', w),
     rows(db, 'SELECT * FROM quality_events WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100', w),
     rows(db, 'SELECT id,lot_id,content_type,size,actor_name,created_at FROM inspection_photos WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100', w),
     // Admins see how many account requests are waiting for them.
-    member.admin ? first(db, "SELECT COUNT(*) AS n FROM users WHERE workspace_id=? AND status='pending'", w).then(row => row.n) : 0,
+    member.admin ? first(db, "SELECT COUNT(*) AS n FROM users WHERE workspace_id=? AND status='pending' AND deactivated_at IS NULL", w).then(row => row.n) : 0,
   ]);
   return { workspace, member, products, lots, balances, movements, members, inspections, qualityEvents, photos, pending, serverTime: Date.now(), backend: 'Yarnflow / Cloudflare D1' };
 }
@@ -198,8 +200,7 @@ async function route(request, env) {
   const w = member.workspace_id;
   if (path === '/api/erp/inbound' || path.startsWith('/api/erp/receipts')) return receiving(request, env, member, path, data);
   if (path.startsWith('/api/erp/sales')) return salesApi(request, env, member, path, data);
-  if (path.startsWith('/api/erp/')) return staffProcurement(request, env, member, path, data);
-  if (path.startsWith('/api/users')) return usersRoute(db, member, path, data);
+  if (path.startsWith('/api/erp/')) return (Object.hasOwn(erp, path.split('/')[3]) ? erp[path.split('/')[3]] : staffProcurement)(request, env, member, path, data);
   if (/^\/api\/lots\/[^/]+\/evidence$/.test(path) && request.method === 'GET') {
     const lotId = id(path.split('/')[3]);
     if (!await first(db, 'SELECT id FROM lots WHERE id=? AND workspace_id=?', lotId, w)) fail(404, 'This batch was not found in your workspace.');
@@ -305,22 +306,15 @@ async function route(request, env) {
 async function currentMember(db, request) {
   const token = sessionToken(request);
   if (!token) return null;
-  const user = await first(db, "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.status='active'", await sha256(token), Date.now());
+  const user = await first(db, "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.status='active' AND u.deactivated_at IS NULL AND u.portal_role IS NOT NULL", await sha256(token), Date.now());
   if (!user) return null;
-  const admin = user.role === 'admin';
-  // role keeps the app's owner/operator vocabulary; admin and permissions are what the API checks.
-  return { user_id: user.id, workspace_id: user.workspace_id, name: user.name, role: admin ? 'owner' : 'operator', admin, permissions: admin ? PERMISSIONS : JSON.parse(user.permissions) };
+  return { user_id: user.id, workspace_id: user.workspace_id, name: user.name, role: user.portal_role, admin: user.portal_role === 'admin', permissions: ROLE_PERMISSIONS[user.portal_role] };
 }
 const pinOf = value => { if (!validPin(value)) fail(422, 'The PIN must be exactly 4 digits.'); return value; };
-function permissionsOf(value) {
-  if (!Array.isArray(value) || value.some(p => !PERMISSIONS.includes(p))) fail(422, 'Choose valid permissions.');
-  return [...new Set(value)];
-}
-
-/** Sign in, request an account, sign out, and the names shown on the sign-in screen. */
+/** Sign in, sign out, and the names shown on the sign-in screen. */
 async function authRoute(request, db, path) {
   if (path === '/api/auth/people' && request.method === 'GET') {
-    const [workspace, people] = await Promise.all([first(db, 'SELECT name FROM workspaces ORDER BY created_at LIMIT 1'), rows(db, "SELECT name FROM users WHERE status='active' ORDER BY name COLLATE NOCASE")]);
+    const [workspace, people] = await Promise.all([first(db, 'SELECT name FROM workspaces ORDER BY created_at LIMIT 1'), rows(db, "SELECT name FROM users WHERE status='active' AND deactivated_at IS NULL AND portal_role IS NOT NULL ORDER BY name COLLATE NOCASE")]);
     return json({ workspace: workspace?.name ?? 'Yarnflow', people: people.map(row => row.name) });
   }
   if (path === '/api/auth/logout' && request.method === 'POST') {
@@ -342,6 +336,8 @@ async function authRoute(request, db, path) {
       await statement(db, 'UPDATE users SET failed_attempts=?,locked_until=? WHERE id=?', locked ? 0 : attempts, locked ? now + LOCK_MS : 0, user.id).run();
       fail(locked ? 429 : 401, locked ? 'Too many wrong PINs. Try again in 5 min.' : 'That name and PIN do not match.');
     }
+    if (user.deactivated_at !== null) fail(403, 'This account is deactivated. Ask an admin.');
+    if (user.portal_role === null) fail(403, 'An admin must assign your role first.');
     if (user.status !== 'active') fail(403, 'An admin still needs to approve your account.');
     const token = randomHex(32);
     await db.batch([
@@ -350,63 +346,6 @@ async function authRoute(request, db, path) {
       statement(db, 'INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES(?,?,?,?)', await sha256(token), user.id, now + SESSION_MS, now),
     ]);
     return json({ name: user.name }, 200, { 'Set-Cookie': sessionCookie(request, token) });
-  }
-  if (path === '/api/auth/signup' && data) {
-    keys(data, ['name', 'pin']);
-    const name = text(data.name, 'Your name', 2, 40); const pin = pinOf(data.pin);
-    const workspace = await first(db, 'SELECT id FROM workspaces ORDER BY created_at LIMIT 1');
-    if (!workspace) fail(503, 'Yarnflow is not set up yet. Ask an admin.');
-    if ((await first(db, "SELECT COUNT(*) AS n FROM users WHERE status='pending'")).n >= 20) fail(429, 'Too many requests are waiting. Ask an admin to review them first.');
-    const row = await userRow({ workspaceId: workspace.id, name, pin, status: 'pending' });
-    try { await statement(db, row.sql, ...row.args).run(); } catch { fail(409, 'That name is already taken. Add your surname or ask an admin.'); }
-    return json({ pending: true }, 201);
-  }
-  fail(404, 'API route not found.');
-}
-
-/** Admins add, approve, change and remove people. The last admin can't be demoted or removed. */
-async function usersRoute(db, member, path, data) {
-  adminOnly(member);
-  const w = member.workspace_id;
-  const lastAdmin = async target => target.role === 'admin' && target.status === 'active'
-    && (await first(db, "SELECT COUNT(*) AS n FROM users WHERE workspace_id=? AND role='admin' AND status='active'", w)).n <= 1;
-  if (path === '/api/users' && !data) {
-    const now = Date.now();
-    const users = await rows(db, 'SELECT id,name,role,status,permissions,created_at,locked_until FROM users WHERE workspace_id=? ORDER BY status DESC, name COLLATE NOCASE', w);
-    return json({ users: users.map(({ locked_until, permissions, ...user }) => ({ ...user, permissions: JSON.parse(permissions), locked: locked_until > now })) });
-  }
-  if (path === '/api/users' && data) {
-    keys(data, ['name', 'pin', 'role', 'permissions']);
-    if (!['admin', 'member'].includes(data.role)) fail(422, 'Choose admin or member.');
-    const row = await userRow({ workspaceId: w, name: text(data.name, 'Name', 2, 40), pin: pinOf(data.pin), role: data.role, permissions: permissionsOf(data.permissions ?? []), createdBy: member.user_id });
-    try { await statement(db, row.sql, ...row.args).run(); } catch { fail(409, 'That name is already taken.'); }
-    return json({ id: row.args[0] }, 201);
-  }
-  if (!data) fail(405, 'Method not allowed.');
-  const target = await first(db, 'SELECT * FROM users WHERE id=? AND workspace_id=?', id(data.id), w);
-  if (!target) fail(404, 'This person was not found.');
-  if (path === '/api/users/update') {
-    keys(data, ['id', 'role', 'status', 'permissions', 'pin']);
-    const role = data.role ?? target.role; const status = data.status ?? target.status;
-    if (!['admin', 'member'].includes(role) || !['active', 'pending'].includes(status)) fail(422, 'Choose a valid role and status.');
-    if ((role !== 'admin' || status !== 'active') && await lastAdmin(target)) fail(409, 'Keep at least one admin.');
-    const permissions = data.permissions === undefined ? target.permissions : JSON.stringify(permissionsOf(data.permissions));
-    const queries = [statement(db, 'UPDATE users SET role=?,status=?,permissions=? WHERE id=?', role, status, permissions, target.id)];
-    if (data.pin !== undefined) {
-      const salt = randomHex();
-      queries.push(statement(db, 'UPDATE users SET pin_salt=?,pin_hash=?,failed_attempts=0,locked_until=0 WHERE id=?', salt, await pinHash(pinOf(data.pin), salt), target.id));
-      queries.push(statement(db, 'DELETE FROM sessions WHERE user_id=?', target.id));
-    }
-    if (status !== 'active') queries.push(statement(db, 'DELETE FROM sessions WHERE user_id=?', target.id));
-    await db.batch(queries);
-    return json({ saved: true });
-  }
-  if (path === '/api/users/remove') {
-    keys(data, ['id']);
-    if (target.id === member.user_id) fail(409, "You can't remove yourself.");
-    if (await lastAdmin(target)) fail(409, 'Keep at least one admin.');
-    await db.batch([statement(db, 'DELETE FROM sessions WHERE user_id=?', target.id), statement(db, 'DELETE FROM users WHERE id=?', target.id)]);
-    return json({ removed: true });
   }
   fail(404, 'API route not found.');
 }

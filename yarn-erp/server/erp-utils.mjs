@@ -49,6 +49,15 @@ export async function readJson(request) {
   const bytes = new Uint8Array(length); let offset = 0; for (const p of parts) { bytes.set(p, offset); offset += p.length; }
   try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { fail(400, 'Send valid JSON.'); }
 }
+export const reason = (value, label = 'Reason') => multiline(value, label, 5, 1000);
+export function role(member, data, ...roles) {
+  if (roles.includes(member.role)) return null;
+  if (member.role !== 'admin') fail(403, 'Your role cannot do this. Ask an admin.');
+  return reason(data?.interventionReason, 'Intervention reason');
+}
+export function viewer(member, ...roles) {
+  if (member.role !== 'admin' && !roles.includes(member.role)) fail(403, 'Your role cannot do this. Ask an admin.');
+}
 export function allow(member, permission) {
   if (!member.admin && !member.permissions.includes(permission)) fail(403, 'Your account does not have permission for this action. Ask an admin.');
 }

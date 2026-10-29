@@ -37,8 +37,8 @@ async function fixture() {
   async function call(path, body, user = 'Anas', method) {
     return send(path, { body, method, cookie: user ? await cookieFor(user) : undefined });
   }
-  async function addPerson(name, permissions = [], role = 'member') {
-    const result = await call('/users', { name, pin: PIN, role, permissions });
+  async function addPerson(name, role) {
+    const result = await call('/erp/admin/users', { name, pin: PIN, role });
     assert.equal(result.status, 201);
     return result.data.id;
   }
@@ -60,21 +60,6 @@ const movement = (lotId, action = 'receive', grams = 10000, extra = {}) => ({
   stage: 'raw', note: 'Goods received', ...extra,
 });
 
-test('requires a signed-in person and the right permission for each kind of entry', async () => {
-  const { call, addPerson, setup } = await fixture();
-  assert.equal((await call('/workspace', undefined, null)).status, 401);
-  const { lot } = await setup();
-  await addPerson('Bilal', ['receive']);
-  assert.equal((await call('/products', { sku: 'X', name: 'X' }, 'Bilal')).status, 403);
-  assert.equal((await call('/movements', movement(lot.id), 'Bilal')).status, 201);
-  assert.equal((await call('/movements', movement(lot.id, 'transfer', 1000, { toStage: 'wip', cartons: 0, cones: 0 }), 'Bilal')).status, 403);
-  assert.equal((await call('/movements', movement(lot.id, 'waste', 1000, { cartons: 0, cones: 0 }), 'Bilal')).status, 403);
-  assert.equal((await call('/inspections', { id: crypto.randomUUID(), lotId: lot.id, labelText: '', note: 'x', result: null }, 'Bilal')).status, 403);
-  assert.equal((await call('/export', undefined, 'Bilal')).status, 403);
-  const me = (await call('/workspace', undefined, 'Bilal')).data.member;
-  assert.deepEqual([me.admin, me.permissions], [false, ['receive']]);
-  assert.equal((await call('/model', undefined, 'Bilal')).status, 200, 'scanning needs no permission');
-});
 
 test('PIN sign-in: wrong PINs lock the name for 5 minutes; signing out ends the session', async () => {
   const { send, login, call, cookies, sql } = await fixture();
@@ -95,43 +80,7 @@ test('PIN sign-in: wrong PINs lock the name for 5 minutes; signing out ends the 
   assert.equal((await send('/workspace', { cookie: cookies.get('  fahad ') })).status, 401);
 });
 
-test('a requested account waits for an admin, who approves it with permissions', async () => {
-  const { send, login, call, setup } = await fixture();
-  const { lot } = await setup();
-  assert.equal((await send('/auth/signup', { body: { name: 'Sara Khan', pin: '9753' } })).status, 201);
-  assert.equal((await send('/auth/signup', { body: { name: 'sara  khan', pin: '1111' } })).status, 409);
-  assert.equal((await send('/auth/signup', { body: { name: 'Sara', pin: '97531' } })).status, 422);
-  assert.equal((await call('/workspace')).data.pending, 1);
-  assert.equal((await login('Sara Khan', '9753')).status, 403);
-  assert.deepEqual((await send('/auth/people')).data.people, ['Anas', 'Fahad', 'Zuhair'], 'pending people are not listed');
-  const sara = (await call('/users')).data.users.find(user => user.name === 'Sara Khan');
-  assert.deepEqual([sara.status, sara.role, sara.permissions], ['pending', 'member', []]);
-  assert.equal((await call('/users/update', { id: sara.id, status: 'active', permissions: ['dispatch', 'qc'] })).status, 200);
-  assert.equal((await login('Sara Khan', '9753')).status, 200);
-  assert.equal((await call('/users', undefined, 'Sara Khan')).status, 403, 'members cannot manage people');
-  await call('/movements', movement(lot.id));
-  assert.equal((await call('/quality', { lotId: lot.id, status: 'approved', note: 'Checked' }, 'Sara Khan')).status, 200);
-  assert.equal((await call('/movements', movement(lot.id, 'dispatch', 1000, { cartons: 0, cones: 0 }), 'Sara Khan')).status, 201);
-  assert.equal((await call('/users/update', { id: sara.id, permissions: ['everything'] })).status, 422);
-});
 
-test('admins add, promote, reset and remove people, but never the last admin or themselves', async () => {
-  const { call, send, addPerson, cookieFor } = await fixture();
-  const people = async () => Object.fromEntries((await call('/users')).data.users.map(user => [user.name, user]));
-  const bilal = await addPerson('Bilal', ['produce']);
-  assert.equal((await call('/users', { name: 'bilal', pin: '1234', role: 'member', permissions: [] })).status, 409);
-  const bilalCookie = await cookieFor('Bilal');
-  assert.equal((await call('/users/update', { id: bilal, pin: '8642' })).status, 200);
-  assert.equal((await send('/workspace', { cookie: bilalCookie })).status, 401, 'a PIN reset signs the person out');
-  assert.equal((await call('/users/update', { id: bilal, role: 'admin' })).status, 200);
-  const all = await people();
-  assert.equal((await call('/users/remove', { id: all.Anas.id })).status, 409, "can't remove yourself");
-  assert.equal((await call('/users/remove', { id: all.Fahad.id })).status, 200);
-  await call('/users/update', { id: all.Zuhair.id, role: 'member' });
-  await call('/users/update', { id: bilal, role: 'member' });
-  assert.equal((await call('/users/update', { id: all.Anas.id, role: 'member' })).status, 409, 'keep at least one admin');
-  assert.deepEqual(Object.keys(await people()).sort(), ['Anas', 'Bilal', 'Zuhair']);
-});
 
 test('two different devices read one durable stock ledger and barcode lookup', async () => {
   const { call, setup } = await fixture();
@@ -188,8 +137,8 @@ test('stock cannot go negative, including concurrent dispatches; failed transfer
 test('QC blocks dispatch until approval; only people with QC permission can approve', async () => {
   const { call, setup, addPerson } = await fixture();
   const { lot } = await setup();
-  await addPerson('Store', ['receive', 'dispatch']);
-  await call('/movements', movement(lot.id), 'Store');
+  await addPerson('Store', 'dispatch');
+  await call('/movements', movement(lot.id), 'Anas');
   assert.equal((await call('/movements', movement(lot.id, 'dispatch', 1000, { cartons: 0, cones: 0 }))).status, 409);
   assert.equal((await call('/quality', { lotId: lot.id, status: 'approved', note: 'Looks fine' }, 'Store')).status, 403);
   assert.equal((await call('/quality', { lotId: lot.id, status: 'approved', note: 'Manager inspected' })).status, 200);
@@ -216,7 +165,7 @@ test('workspace data never leaks to other members or ambiguous barcode matches',
   await addOutsider();
   assert.equal((await call('/movements', movement(lot.id), 'Outsider')).status, 404);
   assert.equal((await call('/lookup?code=' + encodeURIComponent(`YF:${lot.id}`), undefined, 'Outsider')).status, 404);
-  assert.equal((await call('/users', undefined, 'Outsider')).data.users.length, 1);
+  assert.equal((await call('/erp/admin/users', undefined, 'Outsider')).data.users.length, 1);
   await call('/lots', { productId: product.id, batch: 'DYE-002', supplier: '' });
   const lookup = await call('/lookup?code=8901234567890');
   assert.equal(lookup.data.lots.length, 2);

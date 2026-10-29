@@ -56,7 +56,7 @@ test('supplier registration hashes passwords, requires admin approval, and canno
 });
 test('six categories, callable phone normalization, staff permissions and origin checks',async()=>{
  const f=await fixture();assert.equal((await f.staff('/erp/categories')).data.categories.length,6);
- const row=await userRow({workspaceId:f.sql.prepare('SELECT id FROM workspaces').get().id,name:'Purchase',pin:'2468',permissions:['suppliers','procure']});f.sql.prepare(row.sql).run(...row.args);
+ const row=await userRow({workspaceId:f.sql.prepare('SELECT id FROM workspaces').get().id,name:'Purchase',pin:'2468',role:'purchase_manager'});f.sql.prepare(row.sql).run(...row.args);
  const c=(await f.request('/auth/login',{name:'Purchase',pin:'2468'})).cookie;
  const id=crypto.randomUUID();const d={id,name:'Directory Mill',contactName:'Sales desk',email:'sales@mill.test',phone:'+92 (300) 1234567',categories:['cotton'],sourceUrl:'https://mill.test/contact'};
  const r=await f.request('/erp/suppliers',d,c);assert.equal(r.status,201);assert.equal(r.data.supplier.phone,'+923001234567');assert.equal(r.data.supplier.status,'directory');
@@ -167,7 +167,7 @@ test('tonne receipt quantities convert to grams exactly and inventory role does 
  f.sql.prepare("UPDATE procurement_rfqs SET quantity_milli=1000,unit='tonne' WHERE id=?").run(r.id);
  const modified=f.sql.prepare('SELECT * FROM procurement_rfqs WHERE id=?').get(r.id),{order}=await f.award(supplier,modified);
  const product=(await f.staff('/products',{sku:'BULK-COT',name:'Bulk Cotton'})).data;
- const workspace=f.sql.prepare('SELECT id FROM workspaces').get().id,row=await userRow({workspaceId:workspace,name:'Inventory manager',pin:'2468',permissions:['receive']});f.sql.prepare(row.sql).run(...row.args);
+ const workspace=f.sql.prepare('SELECT id FROM workspaces').get().id,row=await userRow({workspaceId:workspace,name:'Inventory manager',pin:'2468',role:'supervisor'});f.sql.prepare(row.sql).run(...row.args);
  const c=(await f.request('/auth/login',{name:'Inventory manager',pin:'2468'})).cookie;
  assert.equal((await f.request('/erp/procurement',undefined,c)).status,403);
  const overview=await f.request('/erp/inbound',undefined,c);assert.equal(overview.status,200);assert.equal(JSON.stringify(overview.data).includes('price_minor'),false);

@@ -5,7 +5,6 @@ import "@fontsource-variable/figtree";
 import "@fontsource-variable/figtree/wght-italic.css";
 import LiveApp from "./LiveApp";
 import SupplierPortal from './SupplierPortal';
-import BuyerPortal from './BuyerPortal';
 import { useEffect, useState } from 'react';
 import { LanguageProvider } from "./i18n";
 import "./yarnflow.css";
@@ -18,9 +17,8 @@ if (typeof crypto.randomUUID !== "function")
     ) as ReturnType<Crypto["randomUUID"]>;
 function Application() {
   const [supplier, setSupplier] = useState(location.hash.startsWith('#/supplier'));
-  const [buyer, setBuyer] = useState(location.hash.startsWith('#/buyer'));
-  useEffect(() => { const route = () => { setSupplier(location.hash.startsWith('#/supplier')); setBuyer(location.hash.startsWith('#/buyer')); }; addEventListener('hashchange', route); return () => removeEventListener('hashchange', route); }, []);
-  return supplier ? <SupplierPortal /> : buyer ? <BuyerPortal /> : <LiveApp />;
+  useEffect(() => { const route = () => { setSupplier(location.hash.startsWith('#/supplier')); }; addEventListener('hashchange', route); return () => removeEventListener('hashchange', route); }, []);
+  return supplier ? <SupplierPortal /> : <LiveApp />;
 }
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
