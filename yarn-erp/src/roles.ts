@@ -9,17 +9,17 @@ export interface Section { id: string; en: string; ur: string; icon: LucideIcon;
 const dashboard: Section = { id: 'dashboard', en: 'Dashboard', ur: 'ڈیش بورڈ', icon: House };
 const stock: Section = { id: 'inventory', en: 'Stock', ur: 'اسٹاک', icon: ConeIcon as LucideIcon };
 const history: Section = { id: 'activity', en: 'History', ur: 'ہسٹری', icon: History };
-const lots: Section = { id: 'lots', en: 'Inspections', ur: 'معائنے', icon: ClipboardCheck };
+const lots: Section = { id: 'lots', en: 'Lots', ur: 'لاٹس', icon: ClipboardCheck };
 const reviews: Section = { id: 'reviews', en: 'Reviews', ur: 'جائزے', icon: ClipboardCheck, tabs: [
   { id: 'reports', en: 'Reports', ur: 'رپورٹس' }, { id: 'rejections', en: 'Issues', ur: 'مسائل' },
 ] };
+const submissions: Section = { id: 'submissions', en: 'My submissions', ur: 'میری جمع کرائی گئی رپورٹس', icon: History, tabs: [{ id: 'mine', en: 'All', ur: 'تمام' }, { id: 'returned', en: 'Returned', ur: 'واپس شدہ' }] };
 const team: Section = { id: 'team', en: 'Team', ur: 'ٹیم', icon: UsersRound };
 const buyers: Section = { id: 'buyers', en: 'Buyers', ur: 'خریدار', icon: UsersRound, tabs: [{ id: 'pending', en: 'Pending', ur: 'زیرِ التوا' }, { id: 'active', en: 'Active', ur: 'فعال' }, { id: 'all', en: 'All', ur: 'سب' }] };
 const buyerRfqs: Section = { id: 'buyer-rfqs', en: 'Buyer RFQs', ur: 'خریدار کی درخواستیں', icon: FileText, tabs: [{ id: 'open', en: 'To quote', ur: 'قیمت دینے کے لیے' }, { id: 'quoted', en: 'Quoted', ur: 'قیمت دی گئی' }, { id: 'sold', en: 'Sold', ur: 'فروخت شدہ' }, { id: 'all', en: 'All', ur: 'سب' }] };
 const invoices: Section = { id: 'invoices', en: 'Invoices', ur: 'انوائسز', icon: FileText, tabs: [{ id: 'owed', en: 'To collect', ur: 'وصولی کے لیے' }, { id: 'paid', en: 'Paid', ur: 'ادا شدہ' }, { id: 'all', en: 'All', ur: 'سب' }] };
 const dispatchRequests: Section = { id: 'dispatch-requests', en: 'Dispatch requests', ur: 'ڈسپیچ درخواستیں', icon: Truck, tabs: [{ id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'all', en: 'All', ur: 'سب' }] };
 const analytics: Section = { id: 'analytics', en: 'Analytics', ur: 'تجزیہ', icon: ChartNoAxesCombined };
-const dispatchStock: Section = { id: 'dispatch', en: 'Dispatch', ur: 'ڈسپیچ', icon: Truck };
 const dispatches: Section = { id: 'dispatches', en: 'Dispatches', ur: 'ڈسپیچز', icon: Truck, tabs: [{ id: 'all', en: 'All', ur: 'سب' }, { id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'approved', en: 'Approved', ur: 'منظور شدہ' }, { id: 'on_hold', en: 'On hold', ur: 'روکی گئی' }, { id: 'dispatched', en: 'Dispatched', ur: 'روانہ' }, { id: 'delivered', en: 'Delivered', ur: 'پہنچائی گئی' }] };
 const newDispatch: Section = { id: 'new-dispatch', en: 'New dispatch', ur: 'نئی ڈسپیچ', icon: PackagePlus };
 const dispatchHistory: Section = { id: 'history', en: 'History', ur: 'ہسٹری', icon: History };
@@ -40,7 +40,7 @@ export const NAV: Record<Role, Section[]> = {
   purchase_manager: [dashboard, suppliers, rfqs, orders, claims, purchaseAnalytics],
   sales_manager: [dashboard, buyers, buyerRfqs, invoices, dispatchRequests, analytics],
   dispatch: [dashboard, dispatches, newDispatch, dispatchHistory],
-  quality_inspector: [dashboard, lots, stock, history],
+  quality_inspector: [dashboard, lots, submissions],
   supervisor: [dashboard, reviews, supervisorInventory, requests, report, history],
 };
 export const COMMON: Section[] = [

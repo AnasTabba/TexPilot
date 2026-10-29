@@ -4,12 +4,13 @@ import { AsyncForm, Field, errorMessage } from './forms';
 import { inventoryRequest as api } from './inventory-client';
 import { useLanguage } from './i18n';
 import { factoryTime, fixedInput, quantity } from './erp-client';
+import { NextStep, SectionTabs } from './PortalCommon';
 
 type Severity = 'minor' | 'major' | 'critical';
 interface Lot { id: string; reference: string; product_name: string; supplier_name: string; order_reference: string; quantity_milli: number; open_milli: number; unit: string; arrived_at: number; status: 'awaiting_inspection' | 'under_review' | 'settled' }
 interface Photo { id: string; issue_id: string | null; taken_at: number }
 interface Issue { id: string; type: string; severity: Severity; description: string; status: string }
-interface Inspection { id: string; lot_id: string; lot_reference: string; product_name: string; unit: string; accepted_milli: number; rejected_milli: number; note: string; status: 'draft' | 'submitted'; report_status: string | null; rejection_status: string | null; submitted_at: number | null; photos: Photo[]; issues: Issue[] }
+interface Inspection { id: string; lot_id: string; lot_reference: string; product_name: string; unit: string; accepted_milli: number; rejected_milli: number; note: string; status: 'draft' | 'submitted'; report_status: string | null; report_reason: string | null; rejection_status: string | null; submitted_at: number | null; photos: Photo[]; issues: Issue[] }
 const decision = (status: string | null) => status === null ? null : ({ pending: ['waiting for the supervisor', 'سپروائزر کے فیصلے کا منتظر'], accepted: ['accepted', 'قبول'], returned: ['returned for re-inspection', 'دوبارہ معائنے کے لیے واپس'], confirmed: ['rejection confirmed', 'مسترد کرنا تصدیق شدہ'], dismissed: ['rejection dismissed', 'مسترد کرنا خارج'], escalated: ['sent to the admin', 'ایڈمن کو بھیجا گیا'] } as Record<string, [string, string]>)[status];
 const photoUrl = (id: string) => `/api/erp/qc/photos/${id}`;
 async function upload(fields: Record<string, string>, file: File) {
@@ -18,7 +19,7 @@ async function upload(fields: Record<string, string>, file: File) {
   if (!response) throw new Error('Could not confirm the upload. Check the connection and pick the photo again.');
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'The photo was not saved. Try again.');
 }
-export default function Inspections() {
+export default function Inspections({ view = 'lots' }: { view?: 'dashboard' | 'lots' | 'submissions' }) {
   const { t } = useLanguage();
   const [lots, setLots] = useState<Lot[] | null>(null), [inspections, setInspections] = useState<Inspection[]>([]), [error, setError] = useState(''), [open, setOpen] = useState(''), [notice, setNotice] = useState('');
   const load = useCallback(async () => {
@@ -27,14 +28,22 @@ export default function Inspections() {
   useEffect(() => { void load(); }, [load]);
   const saved = (message: string) => async () => { setOpen(''); setNotice(message); await load(); };
   const drafts = inspections.filter(i => i.status === 'draft'), sent = inspections.filter(i => i.status === 'submitted');
-  return <section className="live-panel"><div className="yf-head"><div><h2>{t('Inspections', 'معائنے')}</h2><p>{t('Count what you accept and what you reject, photograph the accepted quantity, describe every rejection, then submit.', 'جو قبول اور جو مسترد کریں اسے گنیں، قبول شدہ مقدار کی تصویر لیں، ہر مسترد مال کی وجہ لکھیں، پھر جمع کریں۔')}</p></div><button className="button" onClick={() => void load()}><RefreshCw size={18} />{t('Refresh', 'تازہ کریں')}</button></div>
+  const waiting = [...(lots || [])].filter(l => l.open_milli > 0).sort((a, b) => a.arrived_at - b.arrived_at);
+  const returned = sent.filter(i => i.report_status === 'returned');
+  const [tab, setTab] = useState<'returned' | 'mine'>(() => location.hash.includes('/returned') ? 'returned' : 'mine');
+  if (view === 'dashboard') return <section className="live-panel">{error && <p className="live-error" role="alert">{t(error)} <button className="live-text-button" onClick={() => void load()}>{t('Retry connection', 'دوبارہ رابطہ کریں')}</button></p>}{!lots && !error && <p role="status">{t('Loading lots…', 'لاٹس لوڈ ہو رہی ہیں…')}</p>}{lots && <NextStep tone={waiting.length ? 'warn' : 'ok'} title={waiting.length ? t('Next: inspect the oldest waiting lot', 'اگلا کام: سب سے پرانے منتظر لاٹ کا معائنہ کریں') : t('No lots are waiting for inspection', 'معائنے کے لیے کوئی لاٹ منتظر نہیں')} reason={waiting[0] ? `${waiting[0].reference} · ${waiting[0].product_name} · ${quantity(waiting[0].open_milli)} ${waiting[0].unit}` : t('New arrivals appear here when registered.', 'نئی آمد درج ہونے پر یہاں نظر آئے گی۔')} />}</section>;
+  return <section className="live-panel"><div className="yf-head"><div><h2>{t(view === 'lots' ? 'Lots to inspect' : 'My submissions', view === 'lots' ? 'معائنے کے لاٹس' : 'میری رپورٹس')}</h2><p>{t('Count what you accept and reject, photograph accepted quantities, describe issues, then submit.', 'قبول اور مسترد مقدار درج کریں، قبول شدہ مقدار کی تصاویر اور مسائل شامل کر کے جمع کریں۔')}</p></div><button className="button" onClick={() => void load()}><RefreshCw size={18} />{t('Refresh', 'تازہ کریں')}</button></div>
     {error && <p className="live-error" role="alert">{t(error)}</p>}{notice && <p className="live-success" role="status">{notice}</p>}{!lots && !error && <p role="status">{t('Loading lots…', 'لاٹس لوڈ ہو رہی ہیں…')}</p>}
-    <h3 className="live-subheading">{t('Lots to inspect', 'معائنے کی لاٹس')}</h3>
+    {view === 'submissions' && <SectionTabs tabs={[{ id: 'mine', en: 'My submissions', ur: 'میری رپورٹس' }, { id: 'returned', en: 'Returned', ur: 'واپس شدہ' }]} value={tab} onChange={id => { const next = id === 'returned' ? 'returned' : 'mine'; setTab(next); location.hash = next === 'returned' ? '#/submissions/returned' : '#/submissions'; }} />}
+    {view === 'submissions' && tab === 'returned' && <h3 className="live-subheading">{t('Returned items', 'واپس شدہ آئٹمز')}</h3>}
+    {view === 'submissions' && tab === 'returned' && returned.length === 0 && <p className="live-empty">{t('No returned inspections.', 'کوئی معائنہ واپس نہیں آیا۔')}</p>}
+    {view === 'submissions' && tab === 'mine' && sent.length === 0 && <p className="live-empty">{t('No submitted inspections yet.', 'ابھی کوئی معائنہ جمع نہیں ہوا۔')}</p>}
+    {view === 'lots' && <><h3 className="live-subheading">{t('Lots to inspect', 'معائنے کی لاٹس')}</h3>
     {lots && !lots.some(l => l.open_milli > 0) && <p className="live-muted">{t('Lots appear here when the purchase manager registers an arrival.', 'خریداری مینیجر کی آمد درج کرنے پر لاٹس یہاں نظر آئیں گی۔')}</p>}
     <div className="erp-records">{lots?.filter(l => l.open_milli > 0).map(l => <article className="erp-record" key={l.id}><h3>{l.reference} · {l.product_name}</h3><p>{l.supplier_name} · {l.order_reference} · {factoryTime(l.arrived_at)}</p><p>{t('Still to inspect:', 'معائنہ باقی:')} {quantity(l.open_milli)} {t('of', 'میں سے')} {quantity(l.quantity_milli)} {l.unit}</p>
-      {open === 'new:' + l.id ? <NewInspection lot={l} onSaved={saved(t('Draft saved. Add photos and issues, then submit it.', 'مسودہ محفوظ ہو گیا۔ تصاویر اور مسائل شامل کریں، پھر جمع کریں۔'))} onCancel={() => setOpen('')} /> : <button className="button primary" onClick={() => setOpen('new:' + l.id)}><Plus size={18} />{t('Record inspection', 'معائنہ درج کریں')}</button>}</article>)}</div>
+      {open === 'new:' + l.id ? <NewInspection lot={l} onSaved={saved(t('Draft saved. Add photos and issues, then submit it.', 'مسودہ محفوظ ہو گیا۔ تصاویر اور مسائل شامل کریں، پھر جمع کریں۔'))} onCancel={() => setOpen('')} /> : <button className="button primary" onClick={() => setOpen('new:' + l.id)}><Plus size={18} />{t('Record inspection', 'معائنہ درج کریں')}</button>}</article>)}</div></>}
     {drafts.length > 0 && <><h3 className="live-subheading">{t('Drafts', 'مسودے')}</h3><div className="erp-records">{drafts.map(i => <Draft key={i.id} inspection={i} open={open} setOpen={setOpen} onChanged={load} onSubmitted={saved(t('Inspection submitted. Supervisors have been told.', 'معائنہ جمع ہو گیا۔ سپروائزرز کو بتا دیا گیا ہے۔'))} />)}</div></>}
-    {sent.length > 0 && <><h3 className="live-subheading">{t('Submitted', 'جمع شدہ')}</h3><div className="erp-records">{sent.map(i => <article className="erp-record" key={i.id}><h3>{i.lot_reference} · {i.product_name}</h3><p><ClipboardCheck size={16} aria-hidden="true" /> {t('Accepted', 'قبول')} {quantity(i.accepted_milli)} {i.unit}{decision(i.report_status) && <> · {t(...decision(i.report_status)!)}</>}</p><p>{t('Rejected', 'مسترد')} {quantity(i.rejected_milli)} {i.unit}{decision(i.rejection_status) && <> · {t(...decision(i.rejection_status)!)}</>}</p>{i.submitted_at && <p>{factoryTime(i.submitted_at)}</p>}</article>)}</div></>}
+    {(view === 'lots' ? drafts : tab === 'returned' ? returned : sent).length > 0 && <><h3 className="live-subheading">{t(view === 'lots' ? 'Drafts' : tab === 'returned' ? 'Returned items' : 'Submitted', view === 'lots' ? 'مسودے' : tab === 'returned' ? 'واپس شدہ آئٹمز' : 'جمع شدہ')}</h3><div className="erp-records">{(view === 'lots' ? drafts : tab === 'returned' ? returned : sent).map(i => <article className="erp-record" key={i.id}><h3>{i.lot_reference} · {i.product_name}</h3><p><ClipboardCheck size={16} aria-hidden="true" /> {t('Accepted', 'قبول')} {quantity(i.accepted_milli)} {i.unit}{decision(i.report_status) && <> · {t(...decision(i.report_status)!)}</>}</p><p>{t('Rejected', 'مسترد')} {quantity(i.rejected_milli)} {i.unit}{decision(i.rejection_status) && <> · {t(...decision(i.rejection_status)!)}</>}</p>{i.report_status === 'returned' && <p className="live-error">{t('Supervisor reason:', 'سپروائزر کی وجہ:')} {i.report_reason || t('No reason provided.', 'کوئی وجہ فراہم نہیں کی گئی۔')}</p>}{i.submitted_at && <p>{factoryTime(i.submitted_at)}</p>}</article>)}</div></>}
   </section>;
 }
 function NewInspection({ lot, onSaved, onCancel }: { lot: Lot; onSaved: () => Promise<void>; onCancel: () => void }) {

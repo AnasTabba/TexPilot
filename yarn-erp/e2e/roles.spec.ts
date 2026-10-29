@@ -8,7 +8,7 @@ for (const [name, sections] of [
   ['Pervaiz', ['Dashboard', 'Suppliers', 'RFQs', 'Orders', 'Claims', 'Analytics']],
   ['Saima', ['Dashboard', 'Reviews', 'Inventory', 'Requests', 'Report', 'History']],
   ['Sana', ['Dashboard', 'Buyers', 'Buyer RFQs', 'Invoices', 'Dispatch requests', 'Analytics']],
-  ['Qasim', ['Dashboard', 'Inspections', 'Stock', 'History']],
+  ['Qasim', ['Dashboard', 'Lots', 'My submissions']],
   ['Danish', ['Dashboard', 'Dispatches', 'New dispatch', 'History']],
 ] as const) test(`${name} sees only the sections of their role, plus the common ones`, async ({ page }) => {
   await signIn(page, name);
