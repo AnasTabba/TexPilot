@@ -10,6 +10,7 @@ import { InventoryWidget, ProductionWidget } from './StockWidgets';
 import { NoticeWidget } from './NoticeWidget';
 import { ShipmentsWidget } from './ShipmentTracking';
 import { AttentionWidget } from './AttentionWidget';
+import { WallpaperButton } from './Wallpaper';
 
 export interface Notice { id: string; event: string; object_type: string; object_id: string; label: string; status: 'unread' | 'read'; created_at: number }
 export interface Inbox { notifications: Notice[]; unread: number }
@@ -264,5 +265,6 @@ export function Dashboard({ member, inbox, reload, state, onChanged }: { member:
     <div className="yf-dash-foot">
       <button type="button" className="yf-dash-reset" onClick={() => change(() => DEFAULT_LAYOUT.map(s => ({ ...s })))}>{t('Reset layout', 'ترتیب ری سیٹ کریں')}</button>
     </div>
+    <WallpaperButton />
   </div>;
 }

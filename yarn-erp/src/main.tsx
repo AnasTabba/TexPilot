@@ -10,7 +10,9 @@ import { useEffect, useState } from 'react';
 import { LanguageProvider } from "./i18n";
 import "./yarnflow.css";
 import { applyStoredTheme } from "./AppSettings";
+import { applyStoredWallpaper } from "./wallpaper-store";
 applyStoredTheme();
+applyStoredWallpaper();
 // crypto.randomUUID exists only on HTTPS and localhost; phones testing over the LAN use plain
 // HTTP. getRandomValues works everywhere, so build the same random v4 UUID from it.
 if (typeof crypto.randomUUID !== "function")
