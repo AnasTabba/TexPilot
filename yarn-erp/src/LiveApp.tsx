@@ -11,13 +11,13 @@ import Procurement from './Procurement';
 import { ChoiceCards, QuickReasons, Segments, SavedCard, Tiles } from './ui';
 import StockEntry, { BatchHeader, BatchPicker, batchBlock, presetInfo, type Preset } from './StockEntry';
 import { useFloor, useFloorLabels } from './copy';
-import { Menu, Package, Truck, CircleHelp, Search, ChevronRight, ShieldAlert, PackagePlus, ArrowRightLeft, Trash2, ClipboardCheck, ScanBarcode, House, History, LogOut, UsersRound, Undo2 } from 'lucide-react';
+import { Menu, Package, Truck, CircleHelp, Search, ChevronRight, ShieldAlert, PackagePlus, ClipboardCheck, ScanBarcode, House, History, LogOut, UsersRound, Undo2 } from 'lucide-react';
 import BarcodeScanner from './BarcodeScanner';
 import Scanner from './Scanner';
 import SpecScan from './SpecScan';
 import { Cone, materialHue } from './Cone';
 import type { ScanResult } from './scanner-client';
-import { roleLabel, can, gramsFromKg, InventoryError, inventoryRequest as api, qualityName, stageName, stockStages, timestamp, weight, type Permission, type Quality, type StockLot, type StockMovement, type StockStage, type WorkspaceState } from './inventory-client';
+import { roleLabel, can, InventoryError, inventoryRequest as api, stageName, timestamp, weight, type Permission, type Quality, type StockLot, type StockMovement, type StockStage, type WorkspaceState } from './inventory-client';
 import { accessSummary, permissionInfo } from './Team';
 
 type FormType = 'product' | 'lot' | 'receive' | 'dispatch' | 'transfer' | 'waste' | 'quality' | 'inspection';
