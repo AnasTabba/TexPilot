@@ -16,5 +16,6 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "yarnflow-db", "database_id": "987ffaba-7994-4987-a860-5cff34483f0e", "migrations_dir": "drizzle" }
   ],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "triggers": { "crons": ["0 * * * *"] }
 }

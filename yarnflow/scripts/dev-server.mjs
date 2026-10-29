@@ -5,7 +5,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync
 import { resolve, extname } from 'node:path';
 import { inventoryApi } from '../server/inventory.mjs';
 import { sqliteBinding } from '../server/sqlite.mjs';
-import { seedRows } from '../server/auth.mjs';
+import { seedRows, userRow } from '../server/auth.mjs';
+import { notifyRole } from '../server/notify.mjs';
 import { seedDemoStock } from './demo-stock.mjs';
 
 if (process.env.YARNFLOW_LOCAL_DEV !== '1') throw new Error('Local preview requires YARNFLOW_LOCAL_DEV=1. Hosted production runs on Cloudflare D1.');
@@ -31,9 +32,14 @@ async function open() {
     if (!pin) throw new Error('New local database: set YARNFLOW_SEED_PIN (4 digits) for the admins Anas, Fahad and Zuhair.');
     for (const { sql, args } of await seedRows(pin)) database.prepare(sql).run(...args);
     if (process.env.YARNFLOW_TEST_MODE !== '1' || dbPath !== ':memory:') return { database, DB };
+    // Test mode also has one person for each other role.
+    const workspaceId = database.prepare('SELECT id FROM workspaces').get().id;
+    for (const [name, role] of [['Pervaiz', 'purchase_manager'], ['Qasim', 'quality_inspector'], ['Saima', 'supervisor'], ['Sana', 'sales_manager'], ['Danish', 'dispatch']]) {
+      const { sql, args } = await userRow({ workspaceId, name, pin, role, createdBy: 'system:seed' }); database.prepare(sql).run(...args);
+    }
     const call = (path, body, cookie) => inventoryApi(new Request('http://local/api' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://local', ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(body) }), { DB });
-    const cookie = (await call('/auth/login', { name: 'Anas', pin })).headers.get('Set-Cookie').split(';')[0];
-    await seedDemoStock(async (path, body) => { const response = await call(path, body, cookie); if (!response.ok) throw new Error(`Demo stock ${path}: ${response.status}`); return response.json(); });
+    const cookie = (await call('/auth/login', { name: 'Saima', pin })).headers.get('Set-Cookie').split(';')[0];
+    await seedDemoStock({ post: async (path, body) => { const response = await call(path, body, cookie); if (!response.ok) throw new Error(`Demo stock ${path}: ${response.status}`); return response.json(); } });
     database.exec('DELETE FROM sessions');
   }
   return { database, DB };
@@ -46,7 +52,7 @@ const bucket = {
   async get(key) { const path = objectPath(key); return existsSync(path) ? { body: readFileSync(path) } : null; },
   async delete(key) { rmSync(objectPath(key), { force: true }); },
 };
-const env = { DB, BUCKET: bucket, TEXPILOT_API_URL: process.env.TEXPILOT_API_URL, INVENTREE_URL: process.env.INVENTREE_URL, INVENTREE_TOKEN: process.env.INVENTREE_TOKEN };
+const env = { SUPPLIER_PORTAL_TOKEN: process.env.SUPPLIER_PORTAL_TOKEN, BUYER_PORTAL_TOKEN: process.env.BUYER_PORTAL_TOKEN, DB, BUCKET: bucket, TEXPILOT_API_URL: process.env.TEXPILOT_API_URL, INVENTREE_URL: process.env.INVENTREE_URL, INVENTREE_TOKEN: process.env.INVENTREE_TOKEN, DATALOOPLABS_API_KEY: process.env.DATALOOPLABS_API_KEY, DATALOOPLABS_CONTRACT: process.env.DATALOOPLABS_CONTRACT };
 const port = Number(process.env.PORT || 8788);
 const server = createServer(async (incoming, outgoing) => {
   try {
@@ -55,13 +61,20 @@ const server = createServer(async (incoming, outgoing) => {
       database.close(); ({ database, DB } = await open()); env.DB = DB;
       outgoing.writeHead(204); outgoing.end(); return;
     }
+    // Tests raise a notification the way a later intake route will: for every active person of a role.
+    if (url.pathname === '/__test/notify' && incoming.method === 'POST' && process.env.YARNFLOW_TEST_MODE === '1' && dbPath === ':memory:') {
+      let text = ''; for await (const chunk of incoming) text += chunk;
+      const { role, event, objectType, objectId, label } = JSON.parse(text);
+      await notifyRole(DB, database.prepare('SELECT id FROM workspaces').get().id, role, event, objectType, objectId, label).run();
+      outgoing.writeHead(204); outgoing.end(); return;
+    }
     if (url.pathname.startsWith('/api/')) {
       const headers = new Headers();
       for (const [key, value] of Object.entries(incoming.headers)) if (value) headers.set(key, Array.isArray(value) ? value.join(',') : value);
       let body;
       if (incoming.method !== 'GET' && incoming.method !== 'HEAD') {
         const chunks = []; let size = 0;
-        const limit = url.pathname === '/api/photos' ? 11 * 1024 * 1024 : 65536;
+        const limit = ['/api/photos', '/api/erp/qc/photos'].includes(url.pathname) ? 11 * 1024 * 1024 : 65536;
         for await (const chunk of incoming) { size += chunk.length; if (size > limit) { outgoing.writeHead(413, { 'Content-Type': 'application/json' }); outgoing.end(JSON.stringify({ error: 'Request too large' })); return; } chunks.push(chunk); }
         body = Buffer.concat(chunks);
       }

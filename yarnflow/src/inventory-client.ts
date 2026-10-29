@@ -1,7 +1,7 @@
 export type StockStage = 'raw' | 'wip' | 'finished' | 'cops';
 export type Quality = 'uninspected' | 'approved' | 'hold';
 export interface Product { id: string; sku: string; name: string; barcode: string | null }
-export interface StockLot { id: string; product_id: string; batch: string; supplier: string; quality: Quality; created_at: number }
+export interface StockLot { id: string; product_id: string; batch: string; supplier: string; quality: Quality; created_at: number; inventory_type?: 'raw' | 'finished' | null; source?: 'qc_lot' | 'production' | null }
 export interface StockBalance { lot_id: string; stage: StockStage; grams: number; cartons: number; cones: number }
 export interface StockMovement {
   id: string; lot_id: string; action: string; from_stage: StockStage | null;
@@ -12,9 +12,13 @@ export interface Inspection {
   id: string; lot_id: string; label_text: string; note: string; source: string;
   result_json: string | null; actor_name: string; created_at: number;
 }
-// What an admin can let each person record. Admins can do all of it; scanning and viewing need none.
-export type Permission = 'receive' | 'produce' | 'dispatch' | 'catalog' | 'inspect' | 'qc' | 'waste' | 'reverse';
-export interface Member { user_id: string; name: string; role: 'owner' | 'operator'; admin: boolean; permissions: Permission[] }
+export type Role = 'admin' | 'purchase_manager' | 'quality_inspector' | 'supervisor' | 'sales_manager' | 'dispatch';
+export const roleLabel: Record<Role, [string, string]> = {
+  admin: ['Admin', 'ایڈمن'], purchase_manager: ['Purchase Manager', 'خریداری مینیجر'],
+  quality_inspector: ['Quality Inspector', 'کوالٹی انسپکٹر'], supervisor: ['Supervisor', 'سپروائزر'],
+  sales_manager: ['Sales Manager', 'سیلز مینیجر'], dispatch: ['Dispatch', 'ڈسپیچ'],
+};
+export interface Member { user_id: string; name: string; role: Role; admin: boolean }
 export interface WorkspaceState {
   workspace: { id: string; name: string };
   member: Member;
@@ -52,7 +56,6 @@ export async function inventoryRequest<T>(path: string, data?: unknown, signal?:
     clearTimeout(timer); signal?.removeEventListener('abort', abort);
   }
 }
-export const can = (member: Member, permission: Permission) => member.admin || member.permissions.includes(permission);
 export const stockStages: StockStage[] = ['raw', 'wip', 'finished', 'cops'];
 export const stageName: Record<StockStage, string> = { raw: 'Raw material', wip: 'Work in progress', finished: 'Finished stock', cops: 'Cops' };
 export const qualityName: Record<Quality, string> = { uninspected: 'Needs inspection', approved: 'QC approved', hold: 'QC hold' };

@@ -2,7 +2,7 @@
 // A 4-digit PIN has only 10,000 values, so its real protection is the lockout (5 wrong tries,
 // then 5 minutes) and access to the database itself; the salted hash keeps PINs unreadable
 // to anyone who reads the users table, including admins.
-export const PERMISSIONS = ['receive', 'produce', 'dispatch', 'catalog', 'inspect', 'qc', 'waste', 'reverse'];
+export const ROLES = ['admin', 'purchase_manager', 'quality_inspector', 'supervisor', 'sales_manager', 'dispatch'];
 export const LOCK_AFTER = 5;
 export const LOCK_MS = 5 * 60_000;
 export const SESSION_MS = 30 * 24 * 3600_000;
@@ -26,11 +26,12 @@ export function sessionCookie(request, token) {
 }
 
 /** SQL for one active or pending user; used by the API, the seed script and tests. */
-export async function userRow({ id = crypto.randomUUID(), workspaceId, name, pin, role = 'member', status = 'active', permissions = [], createdBy = null, now = Date.now() }) {
+export async function userRow({ id = crypto.randomUUID(), workspaceId, name, pin, role = null, status = 'active', createdBy = null, now = Date.now() }) {
+  if (role !== null && !ROLES.includes(role)) throw new Error('Unknown role');
   const salt = randomHex();
   return {
-    sql: 'INSERT INTO users(id,workspace_id,name,name_key,pin_hash,pin_salt,role,status,permissions,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-    args: [id, workspaceId, name.trim(), nameKey(name), await pinHash(pin, salt), salt, role, status, JSON.stringify(permissions), now, createdBy],
+    sql: 'INSERT INTO users(id,workspace_id,name,name_key,pin_hash,pin_salt,role,status,permissions,created_at,created_by,portal_role,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    args: [id, workspaceId, name.trim(), nameKey(name), await pinHash(pin, salt), salt, role === 'admin' ? 'admin' : 'member', status, '[]', now, createdBy, role, now],
   };
 }
 
@@ -41,6 +42,6 @@ export async function seedRows(pin, now = Date.now()) {
   const workspaceId = crypto.randomUUID();
   return [
     { sql: 'INSERT INTO workspaces(id,name,created_at) VALUES(?,?,?)', args: [workspaceId, 'FAZ Textile Factory', now] },
-    ...await Promise.all(SEED_ADMINS.map(name => userRow({ workspaceId, name, pin, role: 'admin', now }))),
+    ...await Promise.all(SEED_ADMINS.map(name => userRow({ workspaceId, name, pin, role: 'admin', createdBy: 'system:seed', now }))),
   ];
 }

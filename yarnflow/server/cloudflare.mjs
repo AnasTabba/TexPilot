@@ -4,6 +4,9 @@
 // route is the shared inventory, accounts and sign-in, on the D1 database bound as DB.
 import { inventoryApi, signedIn } from './inventory.mjs';
 import { forwardToScanner } from './scanner-proxy.mjs';
+import { creditAlertsScheduled } from './sales.mjs';
+import { remindersScheduled } from './notify.mjs';
+import { purchasingScheduled } from './procurement.mjs';
 
 export default {
   async fetch(request, env) {
@@ -17,5 +20,8 @@ export default {
     } catch {
       return Response.json({ error: 'The TexPilot scanner could not be reached. Please try again shortly.' }, { status: 502 });
     }
+  },
+  async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(Promise.all([purchasingScheduled(env), remindersScheduled(env), creditAlertsScheduled(env)]));
   },
 };

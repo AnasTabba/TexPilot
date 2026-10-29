@@ -21,13 +21,13 @@ async function expectMotionSettled(page: Page) {
 
 type Language = 'en' | 'ur';
 const pinLabel = (language: Language) => language === 'ur' ? 'چار ہندسوں کا پن' : '4-digit PIN';
-const homeHeading = (language: Language) => language === 'ur' ? 'ہوم' : 'Home';
+const homeHeading = (language: Language) => language === 'ur' ? 'ڈیش بورڈ' : 'Dashboard';
 
 async function signIn(page: Page, language: Language = 'en') {
   await page.goto('/');
   await page.waitForSelector('.yf-people');
   if (language === 'ur') {
-    await page.getByRole('combobox', { name: 'Language / زبان' }).selectOption('ur');
+    if (await page.locator('html').getAttribute('lang') !== 'ur') await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   }
   await page.getByRole('button', { name: 'Anas', exact: true }).click();
@@ -88,8 +88,10 @@ async function expectPagesFit(page: Page, language: Language) {
   const prefix = language === 'ur' ? 'ur' : 'en';
   await expect(page.locator('html')).toHaveAttribute('lang', prefix);
 
-  await openPage(page, '#/overview', homeHeading(language));
-  await expectNoHorizontalOverflow(page, `${prefix} Home`);
+  await openPage(page, '#/dashboard', homeHeading(language));
+  await expectNoHorizontalOverflow(page, `${prefix} Dashboard`);
+  await openPage(page, '#/notifications', language === 'ur' ? 'اطلاعات' : 'Notifications');
+  await expectNoHorizontalOverflow(page, `${prefix} Notifications`);
   await openPage(page, '#/inventory', language === 'ur' ? 'اسٹاک' : 'Stock');
   await expectNoHorizontalOverflow(page, `${prefix} Stock`);
   await page.locator('.live-lot-row').first().click();
@@ -97,12 +99,12 @@ async function expectPagesFit(page: Page, language: Language) {
   await expectNoHorizontalOverflow(page, `${prefix} batch detail`);
   await openPage(page, '#/scanner', language === 'ur' ? 'اسکین' : 'Scan');
   await expectNoHorizontalOverflow(page, `${prefix} Scan`);
-  await openPage(page, '#/activity', language === 'ur' ? 'ہسٹری' : 'History');
+  await openPage(page, '#/history', language === 'ur' ? 'ہسٹری' : 'History');
   await expectNoHorizontalOverflow(page, `${prefix} History`);
-  await openPage(page, '#/team', language === 'ur' ? 'ٹیم' : 'Team');
-  await expectNoHorizontalOverflow(page, `${prefix} Team`);
-  await openPage(page, '#/settings', language === 'ur' ? 'ترتیبات' : 'Settings');
+  await openPage(page, '#/settings/users', language === 'ur' ? 'ترتیبات' : 'Settings');
   await expectNoHorizontalOverflow(page, `${prefix} Settings`);
+  await openPage(page, '#/profile', language === 'ur' ? 'میری پروفائل' : 'My profile');
+  await expectNoHorizontalOverflow(page, `${prefix} My profile`);
 }
 
 const viewports = [
@@ -115,9 +117,10 @@ for (const language of ['en', 'ur'] as const) {
   test(`${language}: every screen fits every viewport without horizontal overflow`, async ({ page }) => {
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.context().clearCookies();
       await page.goto('/');
       await page.waitForSelector('.yf-people');
-      if (language === 'ur') await page.getByRole('combobox', { name: 'Language / زبان' }).selectOption('ur');
+      if (language === 'ur' && await page.locator('html').getAttribute('lang') !== 'ur') await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
       await expectNoHorizontalOverflow(page, `${language} sign-in at ${viewport.name}`);
       await signIn(page, language);
       await expectPagesFit(page, language);
@@ -125,24 +128,23 @@ for (const language of ['en', 'ur'] as const) {
   });
 }
 
-test('measured controls reach 44 × 44 at 390 px, including the save notice', async ({ page }) => {
+test('measured controls reach 44 × 44 at 390 px', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await page.waitForSelector('.yf-people');
 
-  await expectTarget(page.locator('.yf-language select'), 'sign-in language select');
-  await expectTarget(page.locator('.yf-signin-ask'), 'ask for an account');
+  for (const button of await page.locator('.yf-language button').all()) await expectTarget(button, 'sign-in language choice');
+  for (const button of await page.locator('.yf-person').all()) await expectTarget(button, 'sign-in person');
   await page.getByRole('button', { name: 'Anas', exact: true }).click();
   await expectTarget(page.locator('.yf-signin-back'), 'back to people');
   await expectTarget(page.locator('.yf-keypad button').first(), 'PIN keypad key');
   await page.getByLabel('4-digit PIN').fill('2468');
-  await expect(page.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 
   await expectTarget(page.locator('.live-topbar .live-brand'), 'top bar brand');
   await expectTarget(page.locator('.live-bottom-nav button').first(), 'bottom navigation');
-  await expectTarget(page.getByRole('button', { name: 'Open Stock', exact: true }), 'Home Open Stock');
-  await expectTarget(page.locator('.yf-head .live-text-button').filter({ hasText: 'History' }), 'Home History');
-  await expectScreenTargets(page, 'Home');
+  await expectTarget(page.locator('.yf-head .live-text-button').filter({ hasText: 'See all' }), 'Dashboard See all');
+  await expectScreenTargets(page, 'Dashboard');
 
   await openPage(page, '#/inventory', 'Stock');
   await expectScreenTargets(page, 'Stock');
@@ -150,25 +152,18 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
   await expectTarget(page.locator('.yf-back'), 'batch back');
   await expectScreenTargets(page, 'batch detail');
 
-  // A real confirmation notice: receive one kilogram, review, and save.
-  await page.getByRole('button', { name: 'Receive stock', exact: true }).click();
-  await page.getByLabel('Weight (kg)', { exact: true }).fill('1');
-  await page.getByRole('button', { name: 'Review entry', exact: true }).click();
-  await page.getByRole('button', { name: 'Save entry', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Saved. Everyone on the team sees it now.' })).toBeVisible();
-  await expectTarget(page.locator('.live-success .live-icon-button'), 'notice dismiss');
-  await expectTarget(page.locator('.live-success .live-text-button'), 'notice Undo');
-
-  await openPage(page, '#/activity', 'History');
+  await openPage(page, '#/history', 'History');
   const historyActions = page.locator('.live-history .live-text-button');
   for (const action of await historyActions.all()) await expectTarget(action, 'History text action');
   await expectScreenTargets(page, 'History');
 
-  await openPage(page, '#/team', 'Team');
-  await expectScreenTargets(page, 'Team');
-  await openPage(page, '#/settings', 'Settings');
-  await expectTarget(page.locator('.yf-language select'), 'settings language select');
+  await openPage(page, '#/settings/users', 'Settings');
   await expectScreenTargets(page, 'Settings');
+  await openPage(page, '#/profile', 'My profile');
+  await expectTarget(page.locator('.yf-language'), 'profile language switch');
+  await expectScreenTargets(page, 'My profile');
+  await openPage(page, '#/notifications', 'Notifications');
+  await expectScreenTargets(page, 'Notifications');
 
   await openPage(page, '#/scanner', 'Scan');
   await expectScreenTargets(page, 'Scan');
@@ -203,7 +198,7 @@ test.describe('safe-area tokens', () => {
 
     await page.getByRole('button', { name: 'Anas', exact: true }).click();
     await page.getByLabel('4-digit PIN').fill('2468');
-    await expect(page.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
     const shell = await page.evaluate(() => {
       const read = (selector: string) => {
         const style = getComputedStyle(document.querySelector(selector)!);
@@ -237,7 +232,7 @@ test.describe('safe-area tokens', () => {
     await page.setViewportSize({ width: 844, height: 390 });
     await page.goto('/');
     await page.waitForSelector('.yf-people');
-    await page.getByRole('combobox', { name: 'Language / زبان' }).selectOption('ur');
+    await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
     await page.evaluate(() => {
       document.documentElement.style.setProperty('--safe-left', '47px');
       document.documentElement.style.setProperty('--safe-right', '21px');
@@ -296,7 +291,7 @@ test('reduced motion removes entrance animation and keeps state changes immediat
   expect(state.endlessThread).toBe('none');
 
   await page.locator('.live-bottom-nav button').nth(1).click();
-  await expect(page.getByRole('heading', { name: 'Stock', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Approvals', exact: true })).toBeVisible();
   await expectMotionSettled(page);
 });
 
@@ -309,11 +304,10 @@ test('numbers are tabular, headings balance, and supported squircle corners stay
       const computed = getComputedStyle(element);
       return { numeric: computed.fontVariantNumeric, wrap: computed.textWrap, corner: computed.cornerShape, radius: computed.borderTopLeftRadius };
     };
-    return { heading: style('h1'), flow: style('.yf-flow strong'), panel: style('.yf-next'), supportsSquircle: CSS.supports('corner-shape', 'squircle') };
+    return { heading: style('h1'), panel: style('.yf-next'), supportsSquircle: CSS.supports('corner-shape', 'squircle') };
   });
   expect(home.heading!.numeric).toBe('tabular-nums');
   expect(home.heading!.wrap).toBe('balance');
-  expect(home.flow!.numeric).toBe('tabular-nums');
   if (home.supportsSquircle) {
     expect(home.panel!.corner).toMatch(/^(squircle|superellipse\(2\))$/);
     expect(home.panel!.radius).not.toBe('0px');
@@ -344,6 +338,7 @@ test('numbers are tabular, headings balance, and supported squircle corners stay
     expect(type.pill!.radius).toBe('999px');
   }
 
+  await page.context().clearCookies();
   await page.goto('/');
   await page.waitForSelector('.yf-people');
   await page.getByRole('button', { name: 'Anas', exact: true }).click();

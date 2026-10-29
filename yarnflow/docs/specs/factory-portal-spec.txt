@@ -1,0 +1,589 @@
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+   Textile Factory Portal: Full Build Prompt
+   Paste this whole document into your AI coding tool as the specification.
+
+
+
+   0. Instructions to the AI builder
+   You are building the Factory Portal of a textile factory management system. Follow these
+   rules strictly:
+
+    1. Implement only what is written in this document. Do not add features, roles, screens,
+       fields or integrations that are not listed. If something is unclear, ask before building. Do
+       not guess.
+    2. Items marked [ASSUMPTION] are working assumptions. Implement them as written
+       but keep them easy to change.
+    3. This is the factory-side portal only. The Supplier portal and the Buyer portal are
+       separate applications. Do not build their screens. Build only the factory-side interfaces
+       and data they need (see section 9).
+    4. Enforce permissions on the backend (role-based access control). Hiding buttons in the
+       UI is not enough.
+    5. Every decision, approval, rejection, override and threshold change must be written to
+       an audit log.
+    6. Any rejection, dismissal, override or intervention requires a reason. The system must
+       refuse to save it without one.
+    7. Keep the API key for the shipment tracking service on the server only. Never expose it
+       to the front end.
+
+
+
+   1. System overview
+   Six roles use the factory portal: Admin, Purchase Manager, Quality Inspector, Supervisor,
+   Sales Manager, Dispatch.
+
+   End-to-end flow:
+
+
+
+
+                                                                                              Page 1 of 13
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+        Supplier approval → RFQ → Bidding → Award → PO → Shipment tracking → Quality
+        inspection → Supervisor review → Inventory → Buyer RFQ → Quotation → Sale →
+        Invoice → Dispatch → Payment tracking
+
+   Side flows: partial claims on rejected lots, stock queries to the supervisor, threshold
+   approvals by admin, credit-period alerts.
+
+
+
+   2. Global rules
+
+   2.1 Authority chain
+        Quality Inspector → Supervisor → Admin.
+        The supervisor decides routine items below a threshold. Above the threshold, the item
+        waits for admin approval.
+        Admin can see every action by every role and can intervene on any item at any time. An
+        intervention must include a reason and is logged.
+        A lower role cannot override a higher role.
+
+
+   2.2 Admin-configured thresholds (four, each separate, set only by admin)
+    1. Purchase threshold: compared against the total value of the accepted bid / PO (not
+       per-item).
+    2. Inventory adjustment threshold: inventory corrections and write-offs.
+    3. Claim threshold: confirmed lot rejections and claims.
+    4. Dispatch stock issue threshold: stock issues raised by dispatch.
+
+   Below the threshold: the acting role's decision is final. At or above it: the item stays in a
+   "pending admin approval" state and takes no effect until admin approves. Admin rejection
+   requires a reason. Every threshold change is logged with who changed it, old value, new
+   value and timestamp.
+
+
+   2.3 Audit log
+   Record for every action: user, role, action, object type and id, old and new values where
+   relevant, reason (where required), timestamp. Admin can view the full log. The log cannot
+   be edited or deleted.
+
+
+
+
+                                                                                             Page 2 of 13
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+   2.4 Notifications
+   One shared notification system used by all modules. Each user sees their own
+   notifications in-app. Notification events are listed in section 6.
+
+
+   2.5 Reminders
+   A pending item waiting for a decision for more than 24 hours triggers a reminder to the
+   responsible role [ASSUMPTION: 24h, configurable by admin].
+
+
+
+   3. Roles and permissions
+
+   3.1 Admin
+        Can do everything and view everything on the factory portal.
+        Approves or rejects requests that exceed thresholds.
+        Decides outcomes of claims (return, replacement or claim) and may adjust the auto-
+        calculated claim amount with a mandatory reason.
+        Sets the four thresholds.
+        Views analytics (section 7).
+        Can intervene on any item, with a reason.
+
+
+   3.2 Purchase Manager
+        Supplier list: view and maintain approved suppliers. Cannot add suppliers (suppliers
+        register themselves on the supplier portal and appear here as pending). Can approve
+        or reject pending suppliers (reason required on rejection).
+        RFQs: post a request for quotation. It goes only to approved suppliers in the relevant
+        category.
+        Bidding: start bidding, accept a bid, reject a bid (reason required), end bidding.
+        Award approval: if the accepted bid’s total value is at or above the purchase threshold,
+        the award needs admin approval. The PO is generated only after approval.
+        Shipment tracking: track shipments by B/L number using the shipment tracking API
+        (key stored server-side).
+        Supplier ratings: give ratings to suppliers, maintain supplier profile, review feedback
+        and quality results.
+
+
+
+
+                                                                                             Page 3 of 13
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+        Receives a notification only when a lot is rejected and a claim is raised. Takes no
+        decision on claims.
+
+
+   3.3 Quality Inspector
+        Inspect an incoming lot and record accepted quantity and rejected quantity (partial
+        acceptance allowed).
+        For the accepted quantity: take and upload mandatory photos of the approved lot and
+        report to the supervisor.
+        For the rejected quantity: highlight the issues (type, severity, description, optional
+        photos) and send them to the supervisor.
+        Cannot add inventory and cannot override the supervisor.
+
+
+   3.4 Supervisor
+        The only role that adds inventory (raw materials and finished goods). Each inventory
+        record stores its type and source (QC-approved lot or production output).
+        Reviews inspector reports and accepts or rejects them (rejection requires a reason).
+        Reviews issues raised by the inspector: confirm, dismiss (reason required) or
+        escalate to admin.
+        Answers stock availability queries from Sales.
+        Handles stock issues raised by Dispatch (shortage or mismatch): accepts or rejects
+        and corrects inventory if needed.
+        Inventory adjustments and write-offs require a reason. At or above the inventory
+        adjustment threshold, they need admin approval.
+        Reports to admin through a structured report (section 7.2).
+
+
+   3.5 Sales Manager
+        Buyer list: buyers register themselves on the buyer portal and appear as pending. The
+        sales manager verifies the buyer’s details and approves or rejects (reason on
+        rejection). Only approved buyers can transact.
+        Buyer RFQs: can respond only to RFQs from approved buyers. RFQs from pending
+        buyers are held in state awaiting buyer approval. If the buyer is rejected, their RFQs
+        close automatically [ASSUMPTION].
+        Quotation: respond to a buyer RFQ with rates, specifications and payment terms.
+        Before quoting, may send a stock availability query to the supervisor.
+
+
+
+                                                                                              Page 4 of 13
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+        Sales noting: record the sale once the buyer accepts.
+        Auto invoice generation after rates, specs and payment terms are decided.
+        Payment tracking: for example 30 days credit. Track the time until due and send alerts
+        to the sales manager.
+        Dispatch approval: respond to approval requests from Dispatch.
+        Sales analytics (section 7).
+
+
+   3.6 Dispatch
+        Track dispatches.
+        Request approval from the sales manager before dispatch. Can hold a dispatch on
+        failure of certain terms, after a message from the sales manager.
+        Raise a stock issue to the supervisor (shortage or mismatch).
+        Cannot change invoices, prices or payment terms.
+
+
+
+   4. Detailed workflows
+
+   4.1 Supplier approval
+    1. Supplier registers on the supplier portal. The record arrives in the factory portal with
+        status pending.
+    2. Purchase Manager approves or rejects (reason on rejection).
+    3. Supplier statuses: pending, approved, rejected, suspended [ASSUMPTION:
+        suspended included].
+    4. Each supplier has one or more categories (for example yarn, dyes, chemicals,
+       packaging). Only approved suppliers receive RFQs.
+
+
+   4.2 RFQ and bidding
+    1. Purchase Manager creates an RFQ (item, specification, quantity, category, required
+       date, closing deadline).
+    2. On posting, it is sent to all approved suppliers in that category.
+    3. Bidding states: draft, open, closed, awarded, cancelled.
+    4. Purchase Manager can start bidding, end bidding manually, and bidding also auto-ends
+        at the closing deadline.
+    5. Purchase Manager accepts or rejects bids (reason on rejection).
+
+
+                                                                                            Page 5 of 13
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+    6. Bids are sealed: suppliers cannot see each other’s prices [ASSUMPTION].
+
+
+   4.3 Award and PO
+    1. Purchase Manager accepts a bid.
+    2. If total bid value is below the purchase threshold: the PO is generated immediately.
+    3. If at or above: status becomes pending admin approval. Admin approves (PO
+       generated) or rejects (reason required).
+    4. If the PO total later crosses the threshold (for example after a quantity change), it
+        needs admin approval again [ASSUMPTION].
+    5. The B/L number is attached to the PO and used for shipment tracking.
+
+
+   4.4 Shipment tracking
+        Purchase Manager enters or views the B/L number on the PO and sees status from the
+        tracking API.
+        If the API fails, show the last known cached status and an error message. Never crash
+        the page.
+
+
+   4.5 Quality inspection and supervisor review
+    1. Each lot is linked to its PO, shipment and supplier.
+    2. Inspector records accepted quantity and rejected quantity.
+    3. Accepted quantity: inspector uploads mandatory photos (timestamped, tied to the lot
+        id) and reports to the supervisor.
+              Supervisor accepts: the quantity is added to inventory.
+              Supervisor rejects (reason required): the report returns to the inspector for re-
+              inspection or better photos.
+    4. Rejected quantity: inspector raises issues with type and severity. The supervisor
+        chooses:
+              Confirm: a partial claim is created (4.6).
+              Dismiss (reason required): returns to the inspector for re-inspection, or the lot is
+              accepted with a noted deviation.
+              Escalate to admin: for disputed or high-value cases.
+    5. If the confirmed rejection is at or above the claim threshold, it needs admin approval
+        before the claim proceeds.
+
+
+
+
+                                                                                                Page 6 of 13
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+   4.6 Partial claims
+    1. Claim amount is calculated automatically: rejected quantity × PO rate for that lot.
+    2. Admin decides the outcome: return, replacement or claim.
+    3. Admin may adjust the calculated amount. A reason is mandatory. The audit log stores
+       the original amount, adjusted amount, reason, admin and timestamp.
+    4. The Purchase Manager is notified of the final outcome and amount. No decision by the
+        purchase manager.
+    5. The outcome feeds the supplier rating.
+
+
+   4.7 Inventory
+        Only the Supervisor adds inventory. Raw material inventory comes only from QC-
+        approved lots. Finished goods are added by the supervisor as production output.
+        Adjustments and write-offs need a reason and follow the inventory adjustment
+        threshold.
+        Inventory is deducted at the moment of dispatch.
+
+
+   4.8 Buyer RFQ to sale to invoice
+    1. Buyer registers on the buyer portal (status pending). Sales Manager verifies and
+       approves or rejects.
+    2. Approved buyer posts an RFQ (the RFQ may also be posted while pending but stays
+       locked as awaiting buyer approval).
+    3. Sales Manager sends a stock availability query to the Supervisor, who replies with
+       available quantity.
+    4. Sales Manager responds with a quotation: rates, specifications, payment terms.
+    5. When the buyer accepts, Sales Manager notes the sale.
+    6. Invoice is generated automatically from the agreed rates, specs and payment terms.
+       Once issued, the invoice is locked. Corrections happen through a revised invoice or
+        credit note [ASSUMPTION].
+
+
+   4.9 Payment tracking
+        Each invoice has payment terms (for example 30 days credit) and a due date.
+        Track payments received, including partial payments [ASSUMPTION].
+        Alerts to the Sales Manager at 7 days before due, 3 days before due, on the due date,
+        and when overdue [ASSUMPTION: intervals configurable].
+
+
+                                                                                             Page 7 of 13
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+        Payment statuses: unpaid, partially paid, paid, overdue.
+
+
+   4.10 Dispatch
+    1. Dispatch statuses: pending approval, approved, on hold, dispatched, delivered.
+    2. Dispatch raises a structured approval request tied to the order. The Sales Manager
+       approves or holds (hold reason required, for example payment overdue or terms not
+        met).
+    3. Dispatch can hold a dispatch on failure of terms after a message from the Sales
+       Manager. Messaging is a structured request linked to the order, not free-form chat.
+    4. If stock is short or mismatched, Dispatch raises a stock issue to the Supervisor. At or
+       above the dispatch stock issue threshold, it goes to Admin.
+    5. Dispatch record may include vehicle or transport details and delivery proof
+        [ASSUMPTION: optional fields].
+    6. Inventory is deducted when status becomes dispatched.
+
+
+
+   5. Data entities (for the database)
+   Create tables for at least these entities. Each has status fields, created and updated
+   timestamps, and created-by user.
+
+        Users, Roles
+        Suppliers (status, categories, profile, ratings) – synced from the supplier portal
+        Buyers (status, verification details) – synced from the buyer portal
+        RFQs (purchase), Bids (state, value, reason on rejection)
+        Purchase Orders (total value, B/L number, approval status)
+        Shipments (B/L number, last known status, last checked time)
+        Lots, Inspections (accepted qty, rejected qty), Inspection Photos, Issues (type,
+        severity, status)
+        Inventory items, Inventory transactions (type: raw or finished, source, adjustments
+        with reason)
+        Claims (rejected qty, PO rate, calculated amount, adjusted amount, outcome, reason)
+        Buyer RFQs, Quotations
+        Sales, Invoices (locked flag, number, tax, currency), Payments, Credit alerts
+
+
+
+
+                                                                                             Page 8 of 13
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+        Dispatches (status, hold reason), Dispatch approval requests, Stock queries, Stock
+        issues
+        Thresholds (four types, value, changed by, history)
+        Approval requests (generic: type, object, amount, status, decided by, reason)
+        Notifications
+        Audit log
+        Supplier ratings (manual rating plus automatic data such as QC pass rate and on-time
+        delivery [ASSUMPTION])
+
+   Invoice fields (tax, currency, numbering format) are not yet defined. Ask me before
+   building the invoice template.
+
+
+
+   6. Notification events
+
+     Event                                      Recipient
+
+     New supplier pending                       Purchase Manager
+
+     New buyer pending                          Sales Manager
+
+     New buyer RFQ from approved buyer          Sales Manager
+
+     Bid received, bidding closed               Purchase Manager
+
+     Award above threshold awaiting approval    Admin
+
+     Lot ready for inspection                   Quality Inspector
+
+     Inspector report or issue submitted        Supervisor
+
+     Supervisor decision returned               Quality Inspector
+
+     Item above threshold awaiting approval     Admin
+
+     Claim created and final outcome            Admin, then Purchase Manager (notice only)
+
+     Stock query from Sales or Dispatch         Supervisor
+
+     Payment due soon, due today, overdue       Sales Manager
+
+     Dispatch approval request                  Sales Manager
+
+     Dispatch on hold or approved               Dispatch
+
+
+
+
+                                                                                         Page 9 of 13
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+     Event                                       Recipient
+
+     Pending item older than 24 hours            Responsible role
+
+
+
+
+   7. Analytics and reports
+
+   7.1 Analytics
+        Admin: all analytics across purchasing, quality, inventory, sales, payments, dispatch
+        and user activity.
+        Sales Manager: sales analytics (sales by period, buyer, product; payment status;
+        overdue amounts).
+        Purchase Manager: supplier performance and bidding summary [ASSUMPTION].
+
+
+   7.2 Supervisor report to admin
+   Structured report containing: confirmed rejections with reasons and photos, escalated
+   issues, inventory adjustments and write-offs, and manually flagged items.
+
+
+
+   8. Screen list per role
+   All roles also have: Login, Notifications, My Profile.
+
+
+   8.1 Admin
+    1. Dashboard (pending approvals, key figures)
+    2. Approvals queue (purchase awards, inventory adjustments, claims, dispatch stock
+        issues, escalations)
+    3. Approval detail (approve or reject with reason)
+    4. Claims list and claim detail (decide outcome, adjust amount with reason)
+    5. Thresholds settings (four thresholds, change history)
+    6. Activity monitor (all actions by all roles, intervene with reason)
+    7. Audit log viewer
+    8. Supervisor reports
+    9. Analytics (all modules)
+
+
+
+
+                                                                                           Page 10 of 13
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+ 10. User and role management [ASSUMPTION: in scope, confirm]
+ 11. Read-only views of every module screen below
+
+
+   8.2 Purchase Manager
+    1. Dashboard
+    2. Supplier list (filter by status and category)
+    3. Pending suppliers (approve or reject)
+    4. Supplier profile (details, ratings, feedback, quality history)
+    5. Create RFQ
+    6. RFQ list and RFQ detail (start, end bidding)
+    7. Bid comparison (accept or reject bids)
+    8. Awards pending admin approval
+    9. Purchase orders list and detail
+ 10. Shipment tracking (B/L lookup)
+ 11. Rate supplier
+ 12. Claim notices (read-only)
+ 13. Supplier performance analytics
+
+
+   8.3 Quality Inspector
+    1. Dashboard (lots awaiting inspection)
+    2. Lot list
+    3. Inspection form (accepted qty, rejected qty)
+    4. Photo upload (mandatory for accepted quantity)
+    5. Raise issue form (type, severity, description, photos)
+    6. My submissions and their status
+    7. Returned items (rejected by supervisor, with reason)
+
+
+   8.4 Supervisor
+    1. Dashboard
+    2. Inspector reports queue (accept or reject with reason)
+    3. Issues queue (confirm, dismiss, escalate)
+    4. Add inventory (raw or finished)
+
+
+
+
+                                                                        Page 11 of 13
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+    5. Inventory list and detail
+    6. Inventory adjustment and write-off form
+    7. Stock queries from Sales (respond)
+    8. Dispatch stock issues (accept or reject, correct inventory)
+    9. Report to admin
+ 10. Decision history
+
+
+   8.5 Sales Manager
+    1. Dashboard
+    2. Buyer list (filter by status)
+    3. Pending buyers (verify details, approve or reject)
+    4. Buyer RFQ list and detail (respond only if buyer approved)
+    5. Stock availability query
+    6. Create quotation (rates, specs, payment terms)
+    7. Note sale
+    8. Invoices list and detail (locked after issue)
+    9. Payment tracking (due dates, partial payments, status)
+ 10. Credit alerts
+ 11. Dispatch approval requests (approve or hold)
+ 12. Sales analytics
+
+
+   8.6 Dispatch
+    1. Dashboard
+    2. Dispatch list (by status)
+    3. Dispatch detail and tracking
+    4. Request dispatch approval
+    5. Hold dispatch (reason)
+    6. Raise stock issue to supervisor
+    7. Dispatch history
+
+
+
+
+                                                                     Page 12 of 13
+Textile Factory Portal: Full Build Prompt
+
+
+
+
+   9. Integration with the Supplier and Buyer portals
+        Supplier and Buyer portals are separate applications. Do not build them.
+        The factory portal receives from them: supplier registrations, supplier bids, buyer
+        registrations, buyer RFQs, buyer acceptance of quotations.
+        The factory portal sends to them: purchase RFQs, bid results, quotations, invoices.
+        Not yet decided: whether these share one database or communicate by API. Ask me
+        before building this layer. Until then, build the factory-side data model and endpoints
+        so either option can be added.
+
+
+
+   10. Out of scope
+   Do not build: supplier or buyer portal screens, production planning, payroll or HR,
+   manufacturing job tracking, a free-form chat system, payment gateways, or any role
+   beyond the six above.
+
+
+
+   11. Open items to confirm before building
+    1. Invoice fields: tax, currency, numbering format.
+    2. Shared database or API between the factory portal and the supplier and buyer portals.
+    3. Whether user and role management is in admin scope.
+    4. Whether the PO re-approval rule (4.3, point 4) should stay.
+    5. Any of the [ASSUMPTION] items above that you want changed.
+
+   Ask me these before starting the parts they affect.
+
+
+
+
+                                                                                           Page 13 of 13
+

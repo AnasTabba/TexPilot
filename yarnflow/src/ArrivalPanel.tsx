@@ -1,0 +1,39 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Plus, RefreshCw } from 'lucide-react';
+import { AsyncForm, Field, errorMessage } from './forms';
+import { inventoryRequest as api, type Member, type Product } from './inventory-client';
+import { useLanguage } from './i18n';
+import { InterventionField } from './PortalCommon';
+import { factoryInput, factoryTime, fixedInput, localFactoryInput, quantity } from './erp-client';
+
+interface InboundOrder { id: string; reference: string; status: string; supplier_name: string; title: string; specifications: string; quantity_milli: number; arrived_milli: number; unit: string }
+interface Shipment { id: string; purchase_order_id: string; bill_of_lading: string }
+interface QcLot { id: string; purchase_order_id: string; reference: string; supplier_lot: string; quantity_milli: number; unit: string; arrived_at: number; status: 'awaiting_inspection' | 'under_review' | 'settled'; product_name: string }
+interface InboundState { orders: InboundOrder[]; products: Product[]; shipments: Shipment[]; lots: QcLot[] }
+const lotStatus = { awaiting_inspection: ['Awaiting inspection', 'معائنے کا منتظر'], under_review: ['Under review', 'جائزے میں'], settled: ['Settled', 'نمٹا دیا گیا'] } as const;
+export default function IncomingStock({ member, orderId, onInventoryChanged }: { member: Member; orderId?: string; onInventoryChanged: () => Promise<void> }) {
+ const { t } = useLanguage();const [state,setState]=useState<InboundState|null>(null),[error,setError]=useState(''),[open,setOpen]=useState(''),[notice,setNotice]=useState('');
+ const load=useCallback(async()=>{try{const [procurement, inventory, quality, shipmentData] = await Promise.all([api<{orders:(InboundOrder & {terms:{title:string;specifications:string;unit:string}})[]}>('/erp/procurement'), api<{products:Product[]}>('/workspace'), api<{lots:QcLot[]}>('/erp/qc/lots'), api<{shipments:Shipment[]}>('/erp/shipments')]);const lots=quality.lots;const orders=procurement.orders.filter(o=>!orderId||o.id===orderId).map(o=>({...o, title:o.terms.title, specifications:o.terms.specifications, unit:o.terms.unit, arrived_milli:lots.filter(l=>l.purchase_order_id===o.id).reduce((n,l)=>n+l.quantity_milli,0)}));setState({orders,products:inventory.products,shipments:shipmentData.shipments,lots});setError('');}catch(e){setError(errorMessage(e));}},[orderId]);
+ useEffect(()=>{void load();},[load]);const saved=async()=>{await onInventoryChanged();await load();setOpen('');setNotice(t('Arrival registered. Quality inspectors have been told it is ready to inspect.', 'آمد درج ہو گئی۔ کوالٹی انسپکٹرز کو بتا دیا گیا ہے کہ معائنہ تیار ہے۔'));};
+ return <section className="live-panel"><div className="yf-head"><div><h2>{t('Incoming stock', 'آنے والا اسٹاک')}</h2><p>{t('Register each arrival against its purchase order and shipment. Quality inspectors then count, photograph and report what they accepted and rejected.', 'ہر آمد کو اس کے خریداری آرڈر اور شپمنٹ کے ساتھ درج کریں۔ پھر کوالٹی انسپکٹر قبول اور مسترد مال گنتے، تصویر لیتے اور رپورٹ کرتے ہیں۔')}</p></div><button className="button" onClick={()=>void load()}><RefreshCw size={18}/>{t('Refresh arrivals', 'آمد تازہ کریں')}</button></div>
+  {error&&<p className="live-error" role="alert">{t(error)}</p>}{notice&&<p className="live-success" role="status">{notice}</p>}{!state&&!error&&<p role="status">{t('Loading incoming orders…','آنے والے آرڈر لوڈ ہو رہے ہیں…')}</p>}
+  {state&&!state.orders.length&&<p className="live-muted">{t('Accepted supplier purchase orders appear here.', 'منظور شدہ سپلائر خریداری آرڈر یہاں نظر آئیں گے۔')}</p>}
+  <div className="erp-records">{state?.orders.map(o=>{const lots=state.lots.filter(l=>l.purchase_order_id===o.id),remaining=o.quantity_milli-o.arrived_milli;return <article className="erp-record" key={o.id}><h3>{o.reference} · {o.supplier_name}</h3><h4>{o.title}</h4><p className="erp-multiline">{o.specifications}</p><p>{t('Still to arrive:', 'آنا باقی:')} {quantity(remaining)} {o.unit}</p>
+   {open==='receive:'+o.id?<ArrivalForm member={member} order={o} remaining={remaining} products={state.products} shipments={state.shipments.filter(x=>x.purchase_order_id===o.id)} onSaved={saved} onCancel={()=>setOpen('')}/>:remaining>0&&['purchase_manager','admin'].includes(member.role)&&['accepted','dispatched'].includes(o.status)&&<button className="button primary" onClick={()=>setOpen('receive:'+o.id)}><Plus size={18}/>{t('Register arrival', 'آمد درج کریں')}</button>}
+   {lots.map(l=><div className="erp-shipment" key={l.id}><strong>{l.reference} · {l.product_name} · {quantity(l.quantity_milli)} {l.unit}</strong><span>{factoryTime(l.arrived_at)}{l.supplier_lot?' · '+l.supplier_lot:''} · {t(lotStatus[l.status][0], lotStatus[l.status][1])}</span></div>)}
+
+  </article>;})}</div>
+ </section>;
+}
+function ArrivalForm({member,order,remaining,products,shipments,onSaved,onCancel}:{member:Member;order:InboundOrder;remaining:number;products:Product[];shipments:Shipment[];onSaved:()=>Promise<void>;onCancel:()=>void}){
+ const {t}=useLanguage();const [id]=useState(crypto.randomUUID()),[productId,setProduct]=useState(products[0]?.id||''),[shipmentId,setShipment]=useState(shipments[0]?.id||''),[qty,setQty]=useState(String(remaining/1000)),[reference,setReference]=useState(''),[supplierLot,setSupplierLot]=useState(''),[arrived,setArrived]=useState(localFactoryInput(Date.now())),[intervention,setIntervention]=useState('');
+ return <AsyncForm title={t('Register arrival','آمد درج کریں')} detail={order.reference} submit={t('Register arrival for inspection','معائنے کے لیے آمد درج کریں')} onCancel={onCancel} note={t('Nothing is added to stock here. The lot waits for a quality inspector, who records what was accepted and what was rejected.', 'یہاں اسٹاک میں کچھ شامل نہیں ہوتا۔ لاٹ کوالٹی انسپکٹر کا انتظار کرتی ہے جو قبول اور مسترد مقدار درج کرتا ہے۔')} onSubmit={async()=>{await api('/erp/qc/lots',{id,orderId:order.id,shipmentId,productId,reference,quantityMilli:fixedInput(qty,3,'Quantity'),supplierLot,arrivedAt:factoryInput(arrived),...(intervention?{interventionReason:intervention}:{})});await onSaved();}}>
+  {!products.length&&<p className="live-warning">{t('Add the material in Stock before registering it.', 'درج کرنے سے پہلے اسٹاک میں میٹیریل شامل کریں۔')}</p>}
+  {!shipments.length&&<p className="live-warning">{t('Attach a bill of lading to this order before registering an arrival.', 'آمد درج کرنے سے پہلے اس آرڈر کے ساتھ بل آف لیڈنگ منسلک کریں۔')}</p>}
+  <Field>{t('Shipment (bill of lading)','شپمنٹ (بل آف لیڈنگ)')}<select value={shipmentId} onChange={e=>setShipment(e.target.value)} required><option value="" disabled>{t('Choose shipment','شپمنٹ منتخب کریں')}</option>{shipments.map(x=><option key={x.id} value={x.id}>{x.bill_of_lading}</option>)}</select></Field>
+  <Field>{t('Material','میٹیریل')}<select value={productId} onChange={e=>setProduct(e.target.value)} required><option value="" disabled>{t('Choose material','میٹیریل منتخب کریں')}</option>{products.map(p=><option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}</select></Field>
+  <Field>{t('Lot reference','لاٹ حوالہ')}<input value={reference} onChange={e=>setReference(e.target.value)} required maxLength={100}/></Field><Field>{t('Supplier lot reference (optional)','سپلائر لاٹ حوالہ (اختیاری)')}<input value={supplierLot} onChange={e=>setSupplierLot(e.target.value)} maxLength={100}/></Field>
+  <div className="live-fields"><Field>{t(`Arrived quantity (${order.unit})`,`پہنچنے والی مقدار (${order.unit})`)}<input inputMode="decimal" value={qty} onChange={e=>setQty(e.target.value)} required/></Field><Field>{t('Arrived at (factory time)','آمد کا وقت (فیکٹری وقت)')}<input type="datetime-local" value={arrived} onChange={e=>setArrived(e.target.value)} required/></Field></div>
+ <InterventionField member={member} owners={['purchase_manager']} value={intervention} onChange={setIntervention}/>
+ </AsyncForm>;
+}
