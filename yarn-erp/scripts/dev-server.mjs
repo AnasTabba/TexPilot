@@ -5,7 +5,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync
 import { resolve, extname } from 'node:path';
 import { inventoryApi } from '../server/inventory.mjs';
 import { sqliteBinding } from '../server/sqlite.mjs';
-import { seedRows } from '../server/auth.mjs';
+import { seedRows, userRow } from '../server/auth.mjs';
+import { notifyRole } from '../server/notify.mjs';
 import { seedDemoStock } from './demo-stock.mjs';
 
 if (process.env.YARNFLOW_LOCAL_DEV !== '1') throw new Error('Local preview requires YARNFLOW_LOCAL_DEV=1. Hosted production runs on Cloudflare D1.');
@@ -31,6 +32,11 @@ async function open() {
     if (!pin) throw new Error('New local database: set YARNFLOW_SEED_PIN (4 digits) for the admins Anas, Fahad and Zuhair.');
     for (const { sql, args } of await seedRows(pin)) database.prepare(sql).run(...args);
     if (process.env.YARNFLOW_TEST_MODE !== '1' || dbPath !== ':memory:') return { database, DB };
+    // Test mode also has one person for each other role.
+    const workspaceId = database.prepare('SELECT id FROM workspaces').get().id;
+    for (const [name, role] of [['Pervaiz', 'purchase_manager'], ['Qasim', 'quality_inspector'], ['Saima', 'supervisor'], ['Sana', 'sales_manager'], ['Danish', 'dispatch']]) {
+      const { sql, args } = await userRow({ workspaceId, name, pin, role, createdBy: 'system:seed' }); database.prepare(sql).run(...args);
+    }
     const call = (path, body, cookie) => inventoryApi(new Request('http://local/api' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://local', ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(body) }), { DB });
     const cookie = (await call('/auth/login', { name: 'Anas', pin })).headers.get('Set-Cookie').split(';')[0];
     await seedDemoStock(async (path, body) => { const response = await call(path, body, cookie); if (!response.ok) throw new Error(`Demo stock ${path}: ${response.status}`); return response.json(); });
@@ -53,6 +59,13 @@ const server = createServer(async (incoming, outgoing) => {
     const url = new URL(incoming.url || '/', `http://${incoming.headers.host || `127.0.0.1:${port}`}`);
     if (url.pathname === '/__test/reset' && incoming.method === 'POST' && process.env.YARNFLOW_TEST_MODE === '1' && dbPath === ':memory:') {
       database.close(); ({ database, DB } = await open()); env.DB = DB;
+      outgoing.writeHead(204); outgoing.end(); return;
+    }
+    // Tests raise a notification the way a later intake route will: for every active person of a role.
+    if (url.pathname === '/__test/notify' && incoming.method === 'POST' && process.env.YARNFLOW_TEST_MODE === '1' && dbPath === ':memory:') {
+      let text = ''; for await (const chunk of incoming) text += chunk;
+      const { role, event, objectType, objectId, label } = JSON.parse(text);
+      await notifyRole(DB, database.prepare('SELECT id FROM workspaces').get().id, role, event, objectType, objectId, label).run();
       outgoing.writeHead(204); outgoing.end(); return;
     }
     if (url.pathname.startsWith('/api/')) {

@@ -11,7 +11,7 @@ export default defineConfig({
     { name: 'iphone-webkit', use: { ...devices['iPhone 13'] } },
   ],
   webServer: {
-    command: `YARNFLOW_LOCAL_DEV=1 YARNFLOW_TEST_MODE=1 YARNFLOW_SEED_PIN=2468 YARNFLOW_SQLITE_PATH=:memory: PORT=${port} node scripts/dev-server.mjs`,
+    command: `YARNFLOW_LOCAL_DEV=1 YARNFLOW_TEST_MODE=1 YARNFLOW_SEED_PIN=2468 YARNFLOW_SQLITE_PATH=:memory: SUPPLIER_PORTAL_TOKEN=e2e-supplier-portal-token-000000000000 BUYER_PORTAL_TOKEN=e2e-buyer-portal-token-00000000000000000 PORT=${port} node scripts/dev-server.mjs`,
     url: baseURL, reuseExistingServer: !process.env.CI, timeout: 30000,
   },
 });

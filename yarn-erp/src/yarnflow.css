@@ -318,6 +318,19 @@ input:disabled, select:disabled, textarea:disabled { background: var(--sunken); 
 .yf-next.uninspected .yf-next-icon { color: var(--warn); }
 .yf-next.hold .yf-next-icon { color: var(--bad); }
 .yf-next.clear .yf-next-icon, .yf-next.approved .yf-next-icon { color: var(--ok); }
+.yf-next.is-ok { background: var(--ok-bg); }
+.yf-next.is-warn { background: var(--warn-bg); }
+.yf-next.is-bad { background: var(--bad-bg); }
+.yf-next.is-ok .yf-next-icon { color: var(--ok); }
+.yf-next.is-warn .yf-next-icon { color: var(--warn); }
+.yf-next.is-bad .yf-next-icon { color: var(--bad); }
+.yf-status { display: inline-flex; align-items: center; gap: 6px; flex: none; height: 30px; padding: 0 12px; border-radius: var(--r-pill); background: var(--ground); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.yf-status.is-ok { background: var(--ok-bg); color: var(--ok); }
+.yf-status.is-warn { background: var(--warn-bg); color: var(--warn); }
+.yf-status.is-bad { background: var(--bad-bg); color: var(--bad); }
+.yf-inbox ul, ul.yf-inbox { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.yf-inbox .live-actions { margin-bottom: 12px; }
+.yf-notice.is-unread .live-lot-name strong { font-weight: 700; }
 .yf-next h2 { font-size: 24px; line-height: 1.2; letter-spacing: -0.015em; }
 .yf-next h3 { font-size: 19px; line-height: 1.25; }
 .yf-next p { margin-top: 6px; color: var(--ink-2); }

@@ -157,7 +157,7 @@ test.describe('Shared inventory', () => {
   test('phone screens have no critical accessibility issues or horizontal overflow', async ({ page }, testInfo) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await signIn(page);
-    for (const route of ['overview', 'inventory', 'scanner', 'activity', 'settings']) {
+    for (const route of ['dashboard', 'inventory', 'scanner', 'activity', 'notifications', 'profile']) {
       await page.goto('/#/' + route);
       await expect(page.getByRole('main')).toBeVisible();
       const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();

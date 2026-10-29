@@ -7,17 +7,17 @@ async function signIn(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Anas', exact: true }).click();
   await page.getByLabel('4-digit PIN', { exact: true }).fill('2468');
-  await expect(page.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 }
 
 test('a second tab and reload share the signed-in session', async ({ page, context }) => {
   await signIn(page);
   const second = await context.newPage();
   await second.goto('/');
-  await expect(second.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
+  await expect(second.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await second.reload();
-  await expect(second.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
+  await expect(second.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 });
 
 test('backgrounding and closing a tab keep the session active', async ({ page, context }) => {
@@ -30,7 +30,7 @@ test('backgrounding and closing a tab keep the session active', async ({ page, c
   await page.close();
   const reopened = await context.newPage();
   await reopened.goto('/');
-  await expect(reopened.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
+  await expect(reopened.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 });
 
 test('explicit sign-out revokes the shared server session', async ({ page, context }) => {
