@@ -76,6 +76,8 @@ export function poInsertQueries(db, member, { bidId, bidVersion, termsSnapshot: 
     query(db, "INSERT INTO supplier_purchase_orders(id,workspace_id,rfq_id,bid_id,supplier_id,reference,terms_snapshot,status,accepted_by,created_at,quantity_milli,total_minor,approval_status,version,updated_at,created_by) VALUES(?,?,?,?,?,?,?,'accepted',?,?,?,?,'approved',1,?,?)",
       id, w, t.rfq_id, bidId, t.supplier_id, reference('PO'), JSON.stringify(t), acceptedBy, now, t.quantity_milli, total, now, acceptedBy),
     query(db, "UPDATE procurement_rfqs SET status='awarded',updated_at=? WHERE id=? AND status IN ('open','closed') AND cancelled_at IS NULL", now, t.rfq_id), lostRace(db),
+    notifyRole(db, w, 'purchase_manager', 'po.created', 'purchase_order', id, t.title, member.user_id),
+    notifyRole(db, w, 'admin', 'po.created', 'purchase_order', id, t.title, member.user_id),
     audit(db, member, 'po.created', id, { bidId, bidVersion }, 'staff', { objectType: 'po', after: { total_minor: total, quantity_milli: t.quantity_milli }, intervention })];
 }
 const sameCurrency = async (db, workspaceId, currency) => { if ((await settingsOf(db, workspaceId)).currency !== currency) throw new Error('currency changed'); };
@@ -192,6 +194,8 @@ export async function staffProcurement(request, env, member, path, data) {
       const previous = await one(db, 'SELECT * FROM supplier_ratings WHERE id=?', id);
       if (previous) { if (previous.supplier_id !== s.id || previous.delivery !== delivery || previous.quality !== quality || previous.terms !== terms || previous.feedback !== comment || previous.order_id !== orderId) fail(409, 'This record ID was already used for a different rating.'); return json({ saved: true }); }
       await db.batch([query(db, 'INSERT INTO supplier_ratings(id,workspace_id,supplier_id,rating,feedback,status,created_by,created_at,updated_at,delivery,quality,terms,order_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', id, w, s.id, rating, comment, 'active', member.user_id, now, now, delivery, quality, terms, orderId),
+        notifyRole(db, w, 'purchase_manager', 'supplier.rated', 'supplier', s.id, s.name, member.user_id),
+        notifyRole(db, w, 'admin', 'supplier.rated', 'supplier', s.id, s.name, member.user_id),
         audit(db, member, 'supplier.rated', s.id, { delivery, quality, terms, comment, orderId }, 'staff', { intervention })]);
       return json({ saved: true });
     }
@@ -202,6 +206,8 @@ export async function staffProcurement(request, env, member, path, data) {
       const previous = await one(db, 'SELECT * FROM supplier_ratings WHERE id=?', id);
       if (previous) { if (previous.supplier_id !== s.id || previous.rating !== rating || previous.feedback !== feedback) fail(409, 'This record ID was already used for a different rating.'); return json({ saved: true }); }
       await db.batch([query(db, 'INSERT INTO supplier_ratings(id,workspace_id,supplier_id,rating,feedback,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)', id, w, s.id, rating, feedback, 'active', member.user_id, now, now),
+        notifyRole(db, w, 'purchase_manager', 'supplier.rated', 'supplier', s.id, s.name, member.user_id),
+        notifyRole(db, w, 'admin', 'supplier.rated', 'supplier', s.id, s.name, member.user_id),
         audit(db, member, 'supplier.rated', s.id, { rating, feedback }, 'staff', { intervention })]);
       return json({ saved: true });
     }
@@ -406,6 +412,8 @@ export async function supplierOperations(request, env, user, path, data) {
       // The supplier's bill of lading also becomes the order's shipment, so Incoming stock can register the arrival without re-entering it.
       query(db,'INSERT INTO shipments(id,workspace_id,purchase_order_id,bill_of_lading,created_by,created_at,updated_at) SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM shipments WHERE purchase_order_id=? AND bill_of_lading=?)',id,user.workspace_id,order.id,trackedBl,user.user_id,now,now,order.id,trackedBl),
       query(db,"UPDATE supplier_purchase_orders SET bill_of_lading=?,updated_at=? WHERE id=? AND bill_of_lading=''",trackedBl,now,order.id),
+      notifyRole(db,user.workspace_id,'purchase_manager','shipment.dispatched','purchase_order',order.id,order.reference),
+      notifyRole(db,user.workspace_id,'admin','shipment.dispatched','purchase_order',order.id,order.reference),
       audit(db,user,'shipment.dispatched',id,{order:order.id,billOfLading:bl},'supplier')]);}
     catch {fail(409,'This dispatch exceeds the order quantity or the order is no longer dispatchable. Reload first.');}
     return json({shipment:await one(db,'SELECT * FROM procurement_shipments WHERE id=?',id)},201);

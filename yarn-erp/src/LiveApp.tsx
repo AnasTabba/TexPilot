@@ -5,12 +5,14 @@ import { ArrowLeft, ArrowRight, Boxes, Camera, Check, CheckCheck, ClipboardList,
 import QRCode from 'qrcode';
 import { QualityBadge, StockFlow, movedName, when, yarnName } from './WorkspaceDashboard';
 import { moveIcon } from './icons';
-import { Dashboard, Notifications, type Inbox } from './Notifications';
+import { Dashboard, Notifications, type Inbox, type Notice } from './Notifications';
+import { NoticeToast } from './NoticeToast';
 import { ShipmentTracking } from './ShipmentTracking';
 import Profile from './Profile';
 import { portal } from './PortalCommon';
 import { COMMON, NAV } from './roles';
 import Inspections from './Inspections';
+import InspectArrival, { type Arrival } from './InspectArrival';
 import Review from './Review';
 import { parseHash } from './routes.ts';
 import SignIn, { Avatar } from './SignIn';
@@ -196,10 +198,13 @@ export default function LiveApp() {
   const [view, setView] = useState<View>(() => aliases[location.hash.split('/')[1]]?.[1] ?? 'all');
   const [online, setOnline] = useState(navigator.onLine); const [savedAt, setSavedAt] = useState(0);
   const [notice, setNotice] = useState(''); const [scanTab, setScanTab] = useState('fabric');
+  const [inspecting, setInspecting] = useState<Arrival | null>(null);
   const [matches, setMatches] = useState<{ id: string; batch: string; name: string }[]>([]);
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
   const [exportBusy, setExportBusy] = useState(false); const [integration, setIntegration] = useState('');
   const [inbox, setInbox] = useState<Inbox>({ notifications: [], unread: 0 });
+  const [toast, setToast] = useState<Notice | null>(null); const inboxSeen = useRef<number | null>(null);
+  const dismissToast = useCallback(() => setToast(null), []);
   const [history, setHistory] = useState<StockMovement[]>([]); const [moreHistory, setMoreHistory] = useState(true);
   const [historyBusy, setHistoryBusy] = useState(false); 
   const theme = 'light';
@@ -212,7 +217,7 @@ export default function LiveApp() {
     sessionLocked.current = true; requestSequence.current++;
     menuDialog.current?.close(); setState(null); setAuthNeeded(true); setLoading(false); setRefreshing(false);
     setError(''); setNotice(''); setAction(null); setHistory([]); setMoreHistory(true);
-    setLastResult(null); setMatches([]); setQuery(''); setIntegration(''); setInbox({ notifications: [], unread: 0 });
+    setLastResult(null); setMatches([]); setQuery(''); setIntegration(''); setInbox({ notifications: [], unread: 0 }); inboxSeen.current = null; setToast(null);
     if (!preserveRoute) location.hash = '/dashboard';
     if (logoutRequest.current) return logoutRequest.current;
     setEndingSession(true);
@@ -243,6 +248,22 @@ export default function LiveApp() {
     } finally { if (sequence === requestSequence.current) { setLoading(false); setRefreshing(false); } }
   }, []);
   useEffect(() => { void refresh(); const interval = setInterval(() => { if (!document.hidden) void refresh(true); }, 10000); const focus = () => { if (!document.hidden) void refresh(true); }; window.addEventListener('focus', focus); document.addEventListener('visibilitychange', focus); return () => { clearInterval(interval); requestSequence.current++; window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus); }; }, [refresh]);
+  // Other people's changes raise notices: poll the inbox lightly, toast when unread rises, and refresh the workspace so the new data shows. Skipped while hidden or signed out.
+  useEffect(() => {
+    const check = () => {
+      if (document.hidden || sessionLocked.current) return;
+      const sequence = requestSequence.current;
+      void portal<Inbox>('/notifications').then(next => {
+        if (sequence !== requestSequence.current || sessionLocked.current) return;
+        const previous = inboxSeen.current; inboxSeen.current = next.unread; setInbox(next);
+        if (previous !== null && next.unread > previous) { setToast(next.notifications.find(n => n.status === 'unread') ?? null); void refresh(true); }
+      }, () => { /* A failed poll keeps the last inbox; the next tick retries. */ });
+    };
+    const interval = setInterval(check, 20000);
+    const wake = () => { if (!document.hidden) check(); };
+    window.addEventListener('focus', wake); document.addEventListener('visibilitychange', wake);
+    return () => { clearInterval(interval); window.removeEventListener('focus', wake); document.removeEventListener('visibilitychange', wake); };
+  }, [refresh]);
   useEffect(() => { const update = () => { menuDialog.current?.close(); const alias = aliases[location.hash.split('/')[1]]; if (alias) setView(alias[1]); setRoute(routeFromHash()); setSelectedId(lotFromHash()); setAction(null); }; window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
   useEffect(() => { const network = () => { setOnline(navigator.onLine); void refresh(true); }; window.addEventListener('online', network); window.addEventListener('offline', network); return () => { window.removeEventListener('online', network); window.removeEventListener('offline', network); }; }, [refresh]);
   useEffect(() => { document.documentElement.dataset.theme = theme; try { localStorage.setItem('yf-theme', theme); } catch { /* The theme can remain in memory. */ } }, [theme]);
@@ -295,7 +316,7 @@ export default function LiveApp() {
     return <div className="yf-stock-groups">{groups.map(({ p, lots, waiting }) => <section className="yf-stock-group" key={p.id} aria-label={p.name}>
       <header><Cone hue={materialHue(workspace.products, p.id)} size={36} /><div><strong>{yarnName(p.name)}</strong><span>{p.sku}{p.barcode ? ' · ' + p.barcode : ''}</span></div><strong className="live-row-weight">{weight(lots.reduce((sum, l) => sum + lotGrams(l.id), 0) + waiting.reduce((sum, a) => sum + a.open_milli * (a.unit === 'tonne' ? 1000 : 1), 0))} <small>kg</small></strong></header>
       {lots.map(lot => <button key={lot.id} className="live-lot-row" onClick={() => { navigate('inventory', lot.id); }}><span className="live-lot-name"><strong>{t("Batch")} {lot.batch}</strong><span>{lot.supplier || 'Supplier not recorded'}</span></span><QualityBadge value={lot.quality} /><strong className="live-row-weight">{weight(lotGrams(lot.id))} <small>kg</small></strong><ChevronRight size={20} aria-hidden="true" /></button>)}
-      {waiting.map(a => <button key={a.id} className="live-lot-row" onClick={() => { location.hash = me.role === 'quality_inspector' ? '#/lots' : '#/procurement'; }}><span className="live-lot-name"><strong>{t("Arrival")} {a.reference}</strong><span>{a.supplier_name} · {t("Awaiting inspection", "معائنے کا منتظر")}</span></span><QualityBadge value="uninspected" /><strong className="live-row-weight">{weight(a.open_milli * (a.unit === 'tonne' ? 1000 : 1))} <small>kg</small></strong><ChevronRight size={20} aria-hidden="true" /></button>)}
+      {waiting.map(a => <button key={a.id} className="live-lot-row" onClick={() => { if (me.role === 'quality_inspector' || me.role === 'admin') setInspecting(a); else location.hash = '#/procurement'; }}><span className="live-lot-name"><strong>{t("Arrival")} {a.reference}</strong><span>{a.supplier_name} · {t("Awaiting inspection", "معائنے کا منتظر")}</span></span><QualityBadge value="uninspected" /><strong className="live-row-weight">{weight(a.open_milli * (a.unit === 'tonne' ? 1000 : 1))} <small>kg</small></strong><ChevronRight size={20} aria-hidden="true" /></button>)}
       {!lots.length && !waiting.length && <p className="yf-stock-empty">{t('No batches yet.')}</p>}
     </section>)}{!groups.length && <div className="live-empty"><h3>{workspace.products.length ? 'Nothing matches' : 'Start with your first material'}</h3><p>{workspace.products.length ? 'Try another name, batch or filter.' : 'Add a material (for example Cotton 30/1), then add its batches.'}</p></div>}</div>;
   }
@@ -338,6 +359,7 @@ export default function LiveApp() {
   const whoAmI = <div className="yf-me"><Avatar name={me.name} /><span><strong>{me.name}</strong><span>{t(...roleLabel[me.role])}</span></span><button className="live-icon-button" onClick={() => void signOut()} aria-label={`${t('Sign out')} ${me.name}`} title={t("Sign out")}><LogOut size={20} aria-hidden="true" /></button></div>;
   return <div className="live-app"><a className="skip-link" href="#live-main" onClick={event => { event.preventDefault(); document.getElementById('live-main')?.focus(); }}>{t("Skip to content")}</a>
     <aside className="live-sidebar">{brand}<div className="live-factory">{workspace.workspace.name}<span>{t("Shared by the whole team")}</span></div><nav aria-label={t("Main navigation")}>{shown.map(({ id, en, ur, icon: Icon }) => [id === COMMON[0].id && <span className="yf-nav-gap" key="gap" />, <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={19} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>])}</nav>{whoAmI}</aside>
+    {inspecting && <InspectArrival arrival={inspecting} isAdmin={me.role === 'admin'} onClose={() => setInspecting(null)} onDone={async message => { setInspecting(null); setNotice(message); await refresh(true); }} />}
     <dialog className="yf-mobile-menu" ref={menuDialog} onClick={e=>{if(e.target===e.currentTarget)menuDialog.current?.close();}} aria-label={t("Navigation menu")}><div>{brand}<button className="live-icon-button" onClick={()=>menuDialog.current?.close()} aria-label={t("Close navigation")}><X aria-hidden="true" /></button></div><nav aria-label={t("All pages")}>{shown.map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={22} aria-hidden="true" />{t(en, ur)}{badge(id)}</button>)}</nav>{whoAmI}</dialog>
     <div className="live-main-shell"><header className="live-topbar">{brand}{shown.some(section => section.id === 'inventory') && <button className="live-icon-button" aria-label={t("Find a batch")} onClick={()=>{navigate('inventory');setTimeout(()=>document.querySelector<HTMLInputElement>('input[type="search"]')?.focus(),0);}}><Search size={22} aria-hidden="true" /></button>}</header>
     <main id="live-main" key={`${route}:${selected?.id || ''}:${action?.type || ''}`} className="live-content" data-page={action ? 'form' : selected ? 'batch' : page} tabIndex={-1}>
@@ -362,5 +384,6 @@ export default function LiveApp() {
       </>}
     </main><footer className="live-sync" role="status"><CheckCheck size={17} aria-hidden="true"/><span>{t("All changes saved")}{savedAt ? ' · '+t('checked', 'چیک کیا')+' '+new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Karachi'}).format(savedAt) : ''}</span></footer></div>
     <nav className="live-bottom-nav" aria-label={t("Phone navigation")}>{[...NAV[me.role].slice(0, 3), COMMON[0]].map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={23} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>)}<button onClick={()=>menuDialog.current?.showModal()} aria-label={workspace.pending > 0 ? `More pages, ${workspace.pending} waiting in Team` : t("More pages")}><Menu size={23} aria-hidden="true" /><span>{t("More")}</span>{workspace.pending > 0 && <b className="yf-nav-count" aria-hidden="true">{workspace.pending}</b>}</button></nav>
+  <NoticeToast notice={toast} onDismiss={dismissToast} />
   </div>;
 }

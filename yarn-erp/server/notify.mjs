@@ -2,18 +2,19 @@ import { all, one, query, json, fail, keys, recordId, role, viewer } from './erp
 import { settingsOf } from './governance.mjs';
 import { ROLES } from './auth.mjs';
 
-export const EVENTS = ['supplier.pending','buyer.pending','buyer_rfq.received','bid.received','bidding.closed','award.pending_approval','lot.ready','inspection.submitted','inspection.decided','approval.pending','approval.decided','claim.created','claim.decided','stock_query.created','stock_issue.raised','payment.due_soon','payment.due_today','payment.overdue','dispatch.approval_requested','dispatch.approved','dispatch.held','dispatch.hold_notice','reminder'];
+export const EVENTS = ['supplier.pending','buyer.pending','buyer_rfq.received','bid.received','bidding.closed','award.pending_approval','lot.ready','inspection.submitted','inspection.decided','approval.pending','approval.decided','claim.created','claim.decided','stock_query.created','stock_issue.raised','payment.due_soon','payment.due_today','payment.overdue','dispatch.approval_requested','dispatch.approved','dispatch.held','dispatch.hold_notice','reminder','shipment.dispatched','po.created','stock.received','stock.adjusted','user.added','user.removed','supplier.rated'];
 // SQL generates a different UUID for every recipient of an INSERT SELECT.
 const UUID = "lower(hex(randomblob(4))||'-'||hex(randomblob(2))||'-4'||substr(hex(randomblob(2)),2)||'-8'||substr(hex(randomblob(2)),2)||'-'||hex(randomblob(6)))";
 const COLUMNS = 'id,workspace_id,user_id,role,event,object_type,object_id,label,status,created_by,created_at,updated_at,read_at,since';
-function notice(db, workspaceId, field, recipient, event, objectType, objectId, label) {
+// exceptUserId: the person who made the change never gets a notice about their own action.
+function notice(db, workspaceId, field, recipient, event, objectType, objectId, label, exceptUserId = null) {
   const now = Date.now();
   return query(db, `INSERT INTO notifications(${COLUMNS})
     SELECT ${UUID},workspace_id,id,portal_role,?,?,?,?,'unread','system:notifications',?,?,NULL,NULL
-    FROM users WHERE workspace_id=? AND ${field}=? AND status='active' AND deactivated_at IS NULL`,
-    event, objectType, objectId, label, now, now, workspaceId, recipient);
+    FROM users WHERE workspace_id=? AND ${field}=? AND status='active' AND deactivated_at IS NULL${exceptUserId ? ' AND id<>?' : ''}`,
+    event, objectType, objectId, label, now, now, workspaceId, recipient, ...(exceptUserId ? [exceptUserId] : []));
 }
-export const notifyRole = (db, workspaceId, role, event, objectType, objectId, label = '') => notice(db, workspaceId, 'portal_role', role, event, objectType, objectId, label);
+export const notifyRole = (db, workspaceId, role, event, objectType, objectId, label = '', exceptUserId = null) => notice(db, workspaceId, 'portal_role', role, event, objectType, objectId, label, exceptUserId);
 export const notifyUser = (db, workspaceId, userId, event, objectType, objectId, label = '') => notice(db, workspaceId, 'id', userId, event, objectType, objectId, label);
 
 export async function notificationsApi(request, env, member, path, data) {

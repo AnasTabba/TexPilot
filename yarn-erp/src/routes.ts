@@ -23,6 +23,13 @@ export const eventTitle: Record<string, [string, string]> = {
   'dispatch.approved': ['Dispatch approved', 'ڈسپیچ منظور ہو گیا'],
   'dispatch.held': ['Dispatch on hold', 'ڈسپیچ روک دیا گیا'],
   'dispatch.hold_notice': ['Dispatch hold notice', 'ڈسپیچ روکنے کا نوٹس'],
+  'shipment.dispatched': ['Supplier dispatched shipment', 'سپلائر نے کھیپ روانہ کی'],
+  'po.created': ['Purchase order created', 'خریداری آرڈر بن گیا'],
+  'stock.received': ['Finished stock received', 'تیار اسٹاک موصول ہوا'],
+  'stock.adjusted': ['Stock adjusted', 'اسٹاک میں تبدیلی ہوئی'],
+  'user.added': ['Team member added', 'ٹیم میں نیا رکن شامل ہوا'],
+  'user.removed': ['Team member removed', 'ٹیم سے رکن ہٹایا گیا'],
+  'supplier.rated': ['Supplier rated', 'سپلائر کی درجہ بندی ہوئی'],
   reminder: ['Reminder: still waiting', 'یاددہانی: اب بھی منتظر ہے'],
 };
 

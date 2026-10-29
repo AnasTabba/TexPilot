@@ -1,0 +1,16 @@
+.inspect-arrival { width: min(520px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: 24px; background: var(--panel); color: var(--ink); overflow: auto; box-shadow: 0 24px 60px rgb(23 18 11 / 24%); transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out), display 200ms allow-discrete, overlay 200ms allow-discrete; }
+.inspect-arrival[open] { opacity: 1; transform: none; }
+@starting-style { .inspect-arrival[open] { opacity: 0; transform: translateY(12px) scale(0.98); } }
+.inspect-arrival:not([open]) { opacity: 0; transform: translateY(12px) scale(0.98); }
+.inspect-arrival::backdrop { background: rgb(23 18 11 / 52%); }
+.inspect-arrival-form { display: grid; gap: 18px; padding: 24px; }
+.inspect-arrival-form header h2 { margin: 0 0 6px; }
+.inspect-arrival-form header p { margin: 0; color: var(--ink-2); }
+.inspect-arrival-fields { display: grid; gap: 18px; min-width: 0; border: 0; margin: 0; padding: 0; }
+.inspect-arrival-label { font-size: 15px; font-weight: 600; }
+.inspect-arrival-preview { width: 96px; height: 96px; object-fit: cover; border-radius: 14px; }
+.inspect-arrival .live-field small { display: flex; align-items: center; gap: 6px; }
+.inspect-arrival .live-actions { margin: 0; flex-wrap: wrap; }
+.inspect-arrival .button:active:not(:disabled) { transform: scale(0.97); }
+.inspect-arrival-form input[type="file"] { min-height: 44px; }
+@media (prefers-reduced-motion: reduce) { .inspect-arrival { transition: none; } }

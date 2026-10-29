@@ -12,7 +12,7 @@ interface Issue { id: string; type: string; severity: Severity; description: str
 interface Inspection { id: string; lot_id: string; lot_reference: string; product_name: string; unit: string; accepted_milli: number; rejected_milli: number; note: string; status: 'draft' | 'submitted'; report_status: string | null; rejection_status: string | null; submitted_at: number | null; photos: Photo[]; issues: Issue[] }
 const decision = (status: string | null) => status === null ? null : ({ pending: ['waiting for the supervisor', 'سپروائزر کے فیصلے کا منتظر'], accepted: ['accepted', 'قبول'], returned: ['returned for re-inspection', 'دوبارہ معائنے کے لیے واپس'], confirmed: ['rejection confirmed', 'مسترد کرنا تصدیق شدہ'], dismissed: ['rejection dismissed', 'مسترد کرنا خارج'], escalated: ['sent to the admin', 'ایڈمن کو بھیجا گیا'] } as Record<string, [string, string]>)[status];
 const photoUrl = (id: string) => `/api/erp/qc/photos/${id}`;
-async function upload(fields: Record<string, string>, file: File) {
+export async function upload(fields: Record<string, string>, file: File) {
   const form = new FormData(); for (const [key, value] of Object.entries(fields)) form.set(key, value); form.set('photo', file);
   const response = await fetch('/api/erp/qc/photos', { method: 'POST', body: form, credentials: 'same-origin', cache: 'no-store', redirect: 'error' }).catch(() => null);
   if (!response) throw new Error('Could not confirm the upload. Check the connection and pick the photo again.');

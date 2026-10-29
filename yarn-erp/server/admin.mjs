@@ -1,6 +1,7 @@
 import { ROLES, userRow, validPin, randomHex, pinHash } from './auth.mjs';
 import { all, one, query, json, fail, keys, text, recordId, integer, role, viewer, audit } from './erp-utils.mjs';
 import { THRESHOLDS, DEFAULT_SETTINGS, settingsOf, settingValue } from './governance.mjs';
+import { notifyRole } from './notify.mjs';
 const roleOf = value => { if (!ROLES.includes(value)) fail(422, 'Choose a valid role.'); return value; };
 const pinOf = value => { if (!validPin(value)) fail(422, 'The PIN must be exactly 4 digits.'); return value; };
 
@@ -79,7 +80,7 @@ export async function adminApi(request, env, member, path, data) {
   if (path === '/api/erp/admin/users') {
     keys(data, ['name','pin','role','interventionReason']);
     const row = await userRow({ workspaceId: w, name: text(data.name, 'Name', 2, 40), pin: pinOf(data.pin), role: roleOf(data.role), createdBy: member.user_id });
-    try { await db.batch([query(db, row.sql, ...row.args), audit(db, member, 'user.created', row.args[0], { name: data.name.trim(), role: data.role })]); }
+    try { await db.batch([query(db, row.sql, ...row.args), notifyRole(db, w, 'admin', 'user.added', 'user', row.args[0], data.name.trim(), member.user_id), audit(db, member, 'user.created', row.args[0], { name: data.name.trim(), role: data.role })]); }
     catch (error) { if (/UNIQUE constraint failed: users.name_key/.test(String(error))) fail(409, 'That name is already taken.'); throw error; }
     return json({ id: row.args[0] }, 201);
   }
@@ -98,6 +99,7 @@ export async function adminApi(request, env, member, path, data) {
       await db.batch([guard,
         query(db, 'UPDATE users SET deactivated_at=?,deactivated_by=?,removed_at=?,updated_at=? WHERE id=?', now, member.user_id, now, Math.max(now, (target.updated_at ?? 0) + 1), target.id),
         query(db, 'DELETE FROM sessions WHERE user_id=?', target.id),
+        notifyRole(db, w, 'admin', 'user.removed', 'user', target.id, target.name, member.user_id),
         audit(db, member, 'user.removed', target.id, { name: target.name, role: target.portal_role }, 'staff', { before: { removed: false }, after: { removed: true } })]);
     } catch (error) {
       if (/constraint failed: users\./i.test(String(error))) fail(409, 'This account changed. Refresh and try again.');

@@ -21,6 +21,8 @@ export function adjustmentQueries(db, member, { id, lotId, stage, kind = undefin
     query(db, `INSERT INTO inventory_adjustments(id,workspace_id,lot_id,stage,kind,delta_grams,reason,status,source,compensates_id,movement_id,created_by,created_at,updated_at,decided_by,decided_at) VALUES(?,?,?,?,?,?,?,'applied',?,?,?,?,?,?,?,?)
       ON CONFLICT(id) DO UPDATE SET status='applied',movement_id=excluded.movement_id,decided_by=excluded.decided_by,decided_at=excluded.decided_at,updated_at=excluded.updated_at`,
       id, member.workspace_id, lotId, stage, kind ?? (deltaGrams < 0 ? 'write_off' : 'adjustment'), deltaGrams, reason, source, compensatesId, movementId, createdBy, createdAt ?? now, now, member.user_id, now),
+    notifyRole(db, member.workspace_id, 'supervisor', 'stock.adjusted', 'inventory_adjustment', id, `${deltaGrams > 0 ? '+' : ''}${deltaGrams} g · ${stage}`, member.user_id),
+    notifyRole(db, member.workspace_id, 'admin', 'stock.adjusted', 'inventory_adjustment', id, `${deltaGrams > 0 ? '+' : ''}${deltaGrams} g · ${stage}`, member.user_id),
     audit(db, member, 'inventory.adjusted', id, { lot: lotId, stage, deltaGrams, movement: movementId, ...(compensatesId ? { compensates: compensatesId } : {}) }, 'staff', { objectType: 'inventory', reason, intervention })];
 }
 
@@ -126,6 +128,8 @@ export async function stockApi(request, env, member, path, data) {
         query(db, "INSERT INTO lots(id,workspace_id,product_id,batch,supplier,quality,created_at,inventory_type,source) VALUES(?,?,?,?,'','approved',?,'finished','production') ON CONFLICT DO NOTHING", lotId, w, productId, batch, now),
         query(db, "SELECT json('!') WHERE NOT EXISTS(SELECT 1 FROM lots WHERE id=? AND workspace_id=? AND product_id=? AND batch=? AND source='production')", lotId, w, productId, batch),
         ...movementQueries(db, member, { id, lotId, action: 'receive', stage: 'finished', deltaGrams: grams, cartons, cones, note, sourceId }, now),
+        notifyRole(db, w, 'supervisor', 'stock.received', 'inventory', id, batch, member.user_id),
+        notifyRole(db, w, 'admin', 'stock.received', 'inventory', id, batch, member.user_id),
         audit(db, member, 'inventory.received', id, { lot: lotId, batch, grams, cartons, cones }, 'staff', { objectType: 'inventory', intervention })]);
     } catch { return await replay() ?? fail(409, 'Another stock lot already uses this batch number, or the stock changed. Refresh and try again.'); }
     return json({ lotId, movementId: id }, 201);
