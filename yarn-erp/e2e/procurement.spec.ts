@@ -26,15 +26,15 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await supplierLogin();
   await expect(supplier.getByRole('heading', { name: 'Waiting for admin approval' })).toBeVisible();
   await page.goto('/');
-  await page.getByRole('button', { name: 'Anas', exact: true }).click();
+  await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
   await page.getByLabel('4-digit PIN', { exact: true }).fill('2468');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.goto('/#/procurement');
   await page.getByRole('button', { name: 'Suppliers', exact: true }).click();
   await page.getByRole('button', { name: 'Review supplier access', exact: true }).click();
-  await page.getByLabel('Verification details / reason').fill('Contacted the supplier and checked company identity');
+  await page.getByLabel('Verification details (optional)', { exact: true }).fill('Contacted the supplier and checked company identity');
   await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
-  await page.getByRole('checkbox', { name: 'I verified the company' }).check();
+  await page.getByRole('checkbox', { name: 'I verified the company, contact and selected yarn categories.' }).check();
   await page.getByRole('button', { name: 'Save decision' }).click();
   await expect(page.locator('.erp-status').filter({ hasText: /^approved$/ })).toBeVisible();
   await expect(page.getByRole('link', { name: /Call.*923001234567/ })).toHaveAttribute('href', 'tel:+923001234567');
@@ -71,20 +71,12 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await expect(supplier.getByText('Bill of lading: TESTBOL-1001')).toBeVisible();
   await page.locator('[data-stage="po"], [data-stage="incoming"]').getByRole('button', { name: /Test supplier mill/ }).click();
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
-  await expect(page.getByText('Bill of lading: TESTBOL-1001')).toBeVisible();
+  await expect(page.getByText('Bill of lading: TESTBOL-1001').first()).toBeVisible();
   await page.getByRole('button', { name: 'Tracking', exact: true }).click();
-  await expect(page.getByText('Tracking is not connected.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Tracking is not connected yet.', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Pipeline', exact: true }).click();
   await page.locator('[data-stage="po"], [data-stage="incoming"]').getByRole('button', { name: /Test supplier mill/ }).click();
-  // Attach the receiving prerequisite through the same form the purchase manager uses.
-  await page.getByRole('button', { name: 'Attach bill of lading', exact: true }).click();
-  for (const control of [page.getByLabel('Bill of lading number', { exact: true }), page.getByRole('button', { name: 'Save bill of lading', exact: true })]) {
-   const box = await control.boundingBox(); expect(box).not.toBeNull(); expect(box!.height).toBeGreaterThanOrEqual(44);
-  }
-  await page.getByLabel('Bill of lading number', { exact: true }).fill('TESTBOL-1001');
-  await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
-  await page.getByRole('button', { name: 'Save bill of lading', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Bill of lading attached.' })).toBeVisible();
+  // The supplier's dispatch notice already carries the bill of lading, so the purchase manager has nothing left to attach.
   await page.locator('[data-stage="incoming"]').getByRole('button', { name: /Test supplier mill/ }).click();
   await page.getByRole('button', { name: 'Register arrival', exact: true }).click();
   await page.getByLabel('Lot reference', { exact: true }).fill('ERP-RCV-001');

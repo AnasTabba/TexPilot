@@ -13,8 +13,9 @@ for (const [name, sections] of [
 ] as const) test(`${name} sees only the sections of their role, plus the common ones`, async ({ page }) => {
   await signIn(page, name);
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
-  for (const label of [...sections, 'Help']) await expect(nav.getByRole('button', { name: new RegExp(`^${label}`) })).toBeVisible();
-  await expect(nav.getByRole('button')).toHaveCount(sections.length + 1);
+  // Chat is shared by every role, so it sits in the nav next to Help.
+  for (const label of [...sections, 'Chat', 'Help']) await expect(nav.getByRole('button', { name: new RegExp(`^${label}`) })).toBeVisible();
+  await expect(nav.getByRole('button')).toHaveCount(sections.length + 2);
   await expect(nav.getByRole('button', { name: /^My profile/ })).toHaveCount(0);
 });
 
@@ -29,7 +30,8 @@ test('a notification appears with its unread count and opens its item', async ({
   const made = await page.request.post('/__test/notify', { data: { role: 'purchase_manager', event: 'supplier.pending', objectType: 'supplier', objectId: crypto.randomUUID(), label: 'Noor Spinning' } });
   expect(made.ok()).toBeTruthy();
   await signIn(page, 'Pervaiz');
-  const bell = page.locator('.live-page-heading').getByRole('button', { name: /^Notifications/ });
+  const bell = page.locator('.live-head-actions').getByRole('button', { name: /^Notifications/ });
+  await expect(bell).toHaveAccessibleName(/1 unread/);
   await expect(bell.locator('.yf-nav-count')).toHaveText('1');
   await expect(page.getByRole('heading', { level: 2, name: 'Next: New supplier pending' })).toBeVisible();
   await bell.click();

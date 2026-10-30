@@ -52,7 +52,7 @@ test.describe('Shared inventory', () => {
 
   test('another phone signs in with its own PIN and sees the same stock', async ({ browser, page }) => {
     await signIn(page);
-    await apiPost(page, '/erp/admin/users', { name: 'Nadia', pin: '1357', role: 'dispatch' });
+    await apiPost(page, '/erp/admin/users', { name: 'Nadia', pin: '1357', role: 'supervisor' });
     await page.goto('/#/inventory');
     await expect(page.getByRole('button', { name: /Batch LOT-1024/ })).toBeVisible();
     const friend = await browser.newContext({ baseURL: origin, viewport: { width: 390, height: 844 } });
@@ -86,9 +86,11 @@ test.describe('Shared inventory', () => {
     await signIn(page);
     const { lot, state } = await seededLot(page, 'LOT-1023');
     await page.goto('/#/inventory/' + lot.id);
-    await page.getByRole('button', { name: 'Dispatch', exact: true }).click();
+    await page.getByRole('button', { name: 'Adjust stock', exact: true }).click();
     const available = state.balances.find((b: { lot_id: string; stage: string; grams: number }) => b.lot_id === lot.id && b.stage === 'raw')?.grams || 0;
     await page.getByLabel('Weight (kg)', { exact: true }).fill(((available + 1000) / 1000).toFixed(3));
+    await page.getByLabel('Reason', { exact: true }).fill('Count is short after the dye run');
+    await page.getByLabel('Why are you stepping in?', { exact: true }).fill('Supervisor is away today');
     await page.getByRole('button', { name: 'Review entry', exact: true }).click();
     await page.getByRole('button', { name: 'Save entry', exact: true }).click();
     await page.waitForTimeout(2000);
@@ -128,7 +130,7 @@ test.describe('Shared inventory', () => {
     };
     await doInspection();
     if (await page.getByText('Sign in with your name and PIN').isVisible().catch(() => false)) {
-      await page.getByRole('button', { name: 'Anas', exact: true }).click();
+      await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
       await page.getByLabel('4-digit PIN', { exact: true }).fill('2468');
       await page.waitForTimeout(1500);
       await doInspection();
@@ -137,7 +139,7 @@ test.describe('Shared inventory', () => {
     await page.reload();
     await page.waitForTimeout(2000);
     if (await page.getByRole('heading', { name: 'Who’s signing in?', exact: true }).isVisible().catch(() => false)) {
-      await page.getByRole('button', { name: 'Anas', exact: true }).click();
+      await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
       await page.getByLabel('4-digit PIN', { exact: true }).fill('2468');
       await page.waitForTimeout(2000);
     }
@@ -178,6 +180,7 @@ test.describe('Shared inventory', () => {
     const second = { id: created.lotId };
     await apiPost(page, '/inspections', { id: crypto.randomUUID(), lotId: first.id, labelText: '', note: 'Only the first batch has this inspection', result: null });
     await apiPost(page, '/inspections', { id: crypto.randomUUID(), lotId: second.id, labelText: '', note: 'Only the second batch has this inspection', result: null });
+    await page.reload();
     await page.goto('/#/inventory/' + first.id);
     await page.waitForTimeout(800);
     await expect(page.getByText('Only the first batch has this inspection', { exact: true })).toBeVisible({ timeout: 10000 });

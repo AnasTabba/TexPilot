@@ -5,7 +5,7 @@ test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); 
 
 async function signIn(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Anas', exact: true }).click();
+  await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
   await page.getByLabel('4-digit PIN').fill('2468');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 }
@@ -16,7 +16,7 @@ test('Urdu selection persists through sign-in, navigation and reload', async ({ 
   await expect(page.locator('html')).toHaveAttribute('lang', 'ur');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.getByRole('heading', { name: 'کون سائن اِن کر رہا ہے؟' })).toBeVisible();
-  await page.getByRole('button', { name: 'Anas', exact: true }).click();
+  await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
   await page.getByLabel('چار ہندسوں کا پن').fill('2468');
   await expect(page.getByRole('heading', { name: 'ڈیش بورڈ', exact: true })).toBeVisible();
   await page.goto('/#/scanner');
@@ -35,7 +35,7 @@ for (const language of ['en', 'ur']) for (const [width, height] of [[375, 548], 
     await page.setViewportSize({ width, height });
     await page.goto('/');
     if (language === 'ur') await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
-    await page.getByRole('button', { name: 'Anas', exact: true }).click();
+    await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
     const keypad = page.locator('.yf-keypad');
     await expect(keypad).toBeVisible();
     const zero = await keypad.getByRole('button', { name: '0', exact: true }).boundingBox();

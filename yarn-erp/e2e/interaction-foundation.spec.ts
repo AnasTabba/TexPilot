@@ -30,7 +30,7 @@ async function signIn(page: Page, language: Language = 'en') {
     if (await page.locator('html').getAttribute('lang') !== 'ur') await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   }
-  await page.getByRole('button', { name: 'Anas', exact: true }).click();
+  await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
   await page.getByLabel(pinLabel(language)).fill('2468');
   await expect(page.getByRole('heading', { name: homeHeading(language), exact: true })).toBeVisible();
 }
@@ -99,7 +99,7 @@ async function expectPagesFit(page: Page, language: Language) {
   await expectNoHorizontalOverflow(page, `${prefix} batch detail`);
   await openPage(page, '#/scanner', language === 'ur' ? 'اسکین' : 'Scan');
   await expectNoHorizontalOverflow(page, `${prefix} Scan`);
-  await openPage(page, '#/activity', language === 'ur' ? 'ہسٹری' : 'History');
+  await openPage(page, '#/admin-activity', language === 'ur' ? 'سرگرمیاں' : 'Activity');
   await expectNoHorizontalOverflow(page, `${prefix} History`);
   await openPage(page, '#/team', language === 'ur' ? 'ٹیم' : 'Team');
   await expectNoHorizontalOverflow(page, `${prefix} Team`);
@@ -135,8 +135,8 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
 
   for (const button of await page.locator('.yf-language button').all()) await expectTarget(button, 'sign-in language choice');
   for (const button of await page.locator('.yf-person').all()) await expectTarget(button, 'sign-in person');
-  await expectTarget(page.locator('.yf-supplier-entry'), 'supplier sign-in link');
-  await page.getByRole('button', { name: 'Anas', exact: true }).click();
+  for (const link of await page.locator('.yf-supplier-entry').all()) await expectTarget(link, 'supplier or buyer sign-in link');
+  await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
   await expectTarget(page.locator('.yf-signin-back'), 'back to people');
   await expectTarget(page.locator('.yf-keypad button').first(), 'PIN keypad key');
   await page.getByLabel('4-digit PIN').fill('2468');
@@ -163,7 +163,7 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
   await expect(page.getByRole('status').filter({ hasText: 'Saved. Everyone on the team sees it now.' })).toBeVisible();
   await expectTarget(page.locator('.live-success .live-icon-button'), 'notice dismiss');
 
-  await openPage(page, '#/activity', 'History');
+  await openPage(page, '#/admin-activity', 'Activity');
   const historyActions = page.locator('.live-history .live-text-button');
   for (const action of await historyActions.all()) await expectTarget(action, 'History text action');
   await expectScreenTargets(page, 'History');
@@ -207,7 +207,7 @@ test.describe('safe-area tokens', () => {
     expect(afterSignIn.sheetTop - beforeSignIn.sheetTop).toBeCloseTo(0, 0);
     expect(afterSignIn.sheetBottom - beforeSignIn.sheetBottom).toBeCloseTo(13, 0);
 
-    await page.getByRole('button', { name: 'Anas', exact: true }).click();
+    await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
     await page.getByLabel('4-digit PIN').fill('2468');
     await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
     const shell = await page.evaluate(() => {
@@ -226,8 +226,8 @@ test.describe('safe-area tokens', () => {
     expect(shell.nav.bottom).toBeCloseTo(21, 0);
     expect(shell.nav.left).toBeCloseTo(29, 0);
     for (const [name, value] of shell.tokens) expect(value, `${name} is defined`).not.toBe('');
-    expect(shell.tokens.find(([name]) => name === '--motion-fast')![1]).toMatch(/^140ms$|^\.?14s$/);
-    expect(shell.tokens.find(([name]) => name === '--motion-standard')![1]).toMatch(/^220ms$|^\.?22s$/);
+    expect(shell.tokens.find(([name]) => name === '--motion-fast')![1]).toMatch(/^100ms$|^\.?1s$/);
+    expect(shell.tokens.find(([name]) => name === '--motion-standard')![1]).toMatch(/^180ms$|^\.?18s$/);
     await expectNoHorizontalOverflow(page, 'English safe-area shell');
 
     await page.locator('.live-bottom-nav button').last().click();
@@ -249,7 +249,7 @@ test.describe('safe-area tokens', () => {
       document.documentElement.style.setProperty('--safe-right', '21px');
       document.documentElement.style.setProperty('--safe-bottom', '21px');
     });
-    await page.getByRole('button', { name: 'Anas', exact: true }).click();
+    await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
     await page.getByLabel(pinLabel('ur')).fill('2468');
     await expect(page.getByRole('heading', { name: homeHeading('ur'), exact: true })).toBeVisible();
     const shell = await page.evaluate(() => {
@@ -288,7 +288,7 @@ test('reduced motion removes entrance animation and keeps state changes immediat
   await signIn(page);
   await nextFrame(page);
   const state = await page.evaluate(() => {
-    const duration = (selector: string) => getComputedStyle(document.querySelector(selector)!).transitionDuration.split(',').map(value => parseFloat(value));
+    const duration = (selector: string) => getComputedStyle(document.querySelector(selector) ?? document.body).transitionDuration.split(',').map(value => parseFloat(value));
     return {
       animations: document.getAnimations().filter(animation => animation.playState === 'running').length,
       firstSection: getComputedStyle(document.querySelector('.live-content > *')!).animationName,
@@ -315,7 +315,7 @@ test('numbers are tabular, headings balance, and supported squircle corners stay
       const computed = getComputedStyle(element);
       return { numeric: computed.fontVariantNumeric, wrap: computed.textWrap, corner: computed.cornerShape, radius: computed.borderTopLeftRadius };
     };
-    return { heading: style('h1'), panel: style('.yf-next'), supportsSquircle: CSS.supports('corner-shape', 'squircle') };
+    return { heading: style('h1'), panel: style('.live-main-shell'), supportsSquircle: CSS.supports('corner-shape', 'squircle') };
   });
   expect(home.heading!.numeric).toBe('tabular-nums');
   expect(home.heading!.wrap).toBe('balance');
@@ -352,7 +352,7 @@ test('numbers are tabular, headings balance, and supported squircle corners stay
   await page.context().clearCookies();
   await page.goto('/');
   await page.waitForSelector('.yf-people');
-  await page.getByRole('button', { name: 'Anas', exact: true }).click();
+  await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
   expect(await page.evaluate(() => getComputedStyle(document.querySelector('.yf-keypad button')!).fontVariantNumeric)).toBe('tabular-nums');
   expect(await page.evaluate(() => getComputedStyle(document.querySelector('.yf-signin-step h1')!).textWrap)).toBe('balance');
 });

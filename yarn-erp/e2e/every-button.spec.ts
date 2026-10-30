@@ -11,7 +11,7 @@ const PIN = "2468"; // YARNFLOW_SEED_PIN in playwright.config.ts
 
 async function signIn(page: Page, name = "Anas", pin = PIN) {
   await page.goto("/");
-  await page.getByRole("button", { name, exact: true }).click();
+  await page.getByRole("button", { name: new RegExp(`^${name}\\b`) }).click();
   await page.getByLabel("4-digit PIN").fill(pin);
   await expect(page.getByRole("heading", { level: 1, name: "Dashboard", exact: true })).toBeVisible();
 }
@@ -49,9 +49,9 @@ test.describe("desktop", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1, name: "Who’s signing in?" })).toBeVisible();
     await expect(page.locator(".yf-person")).toHaveText([/^AAnas/, /^DDanish/, /^FFahad/, /^PPervaiz/, /^QQasim/, /^SSaima/, /^SSana/, /^ZZuhair/]);
-    await page.getByRole("button", { name: "Fahad", exact: true }).click();
+    await page.getByRole("button", { name: /^Fahad\b/ }).click();
     await page.getByRole("button", { name: "Not Fahad?" }).click();
-    await page.getByRole("button", { name: "Anas", exact: true }).click();
+    await page.getByRole("button", { name: /^Anas\b/ }).click();
     const keypad = page.locator(".yf-keypad");
     for (const key of "1111") await keypad.getByRole("button", { name: key, exact: true }).click();
     await expect(page.getByRole("alert")).toHaveText("That name and PIN do not match.");
@@ -102,7 +102,7 @@ test.describe("desktop", () => {
     await page.goto("/#/dashboard");
     await title(page, "Dashboard");
     const nav = page.getByRole("navigation", { name: "Main navigation" });
-    for (const [label, h1] of [["Stock", "Stock"], ["Scan", "Scan"], ["History", "History"], ["Team", "Team"], ["Help", "Help"], ["Dashboard", "Dashboard"]]) {
+    for (const [label, h1] of [["Stock", "Stock"], ["Scan", "Scan"], ["Activity", "Activity"], ["Team", "Team"], ["Help", "Help"], ["Dashboard", "Dashboard"]]) {
       await nav.getByRole("button", { name: label, exact: true }).click();
       await title(page, h1);
       await expect(nav.getByRole("button", { name: label, exact: true })).toHaveAttribute("aria-current", "page");
@@ -201,11 +201,16 @@ test.describe("desktop", () => {
   });
 
   test("history links, profile access and backup, help", async ({ page }) => {
+    // The stock movement register belongs to the supervisor's History; the admin's Activity is the monitor and audit log.
+    await page.getByRole("button", { name: /^Sign out Anas/ }).click();
+    await signIn(page, "Saima");
     await page.goto("/#/activity");
     await page.locator(".live-history .live-text-button", { hasText: "LOT-1024" }).first().click();
     await title(page, "Batch details");
     await page.goto("/#/activity");
     await expect(page.getByRole("button", { name: "Reverse entry" })).toHaveCount(0);
+    await page.getByRole("button", { name: /^Sign out Saima/ }).click();
+    await signIn(page);
 
     await page.goto("/#/profile");
     const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download backup" }).click()]);

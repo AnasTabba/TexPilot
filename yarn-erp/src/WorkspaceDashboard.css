@@ -18,7 +18,7 @@
 .wd-today::before {
   content: "";
   position: absolute;
-  inset: -40px -12% auto;
+  inset: -40px 0 auto;
   height: 200px;
   z-index: -1;
   pointer-events: none;

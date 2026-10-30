@@ -345,7 +345,7 @@ html[lang="ur"] .yf-nav-label { letter-spacing: normal; text-transform: none; }
 .live-topbar-title { min-width: 0; overflow: hidden; color: var(--ink-2); font-size: 15px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .live-content { position: relative; isolation: isolate; width: 100%; max-width: 1240px; margin: 0 auto; padding: 40px 48px 48px; outline: none; }
 /* Soft blue-to-pop glow behind the page header: decorative, CSS only, behind the content. */
-.live-content::before { content: ""; position: absolute; left: -10%; right: -10%; top: -48px; z-index: -1; height: 340px; pointer-events: none; background: radial-gradient(38% 60% at 22% 18%, color-mix(in srgb, var(--brand) 20%, transparent), transparent 72%), radial-gradient(30% 50% at 84% 10%, color-mix(in srgb, var(--pop) 13%, transparent), transparent 72%); filter: blur(36px); }
+.live-content::before { content: ""; position: absolute; left: 0; right: 0; top: -48px; z-index: -1; height: 340px; pointer-events: none; background: radial-gradient(38% 60% at 22% 18%, color-mix(in srgb, var(--brand) 20%, transparent), transparent 72%), radial-gradient(30% 50% at 84% 10%, color-mix(in srgb, var(--pop) 13%, transparent), transparent 72%); filter: blur(36px); }
 .live-sync { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 1240px; margin: auto auto 0; padding: 0 48px 28px; color: var(--ink-2); font-size: 14px; }
 
 /* One orchestrated settle-in for the page title only; dense tables and panels render without fade. */
