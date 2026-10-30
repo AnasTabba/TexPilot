@@ -18,3 +18,8 @@ def test_rescope_drops_out_of_scope_photos_and_relabels_jersey_as_knit():
         ("knit", "fabric/test/jersey/1.jpg"), ("knit", "fabric/test/knit/1.jpg"),
         ("denim", "fabric/test/denim/1.jpg")]  # fmt: skip
     assert rescope(rows, "fabric") == rows
+
+
+def test_fabric22_is_fabric24_without_serge_and_chenille():
+    assert set(PARTITIONS["fabric24"]) - set(PARTITIONS["fabric22"]) == {"serge", "chenille"}
+    assert len(PARTITIONS["fabric22"]) == 22 and base_partition("fabric22") == "fabric"

@@ -30,6 +30,11 @@ from services.vision.taxonomy import FABRIC_CLASSES, FIBRE_CLASSES
 # knit (it is one).
 SCOPES: dict[str, tuple[str, dict[str, str | None]]] = {
     "fabric24": ("fabric", {"canvas": None, "plush": None, "jersey": "knit"}),
+    # fabric24 without serge (0 of 50 audited photos carry the right label) and chenille (12 of 50).
+    "fabric22": (
+        "fabric",
+        {"canvas": None, "plush": None, "jersey": "knit", "serge": None, "chenille": None},
+    ),
 }
 PARTITIONS: dict[str, tuple[str, ...]] = {"fabric": FABRIC_CLASSES, "fibre": FIBRE_CLASSES}
 PARTITIONS |= {
