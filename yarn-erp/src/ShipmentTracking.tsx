@@ -14,13 +14,13 @@ interface ShipmentsResponse { shipments: Shipment[]; tracking: TrackingStatus }
 interface TrackResponse { shipment?: Shipment; error?: string; stageChanged?: { from: TrackingStage; to: TrackingStage } }
 
 const STAGE: Record<TrackingStage, { en: string; ur: string; colour: string; ink: string }> = {
-  not_checked: { en: 'Not checked', ur: 'چیک نہیں ہوا', colour: '#8a8f98', ink: '#fff' },
-  booked: { en: 'Booked', ur: 'بک ہوا', colour: '#5b6474', ink: '#fff' },
-  departed: { en: 'Departed', ur: 'روانہ', colour: '#0f8b8d', ink: '#fff' },
-  in_transit: { en: 'In transit', ur: 'راستے میں', colour: '#4f5bd5', ink: '#fff' },
-  arrived: { en: 'Arrived', ur: 'پہنچ گیا', colour: '#f2a541', ink: '#2a1d05' },
-  delivered: { en: 'Delivered', ur: 'ڈیلیور ہوا', colour: '#1d6b3e', ink: '#fff' },
-  error: { en: 'Tracking error', ur: 'ٹریکنگ کی خرابی', colour: '#e4572e', ink: '#fff' },
+  not_checked: { en: 'Not checked', ur: 'چیک نہیں ہوا', colour: 'var(--ink-3)', ink: 'var(--on-ink)' },
+  booked: { en: 'Booked', ur: 'بک ہوا', colour: 'var(--ink-2)', ink: 'var(--on-ink)' },
+  departed: { en: 'Departed', ur: 'روانہ', colour: 'var(--brand)', ink: 'var(--on-ink)' },
+  in_transit: { en: 'In transit', ur: 'راستے میں', colour: 'var(--brand-ink)', ink: 'var(--on-ink)' },
+  arrived: { en: 'Arrived', ur: 'پہنچ گیا', colour: 'var(--warn)', ink: 'var(--on-ink)' },
+  delivered: { en: 'Delivered', ur: 'ڈیلیور ہوا', colour: 'var(--ok)', ink: 'var(--on-ink)' },
+  error: { en: 'Tracking error', ur: 'ٹریکنگ کی خرابی', colour: 'var(--bad)', ink: 'var(--on-ink)' },
 };
 const STEPS: [TrackingStage, string, string][] = [['booked', 'Booked', 'بک ہوا'], ['departed', 'Departed', 'روانہ'], ['in_transit', 'In transit', 'راستے میں'], ['arrived', 'Arrived', 'پہنچ گیا'], ['delivered', 'Delivered', 'ڈیلیور']];
 const FILTERS: { id: string; en: string; ur: string; match: (stage: TrackingStage) => boolean }[] = [
@@ -109,7 +109,7 @@ function ShipmentCard({ shipment, error, busy, moved, onCheck, member, onChanged
       {member && (member.role === 'purchase_manager' || member.admin) && view.events.length === 0 && <BillCorrection member={member} shipment={shipment} onSaved={onChanged} />}
       {view.events.length > 0 && <button type="button" className="trk-btn is-ghost" aria-expanded={open} onClick={() => setOpen(!open)}><ChevronDown size={16} aria-hidden="true" className={open ? 'is-open' : undefined} />{open ? t('Hide timeline', 'ٹائم لائن چھپائیں') : t('Show timeline', 'ٹائم لائن دکھائیں')} ({view.events.length})</button>}
     </div>
-    {open && <ol className="trk-events">{view.events.map((e, i) => <li key={i}><span className="trk-event-dot" aria-hidden="true" /><div><strong>{e.title || e.code || t('Update', 'اپ ڈیٹ')}</strong><span className="trk-muted">{[e.location, e.at ? factoryTime(e.at) : t('Time not given', 'وقت درج نہیں')].filter(Boolean).join(' · ')}</span></div></li>)}</ol>}
+    {open && <ol className="trk-events" aria-label={t('Tracking timeline', 'ٹریکنگ کی ٹائم لائن')}>{view.events.map((e, i) => <li key={i} className={i === 0 ? 'is-latest' : undefined}><span className="trk-event-dot" aria-hidden="true" /><div><strong>{e.title || e.code || t('Update', 'اپ ڈیٹ')}</strong><span className="trk-muted">{[e.location, e.at ? factoryTime(e.at) : t('Time not given', 'وقت درج نہیں')].filter(Boolean).join(' · ')}</span></div></li>)}</ol>}
   </article>;
 }
 

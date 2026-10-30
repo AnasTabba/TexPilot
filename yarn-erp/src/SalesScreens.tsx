@@ -4,6 +4,8 @@ import { AnalyticsSection, BarList, KpiStrip, StackedBar, firstCurrency, type Ba
 import { AsyncForm, Field } from './forms';
 import { useLanguage } from './i18n';
 import { InterventionField, NextStep, ReasonField, SectionTabs, StatusTag, kg, money } from './PortalCommon';
+import { StageIcon, stageState, type StageIconName } from './iso/StageIcons';
+import { SplitView, StepFlow } from './SplitView';
 import { inventoryRequest, type Member } from './inventory-client';
 import { factoryTime, fixedInput } from './erp-client';
 import { InvoiceGenerator } from './InvoiceGenerator';
@@ -12,6 +14,7 @@ import { InvoiceDocument } from './InvoiceDocument';
 import { invoiceDocData, type InvoiceDocData } from './invoice-pdf';
 import './sales.css';
 import './sales-screens.css';
+import './sales-ui.css';
 
 type Buyer = { id: string; name: string; contact_name: string; email: string; phone: string; city: string; notes: string; status: string; version: number; created_at: number };
 type Rfq = { id: string; buyer_id: string; buyer_name: string; reference: string; specifications: string; quantity_milli: number; unit: string; requested_delivery_at: number; payment_terms: string; status: string; state: string; created_at: number };
@@ -45,7 +48,6 @@ const tabs: Record<string, { id: string; en: string; ur: string }[]> = {
   invoices: [{ id: 'owed', en: 'To collect', ur: 'وصولی کے لیے' }, { id: 'paid', en: 'Paid', ur: 'ادا شدہ' }, { id: 'all', en: 'All', ur: 'سب' }],
   'dispatch-requests': [{ id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'all', en: 'All', ur: 'سب' }],
 };
-const buyerStatuses = [['all', 'All', 'سب'], ['pending', 'Pending', 'زیرِ التوا'], ['active', 'Active', 'فعال'], ['suspended', 'Suspended', 'معطل'], ['rejected', 'Rejected', 'مسترد']] as const;
 // Status moves the sales team can make, mirroring the supplier rules: pending is approved or rejected, approved can be suspended and reinstated, rejected is final.
 type BuyerMove = { en: string; ur: string; options: [string, string, string][] };
 const buyerMoves: Record<string, BuyerMove> = {
@@ -58,6 +60,8 @@ const termOptions = [
   ['terms_not_met', 'Terms not met', 'شرائط پوری نہیں ہوئیں'],
   ['other', 'Other', 'دیگر'],
 ] as const;
+
+const rfqStep = (state: string) => state === 'sold' ? 2 : state === 'quoted' || state === 'awaiting_buyer_approval' ? 1 : 0;
 
 export function SalesScreens({ member, section, tab, id, navigate }: Props) {
   const { t } = useLanguage();
@@ -82,7 +86,7 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
     try {
       const next = await inventoryRequest<SalesState>('/erp/sales');
       setState(next);
-      if (section === 'buyers') setSummaries((await inventoryRequest<{ buyers: BuyerSummary[] }>('/erp/sales/buyers/summary')).buyers);
+      if (section === 'buyers' || section === 'analytics') setSummaries((await inventoryRequest<{ buyers: BuyerSummary[] }>('/erp/sales/buyers/summary')).buyers);
       if (section === 'buyers' && tab === 'settings' && member.admin) setSalesSettings((await inventoryRequest<{ settings: SalesSettings }>('/erp/sales/settings')).settings);
       if (section === 'buyer-rfqs') setQueries((await inventoryRequest<{ queries: StockQuery[] }>('/erp/stock/queries')).queries);
       if (section === 'dashboard' || section === 'dispatch-requests' || section === 'buyers') setDispatches((await inventoryRequest<{ dispatches: DispatchRecord[] }>('/erp/dispatch')).dispatches);
@@ -131,7 +135,6 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
   const pendingDispatch = dispatches.find(item => item.status === 'pending_approval');
   const overdue = new Map<string, number>();
   for (const invoice of s.invoices.filter(item => item.status === 'overdue')) overdue.set(invoice.currency, (overdue.get(invoice.currency) ?? 0) + invoice.outstanding_minor);
-  const selectedInvoice = s.invoices.find(invoice => invoice.id === id);
   // An unknown buyers tab (for example a stale link) falls back to the approval queue instead of an empty page.
   // Settings are admin-only: a sales manager opening buyers/settings by URL lands on the approval queue.
   const buyerTabs = member.admin ? tabs.buyers : tabs.buyers.filter(item => item.id !== 'settings');
@@ -176,6 +179,9 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
   const saveReopen = (buyer: BuyerSummary, requestId: string, reason: string) =>
     act(t('Buyer reopened for review.', 'خریدار دوبارہ جانچ کے لیے کھول دیا گیا۔'), 'خریدار دوبارہ جانچ کے لیے کھول دیا گیا۔', () => salesPost('/buyers/reopen', { id: requestId, buyerId: buyer.id, version: buyer.version, reason }));
 
+  // Lists keep their tab counts; each tab is a filter on the same records.
+  const splitTabs = (section: string, count: (id: string) => number) => tabs[section].map(item => ({ id: item.id, label: t(item.en, item.ur), count: count(item.id) }));
+
   const buyersView = () => {
     if (currentTab === 'settings') return <div className="erp-workspace"><SectionTabs tabs={buyerTabs} value={currentTab} onChange={value => navigate('buyers/' + value)} />
       <CreditLimitForm key={summaries.length} buyers={summaries} currency={s.settings.currency}
@@ -183,21 +189,27 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
       {salesSettings && <InvoiceSettingsForm key={JSON.stringify(salesSettings)} settings={salesSettings}
         onSave={changes => act(t('Settings saved.', 'ترتیبات محفوظ ہوئیں۔'), 'ترتیبات محفوظ ہوئیں۔', async () => { for (const change of changes) await salesPost('/settings', change); })} />}
     </div>;
-    // A deep link such as buyers/<id> (from the dashboard) focuses that one buyer; the tabs still show the rest.
-    const focused = id ? summaries.filter(buyer => buyer.id === id) : [];
-    return <div className="erp-workspace"><SectionTabs tabs={buyerTabs} value={currentTab} onChange={value => navigate('buyers/' + value)} />
-      <BuyerDirectory key={currentTab} buyers={focused.length ? focused : summaries} focused={focused.length > 0} defaultStatus={currentTab} sales={s} dispatches={dispatches}
-        member={member} open={open} setOpen={setOpen} navigate={navigate} onDecide={saveDecision} onProfile={saveProfile} onReopen={saveReopen} />
+    const orderBuyer = new Map(s.orders.map(order => [order.id, order.buyer_id]));
+    const shownBuyers = summaries.filter(buyer => currentTab === 'all' || buyer.status === currentTab);
+    return <div className="erp-workspace">
+      <a className="button" href="#/buyer" target="_blank" rel="noreferrer"><ExternalLink size={18} aria-hidden="true" />{t('Open buyer registration portal', 'خریدار رجسٹریشن پورٹل کھولیں')}</a>
+      {!summaries.length && <p className="live-muted">{t('Share the registration portal link with buyers.', 'خریداروں کو رجسٹریشن پورٹل کا لنک دیں۔')}</p>}
+      <SplitView label={t('Buyer directory', 'خریدار ڈائریکٹری')} tabs={splitTabs('buyers', id => summaries.filter(buyer => id === 'all' || buyer.status === id).length)} tab={currentTab} onTab={value => navigate('buyers/' + value)}
+        items={shownBuyers.map(buyer => ({ id: buyer.id, title: buyer.name, meta: [buyer.contact_name, buyer.city].filter(Boolean).join(' · ') || buyer.email, status: <StatusTag status={buyer.status} />, text: `${buyer.email} ${buyer.phone}` }))}
+        selectedId={id} onSelect={next => navigate(`buyers/${currentTab}${next ? '/' + next : ''}`)}
+        renderDetail={buyerId => { const buyer = summaries.find(item => item.id === buyerId); return buyer ? <BuyerRecord buyer={buyer} sales={s} dispatches={dispatches.filter(item => orderBuyer.get(item.sales_order_id) === buyer.id)} member={member} open={open} setOpen={setOpen} navigate={navigate}
+          onDecide={(status, reason, intervention) => saveDecision(buyer, status, reason, intervention)} onProfile={(fields, intervention) => saveProfile(buyer, fields, intervention)} onReopen={(requestId, reason) => saveReopen(buyer, requestId, reason)} />
+          : <p className="split-none">{t('This buyer is not in the list.', 'یہ خریدار فہرست میں نہیں۔')}</p>; }}
+        empty={t('No buyers in this view.', 'اس حصے میں کوئی خریدار نہیں۔')} emptyDetail={t('Choose a buyer to review, rate or edit.', 'جانچنے، ریٹنگ دینے یا ترمیم کے لیے خریدار منتخب کریں۔')} />
     </div>;
   };
 
   const buyerRfqsView = () => {
-    const filtered = s.rfqs.filter(rfq => currentTab === 'all' || rfq.state === currentTab);
-    const selected = filtered.find(rfq => rfq.id === id) ?? s.rfqs.find(rfq => rfq.id === id);
-    const newest = selected ? s.revisions.filter(revision => revision.buyer_po_id === selected.id).sort((a, b) => b.version - a.version)[0] : undefined;
-    const stockQueries = queries.filter(query => query.buyer_rfq_id === selected?.id);
-    return <div className="erp-workspace"><SectionTabs tabs={tabs['buyer-rfqs']} value={currentTab} onChange={value => navigate('buyer-rfqs/' + value)} />
-      {selected ? <section className="live-panel"><div className="live-panel-heading"><div><h2>{selected.reference} · {selected.buyer_name}</h2><p>{selected.quantity_milli / 1000} {selected.unit} · {selected.specifications}</p></div><StatusTag status={selected.state} /></div>
+    const rfqDetail = (selected: Rfq) => {
+      const newest = s.revisions.filter(revision => revision.buyer_po_id === selected.id).sort((a, b) => b.version - a.version)[0];
+      const stockQueries = queries.filter(query => query.buyer_rfq_id === selected.id);
+      return <section className="live-panel"><div className="live-panel-heading"><div><h2>{selected.reference} · {selected.buyer_name}</h2><p>{selected.quantity_milli / 1000} {selected.unit} · {selected.specifications}</p></div><StatusTag status={selected.state} /></div>
+        <StepFlow label={t('Request steps', 'درخواست کے مراحل')} current={rfqStep(selected.state)} steps={[{ icon: 'rfq', label: t('Request', 'درخواست') }, { icon: 'bid', label: t('Quote', 'قیمت') }, { icon: 'po', label: t('Sale', 'فروخت') }]} />
         {selected.state === 'awaiting_buyer_approval' && <p className="live-warning">{t('Awaiting buyer approval. A quotation cannot be sent yet.', 'خریدار کی منظوری کا انتظار ہے۔ ابھی قیمت نہیں بھیجی جا سکتی۔')}</p>}
         <dl className="erp-facts"><div><dt>{t('Delivery requested', 'مطلوبہ ترسیل')}</dt><dd>{dueDate(selected.requested_delivery_at)}</dd></div><div><dt>{t('Buyer terms', 'خریدار کی شرائط')}</dt><dd>{selected.payment_terms}</dd></div></dl>
         {selected.state === 'open' && !newest && <button className="button primary" onClick={() => setOpen(open === 'quote:' + selected.id ? '' : 'quote:' + selected.id)}><FileText size={18} aria-hidden="true" />{t('Create quotation', 'قیمت بنائیں')}</button>}
@@ -222,42 +234,46 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
           {open === 'query:' + selected.id && <StockQueryForm rfq={selected} products={s.products} member={member} onCancel={() => setOpen('')} onSave={payload => act(t('Stock question sent to the supervisor.', 'اسٹاک کا سوال سپروائزر کو بھیج دیا گیا۔'), 'اسٹاک کا سوال سپروائزر کو بھیج دیا گیا۔', () => inventoryRequest('/erp/stock/queries', payload))} />}
           {stockQueries.length > 0 && <div className="erp-records">{stockQueries.map(query => <article className="erp-record" key={query.id}><strong>{query.product_name} · {query.quantity_milli === null ? t('Quantity not specified', 'مقدار درج نہیں') : `${query.quantity_milli / 1000} ${selected.unit}`}</strong><p>{query.question}</p>{query.status === 'answered' ? <p role="status">{kg(query.available_grams ?? 0)} · {query.answer}</p> : <StatusTag status={query.status} />}</article>)}</div>}
         </section>
-      </section>
-        : filtered.length ? <div className="erp-records">{filtered.map(rfq => <article className="erp-record" key={rfq.id}><div className="erp-record-head"><div><h2><button className="live-text-button" onClick={() => navigate('buyer-rfqs/' + rfq.id)}>{rfq.reference} · {rfq.buyer_name}</button></h2><p>{rfq.quantity_milli / 1000} {rfq.unit} · {rfq.specifications}</p></div><StatusTag status={rfq.state} /></div>
-          {rfq.state === 'awaiting_buyer_approval' ? <p>{t('Awaiting buyer approval', 'خریدار کی منظوری کا انتظار')}</p> : <button className="button" onClick={() => navigate('buyer-rfqs/' + rfq.id)}><ArrowRight size={18} aria-hidden="true" />{t('Open buyer request', 'خریدار کی درخواست کھولیں')}</button>}</article>)}</div>
-        : <p className="live-empty">{t('No buyer RFQs in this view.', 'اس حصے میں خریدار کی کوئی درخواست نہیں۔')}</p>}
+      </section>;
+    };
+    const counts = (value: string) => s.rfqs.filter(rfq => value === 'all' || rfq.state === value).length;
+    return <div className="erp-workspace">
+      <SplitView label={t('Buyer RFQs', 'خریدار کی درخواستیں')} tabs={splitTabs('buyer-rfqs', counts)} tab={currentTab} onTab={value => navigate('buyer-rfqs/' + value)}
+        items={s.rfqs.filter(rfq => currentTab === 'all' || rfq.state === currentTab).map(rfq => ({ id: rfq.id, title: `${rfq.reference} · ${rfq.buyer_name}`, meta: `${rfq.quantity_milli / 1000} ${rfq.unit} · ${rfq.specifications}`, status: <StatusTag status={rfq.state} /> }))}
+        selectedId={id} onSelect={next => navigate(`buyer-rfqs/${currentTab}${next ? '/' + next : ''}`)}
+        renderDetail={rfqId => { const rfq = s.rfqs.find(item => item.id === rfqId); return rfq ? rfqDetail(rfq) : <p className="split-none">{t('This request is not in the list.', 'یہ درخواست فہرست میں نہیں۔')}</p>; }}
+        empty={t('No buyer RFQs in this view.', 'اس حصے میں خریدار کی کوئی درخواست نہیں۔')} emptyDetail={t('Choose a buyer request to quote or check stock.', 'قیمت دینے یا اسٹاک دیکھنے کے لیے خریدار کی درخواست منتخب کریں۔')} />
     </div>;
   };
 
   const invoicesView = () => {
-    if (selectedInvoice) {
-      const doc = invoiceDocData(selectedInvoice, s.saleLines, s.buyers.find(buyer => buyer.id === selectedInvoice.buyer_id), s.factoryName, selectedInvoice.buyer_name);
-      return <div className="erp-workspace"><InvoiceDocument doc={doc} /><InvoiceDetail invoice={selectedInvoice} creditNotes={s.creditNotes.filter(note => note.invoice_id === selectedInvoice.id)} member={member}
-        payments={s.invoicePayments.filter(item => item.invoice_id === selectedInvoice.id)} orderStatus={s.orders.find(order => order.id === selectedInvoice.sales_order_id)?.status ?? ''}
+    if (open === 'new-invoice') return <div className="erp-workspace"><InvoiceGenerator member={member} buyers={s.buyers} products={s.products} currency={s.settings.currency} taxRateBp={s.settings.tax_rate_bp} prefill={regenPrefill}
+        onCancel={() => { setOpen(''); setRegenerateFrom(''); }} onSave={issueInvoice} onSaveProductType={saveProductType} /></div>;
+    const invoiceDetail = (invoice: Invoice) => {
+      const doc = invoiceDocData(invoice, s.saleLines, s.buyers.find(buyer => buyer.id === invoice.buyer_id), s.factoryName, invoice.buyer_name);
+      return <><InvoiceDocument doc={doc} /><InvoiceDetail invoice={invoice} creditNotes={s.creditNotes.filter(note => note.invoice_id === invoice.id)} member={member}
+        payments={s.invoicePayments.filter(item => item.invoice_id === invoice.id)} orderStatus={s.orders.find(order => order.id === invoice.sales_order_id)?.status ?? ''}
         onPayment={payload => act(t('Payment recorded.', 'ادائیگی درج ہو گئی۔'), 'ادائیگی درج ہو گئی۔', () => salesPost('/payments', payload))}
         onCredit={payload => act(t('Credit note issued.', 'کریڈٹ نوٹ جاری ہو گیا۔'), 'کریڈٹ نوٹ جاری ہو گیا۔', () => salesPost('/credit-notes', payload))}
         onReversePayment={payload => act(t('Payment reversed. The balance is restored.', 'ادائیگی منسوخ ہو گئی۔ بقایا بحال ہو گیا۔'), 'ادائیگی منسوخ ہو گئی۔ بقایا بحال ہو گیا۔', () => salesPost('/payments/reverse', payload))}
         onVoid={payload => act(t('Invoice voided. Issue a corrected invoice when ready.', 'انوائس منسوخ ہو گئی۔ تیار ہونے پر درست شدہ انوائس جاری کریں۔'), 'انوائس منسوخ ہو گئی۔', () => salesPost('/invoices/void', payload))}
-        onRegenerate={() => { setRegenerateFrom(selectedInvoice.id); setOpen('new-invoice'); navigate('invoices'); }} /></div>;
-    }
-    const filtered = s.invoices.filter(invoice => currentTab === 'all' || (currentTab === 'paid' ? invoice.status === 'paid' : invoice.outstanding_minor > 0));
-    return <div className="erp-workspace"><SectionTabs tabs={tabs.invoices} value={currentTab} onChange={value => navigate('invoices/' + value)} />
-      {open === 'new-invoice' ? <InvoiceGenerator member={member} buyers={s.buyers} products={s.products} currency={s.settings.currency} taxRateBp={s.settings.tax_rate_bp} prefill={regenPrefill}
-        onCancel={() => { setOpen(''); setRegenerateFrom(''); }} onSave={issueInvoice} onSaveProductType={saveProductType} />
-        : <div className="erp-toolbar"><span>{t('Invoices are locked once issued.', 'جاری انوائس مقفل ہو جاتی ہے۔')}</span><button className="button primary" onClick={() => { setRegenerateFrom(''); setOpen('new-invoice'); }}><Plus size={18} aria-hidden="true" />{t('New invoice', 'نئی انوائس')}</button></div>}
-      {filtered.length ? <div className="erp-records">{filtered.map(invoice => <article className="erp-record" key={invoice.id}><div className="erp-record-head"><div><h2><button className="live-text-button" onClick={() => navigate('invoices/' + invoice.id)}>{invoice.number}</button></h2><p>{invoice.buyer_name} · {invoice.order_reference} · {dueDate(invoice.due_at)}</p></div><StatusTag status={invoice.status} /></div>
-        <p>{t('Outstanding', 'بقایا')}: {money(invoice.outstanding_minor, invoice.currency)} · {t('Total', 'کل')}: {money(invoice.total_minor, invoice.currency)}</p>
-        <button className="button" onClick={() => navigate('invoices/' + invoice.id)}><FileText size={18} aria-hidden="true" />{t('Open invoice', 'انوائس کھولیں')}</button></article>)}</div>
-        : <p className="live-empty">{t('No invoices in this view.', 'اس حصے میں کوئی انوائس نہیں۔')}</p>}
+        onRegenerate={() => { setRegenerateFrom(invoice.id); setOpen('new-invoice'); navigate('invoices'); }} /></>;
+    };
+    const paidOnly = (invoice: Invoice) => currentTab === 'paid' ? invoice.status === 'paid' : invoice.outstanding_minor > 0;
+    const counts = (value: string) => s.invoices.filter(invoice => value === 'all' || (value === 'paid' ? invoice.status === 'paid' : invoice.outstanding_minor > 0)).length;
+    return <div className="erp-workspace">
+      <div className="erp-toolbar"><span>{t('Invoices are locked once issued.', 'جاری انوائس مقفل ہو جاتی ہے۔')}</span><button className="button primary" onClick={() => { setRegenerateFrom(''); setOpen('new-invoice'); }}><Plus size={18} aria-hidden="true" />{t('New invoice', 'نئی انوائس')}</button></div>
+      <SplitView label={t('Invoices', 'انوائسز')} tabs={splitTabs('invoices', counts)} tab={currentTab} onTab={value => navigate('invoices/' + value)}
+        items={s.invoices.filter(invoice => currentTab === 'all' || paidOnly(invoice)).map(invoice => ({ id: invoice.id, title: invoice.number, meta: `${invoice.buyer_name} · ${t('Outstanding', 'بقایا')}: ${money(invoice.outstanding_minor, invoice.currency)}`, status: <StatusTag status={invoice.status} /> }))}
+        selectedId={id} onSelect={next => navigate(`invoices/${currentTab}${next ? '/' + next : ''}`)}
+        renderDetail={invoiceId => { const invoice = s.invoices.find(item => item.id === invoiceId); return invoice ? invoiceDetail(invoice) : <p className="split-none">{t('This invoice is not in the list.', 'یہ انوائس فہرست میں نہیں۔')}</p>; }}
+        empty={t('No invoices in this view.', 'اس حصے میں کوئی انوائس نہیں۔')} emptyDetail={t('Choose an invoice to record a payment or a credit note.', 'ادائیگی یا کریڈٹ نوٹ درج کرنے کے لیے انوائس منتخب کریں۔')} />
       <section className="live-panel"><h2>{t('Credit alerts', 'ادائیگی کی یاددہانیاں')}</h2>{alerts.length ? <ul className="erp-records">{alerts.map(({ invoice, alert }) => <li className="erp-record" key={alert.id}><strong>{invoice.number} · {invoice.buyer_name}</strong><p><StatusTag status={alert.kind} /> · {money(invoice.outstanding_minor, invoice.currency)} · {dueDate(invoice.due_at)}</p></li>)}</ul> : <p>{t('No credit alerts.', 'ادائیگی کی کوئی یاددہانی نہیں۔')}</p>}</section>
     </div>;
   };
 
   const dispatchRequestsView = () => {
-    const filtered = dispatches.filter(item => currentTab === 'all' || item.status === currentTab);
-    const selected = filtered.find(item => item.id === id) ?? dispatches.find(item => item.id === id);
-    return <div className="erp-workspace"><SectionTabs tabs={tabs['dispatch-requests']} value={currentTab} onChange={value => navigate('dispatch-requests/' + value)} />
-      {selected ? <section className="live-panel"><div className="live-panel-heading"><div><h2>{selected.order_reference} · {selected.buyer_name}</h2><p>{selected.product_name} · {selected.lot_batch} · {kg(selected.grams)}</p></div><StatusTag status={selected.status} /></div>
+    const dispatchDetail = (selected: DispatchRecord) => <section className="live-panel"><div className="live-panel-heading"><div><h2>{selected.order_reference} · {selected.buyer_name}</h2><p>{selected.product_name} · {selected.lot_batch} · {kg(selected.grams)}</p></div><StatusTag status={selected.status} /></div>
         <DispatchThread status={selected.status} holdReason={selected.hold_reason} />
         {selected.status === 'pending_approval' && selected.approval_request_id && <>
           <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
@@ -266,11 +282,14 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
         </>}
         {open === 'hold:' + selected.id && <DispatchHoldForm member={member} onCancel={() => setOpen('')} onSave={(term, reason, holdIntervention) => act(t('Dispatch placed on hold.', 'ڈسپیچ روک دی گئی۔'), 'ڈسپیچ روک دی گئی۔', () => dispatchPost('/requests/decide', { requestId: selected.approval_request_id, decision: 'hold', term, reason, ...(holdIntervention ? { interventionReason: holdIntervention } : {}) }))} />}
         {selected.status === 'approved' && <HoldNoticeForm member={member} onCancel={() => setOpen('')} onSave={(term, message, noticeIntervention) => act(t('Hold notice sent to dispatch.', 'ڈسپیچ کو روکنے کا نوٹس بھیج دیا گیا۔'), 'ڈسپیچ کو روکنے کا نوٹس بھیج دیا گیا۔', () => dispatchPost('/hold-notices', { dispatchId: selected.id, term, message, ...(noticeIntervention ? { interventionReason: noticeIntervention } : {}) }))} />}
-        <button className="button" onClick={() => navigate('dispatch-requests')}><ArrowRight size={18} aria-hidden="true" />{t('Back to requests', 'درخواستوں کی فہرست')}</button>
-      </section>
-        : filtered.length ? <div className="erp-records">{filtered.map(item => <article className="erp-record" key={item.id}><div className="erp-record-head"><div><h2><button className="live-text-button" onClick={() => navigate('dispatch-requests/' + item.id)}>{item.order_reference} · {item.buyer_name}</button></h2><p>{item.product_name} · {item.lot_batch} · {kg(item.grams)}</p></div><StatusTag status={item.status} /></div>
-          <button className="button" onClick={() => navigate('dispatch-requests/' + item.id)}><Truck size={18} aria-hidden="true" />{t('Review dispatch', 'ڈسپیچ دیکھیں')}</button></article>)}</div>
-        : <p className="live-empty">{t('No dispatch requests in this view.', 'اس حصے میں کوئی ڈسپیچ درخواست نہیں۔')}</p>}
+      </section>;
+    const counts = (value: string) => dispatches.filter(item => value === 'all' || item.status === value).length;
+    return <div className="erp-workspace">
+      <SplitView label={t('Dispatch requests', 'ڈسپیچ درخواستیں')} tabs={splitTabs('dispatch-requests', counts)} tab={currentTab} onTab={value => navigate('dispatch-requests/' + value)}
+        items={dispatches.filter(item => currentTab === 'all' || item.status === currentTab).map(item => ({ id: item.id, title: `${item.order_reference} · ${item.buyer_name}`, meta: `${item.product_name} · ${item.lot_batch} · ${kg(item.grams)}`, status: <StatusTag status={item.status} /> }))}
+        selectedId={id} onSelect={next => navigate(`dispatch-requests/${currentTab}${next ? '/' + next : ''}`)}
+        renderDetail={itemId => { const selected = dispatches.find(item => item.id === itemId); return selected ? dispatchDetail(selected) : <p className="split-none">{t('This request is not in the list.', 'یہ درخواست فہرست میں نہیں۔')}</p>; }}
+        empty={t('No dispatch requests in this view.', 'اس حصے میں کوئی ڈسپیچ درخواست نہیں۔')} emptyDetail={t('Choose a dispatch request to approve, hold or review.', 'منظوری، روکنے یا جانچنے کے لیے ڈسپیچ درخواست منتخب کریں۔')} />
     </div>;
   };
 
@@ -280,6 +299,11 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
     const overdue = analytics && currency ? money(analytics.overdueByCurrency.find(row => row.currency === currency)?.overdueMinor ?? 0, currency) : null;
     const paymentTone: Record<string, Tone> = { unpaid: 'stone', partially_paid: 'warn', paid: 'ok', overdue: 'bad' };
     const grouped = (rows: { key: string; label: string; currency: string; amount: number }[]): BarRow[] => rows.map(row => ({ key: row.key, label: row.label, value: row.amount, text: money(row.amount, row.currency), group: row.currency }));
+    // Who owes: what each buyer still owes, with the overdue part named on the row. Bars scale per currency.
+    const owed: BarRow[] = summaries.flatMap(buyer => buyer.outstanding.filter(row => row.outstanding_minor > 0).map(row => {
+      const late = buyer.overdue.find(item => item.currency === row.currency)?.overdue_minor ?? 0;
+      return { key: `${buyer.id}-${row.currency}`, label: buyer.name, sub: late > 0 ? `${t('Overdue', 'مدت گزر گئی')} ${money(late, row.currency)}` : undefined, value: row.outstanding_minor, text: money(row.outstanding_minor, row.currency), group: row.currency };
+    })).sort((a, b) => b.value - a.value).slice(0, 8);
     return <div className="ak-page">
       <div className="ak-toolbar">
         <Field>{t('From', 'سے')}<input type="date" value={from} onChange={event => setFrom(event.target.value)} /></Field>
@@ -290,21 +314,26 @@ export function SalesScreens({ member, section, tab, id, navigate }: Props) {
         <KpiStrip items={[
           { label: t('Total invoiced', 'کل انوائس'), value: invoiced },
           { label: t('Overdue', 'مدت گزر گئی'), value: overdue },
-          { label: t('Paid invoices', 'ادا شدہ انوائس'), value: String(analytics.paymentStatus.paid ?? 0) },
           { label: t('Unpaid invoices', 'غیر ادا شدہ انوائس'), value: String(analytics.paymentStatus.unpaid ?? 0) },
         ]} />
-        <AnalyticsSection title={t('Sales by month', 'ماہانہ فروخت')}>
-          <BarList rows={grouped(analytics.byPeriod.map(row => ({ key: `${row.period}-${row.currency}`, label: row.period, currency: row.currency, amount: row.totalMinor })))} empty={t('No invoiced sales in this period.', 'اس مدت میں کوئی انوائس شدہ فروخت نہیں۔')} />
+        <AnalyticsSection title={t('Who owes us', 'کون کتنا دینا ہے')} note={t('Outstanding balance per buyer, largest first.', 'ہر خریدار کا بقایا، سب سے بڑا پہلے۔')}>
+          <BarList rows={owed} empty={t('Nobody owes money right now.', 'اس وقت کوئی بقایا نہیں۔')} />
         </AnalyticsSection>
-        <AnalyticsSection title={t('Sales by buyer', 'خریدار کے لحاظ سے فروخت')}>
-          <BarList rows={grouped(analytics.byBuyer.map(row => ({ key: `${row.buyer}-${row.currency}`, label: row.buyer, currency: row.currency, amount: row.totalMinor })))} empty={t('No buyer totals in this period.', 'اس مدت میں خریدار کا کوئی مجموعہ نہیں۔')} />
-        </AnalyticsSection>
-        <AnalyticsSection title={t('Sales by product', 'مصنوعات کے لحاظ سے فروخت')}>
+        <AnalyticsSection title={t('What sells', 'کیا بکتا ہے')} note={t('Invoiced sales by material in this period.', 'اس مدت میں مواد کے لحاظ سے انوائس شدہ فروخت۔')}>
           <BarList rows={grouped(analytics.byProduct.map((row, i) => ({ key: `${row.product}-${row.currency}-${i}`, label: row.product ?? t('Unassigned material', 'غیر مختص مواد'), currency: row.currency, amount: row.totalMinor })))} empty={t('No product totals in this period.', 'اس مدت میں مصنوعات کا کوئی مجموعہ نہیں۔')} />
         </AnalyticsSection>
-        <AnalyticsSection title={t('Payment status', 'ادائیگی کی حالت')}>
-          <StackedBar segments={Object.entries(analytics.paymentStatus).map(([status, count]) => ({ key: status, label: <StatusTag status={status} />, value: Number(count), text: String(count), tone: paymentTone[status] ?? 'stone' }))} />
-        </AnalyticsSection>
+        <details className="live-panel ak-more">
+          <summary>{t('Monthly sales, buyers and payment status', 'ماہانہ فروخت، خریدار اور ادائیگی کی حالت')}</summary>
+          <AnalyticsSection title={t('Sales by month', 'ماہانہ فروخت')}>
+            <BarList rows={grouped(analytics.byPeriod.map(row => ({ key: `${row.period}-${row.currency}`, label: row.period, currency: row.currency, amount: row.totalMinor })))} empty={t('No invoiced sales in this period.', 'اس مدت میں کوئی انوائس شدہ فروخت نہیں۔')} />
+          </AnalyticsSection>
+          <AnalyticsSection title={t('Sales by buyer', 'خریدار کے لحاظ سے فروخت')}>
+            <BarList rows={grouped(analytics.byBuyer.map(row => ({ key: `${row.buyer}-${row.currency}`, label: row.buyer, currency: row.currency, amount: row.totalMinor })))} empty={t('No buyer totals in this period.', 'اس مدت میں خریدار کا کوئی مجموعہ نہیں۔')} />
+          </AnalyticsSection>
+          <AnalyticsSection title={t('Payment status', 'ادائیگی کی حالت')}>
+            <StackedBar segments={Object.entries(analytics.paymentStatus).map(([status, count]) => ({ key: status, label: <StatusTag status={status} />, value: Number(count), text: String(count), tone: paymentTone[status] ?? 'stone' }))} />
+          </AnalyticsSection>
+        </details>
       </>}
     </div>;
   };
@@ -469,38 +498,14 @@ function HoldNoticeForm({ member, onSave, onCancel }: { member: Member; onSave: 
   </AsyncForm>;
 }
 
+const dispatchIcons: StageIconName[] = ['request', 'approve', 'dispatch', 'deliver'];
+
 function DispatchThread({ status, holdReason }: { status: DispatchRecord['status']; holdReason: string | null }) {
   const { t } = useLanguage(); const nodes = ['pending_approval', 'approved', 'dispatched', 'delivered'] as const; const index = nodes.indexOf(status as typeof nodes[number]);
   return <div className="yf-dispatch-thread" aria-label={t('Dispatch status history', 'ڈسپیچ کی حالت کی تاریخ')}>
-    <ol>{nodes.map((node, i) => <li key={node} className={i <= index ? 'done' : ''} aria-current={node === status ? 'step' : undefined}><span aria-hidden="true">{i + 1}</span><StatusTag status={node} /></li>)}</ol>
+    <ol>{nodes.map((node, i) => <li key={node} className={i <= index ? 'done' : ''} aria-current={node === status ? 'step' : undefined}><StageIcon name={dispatchIcons[i]} state={stageState(i, index)} /><span aria-hidden="true">{i + 1}</span><StatusTag status={node} /></li>)}</ol>
     {status === 'on_hold' && <p className="live-warning"><StatusTag status="on_hold" /> · {holdReason}</p>}
   </div>;
-}
-
-function BuyerDirectory({ buyers, focused, defaultStatus, sales, dispatches, member, open, setOpen, navigate, onDecide, onProfile, onReopen }: {
-  buyers: BuyerSummary[]; focused: boolean; defaultStatus: string; sales: SalesState; dispatches: DispatchRecord[]; member: Member; open: string; setOpen: (key: string) => void; navigate: (to: string) => void;
-  onDecide: (buyer: BuyerSummary, status: string, reason: string, intervention: string) => Promise<void>;
-  onProfile: (buyer: BuyerSummary, fields: { contactName: string; phone: string; city: string; notes: string }, intervention: string) => Promise<void>;
-  onReopen: (buyer: BuyerSummary, requestId: string, reason: string) => Promise<void>;
-}) {
-  const { t } = useLanguage();
-  const [status, setStatus] = useState(defaultStatus), [search, setSearch] = useState('');
-  const term = search.trim().toLowerCase();
-  const rows = focused ? buyers : buyers.filter(buyer => (status === 'all' || buyer.status === status) && [buyer.name, buyer.contact_name, buyer.city, buyer.email].join(' ').toLowerCase().includes(term));
-  const orderBuyer = new Map(sales.orders.map(order => [order.id, order.buyer_id]));
-  return <section className="live-panel">
-    <div className="yf-head"><div><h2>{t('Buyer directory', 'خریدار ڈائریکٹری')}</h2><p>{t('Registered buyers. The sales team approves them before they can order.', 'رجسٹرڈ خریدار۔ آرڈر دینے سے پہلے فروخت کی ٹیم انہیں منظور کرتی ہے۔')}</p></div></div>
-    <a className="button" href="#/buyer" target="_blank" rel="noreferrer"><ExternalLink size={18} aria-hidden="true" />{t('Open buyer registration portal', 'خریدار رجسٹریشن پورٹل کھولیں')}</a>
-    {focused ? <p className="live-muted"><button className="live-text-button" onClick={() => navigate('buyers/' + defaultStatus)}>{t('Show all buyers', 'تمام خریدار دکھائیں')}</button></p>
-      : <div className="live-fields erp-filters"><Field>{t('Status', 'حالت')}<select value={status} onChange={event => setStatus(event.target.value)}>{buyerStatuses.map(([value, en, ur]) => <option key={value} value={value}>{t(en, ur)}</option>)}</select></Field>
-        <Field>{t('Search buyers', 'خریدار تلاش کریں')}<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={t('Name, contact, city, email', 'نام، رابطہ، شہر، ای میل')} /></Field></div>}
-    {!buyers.length && <p className="live-muted">{t('Share the registration portal link with buyers.', 'خریداروں کو رجسٹریشن پورٹل کا لنک دیں۔')}</p>}
-    {rows.length ? <div className="erp-records">{rows.map(buyer => <BuyerRecord key={buyer.id} buyer={buyer} sales={sales}
-        dispatches={dispatches.filter(item => orderBuyer.get(item.sales_order_id) === buyer.id)} member={member} open={open} setOpen={setOpen} navigate={navigate}
-        onDecide={(status, reason, intervention) => onDecide(buyer, status, reason, intervention)}
-        onProfile={(fields, intervention) => onProfile(buyer, fields, intervention)} onReopen={(requestId, reason) => onReopen(buyer, requestId, reason)} />)}</div>
-      : buyers.length ? <p className="live-empty">{t('No buyers in this view.', 'اس حصے میں کوئی خریدار نہیں۔')}</p> : null}
-  </section>;
 }
 
 function BuyerRecord({ buyer, sales, dispatches, member, open, setOpen, navigate, onDecide, onProfile, onReopen }: {

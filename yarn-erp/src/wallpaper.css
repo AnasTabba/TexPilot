@@ -59,7 +59,7 @@ html[data-wallpaper] .live-content[data-page="dashboard"] .live-page-heading :is
   transition: transform 160ms var(--ease-out);
 }
 .yf-wall-edit:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
-.yf-wall-edit:active { transform: scale(.96); }
+.yf-wall-edit:active { transform: scale(.97); }
 
 .yf-wall-sheet {
   position: fixed;
@@ -78,7 +78,8 @@ html[data-wallpaper] .live-content[data-page="dashboard"] .live-page-heading :is
   color: var(--ink);
   box-shadow: 0 24px 60px rgb(0 0 0 / .28);
 }
-.yf-wall-sheet[open] { animation: yf-wall-enter 220ms var(--ease-out); }
+.yf-wall-sheet { transform-origin: 100% 100%; }
+.yf-wall-sheet[open] { animation: yf-wall-enter 200ms var(--ease-out); }
 .yf-wall-sheet::backdrop { background: rgb(0 0 0 / .12); }
 .yf-wall-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-block-end: 20px; }
 .yf-wall-head h2 { margin: 0; font-size: 20px; }
@@ -121,13 +122,14 @@ html[data-wallpaper] .live-content[data-page="dashboard"] .live-page-heading :is
 .yf-wall-dim { display: grid; gap: 8px; margin-block-start: 18px; }
 .yf-wall-dim input[type="range"] { width: 100%; accent-color: var(--ink); }
 
+/* The sheet is anchored to the bottom-right button, so it grows from that corner. */
 @keyframes yf-wall-enter {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: none; }
 }
 @media (hover: hover) and (pointer: fine) {
   .yf-wall-edit:hover { transform: translateY(-1px); }
-  .yf-wall-edit:active { transform: scale(.96); }
+  .yf-wall-edit:active { transform: scale(.97); }
   .yf-wall-swatch:hover .yf-wall-thumb { transform: scale(1.02); }
 }
 @media (max-width: 900px) {

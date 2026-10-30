@@ -4,7 +4,8 @@ import { qualityName, stageName, stockStages, weight, type StockStage, type Work
 import { RangeSelect, buckets, bucketIndex, useRange } from './RangeSelect';
 import './stock-widgets.css';
 
-const COLOUR: Record<StockStage, string> = { raw: '#f2a541', wip: '#4f5bd5', finished: '#0f8b8d', cops: '#e4572e' };
+// Stage colours are one brand ramp (see --st-* in stock-widgets.css), so the data reads in --brand, not in alert colours.
+const stageColour = (stage: StockStage) => `var(--st-${stage})`;
 const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
@@ -109,8 +110,8 @@ export function ProductionWidget({ state }: { state: WorkspaceState }) {
         <svg key={range} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Production per period">
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#4fd1c5" />
-              <stop offset="100%" stopColor={COLOUR.finished} />
+              <stop offset="0%" style={{ stopColor: 'var(--brand)' }} />
+              <stop offset="100%" style={{ stopColor: 'var(--brand-ink)' }} />
             </linearGradient>
           </defs>
           {days.map((d, i) => {
@@ -217,10 +218,9 @@ export function InventoryWidget({ state }: { state: WorkspaceState }) {
                 cy={100}
                 r={80}
                 pathLength={100}
-                stroke={COLOUR[s.stage]}
                 strokeDasharray={ready ? `${s.pct} 100` : '0 100'}
                 strokeDashoffset={-s.offset}
-                style={{ transitionDelay: `${s.index * 120}ms` }}
+                style={{ stroke: stageColour(s.stage), transitionDelay: `${s.index * 120}ms` }}
                 role="button"
                 tabIndex={0}
                 aria-label={`${stageName[s.stage]}: ${weight(stageGrams[s.stage])} kg`}
@@ -242,7 +242,7 @@ export function InventoryWidget({ state }: { state: WorkspaceState }) {
               key={st}
               type="button"
               className={`stw-chip${selected === st ? ' is-on' : ''}`}
-              style={{ '--c': COLOUR[st], '--ct': st === 'raw' ? '#1d1b19' : '#fff' } as CSSProperties}
+              style={{ '--c': stageColour(st) } as CSSProperties}
               aria-pressed={selected === st}
               onClick={() => toggle(st)}
             >
@@ -277,7 +277,7 @@ export function InventoryWidget({ state }: { state: WorkspaceState }) {
               >
                 <td><span className="stw-cell">{lot.batch}</span></td>
                 <td>{productName.get(lot.product_id) ?? '—'}</td>
-                <td><span className="stw-stage" style={{ '--c': COLOUR[b.stage] } as CSSProperties}>{stageName[b.stage]}</span></td>
+                <td><span className="stw-stage" style={{ '--c': stageColour(b.stage) } as CSSProperties}>{stageName[b.stage]}</span></td>
                 <td className="num">{weight(b.grams)}</td>
                 <td><span className={`stw-q stw-q--${lot.quality}`}>{qualityName[lot.quality]}</span></td>
               </tr>

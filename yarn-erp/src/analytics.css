@@ -17,8 +17,11 @@
 .ak-kpi:nth-child(2n) { padding-inline: 16px 0; border-inline-start: 1px solid var(--line); }
 .ak-kpi dt { color: var(--ink-2); font-size: 14px; }
 .ak-kpi dd { margin: 4px 0 0; font-size: clamp(24px, 3.2vw, 32px); font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.ak-kpi:first-child dd { color: var(--brand); }
 
 /* Ranked rows: label and value on one line, the thin track underneath. */
+/* Emphasis: the top-ranked row carries the pop bar; every other bar is brand blue. */
+.ak-bar-row:first-child .ak-bar-fill { background: var(--pop); }
 .ak-bar-list { list-style: none; margin: 0; padding: 0; display: grid; }
 .ak-bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label value" "track track"; column-gap: 16px; row-gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .ak-bar-label { grid-area: label; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -26,7 +29,7 @@
 .ak-bar-label small { color: var(--ink-2); font-size: 13px; overflow-wrap: anywhere; }
 .ak-bar-value { grid-area: value; font-weight: 600; text-align: end; white-space: nowrap; }
 .ak-bar-track { grid-area: track; display: block; height: 6px; border-radius: var(--r-pill); background: var(--sunken); overflow: hidden; }
-.ak-bar-fill { display: block; height: 100%; min-width: 0; border-radius: inherit; background: var(--kraft); transition: width 320ms var(--ease-out); }
+.ak-bar-fill { display: block; height: 100%; min-width: 0; border-radius: inherit; background: var(--brand); transition: width 320ms var(--ease-out); }
 
 /* Segmented bar and legend. */
 .ak-stack { display: grid; gap: 14px; min-width: 0; }
@@ -42,8 +45,8 @@
 .ak-seg.is-ok, .ak-swatch.is-ok { background: var(--ok); }
 .ak-seg.is-warn, .ak-swatch.is-warn { background: var(--warn); }
 .ak-seg.is-bad, .ak-swatch.is-bad { background: var(--bad); }
-.ak-seg.is-kraft, .ak-swatch.is-kraft { background: var(--kraft); }
-.ak-seg.is-ink, .ak-swatch.is-ink { background: var(--ink-2); }
+.ak-seg.is-kraft, .ak-swatch.is-kraft { background: var(--brand); }
+.ak-seg.is-ink, .ak-swatch.is-ink { background: var(--brand); }
 .ak-seg.is-stone, .ak-swatch.is-stone { background: var(--line-strong); }
 
 /* Wide screens: money and operations side by side, people below operations, divided by one hairline. */

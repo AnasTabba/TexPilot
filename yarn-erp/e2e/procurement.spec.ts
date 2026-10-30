@@ -30,6 +30,7 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await page.getByLabel('4-digit PIN', { exact: true }).fill('2468');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   await page.goto('/#/procurement');
+  await page.getByRole('button', { name: 'Suppliers', exact: true }).click();
   await page.getByRole('button', { name: 'Review supplier access', exact: true }).click();
   await page.getByLabel('Verification details / reason').fill('Contacted the supplier and checked company identity');
   await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
@@ -37,7 +38,7 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await page.getByRole('button', { name: 'Save decision' }).click();
   await expect(page.locator('.erp-status').filter({ hasText: /^approved$/ })).toBeVisible();
   await expect(page.getByRole('link', { name: /Call.*923001234567/ })).toHaveAttribute('href', 'tel:+923001234567');
-  await page.getByRole('button', { name: 'RFQs and bids', exact: true }).click();
+  await page.getByRole('button', { name: 'Pipeline', exact: true }).click();
   await page.getByRole('button', { name: 'New RFQ', exact: true }).click();
   await page.getByLabel('RFQ title', { exact: true }).fill('Cotton 30/1 trial order');
   await page.getByLabel('Specifications (count, composition, quality)', { exact: true }).fill('Combed ring-spun cotton, count 30/1, freight included');
@@ -56,6 +57,7 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await supplier.getByRole('button', { name: 'Submit bid', exact: true }).click();
   await expect(supplier.getByRole('button', { name: 'Revise your bid' })).toBeVisible();
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page.locator('[data-stage="bids"]').getByRole('button', { name: /Test supplier mill/ }).click();
   await page.getByRole('button', { name: 'Review and accept bid' }).click();
   await page.getByRole('checkbox', { name: 'I accept this bid revision' }).check();
   await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
@@ -67,10 +69,13 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await supplier.getByLabel('Shipping carrier', { exact: true }).fill('Test carrier');
   await supplier.getByRole('button', { name: 'Save dispatch notice' }).click();
   await expect(supplier.getByText('Bill of lading: TESTBOL-1001')).toBeVisible();
-  await page.getByRole('button', { name: 'Purchase orders', exact: true }).click();
+  await page.locator('[data-stage="po"], [data-stage="incoming"]').getByRole('button', { name: /Test supplier mill/ }).click();
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(page.getByText('Bill of lading: TESTBOL-1001')).toBeVisible();
+  await page.getByRole('button', { name: 'Tracking', exact: true }).click();
   await expect(page.getByText('Tracking is not connected.', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Pipeline', exact: true }).click();
+  await page.locator('[data-stage="po"], [data-stage="incoming"]').getByRole('button', { name: /Test supplier mill/ }).click();
   // Attach the receiving prerequisite through the same form the purchase manager uses.
   await page.getByRole('button', { name: 'Attach bill of lading', exact: true }).click();
   for (const control of [page.getByLabel('Bill of lading number', { exact: true }), page.getByRole('button', { name: 'Save bill of lading', exact: true })]) {
@@ -80,7 +85,7 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
   await page.getByRole('button', { name: 'Save bill of lading', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Bill of lading attached.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Incoming stock', exact: true }).click();
+  await page.locator('[data-stage="incoming"]').getByRole('button', { name: /Test supplier mill/ }).click();
   await page.getByRole('button', { name: 'Register arrival', exact: true }).click();
   await page.getByLabel('Lot reference', { exact: true }).fill('ERP-RCV-001');
   await page.getByLabel('Supplier lot reference (optional)', { exact: true }).fill('SUP-LOT-001');
@@ -167,7 +172,7 @@ test('admin legacy purchasing forms require intervention on every mutation, and 
  expect((await post('/erp/suppliers/review', { id: suppliers.suppliers[0].id, version: 1, status: 'approved', reason: 'Company checked', interventionReason: 'Purchase manager not set up yet' })).status).toBe(200);
  expect((await post('/erp/admin/thresholds', { type: 'purchase', value: 1, interventionReason: 'Test the approval gate' })).status).toBe(200);
  await page.goto('/#/procurement');
- await page.getByRole('button', { name: 'RFQs and bids', exact: true }).click();
+ await page.getByRole('button', { name: 'Pipeline', exact: true }).click();
  await page.getByRole('button', { name: 'New RFQ', exact: true }).click();
  await page.getByLabel('RFQ title', { exact: true }).fill('Gate cotton order');
  await page.getByLabel('Specifications (count, composition, quality)', { exact: true }).fill('Combed cotton 20/1 for the gate test');
@@ -189,6 +194,7 @@ test('admin legacy purchasing forms require intervention on every mutation, and 
  const bid = await post('/portal/bids', { id: crypto.randomUUID(), rfqId: rfq.id, version: 0, quantityMilli: rfq.quantity_milli, priceMinor: 125000, currency: 'PKR', paymentTerms: 'Net 30 after delivery', deliveryAt: Date.now() + 7 * 86400000, validUntil: Date.now() + 3 * 86400000, note: '' });
  expect(bid.status).toBe(201);
  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+ await page.locator('[data-stage="bids"]').getByRole('button', { name: /Gate mill/ }).click();
  await page.getByRole('button', { name: 'Review and accept bid' }).click();
  await page.getByRole('checkbox', { name: 'I accept this bid revision' }).check();
  await page.getByLabel('Intervention reason').fill('Purchase manager not set up yet');
@@ -202,8 +208,8 @@ test('the dark pill follows the procurement tab that is pressed', async ({ page 
  await signIn(page, 'Anas');
  await page.goto(origin + '/#/procurement');
  const tabs = page.locator('.live-segments[aria-label="Procurement views"]');
- await tabs.getByRole('button', { name: 'RFQs and bids' }).click();
- await expect(tabs.getByRole('button', { name: 'RFQs and bids' })).toHaveAttribute('aria-pressed', 'true');
+ await tabs.getByRole('button', { name: 'Pipeline' }).click();
+ await expect(tabs.getByRole('button', { name: 'Pipeline' })).toHaveAttribute('aria-pressed', 'true');
  await expect.poll(() => tabs.evaluate(nav => {
   const pressed = nav.querySelector<HTMLElement>('button[aria-pressed="true"]')!;
   return nav.style.getPropertyValue('--glide-x') === pressed.offsetLeft + 'px' && nav.style.getPropertyValue('--glide-w') === pressed.offsetWidth + 'px';

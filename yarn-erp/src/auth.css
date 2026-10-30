@@ -1,0 +1,60 @@
+/* Sign-in and entry. Scoped under .yf-signin so these rules win over yarnflow.css without editing it.
+   Atmosphere is CSS gradients only; the keypad gets no motion (it is used all day). */
+
+@keyframes yf-auth-rise { from { opacity: 0; transform: translateY(10px); } }
+
+/* Atmosphere: a soft blue glow with a hint of pop behind the sheet, showing through the glass panels. */
+.yf-signin { position: relative; isolation: isolate; }
+.yf-signin::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(42% 38% at 76% 14%, color-mix(in srgb, var(--brand) 42%, transparent), transparent 72%),
+    radial-gradient(36% 32% at 64% 90%, color-mix(in srgb, var(--pop) 30%, transparent), transparent 74%);
+}
+.yf-signin .yf-signin-rail { background: color-mix(in srgb, var(--rail) 80%, transparent); backdrop-filter: blur(18px) saturate(1.2); }
+.yf-signin .yf-signin-sheet { position: relative; background: color-mix(in srgb, var(--sheet) 90%, transparent); backdrop-filter: blur(22px) saturate(1.1); }
+@supports not (backdrop-filter: blur(1px)) {
+  .yf-signin .yf-signin-rail { background: var(--rail); }
+  .yf-signin .yf-signin-sheet { background: var(--sheet); }
+}
+
+/* Headline: big, confident, tight, upright (Urdu keeps its own letterforms). */
+.yf-signin .yf-signin-step h1 { font-style: normal; font-size: clamp(32px, 6.4cqh, 46px); line-height: 1.04; letter-spacing: -0.035em; }
+html[lang="ur"] .yf-signin .yf-signin-step h1 { letter-spacing: 0; line-height: 1.2; }
+.yf-signin .yf-signin-step > p { line-height: 1.45; }
+
+/* Names: large tappable rows, role under the name, staggered in at 40ms. */
+.yf-signin .yf-people { gap: 10px; }
+.yf-signin .yf-people > li { animation: yf-auth-rise 240ms var(--ease-out) backwards; }
+.yf-signin .yf-people > li:nth-child(2) { animation-delay: 40ms; }
+.yf-signin .yf-people > li:nth-child(3) { animation-delay: 80ms; }
+.yf-signin .yf-people > li:nth-child(4) { animation-delay: 120ms; }
+.yf-signin .yf-people > li:nth-child(5) { animation-delay: 160ms; }
+.yf-signin .yf-people > li:nth-child(6) { animation-delay: 200ms; }
+.yf-signin .yf-people > li:nth-child(7) { animation-delay: 240ms; }
+.yf-signin .yf-people > li:nth-child(n+8) { animation-delay: 280ms; }
+.yf-signin .yf-person { grid-template-columns: 48px minmax(0, 1fr) 20px; gap: 16px; min-height: 76px; padding: 12px 20px 12px 14px; font: 700 20px/1.2 var(--font); }
+.yf-signin .yf-person > span { gap: 4px; }
+.yf-signin .yf-person small { font: 500 15px/1.3 var(--font); }
+.yf-signin .yf-person .yf-avatar { width: 48px; height: 48px; font-size: 20px; }
+.yf-signin .yf-person:active { transform: scale(0.97); }
+
+/* Supplier and buyer paths: two clear, equal targets under a label. */
+.yf-signin .yf-portal-entries { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; margin-top: 22px; }
+.yf-signin .yf-portal-label { grid-column: 1 / -1; color: var(--ink-3); font: 600 14px/1.3 var(--font); }
+.yf-signin .yf-supplier-entry { justify-self: stretch; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 56px; margin-top: 0; padding: 10px 14px 10px 16px; border: 1px solid var(--line-strong); border-radius: var(--r-row); background: var(--panel); color: var(--ink); font: 600 16px/1.25 var(--font); text-decoration: none; transition: transform 160ms var(--ease-out), background-color 150ms ease; }
+.yf-signin .yf-supplier-entry > svg { flex: none; color: var(--brand-ink); }
+.yf-signin .yf-supplier-entry:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) { .yf-signin .yf-supplier-entry:hover { background: var(--sunken); } }
+html[dir="rtl"] .yf-signin .yf-supplier-entry > svg { transform: rotate(180deg); }
+
+/* PIN: a clear next step, keypad presses answer instantly, locked and error states read at a glance. */
+.yf-signin .yf-pin-next { color: var(--ink-2); }
+.yf-signin .yf-keypad button { transition: transform 120ms var(--ease-out), background-color 120ms ease; }
+.yf-signin .yf-keypad button:active:not(:disabled) { transform: scale(0.94); }
+.yf-signin .yf-pin-status { flex-wrap: wrap; gap: 6px 10px; }
+.yf-signin .yf-pin-status[data-state="error"] { color: var(--bad); font-weight: 600; }
+.yf-signin .yf-pin-status[data-state="locked"] { color: var(--warn); font-weight: 600; }
+.yf-signin .yf-pin-status .live-text-button { min-height: 44px; }
+.yf-signin .yf-pin-dots[data-shake] { animation-duration: 300ms; }
+.yf-signin .yf-pin[data-state="locked"] .yf-pin-dots { opacity: 0.5; }

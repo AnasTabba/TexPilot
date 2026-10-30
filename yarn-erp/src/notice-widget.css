@@ -1,17 +1,5 @@
-/* Notifications card. Colours are theme tokens: each event kind takes one tone (kraft, ok, warn, bad, ink). */
-.nw-card {
-  display: grid;
-  gap: 14px;
-  min-width: 0;
-  padding: 18px;
-  border-radius: 20px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  box-shadow: 0 1px 2px rgb(29 27 25 / 0.05), 0 10px 28px rgb(29 27 25 / 0.07);
-  color: var(--ink);
-  align-content: start;
-  overflow: hidden;
-}
+/* Notifications: an open section with hairline rows. Icon tones are theme tokens; --pop marks only the unread count. */
+.nw-card { display: grid; gap: 14px; align-content: start; min-width: 0; color: var(--ink); }
 
 /* Room on the right for the widget's drag handle and minimise button (see .yf-dash-bar). */
 .nw-head {
@@ -28,13 +16,13 @@
 .nw-title-wrap h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
 
 .nw-badge {
-  min-width: 24px;
+  min-width: 26px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--bad);
-  color: var(--on-ink);
-  font-size: 12px;
-  font-weight: 800;
+  background: var(--pop);
+  color: var(--pop-ink);
+  font-size: 13px;
+  font-weight: 700;
   line-height: 1.5;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -46,10 +34,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: 44px;
   padding: 6px 10px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--r-control);
   background: transparent;
   color: var(--ink-2);
   font: inherit;
@@ -59,12 +47,12 @@
   transition: transform 160ms var(--ease-out), background-color 150ms ease, color 150ms ease;
 }
 .nw-text-btn:hover:not(:disabled) { background: var(--raised); color: var(--ink); }
-.nw-text-btn:active:not(:disabled) { transform: scale(0.96); }
+.nw-text-btn:active:not(:disabled) { transform: scale(0.97); }
 .nw-text-btn:disabled { opacity: 0.45; cursor: default; }
 .nw-text-btn:focus-visible,
 .nw-row:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
-/* Fixed layout so long details truncate inside the card instead of widening the table. */
+/* Fixed layout so long details truncate inside the section instead of widening the table. */
 .nw-scroll { min-width: 0; overflow: hidden; }
 .nw-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 14px; }
 .nw-table th {
@@ -79,15 +67,16 @@
 .nw-table th:nth-child(2) { width: 88px; }
 .nw-table th:nth-child(3) { width: 84px; }
 
-.nw-row { cursor: pointer; animation: nw-rise 160ms var(--ease-out) both; transition: transform 160ms var(--ease-out); }
-.nw-row td { padding: 9px 10px; min-width: 0; vertical-align: middle; transition: background-color 150ms ease; }
-.nw-row td:first-child { padding-inline-start: 8px; border-radius: 14px 0 0 14px; }
-.nw-row td:last-child { padding-inline-end: 8px; border-radius: 0 14px 14px 0; }
+.nw-row { cursor: pointer; animation: nw-rise 200ms var(--ease-out) both; transition: transform 160ms var(--ease-out); }
+.nw-row td { padding: 10px; min-width: 0; vertical-align: middle; border-bottom: 1px solid var(--line); transition: background-color 150ms ease; }
+.nw-row td:first-child { padding-inline-start: 0; }
+.nw-row td:last-child { padding-inline-end: 0; }
 .nw-row:hover td { background: var(--raised); }
-.nw-row:active { transform: scale(0.98); }
+.nw-row:active { transform: scale(0.97); }
+.nw-row.is-unread .nw-title { font-weight: 800; }
 
 @keyframes nw-rise {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
 
@@ -107,7 +96,7 @@
   background: var(--cbg);
   color: var(--c);
 }
-.nw-chip.is-kraft { --c: var(--kraft); }
+.nw-chip.is-brand { --c: var(--brand-ink); }
 .nw-chip.is-ok { --c: var(--ok); --cbg: var(--ok-bg); }
 .nw-chip.is-warn { --c: var(--warn); --cbg: var(--warn-bg); }
 .nw-chip.is-bad { --c: var(--bad); --cbg: var(--bad-bg); }
@@ -115,7 +104,7 @@
 
 .nw-title {
   min-width: 0;
-  font-weight: 700;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -141,8 +130,8 @@
 .nw-pill.is-unread { background: var(--bad-bg); color: var(--bad); }
 .nw-pill.is-read { background: var(--sunken); color: var(--ink-2); }
 
-.nw-empty { display: grid; justify-items: center; gap: 8px; padding: 18px 0 8px; color: var(--ink-2); text-align: center; }
-.nw-empty p { margin: 0; font-size: 14px; }
+.nw-empty { display: grid; justify-items: start; gap: 6px; padding: 4px 0; color: var(--ink-2); }
+.nw-empty p { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); }
 
 @media (prefers-reduced-motion: reduce) {
   .nw-row, .nw-text-btn { animation: none; transition: none; }

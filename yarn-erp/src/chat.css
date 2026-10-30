@@ -19,6 +19,15 @@
 .yf-chat-team { display: inline-grid; flex: none; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--sunken); color: var(--ink); }
 .yf-chat-note { margin: auto; padding: 24px 8px; color: var(--ink-3); text-align: center; }
 
+/* Two panes: conversation list left, thread right. The phone stacks them, list first. */
+.yf-chat-split { grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); align-items: start; }
+.yf-chat-side { display: grid; gap: 10px; min-width: 0; }
+.yf-chat-side-title { margin: 0; color: var(--ink); font: 700 18px/1.25 var(--font); }
+.yf-chat-side .yf-chat-list { margin: 0; padding: 0; list-style: none; }
+.yf-chat-side .yf-chat-row { cursor: default; }
+.yf-chat-row.is-active { background: var(--sunken); box-shadow: inset 3px 0 0 var(--brand); }
+.yf-chat-split > .yf-chat-thread { min-width: 0; }
+
 /* Thread */
 .yf-chat-thread { display: flex; flex-direction: column; height: calc(100dvh - 180px); min-height: 440px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-field); background: var(--panel); }
 .yf-chat-bar { display: flex; flex: none; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
@@ -39,7 +48,10 @@ html[dir="rtl"] .yf-chat-back svg { transform: scaleX(-1); }
 .yf-chat-msg.is-mine { margin-inline-start: auto; justify-items: end; }
 .yf-chat-sender { padding-inline: 12px; color: var(--ink-3); font: 600 13px var(--font); }
 .yf-chat-bubble { display: grid; gap: 8px; min-width: 0; padding: 10px 14px; border-radius: 18px; border-start-start-radius: 6px; background: var(--ground); color: var(--ink); }
-.yf-chat-msg.is-mine .yf-chat-bubble { border-start-start-radius: 18px; border-start-end-radius: 6px; background: var(--ink); color: var(--on-ink); }
+.yf-chat-msg.is-mine .yf-chat-bubble { border-start-start-radius: 18px; border-start-end-radius: 6px; background: var(--brand); color: var(--ink); }
+:root[data-theme="dark"] .yf-chat-msg.is-mine .yf-chat-bubble, :root:not([data-theme="light"]) .yf-chat-msg.is-mine .yf-chat-bubble { color: var(--on-ink); }
+.yf-chat-msg { animation: yf-chat-in 200ms var(--ease-out) both; }
+@keyframes yf-chat-in { from { opacity: 0; transform: translateY(6px); } }
 .yf-chat-text { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; font: 16px/1.4 var(--font); }
 .yf-chat-msg time { padding-inline: 12px; color: var(--ink-3); font: 500 12px var(--font); }
 
@@ -99,8 +111,13 @@ html[dir="rtl"] .yf-chat-back svg { transform: scaleX(-1); }
 }
 /* Phone: the bottom nav is fixed over the page, so the thread stops above it and the composer stays reachable. */
 @media (max-width: 900px) {
+  .yf-chat-split { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .yf-chat-side .yf-chat-row { min-height: 56px; }
   .yf-chat-thread { height: calc(100dvh - 230px - var(--safe-bottom, 0px)); min-height: 360px; }
   .yf-chat-bar { padding: 10px 12px; }
   .yf-chat-roster { padding: 8px 10px; }
   .yf-chat-actions .button { padding-inline: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yf-chat-msg { animation: none; }
 }

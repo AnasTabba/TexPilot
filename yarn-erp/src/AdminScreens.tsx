@@ -7,7 +7,10 @@ import { inventoryRequest as api, roleLabel, type Member, type Role, type Worksp
 import { InterventionField, NextStep, ReasonField, SectionTabs, StatusTag, kg, money, portal } from './PortalCommon';
 import { Correction } from './CorrectionForm';
 import { when } from './WorkspaceDashboard';
+import { SplitView, StepFlow } from './SplitView';
 import './admin-screens.css';
+import './approvals-ui.css';
+import './sales-screens.css';
 
 type Props = { member: Member; section: string; tab: string; id: string; navigate: (to: string, id?: string) => void; state?: WorkspaceState; onInventoryChanged?: () => Promise<void> };
 type Navigate = Props['navigate'];
@@ -90,27 +93,27 @@ export default function AdminScreens({ member, section, tab, id, navigate }: Pro
   </div>;
 }
 
+/** Approvals as a split view: groups filter the list, the chosen request sits beside it with one Approve action. */
 function Approvals({ member, id, currency, navigate }: { member: Member; id: string; currency: string; navigate: Navigate }) {
   const { t, language } = useLanguage();
   const list = useLoad<{ approvals: any[] }>('/erp/approvals');
   const [group, setGroup] = useState('all');
   return <Loaded res={list}>{data => {
     const rows = data.approvals || [];
-    const selected = id ? rows.find(row => row.id === id) : undefined;
-    if (selected) return <ApprovalDetail key={selected.id} member={member} row={selected} currency={currency} navigate={navigate} reload={list.reload} />;
-    const visible = rows.filter(row => group === 'all' || groups.find(g => g.id === group)?.types.includes(row.type));
-    return <>
-      <SectionTabs tabs={[{ id: 'all', en: 'All', ur: 'سب' }, ...groups]} value={group} onChange={setGroup} />
-      <section className="yf-section"><h2>{t('Pending approval requests', 'منظوری کی منتظر درخواستیں')}</h2>
-        {visible.length ? <ul className="yf-admin-list">{visible.map(row => <li key={row.id}><button onClick={() => navigate('approvals', row.id)}><span><strong>{t(...named(row.type))}</strong><small>{row.requested_by_name} · {when.format(row.created_at, language)}</small></span><b>{amountOf(row, row.amount, currency)}</b><ArrowUpRight aria-hidden="true" /></button></li>)}</ul>
-          : <p className="live-empty">{t('No pending requests in this group.', 'اس گروپ میں کوئی زیرِ التوا درخواست نہیں۔')}</p>}
-      </section>
-    </>;
+    const inGroup = (row: any) => group === 'all' || !!groups.find(g => g.id === group)?.types.includes(row.type);
+    const tabs = [{ id: 'all', label: t('All', 'سب'), count: rows.length }, ...groups.map(g => ({ id: g.id, label: t(g.en, g.ur), count: rows.filter(row => g.types.includes(row.type)).length }))];
+    return <div className="yf-approvals">
+      <SplitView label={t('Pending approval requests', 'منظوری کی منتظر درخواستیں')} tabs={tabs} tab={group} onTab={setGroup}
+        items={rows.filter(inGroup).map(row => ({ id: row.id, title: t(...named(row.type)), meta: `${row.requested_by_name} · ${when.format(row.created_at, language)}`, status: <b className="yf-approval-amount">{amountOf(row, row.amount, currency)}</b> }))}
+        selectedId={id} onSelect={next => navigate('approvals', next)}
+        renderDetail={rowId => { const row = rows.find(item => item.id === rowId); return row ? <ApprovalDetail key={row.id} member={member} row={row} currency={currency} navigate={navigate} reload={list.reload} /> : <p className="split-none">{t('This request is no longer in the list.', 'یہ درخواست اب فہرست میں نہیں۔')}</p>; }}
+        empty={t('No pending requests in this group.', 'اس گروپ میں کوئی زیرِ التوا درخواست نہیں۔')} emptyDetail={t('Choose a request to review it.', 'جائزہ لینے کے لیے کوئی درخواست منتخب کریں۔')} />
+    </div>;
   }}</Loaded>;
 }
 
 function ApprovalDetail({ member, row, currency, navigate, reload }: { member: Member; row: any; currency: string; navigate: Navigate; reload: () => void }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const detail = useLoad<any>(`/erp/approvals/${row.id}`);
   const [reason, setReason] = useState(''), [intervention, setIntervention] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   async function decide(decision: 'approve' | 'reject') {
@@ -120,14 +123,15 @@ function ApprovalDetail({ member, row, currency, navigate, reload }: { member: M
       reload(); navigate('approvals');
     } catch (e) { setError(errorMessage(e)); setBusy(false); }
   }
-  return <section className="yf-section">
-    <button className="live-text-button" onClick={() => navigate('approvals')}><ArrowLeft size={18} aria-hidden="true" />{t('All approvals', 'تمام منظوری')}</button>
-    <h2>{t(...named(row.type))}</h2>
+  // Two steps: the request is raised, then someone decides it.
+  const decided = row.status !== 'pending';
+  return <section className="yf-detail-stack">
+    <div className="yf-detail-head"><div><h2>{t(...named(row.type))}</h2><p>{row.requested_by_name} · {when.format(row.created_at, language)}</p></div><b className="yf-approval-amount">{amountOf(row, row.amount, currency)}</b></div>
+    <StepFlow label={t('Approval steps', 'منظوری کے مراحل')} current={decided ? 2 : 1}
+      steps={[{ icon: 'request', label: t('Requested', 'درخواست'), note: row.requested_by_name }, { icon: 'approve', label: t('Decision', 'فیصلہ') }]} />
     <Loaded res={detail}>{data => data.object ? <>
       <dl className="yf-facts">
         <div><dt>{t('Item', 'آئٹم')}</dt><dd>{data.object.label}</dd></div>
-        <div><dt>{t('Requested by', 'درخواست گزار')}</dt><dd>{row.requested_by_name}</dd></div>
-        <div><dt>{t('Amount', 'رقم')}</dt><dd>{amountOf(row, row.amount, currency)}</dd></div>
         <div><dt>{t('Threshold at request', 'درخواست کے وقت حد')}</dt><dd>{amountOf(row, row.threshold, currency)}</dd></div>
         <div><dt>{t('Evidence', 'ثبوت')}</dt><dd><pre>{JSON.stringify(data.object.evidence, null, 2)}</pre></dd></div>
         <div><dt>{t('Proposed change', 'مجوزہ تبدیلی')}</dt><dd><pre>{JSON.stringify(data.object.proposed, null, 2)}</pre></dd></div>

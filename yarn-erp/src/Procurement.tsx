@@ -1,37 +1,183 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Ban, ClipboardList, ExternalLink, Lock, Mail, Pencil, Phone, Plus, RefreshCw, Scale, Ship, ShieldCheck, Star, Truck } from 'lucide-react';
 import { inventoryRequest as api, can, type Member } from './inventory-client';
 import { AsyncForm, Field, errorMessage } from './forms';
 import { InterventionField } from './PortalCommon';
 import { useLanguage } from './i18n';
 import { BidTerms, CategoryPicker, RfqSummary } from './ErpCommon';
-import { PurchaseOrders } from './PurchaseOrders';
+import { ORDER_LABEL, OrderFacts, type OrderRecord } from './PurchaseOrders';
 import { type SupplierCategory, type Supplier, type SupplierRating, type ProcurementState, type ProcurementRfq, type SupplierBid, type PendingPurchasing, type PurchaseOrder, rate, factoryTime, quantity, factoryInput, localFactoryInput, fixedInput } from './erp-client';
 import './erp.css';
-import IncomingStock from './IncomingStock';
+import './people-ui.css';
+import IncomingStock, { type QcLot } from './IncomingStock';
 import { ShipmentTracking } from './ShipmentTracking';
 import { Correction } from './CorrectionForm';
+import { StageIcon, type StageIconName } from './iso/StageIcons';
+import { EmptyIso } from './iso/EmptyIso';
+
+type View = 'board' | 'suppliers' | 'tracking' | 'incoming';
+type Stage = 'rfq' | 'bids' | 'po' | 'incoming' | 'inspect';
+type Rec = { kind: 'rfq'; rfq: ProcurementRfq } | { kind: 'bid'; bid: SupplierBid; rfq: ProcurementRfq } | { kind: 'order'; order: OrderRecord } | { kind: 'lot'; lot: QcLot };
+// One card. `stage` is the column it sits in; null means finished, kept so an open sheet survives a status change.
+interface Item { key: string; stage: Stage | null; title: string; meta: string; tag: string; supplier: string; overdue: boolean; mine: boolean; rec: Rec }
+
+const pipelineIcon: Record<Stage, StageIconName> = { rfq: 'rfq', bids: 'bid', po: 'po', incoming: 'incoming', inspect: 'inspect' };
+const EMPTY: Record<Stage, { kind: 'inbox' | 'people' | 'orders' | 'shipments' | 'stock'; text: string }> = {
+ rfq: { kind: 'inbox', text: 'No requests yet. Publish an RFQ to ask approved suppliers for a price.' },
+ bids: { kind: 'people', text: 'Supplier bids appear here as they arrive.' },
+ po: { kind: 'orders', text: 'Accepting a bid creates a purchase order here.' },
+ incoming: { kind: 'shipments', text: 'Dispatched orders stay here until their arrival is registered.' },
+ inspect: { kind: 'stock', text: 'Arrivals waiting for a quality inspector show here.' },
+};
+const RFQ_UR: Record<string, string> = { draft: 'مسودہ', open: 'کھلا', awarded: 'منظور شدہ', closed: 'بند', cancelled: 'منسوخ' };
 
 export default function Procurement({ member, onInventoryChanged }: { member: Member; onInventoryChanged: () => Promise<void> }) {
  const { language, t } = useLanguage(); const directoryAllowed = can(member, 'suppliers'), buyingAllowed = can(member, 'procure');
- const [view, setView] = useState(() => buyingAllowed && (location.hash.split('/')[2] === 'tracking' || location.hash.startsWith('#/tracking')) ? 'tracking' : directoryAllowed ? 'suppliers' : buyingAllowed ? 'rfqs' : 'incoming'), [category, setCategory] = useState('all'), [search, setSearch] = useState('');
- const [suppliers, setSuppliers] = useState<Supplier[]>([]), [categories, setCategories] = useState<SupplierCategory[]>([]), [state, setState] = useState<ProcurementState>({ rfqs: [], bids: [], orders: [], shipments: [] });
+ const canManage = member.role === 'purchase_manager' || member.admin, canAct = buyingAllowed && canManage;
+ const [view, setView] = useState<View>(() => buyingAllowed && (location.hash.split('/')[2] === 'tracking' || location.hash.startsWith('#/tracking')) ? 'tracking' : buyingAllowed ? 'board' : directoryAllowed ? 'suppliers' : 'incoming');
+ const [category, setCategory] = useState('all'), [search, setSearch] = useState('');
+ const [suppliers, setSuppliers] = useState<Supplier[]>([]), [categories, setCategories] = useState<SupplierCategory[]>([]), [state, setState] = useState<ProcurementState>({ rfqs: [], bids: [], orders: [], shipments: [] }), [lots, setLots] = useState<QcLot[]>([]);
  const [pending, setPending] = useState<PendingPurchasing>({ awards: [], changes: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [open, setOpen] = useState(''), [notice, setNotice] = useState('');
+ const [sel, setSel] = useState(''), [chip, setChip] = useState<'all' | 'mine' | 'overdue'>('all'), [supplierFilter, setSupplierFilter] = useState('');
  const load = useCallback(async () => {
   try {
-   const [cat, list, procurement, waiting] = await Promise.all([api<{ categories: SupplierCategory[] }>('/erp/categories'), directoryAllowed ? api<{ suppliers: Supplier[] }>('/erp/suppliers') : Promise.resolve({ suppliers: [] }), buyingAllowed ? api<ProcurementState>('/erp/procurement') : Promise.resolve({ rfqs: [], bids: [], orders: [], shipments: [] }), buyingAllowed ? api<PendingPurchasing>('/erp/orders/pending-approvals') : Promise.resolve({ awards: [], changes: [] })]);
-   setPending(waiting); setCategories(cat.categories); setSuppliers(list.suppliers); setState(procurement); setError('');
+   const [cat, list, procurement, waiting, qc] = await Promise.all([api<{ categories: SupplierCategory[] }>('/erp/categories'), directoryAllowed ? api<{ suppliers: Supplier[] }>('/erp/suppliers') : Promise.resolve({ suppliers: [] }), buyingAllowed ? api<ProcurementState>('/erp/procurement') : Promise.resolve({ rfqs: [], bids: [], orders: [], shipments: [] }), buyingAllowed ? api<PendingPurchasing>('/erp/orders/pending-approvals') : Promise.resolve({ awards: [], changes: [] }), buyingAllowed ? api<{ lots: QcLot[] }>('/erp/qc/lots') : Promise.resolve({ lots: [] })]);
+   setPending(waiting); setCategories(cat.categories); setSuppliers(list.suppliers); setState(procurement); setLots(qc.lots); setError('');
   } catch (e) { setError(errorMessage(e)); } finally { setLoading(false); }
  }, [directoryAllowed, buyingAllowed]);
  useEffect(() => { void load(); }, [load]);
- const saved = async (message?: string) => { setOpen(''); setNotice(message ?? t('Saved.', 'محفوظ ہو گیا۔')); await load(); };
+ const close = () => { setSel(''); setOpen(''); };
+ const select = (key: string) => { setOpen(''); setSel(key); };
+ const saved = async (message?: string, key?: string) => { setOpen(''); if (key) setSel(key); setNotice(message ?? t('Saved.', 'محفوظ ہو گیا۔')); await load(); };
+ // Opening a card moves focus into its sheet; Escape closes it.
+ useEffect(() => {
+  if (!sel) return;
+  document.getElementById('pb-sheet-title')?.focus({ preventScroll: true });
+  const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSel(''); setOpen(''); } };
+  window.addEventListener('keydown', onKey);
+  return () => window.removeEventListener('keydown', onKey);
+ }, [sel]);
 
  const title = (id: string) => { const c = categories.find(c => c.id === id); return c ? language === 'ur' ? c.urdu_name : c.name : t('Unknown category', 'نامعلوم قسم'); };
- return <div className="erp-workspace">
-  <div className="erp-toolbar"><div className="live-segments" aria-label={t('Procurement views', 'خریداری کے حصے')}>{directoryAllowed && <button aria-pressed={view === 'suppliers'} onClick={() => { setView('suppliers'); setOpen(''); }}>{t('Suppliers', 'سپلائرز')}</button>}{buyingAllowed && <><button aria-pressed={view === 'rfqs'} onClick={() => { setView('rfqs'); setOpen(''); }}>{t('RFQs and bids', 'درخواستیں اور بولیاں')}</button><button aria-pressed={view === 'orders'} onClick={() => { setView('orders'); setOpen(''); }}>{t('Purchase orders', 'خریداری کے آرڈر')}</button><button aria-pressed={view === 'tracking'} onClick={() => { setView('tracking'); setOpen(''); }}><Ship size={18} />{t('Tracking', 'ٹریکنگ')}</button></>}</div><button className="button" onClick={() => void load()}><RefreshCw size={18} />{t('Refresh', 'تازہ کریں')}</button></div>
+ const rfqLabel = (status: string) => t(status, RFQ_UR[status] ?? status);
+ const now = Date.now();
+ // Every record becomes a card; `stage` decides the column. Counts and filters come from this list only.
+ const items: Item[] = [
+  ...state.rfqs.map((r): Item => {
+   const live = ['draft', 'open', 'closed'].includes(r.status);
+   return { key: `rfq:${r.id}`, stage: live ? 'rfq' : null, title: r.title, meta: `${r.reference} · ${title(r.category_id)}`, tag: rfqLabel(r.status), supplier: '', overdue: r.status === 'open' && r.deadline_at < now, mine: canAct && live, rec: { kind: 'rfq', rfq: r } };
+  }),
+  ...state.bids.flatMap((b): Item[] => {
+   const r = state.rfqs.find(x => x.id === b.rfq_id);
+   if (!r) return [];
+   const live = b.status === 'submitted' && ['open', 'closed'].includes(r.status);
+   return [{ key: `bid:${b.id}`, stage: live ? 'bids' : null, title: b.supplier_name ?? t('Unknown supplier', 'نامعلوم سپلائر'), meta: `${r.title} · ${rate(b.price_minor, b.currency)} / ${r.unit}`, tag: b.status === 'rejected' ? t('Rejected', 'مسترد') : t('Submitted', 'جمع شدہ'), supplier: b.supplier_name ?? '', overdue: live && b.valid_until < now, mine: canAct && live, rec: { kind: 'bid', bid: b, rfq: r } }];
+  }),
+  ...state.orders.map((o): Item => {
+   const order = o as OrderRecord, stage: Stage | null = o.status === 'accepted' ? 'po' : o.status === 'dispatched' ? 'incoming' : null, label = ORDER_LABEL[o.status];
+   return { key: `order:${o.id}`, stage, title: o.terms.title, meta: `${o.reference} · ${o.supplier_name ?? ''} · ${quantity(o.quantity_milli)} ${o.terms.unit}`, tag: label ? t(label[0], label[1]) : o.status, supplier: o.supplier_name ?? '', overdue: stage !== null && o.terms.delivery_at < now, mine: canAct && stage !== null && (stage === 'incoming' || !order.bill_of_lading), rec: { kind: 'order', order } };
+  }),
+  ...lots.map((l): Item => {
+   const live = !l.cancelled_at && l.status !== 'settled', supplier = state.orders.find(o => o.id === l.purchase_order_id)?.supplier_name ?? '';
+   const label = l.cancelled_at ? t('Cancelled', 'منسوخ') : l.status === 'awaiting_inspection' ? t('Awaiting inspection', 'معائنے کا منتظر') : t('Under review', 'جائزے میں');
+   return { key: `lot:${l.id}`, stage: live ? 'inspect' : null, title: l.product_name, meta: `${l.reference} · ${quantity(l.quantity_milli)} ${l.unit}`, tag: label, supplier, overdue: false, mine: false, rec: { kind: 'lot', lot: l } };
+  }),
+ ];
+ const count = (stage: Stage) => items.filter(i => i.stage === stage).length;
+ const pass = (i: Item) => (chip === 'all' || (chip === 'mine' ? i.mine : i.overdue)) && (!supplierFilter || i.supplier === supplierFilter);
+ const supplierNames = [...new Set(items.map(i => i.supplier).filter(Boolean))].sort();
+ const drafts = state.rfqs.filter(r => r.status === 'draft').length, openRfqs = state.rfqs.filter(r => r.status === 'open').length;
+ const bidsToReview = count('bids'), accepted = count('po'), dispatched = count('incoming');
+ const COLUMNS: { stage: Stage; name: string; next: string }[] = [
+  { stage: 'rfq', name: t('RFQs', 'درخواستیں'), next: drafts ? t(`Publish ${drafts} draft${drafts === 1 ? '' : 's'}`, `${drafts} مسودہ شائع کریں`) : openRfqs ? t('Bidding is open. Review bids as they arrive.', 'بولی کھلی ہے۔ بولیاں آتے ہی جائزہ لیں۔') : t('Create the first RFQ', 'پہلی درخواست بنائیں') },
+  { stage: 'bids', name: t('Bids', 'بولیاں'), next: bidsToReview ? t('Review and accept a bid', 'بولی کا جائزہ لے کر منظور کریں') : t('Waiting for supplier bids', 'سپلائر کی بولیوں کا انتظار') },
+  { stage: 'po', name: t('Purchase orders', 'خریداری کے آرڈر'), next: accepted ? t('Attach the bill of lading at dispatch', 'روانگی پر بل آف لیڈنگ لگائیں') : t('An order is created when a bid is accepted', 'بولی منظور ہونے پر آرڈر بنتا ہے') },
+  { stage: 'incoming', name: t('Incoming', 'آنے والا مال'), next: dispatched ? t('Register the arrival for inspection', 'معائنے کے لیے آمد درج کریں') : t('Nothing is on the way', 'ابھی کچھ راستے میں نہیں') },
+  { stage: 'inspect', name: t('Inspect', 'معائنہ'), next: t('The inspector records the report, then the supervisor decides', 'معائنہ کار رپورٹ درج کرے، پھر سپروائزر فیصلہ کرے') },
+ ];
+
+ // The sheet body for the selected card: its facts, its own timeline and one primary next step (--pop).
+ const detail = (): { kicker: string; heading: string; body: ReactNode } | null => {
+  if (sel === 'new') return { kicker: t('RFQ', 'درخواست'), heading: t('New RFQ', 'نئی درخواست'), body: <RfqForm member={member} categories={categories} onSaved={id => saved(undefined, `rfq:${id}`)} onCancel={close} /> };
+  const current = items.find(i => i.key === sel);
+  if (!current) return null;
+  const rec = current.rec;
+  if (rec.kind === 'rfq') {
+   const r = rec.rfq;
+   return { kicker: t('RFQ', 'درخواست'), heading: r.title, body: <>
+    <span className="erp-status">{rfqLabel(r.status)}</span>
+    <RfqSummary rfq={r} />
+    <p className="live-muted">{r.recipient_count || 0} {t('supplier portal recipients', 'سپلائر پورٹل وصول کنندگان')} · {r.bid_count || 0} {t('bids', 'بولیاں')}</p>
+    {r.status === 'draft' && <RfqStep member={member} kind="publish" rfq={r} onSaved={saved} />}
+    {r.status === 'open' && <RfqStep member={member} kind="close" rfq={r} onSaved={saved} />}
+    {r.status === 'closed' && r.deadline_at > Date.now() && <Correction member={member} label={t('Reopen bidding', 'بولی دوبارہ کھولیں')} title={t('Reopen bidding', 'بولی دوبارہ کھولیں')} effect={t('Suppliers can bid again until the deadline. Nothing is awarded by this.', 'deadline تک سپلائر دوبارہ بولی دے سکیں گے۔ اس سے کچھ منظور نہیں ہوتا۔')} submit={t('Reopen bidding', 'بولی دوبارہ کھولیں')} owners={['purchase_manager']} path="/erp/rfqs/reopen" payload={() => ({ rfqId: r.id })} onSaved={saved} />}
+    {['draft', 'open', 'closed'].includes(r.status) && <RfqStep member={member} kind="cancel" rfq={r} onSaved={saved} />}
+    <h3 className="pb-sub">{t('Supplier bids', 'سپلائر بولیاں')}</h3>
+    {state.bids.filter(b => b.rfq_id === r.id).map(b => <button key={b.id} type="button" className="pb-bid-link" onClick={() => select(`bid:${b.id}`)}><span>{b.supplier_name} · {t('Revision', 'ترمیم')} {b.version}</span><span className="pb-row-meta">{rate(b.price_minor, b.currency)} / {r.unit} · {b.status === 'rejected' ? t('Rejected', 'مسترد') : t('Submitted', 'جمع شدہ')}</span></button>)}
+    {!state.bids.some(b => b.rfq_id === r.id) && <p className="live-muted">{t('No bids yet.', 'ابھی کوئی بولی نہیں۔')}</p>}
+   </> };
+  }
+  if (rec.kind === 'bid') {
+   const b = rec.bid, r = rec.rfq;
+   const waiting = pending.awards.some(a => a.bidId === b.id);
+   return { kicker: t('Bid', 'بولی'), heading: b.supplier_name ?? '', body: <>
+    <span className="erp-status">{rfqLabel(r.status)}</span>
+    <p className="live-muted">{r.reference} · {r.title} · {t('Revision', 'ترمیم')} {b.version}</p>
+    <BidTerms bid={b} unit={r.unit} />
+    {b.status === 'rejected' && <p className="live-warning">{t('Rejected:', 'مسترد:')} {b.rejection_reason}</p>}
+    {b.status === 'rejected' && ['open', 'closed'].includes(r.status) && <Correction member={member} label={t('Undo rejection', 'مسترد کرنا واپس لیں')} title={t('Undo rejection', 'مسترد کرنا واپس لیں')} effect={t('The bid goes back to submitted, so it can be reviewed and awarded again.', 'بولی دوبارہ جمع شدہ ہو جائے گی، تاکہ دوبارہ جائزہ لے کر منظور کی جا سکے۔')} submit={t('Restore bid', 'بولی بحال کریں')} owners={['purchase_manager']} path="/erp/bids/reject/undo" payload={() => ({ bidId: b.id, version: b.version })} onSaved={saved} />}
+    {r.status === 'cancelled' || r.status === 'awarded' || r.status === 'draft' || b.status !== 'submitted' ? null : waiting ? <>
+     <p className="live-warning">{t('Waiting for admin approval. The purchase order is created once approved.', 'ایڈمن کی منظوری کا انتظار ہے۔ منظوری کے بعد خریداری آرڈر بنے گا۔')}</p>
+     <Correction member={member} label={t('Withdraw this award', 'یہ منظوری واپس لیں')} title={t('Withdraw this award', 'یہ منظوری واپس لیں')} effect={t('The award request is cancelled and nothing is ordered. The RFQ can then be awarded to another bid.', 'منظوری کی درخواست منسوخ ہو جائے گی اور کچھ نہیں منگوایا جائے گا۔ اس کے بعد کسی اور بولی کو منظور کیا جا سکتا ہے۔')} submit={t('Withdraw award', 'منظوری واپس لیں')} owners={['purchase_manager']} path="/erp/orders/cancel" payload={() => ({ approvalId: pending.awards.find(a => a.bidId === b.id)?.approvalId })} onSaved={saved} />
+    </> : open === 'award:' + b.id || open === 'reject:' + b.id ? <BidDecision member={member} bid={b} rfq={r} accepting={open.startsWith('award:')} onSaved={saved} onCancel={() => setOpen('')} />
+     : <div className="live-actions">{canAct && <button className="button primary" onClick={() => setOpen('award:' + b.id)}>{t('Review and accept bid', 'بولی کا جائزہ اور منظوری')}</button>}{canAct && <button className="button" onClick={() => setOpen('reject:' + b.id)}>{t('Reject bid', 'بولی مسترد کریں')}</button>}</div>}
+   </> };
+  }
+  if (rec.kind === 'order') {
+   const o = rec.order;
+   return { kicker: t('Purchase order', 'خریداری آرڈر'), heading: o.terms.title, body: <>
+    <OrderFacts order={o} shipments={state.shipments} />
+    <BidTerms bid={o.terms} unit={o.terms.unit} />
+    {o.approval_status === 'pending_admin' && <p className="live-warning">{t('Quantity change waiting for admin approval', 'مقدار کی تبدیلی ایڈمن کی منظوری کی منتظر ہے')}</p>}
+    <div className="live-actions">{o.approval_status === 'approved' && o.status !== 'cancelled' && (open === 'qty:' + o.id ? <QuantityForm member={member} order={o} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button" onClick={() => setOpen('qty:' + o.id)}><Scale size={18} />{t('Change quantity', 'مقدار تبدیل کریں')}</button>)}{o.approval_status === 'approved' && ['accepted', 'dispatched'].includes(o.status) && !o.bill_of_lading && canManage && (open === 'bl:' + o.id ? <BillOfLadingForm member={member} order={o} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button primary" onClick={() => setOpen('bl:' + o.id)}><Truck size={18} />{t('Attach bill of lading')}</button>)}</div>
+    {o.status === 'accepted' && !o.bill_of_lading && canManage && <Correction member={member} label={t('Cancel this order', 'یہ آرڈر منسوخ کریں')} title={t('Cancel this order', 'یہ آرڈر منسوخ کریں')} effect={t('The order is cancelled and the RFQ is reopened for awarding, so another bid can win. Only possible before goods are dispatched, arrive or have a bill of lading.', 'آرڈر منسوخ ہو جائے گا اور درخواست دوبارہ منظوری کے لیے کھل جائے گی۔ صرف روانگی، آمد یا بل آف لیڈنگ سے پہلے ممکن ہے۔')} submit={t('Cancel order', 'آرڈر منسوخ کریں')} owners={['purchase_manager']} path="/erp/orders/cancel" payload={() => ({ orderId: o.id })} onSaved={saved} />}
+    {o.status === 'dispatched' && <IncomingStock member={member} onInventoryChanged={onInventoryChanged} orderId={o.id} />}
+   </> };
+  }
+  const l = rec.lot;
+  return { kicker: t('Inspect', 'معائنہ'), heading: l.product_name, body: <>
+   <span className="pb-tag">{current.tag}</span>
+   <p className="live-muted">{l.reference}</p>
+   <dl className="erp-facts"><div><dt>{t('Quantity', 'مقدار')}</dt><dd>{quantity(l.quantity_milli)} {l.unit}</dd></div><div><dt>{t('Supplier lot', 'سپلائر لاٹ')}</dt><dd>{l.supplier_lot || '—'}</dd></div><div><dt>{t('Arrived', 'آمد')}</dt><dd>{factoryTime(l.arrived_at)}</dd></div></dl>
+   <p className="live-muted">{t('The inspector records the report, then the supervisor decides.', 'معائنہ کار رپورٹ درج کرے، پھر سپروائزر فیصلہ کرے۔')}</p>
+  </> };
+ };
+ const shown = detail();
+
+ return <div className="erp-workspace pb">
+  <div className="pb-bar"><div className="live-segments" aria-label={t('Procurement views', 'خریداری کے حصے')}>{buyingAllowed && <button aria-pressed={view === 'board'} onClick={() => { setView('board'); setOpen(''); }}>{t('Pipeline', 'سلسلہ')}</button>}{directoryAllowed && <button aria-pressed={view === 'suppliers'} onClick={() => { setView('suppliers'); setOpen(''); }}>{t('Suppliers', 'سپلائرز')}</button>}{buyingAllowed && <button aria-pressed={view === 'tracking'} onClick={() => { setView('tracking'); setOpen(''); }}><Ship size={18} />{t('Tracking', 'ٹریکنگ')}</button>}{!buyingAllowed && can(member, 'receive') && <button aria-pressed={view === 'incoming'} onClick={() => { setView('incoming'); setOpen(''); }}><Truck size={18} />{t('Incoming stock', 'آنے والا اسٹاک')}</button>}</div><div className="pb-bar-actions">{view === "board" && canAct && <button className="button" onClick={() => select("new")}><Plus size={18} />{t("New RFQ", "نئی درخواست")}</button>}<button className="button" onClick={() => void load()}><RefreshCw size={18} />{t("Refresh", "تازہ کریں")}</button></div></div>
   {error && <p className="live-error" role="alert">{t(error)}</p>}{notice && <p className="live-success" role="status">{notice}</p>}{loading && <p role="status">{t('Loading procurement…', 'خریداری کی تفصیلات لوڈ ہو رہی ہیں…')}</p>}
-  {(can(member,'receive')||buyingAllowed)&&<button className="button" aria-pressed={view==='incoming'} onClick={()=>{setView('incoming');setOpen('');}}><Truck size={18}/>{t('Incoming stock','آنے والا اسٹاک')}</button>}
-  {view==='incoming'&&<IncomingStock member={member} onInventoryChanged={onInventoryChanged}/>}
+  {view === 'board' && buyingAllowed && !loading && <>
+   <div className="pb-filters" role="group" aria-label={t('Filter the pipeline', 'سلسلہ فلٹر کریں')}>
+    <button type="button" className="pb-chip" aria-pressed={chip === 'all'} onClick={() => setChip('all')}>{t('All', 'سب')} <b>{items.filter(i => i.stage).length}</b></button>
+    <button type="button" className="pb-chip" aria-pressed={chip === 'mine'} onClick={() => setChip('mine')}>{t('Needs my action', 'میرے عمل کا منتظر')} <b>{items.filter(i => i.stage && i.mine).length}</b></button>
+    <button type="button" className="pb-chip" aria-pressed={chip === 'overdue'} onClick={() => setChip('overdue')}>{t('Overdue', 'تاخیر شدہ')} <b>{items.filter(i => i.stage && i.overdue).length}</b></button>
+    <label className="pb-supplier"><span>{t('Supplier', 'سپلائر')}</span><select value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)}><option value="">{t('All suppliers', 'تمام سپلائرز')}</option>{supplierNames.map(n => <option value={n} key={n}>{n}</option>)}</select></label>
+   </div>
+   <div className={`pb-layout${shown ? ' has-sheet' : ''}`}>
+    <div className="pb-board" role="region" aria-label={t('Procurement pipeline', 'خریداری کا سلسلہ')}>
+     {COLUMNS.map(col => { const n = count(col.stage), rows = items.filter(i => i.stage === col.stage && pass(i)); return <section key={col.stage} className={`pb-col is-${col.stage}`} data-stage={col.stage} aria-labelledby={`pb-h-${col.stage}`}>
+      <header className="pb-col-head"><StageIcon name={pipelineIcon[col.stage]} state={n ? 'current' : 'idle'} /><div><h3 id={`pb-h-${col.stage}`}>{col.name}</h3><p className="pb-next">{col.next}</p></div><strong className={`pb-count${n ? '' : ' is-empty'}`}>{n}</strong></header>
+      {rows.length > 0 && <ul className="pb-list">{rows.map(i => <li key={i.key}><button type="button" className={`pb-row${i.key === sel ? ' is-selected' : ''}${i.overdue ? ' is-overdue' : ''}`} aria-pressed={i.key === sel} onClick={() => select(i.key)}><span className="pb-row-title">{i.title}</span><span className="pb-row-meta">{i.meta}</span><span className="pb-row-foot"><span className="pb-tag">{i.tag}</span>{i.overdue && <span className="pb-tag is-warn">{t('Overdue', 'تاخیر شدہ')}</span>}{i.mine && <span className="pb-tag is-mine">{t('Your action', 'آپ کا عمل')}</span>}</span></button></li>)}</ul>}
+      {!rows.length && <div className="pb-empty">{n ? <p>{t('Nothing matches these filters.', 'ان فلٹرز سے کوئی مطابقت نہیں۔')}</p> : <><EmptyIso kind={EMPTY[col.stage].kind} /><p>{t(EMPTY[col.stage].text)}</p></>}</div>}
+     </section>; })}
+    </div>
+    {shown && <aside className="pb-sheet" role="dialog" aria-labelledby="pb-sheet-title">
+     <header className="pb-sheet-head"><div><p className="pb-kicker">{shown.kicker}</p><h2 id="pb-sheet-title" tabIndex={-1}>{shown.heading}</h2></div><button type="button" className="button pb-close" onClick={close}>{t('Close', 'بند کریں')}</button></header>
+     <div className="pb-sheet-body">{shown.body}</div>
+    </aside>}
+   </div>
+  </>}
   {view === 'suppliers' && directoryAllowed && <>
    <section className="live-panel"><div className="yf-head"><div><h2>{t('Supplier directory', 'سپلائر ڈائریکٹری')}</h2><p>{t('Registered suppliers by yarn category. The purchase manager approves them before they can bid.', 'دھاگے کی اقسام کے مطابق رجسٹرڈ سپلائرز۔ بولی سے پہلے خریداری مینیجر انہیں منظور کرتا ہے۔')}</p></div></div>
     <a className="button" href="#/supplier" target="_blank" rel="noreferrer"><ExternalLink size={18} />{t('Open supplier registration portal', 'سپلائر رجسٹریشن پورٹل کھولیں')}</a>
@@ -47,23 +193,8 @@ export default function Procurement({ member, onInventoryChanged }: { member: Me
     </article>)}</div>
    </section>
   </>}
-  {view === 'rfqs' && buyingAllowed && <section className="live-panel"><div className="yf-head"><div><h2>{t('RFQs and supplier bids', 'قیمت کی درخواستیں اور سپلائر بولیاں')}</h2><p>{t('Publish one request to approved suppliers in the selected category.', 'منتخب قسم کے منظور شدہ سپلائرز کو ایک درخواست بھیجیں۔')}</p></div><button className="button primary" onClick={() => setOpen('rfq:new')}><Plus size={18} />{t('New RFQ', 'نئی درخواست')}</button></div>
-   {open === 'rfq:new' && <RfqForm member={member} categories={categories} onSaved={saved} onCancel={() => setOpen('')} />}
-   {!state.rfqs.length && !loading && <p className="live-muted">{t('Create the first procurement request.', 'پہلی خریداری کی درخواست بنائیں۔')}</p>}
-   <div className="erp-records">{state.rfqs.map(r => <article className="erp-record" key={r.id}><div className="erp-record-head"><strong>{title(r.category_id)}</strong><span className="erp-status">{t(r.status, {draft:'مسودہ',open:'کھلا',awarded:'منظور شدہ',closed:'بند',cancelled:'منسوخ'}[r.status])}</span></div><RfqSummary rfq={r} /><p className="live-muted">{r.recipient_count || 0} {t('supplier portal recipients', 'سپلائر پورٹل وصول کنندگان')} · {r.bid_count || 0} {t('bids', 'بولیاں')}</p>
-    {r.status === 'draft' && <RfqStep member={member} kind="publish" rfq={r} onSaved={saved} />}
-    {r.status === 'open' && <RfqStep member={member} kind="close" rfq={r} onSaved={saved} />}
-    {r.status === 'closed' && r.deadline_at > Date.now() && <Correction member={member} label={t('Reopen bidding', 'بولی دوبارہ کھولیں')} title={t('Reopen bidding', 'بولی دوبارہ کھولیں')} effect={t('Suppliers can bid again until the deadline. Nothing is awarded by this.', 'deadline تک سپلائر دوبارہ بولی دے سکیں گے۔ اس سے کچھ منظور نہیں ہوتا۔')} submit={t('Reopen bidding', 'بولی دوبارہ کھولیں')} owners={['purchase_manager']} path="/erp/rfqs/reopen" payload={() => ({ rfqId: r.id })} onSaved={saved} />}
-    {['draft', 'open', 'closed'].includes(r.status) && <RfqStep member={member} kind="cancel" rfq={r} onSaved={saved} />}
-    {state.bids.filter(b => b.rfq_id === r.id).map(b => <div className="erp-bid" key={b.id}><h4>{b.supplier_name} · {t('Revision', 'ترمیم')} {b.version}</h4><BidTerms bid={b} unit={r.unit} />{b.status === 'rejected' && <p className="live-warning">{t('Rejected:', 'مسترد:')} {b.rejection_reason}</p>}{b.status === 'rejected' && ['open', 'closed'].includes(r.status) && <Correction member={member} label={t('Undo rejection', 'مسترد کرنا واپس لیں')} title={t('Undo rejection', 'مسترد کرنا واپس لیں')} effect={t('The bid goes back to submitted, so it can be reviewed and awarded again.', 'بولی دوبارہ جمع شدہ ہو جائے گی، تاکہ دوبارہ جائزہ لے کر منظور کی جا سکے۔')} submit={t('Restore bid', 'بولی بحال کریں')} owners={['purchase_manager']} path="/erp/bids/reject/undo" payload={() => ({ bidId: b.id, version: b.version })} onSaved={saved} />}{r.status === 'cancelled' || r.status === 'awarded' || r.status === 'draft' || b.status !== 'submitted' ? null : pending.awards.some(a => a.bidId === b.id) ? <><p className="live-warning">{t('Waiting for admin approval. The purchase order is created once approved.', 'ایڈمن کی منظوری کا انتظار ہے۔ منظوری کے بعد خریداری آرڈر بنے گا۔')}</p><Correction member={member} label={t('Withdraw this award', 'یہ منظوری واپس لیں')} title={t('Withdraw this award', 'یہ منظوری واپس لیں')} effect={t('The award request is cancelled and nothing is ordered. The RFQ can then be awarded to another bid.', 'منظوری کی درخواست منسوخ ہو جائے گی اور کچھ نہیں منگوایا جائے گا۔ اس کے بعد کسی اور بولی کو منظور کیا جا سکتا ہے۔')} submit={t('Withdraw award', 'منظوری واپس لیں')} owners={['purchase_manager']} path="/erp/orders/cancel" payload={() => ({ approvalId: pending.awards.find(a => a.bidId === b.id)?.approvalId })} onSaved={saved} /></> : (open === 'award:' + b.id || open === 'reject:' + b.id ? <BidDecision member={member} bid={b} rfq={r} accepting={open.startsWith('award:')} onSaved={saved} onCancel={() => setOpen('')} /> : <div className="live-actions"><button className="button primary" onClick={() => setOpen('award:' + b.id)}>{t('Review and accept bid', 'بولی کا جائزہ اور منظوری')}</button><button className="button" onClick={() => setOpen('reject:' + b.id)}>{t('Reject bid', 'بولی مسترد کریں')}</button></div>)}</div>)}
-   </article>)}</div>
-  </section>}
   {view === 'tracking' && buyingAllowed && <ShipmentTracking member={member} />}
-  {view === 'orders' && buyingAllowed && <section className="live-panel"><h2>{t('Purchase orders and inbound shipments', 'خریداری کے آرڈر اور آنے والی کھیپ')}</h2>{!state.orders.length && <p className="live-muted">{t('Accept a supplier bid to create a purchase order.', 'خریداری کا آرڈر بنانے کے لیے سپلائر کی بولی منظور کریں۔')}</p>}
-   <PurchaseOrders orders={state.orders} shipments={state.shipments}
-    renderDetail={o => <><BidTerms bid={o.terms} unit={o.terms.unit} />{o.approval_status === 'pending_admin' && <p className="live-warning">{t('Quantity change waiting for admin approval', 'مقدار کی تبدیلی ایڈمن کی منظوری کی منتظر ہے')}</p>}</>}
-    renderActions={o => <div className="live-actions">{o.approval_status === 'approved' && o.status !== 'cancelled' && (open === 'qty:' + o.id ? <QuantityForm member={member} order={o} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button" onClick={() => setOpen('qty:' + o.id)}><Scale size={18} />{t('Change quantity', 'مقدار تبدیل کریں')}</button>)}{o.approval_status === 'approved' && ['accepted', 'dispatched'].includes(o.status) && !o.bill_of_lading && (member.role === 'purchase_manager' || member.admin) && (open === 'bl:' + o.id ? <BillOfLadingForm member={member} order={o} onSaved={saved} onCancel={() => setOpen('')} /> : <button className="button" onClick={() => setOpen('bl:' + o.id)}><Truck size={18} />{t('Attach bill of lading')}</button>)}{o.status === 'accepted' && !o.bill_of_lading && (member.role === 'purchase_manager' || member.admin) && <Correction member={member} label={t('Cancel this order', 'یہ آرڈر منسوخ کریں')} title={t('Cancel this order', 'یہ آرڈر منسوخ کریں')} effect={t('The order is cancelled and the RFQ is reopened for awarding, so another bid can win. Only possible before goods are dispatched, arrive or have a bill of lading.', 'آرڈر منسوخ ہو جائے گا اور درخواست دوبارہ منظوری کے لیے کھل جائے گی۔ صرف روانگی، آمد یا بل آف لیڈنگ سے پہلے ممکن ہے۔')} submit={t('Cancel order', 'آرڈر منسوخ کریں')} owners={['purchase_manager']} path="/erp/orders/cancel" payload={() => ({ orderId: o.id })} onSaved={saved} />}</div>} />
-  </section>}
+  {view === 'incoming' && !buyingAllowed && <IncomingStock member={member} onInventoryChanged={onInventoryChanged} />}
  </div>;
 }
 // Mirrors the server: pending→approved|rejected, approved↔suspended; rejected is final.
@@ -144,10 +275,10 @@ function ReinstateSupplier({ supplier, onSaved, onCancel }: { supplier: Supplier
   <Field>{t('Reason', 'وجہ')}<textarea value={reason} onChange={e => setReason(e.target.value)} minLength={5} maxLength={1000} required /></Field>
  </AsyncForm>;
 }
-function RfqForm({ member, categories, onSaved, onCancel }: { member: Member; categories: SupplierCategory[]; onSaved: () => Promise<void>; onCancel: () => void }) {
+function RfqForm({ member, categories, onSaved, onCancel }: { member: Member; categories: SupplierCategory[]; onSaved: (id: string) => Promise<void>; onCancel: () => void }) {
  const { language, t } = useLanguage(); const [id] = useState(crypto.randomUUID()); const [title, setTitle] = useState(''), [categoryId, setCategory] = useState(categories[0]?.id || ''), [specifications, setSpecifications] = useState(''), [qty, setQty] = useState(''), [unit, setUnit] = useState('kg'), [deliveryLocation, setLocation] = useState(''), [intervention, setIntervention] = useState('');
  const [deadline, setDeadline] = useState(localFactoryInput(Date.now() + 2 * 86400000)), [delivery, setDelivery] = useState(localFactoryInput(Date.now() + 14 * 86400000));
- return <AsyncForm title={t('New procurement RFQ', 'نئی خریداری کی درخواست')} submit={t('Save draft RFQ', 'درخواست کا مسودہ محفوظ کریں')} onCancel={onCancel} note={t('Saving a draft does not send it. Publish after reviewing the requirements.', 'مسودہ محفوظ کرنے سے نہیں بھیجا جائے گا۔ ضروریات کا جائزہ لے کر شائع کریں۔')} onSubmit={async () => { await api('/erp/rfqs', { id, title, categoryId, specifications, quantityMilli: fixedInput(qty, 3, 'Quantity'), unit, deliveryLocation, deadlineAt: factoryInput(deadline), requestedDeliveryAt: factoryInput(delivery), ...(intervention ? { interventionReason: intervention } : {}) }); await onSaved(); }}>
+ return <AsyncForm title={t('New procurement RFQ', 'نئی خریداری کی درخواست')} submit={t('Save draft RFQ', 'درخواست کا مسودہ محفوظ کریں')} onCancel={onCancel} note={t('Saving a draft does not send it. Publish after reviewing the requirements.', 'مسودہ محفوظ کرنے سے نہیں بھیجا جائے گا۔ ضروریات کا جائزہ لے کر شائع کریں۔')} onSubmit={async () => { await api('/erp/rfqs', { id, title, categoryId, specifications, quantityMilli: fixedInput(qty, 3, 'Quantity'), unit, deliveryLocation, deadlineAt: factoryInput(deadline), requestedDeliveryAt: factoryInput(delivery), ...(intervention ? { interventionReason: intervention } : {}) }); await onSaved(id); }}>
   <Field>{t('RFQ title', 'درخواست کا عنوان')}<input value={title} onChange={e => setTitle(e.target.value)} minLength={3} maxLength={120} required /></Field><Field>{t('Yarn category', 'دھاگے کی قسم')}<select value={categoryId} onChange={e => setCategory(e.target.value)} required>{categories.map(c => <option value={c.id} key={c.id}>{language === 'ur' ? c.urdu_name : c.name}</option>)}</select></Field><Field>{t('Specifications (count, composition, quality)', 'تفصیلات (کاؤنٹ، مرکب، معیار)')}<textarea value={specifications} onChange={e => setSpecifications(e.target.value)} minLength={5} maxLength={4000} required /></Field><div className="live-fields"><Field>{t('Required quantity', 'مطلوبہ مقدار')}<input inputMode="decimal" value={qty} onChange={e => setQty(e.target.value)} required /></Field><Field>{t('Unit', 'اکائی')}<select value={unit} onChange={e => setUnit(e.target.value)}><option value="kg">kg</option><option value="tonne">tonne</option></select></Field></div><Field>{t('Delivery location', 'ترسیل کی جگہ')}<input value={deliveryLocation} onChange={e => setLocation(e.target.value)} minLength={3} maxLength={200} required /></Field><div className="live-fields"><Field>{t('Bid deadline (PKT)', 'بولی کی آخری تاریخ (پاکستان)')}<input type="datetime-local" value={deadline} onChange={e => setDeadline(e.target.value)} required /></Field><Field>{t('Requested delivery (PKT)', 'مطلوبہ ترسیل (پاکستان)')}<input type="datetime-local" value={delivery} onChange={e => setDelivery(e.target.value)} required /></Field></div><InterventionField member={member} owners={['purchase_manager']} value={intervention} onChange={setIntervention} />
  </AsyncForm>;
 }

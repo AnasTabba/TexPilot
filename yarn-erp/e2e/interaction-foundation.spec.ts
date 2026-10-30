@@ -144,7 +144,7 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
 
   await expectTarget(page.locator('.live-topbar .live-brand'), 'top bar brand');
   await expectTarget(page.locator('.live-bottom-nav button').first(), 'bottom navigation');
-  await expectTarget(page.locator('.yf-head .live-text-button').filter({ hasText: 'See all' }), 'Dashboard See all');
+  await expectTarget(page.locator('.nw-card .nw-text-btn').filter({ hasText: 'See all' }), 'Dashboard See all');
   await expectScreenTargets(page, 'Dashboard');
 
   await openPage(page, '#/inventory', 'Stock');
@@ -302,7 +302,7 @@ test('reduced motion removes entrance animation and keeps state changes immediat
   expect(state.endlessThread).toBe('none');
 
   await page.locator('.live-bottom-nav button').nth(1).click();
-  await expect(page.getByRole('heading', { name: 'Stock', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Approvals', exact: true })).toBeVisible();
   await expectMotionSettled(page);
 });
 

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useLanguage } from './i18n';
 import './analytics.css';
+import './sales-ui.css';
 
 export type Kpi = { label: string; value: string | null };
 export type BarRow = { key: string; label: string; sub?: string; value: number; text: string; group?: string };

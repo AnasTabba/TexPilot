@@ -4,8 +4,11 @@ import { AsyncForm, Field } from './forms';
 import { useLanguage } from './i18n';
 import { inventoryRequest, type Member, type WorkspaceState } from './inventory-client';
 import { ReverseControl } from './ToProduction';
-import { InterventionField, NextStep, ReasonField, SectionTabs, StatusTag, kg } from './PortalCommon';
+import { InterventionField, NextStep, ReasonField, StatusTag, kg } from './PortalCommon';
+import { StageIcon, stageState, type StageIconName } from './iso/StageIcons';
+import { SplitView } from './SplitView';
 import './sales-screens.css';
+import './sales-ui.css';
 
 type Order = { id: string; reference: string; status: string; buyer_name: string; product_id: string | null; product_name: string | null; quantity_milli: number; remaining_milli: number };
 type Dispatch = { id: string; sales_order_id: string; lot_id: string; status: string; order_reference: string; buyer_name: string; product_name: string; lot_batch: string; quantity_milli: number; grams: number; vehicle: string; transporter: string; delivery_proof: string; hold_reason: string | null; approval_request_id: string | null; hold_notice_id: string | null; remaining_milli: number; created_at: number; dispatched_at: number | null; delivered_at: number | null };
@@ -21,6 +24,7 @@ const statusTabs = [
 ];
 const when = (time: number | null) => time == null ? '—' : new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium', timeStyle: 'short' }).format(time);
 const steps = ['pending_approval', 'approved', 'dispatched', 'delivered'] as const;
+const stepIcons: StageIconName[] = ['request', 'approve', 'dispatch', 'deliver'];
 
 export function DispatchScreens({ member, section, tab, id, navigate }: Props) {
   const { t } = useLanguage();
@@ -58,7 +62,6 @@ export function DispatchScreens({ member, section, tab, id, navigate }: Props) {
   if (busy && !stock) return <p role="status">{t('Loading dispatch records…', 'ڈسپیچ ریکارڈ لوڈ ہو رہا ہے…')}</p>;
   if (!stock) return <section className="live-panel"><p className="live-error" role="alert">{t(error || 'Could not load dispatch records.', 'ڈسپیچ ریکارڈ لوڈ نہیں ہو سکا۔')}</p><button className="button" onClick={() => void load()}><RefreshCw size={18} aria-hidden="true" />{t('Retry', 'دوبارہ کوشش کریں')}</button></section>;
 
-  const chosen = rows.find(row => row.id === id);
   const currentTab = tab || 'all';
   const filtered = rows.filter(row => section === 'history' ? row.status === 'delivered' : currentTab === 'all' || row.status === currentTab);
   const products = stock.products, lots = stock.lots, balances = stock.balances;
@@ -111,7 +114,7 @@ export function DispatchScreens({ member, section, tab, id, navigate }: Props) {
 
   const detailView = (row: Dispatch) => <section className="live-panel">
     <div className="live-panel-heading"><div><h2>{row.order_reference} · {row.buyer_name}</h2><p>{row.product_name} · {row.lot_batch} · {kg(row.grams)}</p></div><StatusTag status={row.status} /></div>
-    <div className="yf-dispatch-thread" aria-label={t('Dispatch status history', 'ڈسپیچ کی حالت کی تاریخ')}><ol>{steps.map((step, i) => <li key={step} className={i <= steps.indexOf(row.status as typeof steps[number]) ? 'done' : ''} aria-current={row.status === step ? 'step' : undefined}>
+    <div className="yf-dispatch-thread" aria-label={t('Dispatch status history', 'ڈسپیچ کی حالت کی تاریخ')}><ol>{steps.map((step, i) => <li key={step} className={i <= steps.indexOf(row.status as typeof steps[number]) ? 'done' : ''} aria-current={row.status === step ? 'step' : undefined}><StageIcon name={stepIcons[i]} state={stageState(i, steps.indexOf(row.status as typeof steps[number]))} />
       <StatusTag status={step} /> · {i === 0 ? when(row.created_at) : i === 2 ? when(row.dispatched_at) : i === 3 ? when(row.delivered_at) : row.status === 'approved' || row.status === 'dispatched' || row.status === 'delivered' ? t('Complete', 'مکمل') : t('Waiting', 'منتظر')}
     </li>)}</ol></div>
     {row.status === 'on_hold' && <p className="live-warning"><StatusTag status="on_hold" /> · {row.hold_reason}</p>}
@@ -152,20 +155,19 @@ export function DispatchScreens({ member, section, tab, id, navigate }: Props) {
     </details>}
     {row.status === 'pending_approval' && row.hold_notice_id && <p className="live-warning">{t('The sales manager sent a hold notice. Review it before proceeding.', 'سیلز مینیجر نے روکنے کا نوٹس بھیجا ہے۔ پہلے اسے دیکھیں۔')}</p>}
     {row.status === 'pending_approval' && <p>{t('Waiting for the sales manager to approve this request.', 'سیلز مینیجر کی منظوری کا انتظار ہے۔')}</p>}
-    <button className="button" onClick={() => navigate('dispatches')}><ArrowRight size={18} aria-hidden="true" />{t('Back to dispatches', 'ڈسپیچ فہرست')}</button>
   </section>;
 
-  const listView = () => {
-    const tabsForView = section === 'history' ? [{ id: 'delivered', en: 'Delivered', ur: 'پہنچائی گئی' }] : statusTabs;
-    const value = section === 'history' ? 'delivered' : currentTab;
-    return <>
-      <SectionTabs tabs={tabsForView} value={value} onChange={next => navigate(section === 'history' ? 'history' : 'dispatches/' + next)} />
-      {filtered.length ? <div className="erp-records">{filtered.map(row => <article className="erp-record" key={row.id}>
-        <div className="erp-record-head"><div><h2><button className="live-text-button" onClick={() => navigate('dispatches/' + row.id)}>{row.order_reference} · {row.buyer_name}</button></h2><p>{row.product_name} · {row.lot_batch} · {kg(row.grams)} · {when(row.created_at)}</p></div><StatusTag status={row.status} /></div>
-        <button className="button" onClick={() => navigate('dispatches/' + row.id)}><Truck size={18} aria-hidden="true" />{t('Open dispatch', 'ڈسپیچ کھولیں')}</button>
-      </article>)}</div>
-        : <p className="live-empty">{t('No dispatches in this view.', 'اس حصے میں کوئی ڈسپیچ نہیں۔')}</p>}
-    </>;
+  // Dispatches are a split view: the list filters by status and the chosen dispatch's steps and actions sit beside it.
+  const splitView = () => {
+    const history = section === 'history';
+    const basePath = history ? 'history' : 'dispatches/' + currentTab;
+    return <SplitView label={history ? t('Delivered', 'پہنچائی گئی') : t('Dispatches', 'ڈسپیچز')}
+      tabs={history ? undefined : statusTabs.map(item => ({ id: item.id, label: t(item.en, item.ur), count: item.id === 'all' ? rows.length : rows.filter(row => row.status === item.id).length }))}
+      tab={currentTab} onTab={next => navigate('dispatches/' + next)}
+      items={filtered.map(row => ({ id: row.id, title: `${row.order_reference} · ${row.buyer_name}`, meta: `${row.product_name} · ${row.lot_batch} · ${kg(row.grams)} · ${when(row.created_at)}`, status: <StatusTag status={row.status} /> }))}
+      selectedId={id} onSelect={next => navigate(next ? `${basePath}/${next}` : basePath)}
+      renderDetail={rowId => { const row = rows.find(item => item.id === rowId); return row ? detailView(row) : <p className="split-none">{t('This dispatch is not in the list.', 'یہ ڈسپیچ فہرست میں نہیں۔')}</p>; }}
+      empty={t('No dispatches in this view.', 'اس حصے میں کوئی ڈسپیچ نہیں۔')} emptyDetail={t('Choose a dispatch to see its steps and next action.', 'مراحل اور اگلا کام دیکھنے کے لیے ڈسپیچ منتخب کریں۔')} />;
   };
 
   return <div className="erp-workspace yf-dispatch-screens">
@@ -176,7 +178,7 @@ export function DispatchScreens({ member, section, tab, id, navigate }: Props) {
     {busy && <p role="status">{t('Refreshing dispatch records…', 'ڈسپیچ ریکارڈ تازہ ہو رہا ہے…')}</p>}
     {section === 'dashboard' && dashboardView()}
     {section === 'new-dispatch' && newDispatchView()}
-    {(section === 'dispatches' || section === 'history') && (chosen ? detailView(chosen) : listView())}
+    {(section === 'dispatches' || section === 'history') && splitView()}
   </div>;
 }
 

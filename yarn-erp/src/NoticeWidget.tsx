@@ -10,14 +10,14 @@ import './notice-widget.css';
 
 const LIMIT = 8;
 
-type Tone = 'kraft' | 'ok' | 'warn' | 'bad' | 'ink';
-// Icon and tone follow the event kind, so each row reads at a glance. Tones are theme tokens (see .nw-chip in notice-widget.css).
+type Tone = 'brand' | 'ok' | 'warn' | 'bad' | 'ink';
+// Icon and tone follow the event kind, so each row reads at a glance. Tones are theme tokens (see .nw-chip in notice-widget.css); --pop is never a notice tone.
 function kindFor(event: string): { Icon: LucideIcon; tone: Tone } {
   if (/^(qc\.|inspection\.|lot\.|stock\.ready_for_production)/.test(event)) return { Icon: ClipboardCheck, tone: 'ok' };
   if (/^(approval|award\.pending|supplier\.pending|buyer\.pending|dispatch\.(approval_requested|held))/.test(event)) return { Icon: ListChecks, tone: 'warn' };
-  if (/^stock(_|\.)/.test(event)) return { Icon: Factory, tone: 'kraft' };
+  if (/^stock(_|\.)/.test(event)) return { Icon: Factory, tone: 'brand' };
   if (/^(dispatch|shipment)\./.test(event)) return { Icon: Truck, tone: 'ink' };
-  if (/^(po\.|rfq|bid|bidding|buyer_rfq|award\.|supplier\.rated)/.test(event)) return { Icon: FileText, tone: 'kraft' };
+  if (/^(po\.|rfq|bid|bidding|buyer_rfq|award\.|supplier\.rated)/.test(event)) return { Icon: FileText, tone: 'brand' };
   if (/^claim\./.test(event) || event === 'payment.overdue') return { Icon: ShieldAlert, tone: 'bad' };
   if (/^payment\./.test(event)) return { Icon: Wallet, tone: 'warn' };
   return { Icon: Bell, tone: 'ink' };
@@ -32,7 +32,7 @@ function NoticeRow({ notice, index, onOpen }: { notice: Notice; index: number; o
   const onKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
     if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(notice); }
   };
-  return <tr className={`nw-row${unread ? ' is-unread' : ''}`} role="button" tabIndex={0} style={{ '--d': `${index * 60}ms` } as CSSProperties}
+  return <tr className={`nw-row${unread ? ' is-unread' : ''}`} role="button" tabIndex={0} style={{ '--d': `${index * 40}ms` } as CSSProperties}
     onClick={() => onOpen(notice)} onKeyDown={onKeyDown}>
     <td>
       <div className="nw-name">

@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { CheckCheck, RefreshCw, TriangleAlert } from 'lucide-react';
 import './erp.css';
 import './supervisor-screens.css';
+import './approvals-ui.css';
 import { Field, errorMessage } from './forms';
-import { InterventionField, SectionTabs, StatusTag, portal } from './PortalCommon';
+import { InterventionField, StatusTag, portal } from './PortalCommon';
 import { stageName, weight, type Member, type WorkspaceState } from './inventory-client';
 import { quantity } from './erp-client';
 import { useLanguage } from './i18n';
 import { ReverseControl } from './ToProduction';
+import { SplitView, type SplitItem } from './SplitView';
 
 export const SUPERVISOR_SECTIONS = ['requests', 'report'] as const;
 export type SupervisorSection = (typeof SUPERVISOR_SECTIONS)[number];
@@ -163,6 +165,59 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
   };
   const draftCount = draft ? draft.confirmedRejections.length + draft.escalations.length + draft.adjustments.length : 0;
 
+  // One stock query: the answer form until it is answered, then the answer with a void control.
+  const queryCard = (query: StockQuery) => <article className="erp-record" id={query.id}>
+    <h3>{query.product_name}{query.quantity_milli !== null && ` · ${quantity(query.quantity_milli)} kg`}</h3><p>{query.question}</p><p>{query.asked_by_name} · <StatusTag status={query.status} /></p>
+    {query.status === 'answered' ? <>
+      <p style={query.void_reason ? { textDecoration: 'line-through' } : undefined}>{t('Available', 'دستیاب')}: {weight(query.available_grams || 0)} kg{query.answer ? ` · ${query.answer}` : ''}</p>
+      {query.void_reason ? <p className="live-error">{t('Voided', 'منسوخ')}: {query.void_reason}</p> : <ReverseControl label={t('Void answer', 'جواب منسوخ کریں')} confirm={t('Void answer', 'جواب منسوخ کریں')} isAdmin={member.role === 'admin'}
+        impact={t('The answer is struck through and kept on record. Sales can ask the question again.', 'جواب پر لکیر لگ جائے گی اور ریکارڈ میں رہے گا۔ سیلز دوبارہ سوال کر سکتی ہے۔')}
+        run={async ({ id, reason, interventionReason }) => { await portal('/stock/queries/void', { id, queryId: query.id, reason, ...(interventionReason ? { interventionReason } : {}) }); await loadRequests(); setNotice(t('Answer voided. Sales can ask again.', 'جواب منسوخ ہو گیا۔ سیلز دوبارہ پوچھ سکتی ہے۔')); }} />}
+    </> : <form onSubmit={event => void answer(query, event)} aria-label={t('Answer stock query', 'اسٹاک کی درخواست کا جواب')}>
+      <Field>{t('Available (kg)', 'دستیاب مقدار (کلوگرام)')}<input value={queryDrafts[query.id]?.kg || ''} onChange={event => setQueryDrafts(old => ({ ...old, [query.id]: { ...(old[query.id] || { kg: '', answer: '' }), kg: event.target.value } }))} inputMode="decimal" placeholder="0.000" required /></Field>
+      <Field>{t('Answer', 'جواب')}<textarea value={queryDrafts[query.id]?.answer || ''} onChange={event => setQueryDrafts(old => ({ ...old, [query.id]: { ...(old[query.id] || { kg: '', answer: '' }), answer: event.target.value } }))} rows={2} maxLength={1000} /></Field>
+      <button className="button primary" disabled={busy}>{t('Save answer', 'جواب محفوظ کریں')}</button>
+    </form>}
+  </article>;
+
+  // One stock issue from dispatch: the gate previews, then the accept or reject decision.
+  const issueCard = (issue: StockIssue) => {
+    const values = issueDrafts[issue.id] || { correctionKg: '', reason: '' };
+    const correction = tryKgToGrams(values.correctionKg, { signed: true }) || 0;
+    return <article className="erp-record" id={issue.id}>
+      <h3>{issue.product_name} · {issue.lot_batch} · {t(issue.stage === 'raw' ? 'Raw' : 'Finished', issue.stage === 'raw' ? 'خام مال' : 'تیار مال')}</h3>
+      <p>{t(...pair(kindWords, issue.kind))} · {issue.description}</p>
+      <p>{t('Reported difference', 'درج شدہ فرق')}: {weight(issue.difference_grams)} kg · <StatusTag status={issue.status} /></p>
+      {issue.decision_reason && <p>{t('Decision reason', 'فیصلے کی وجہ')}: {issue.decision_reason}</p>}
+      {issue.status === 'open' && thresholds && <div className="live-muted" aria-label={t('Approval previews', 'منظوری کا پیش نظارہ')}>
+        <p>{t('Dispatch issue gate', 'ڈسپیچ مسئلے کی حد')}: {thresholdText(issue.difference_grams, thresholds.dispatchStockIssueGrams)}</p>
+        <p>{correction ? t('Inventory correction gate', 'انوینٹری کی درستگی کی حد') : t('Inventory correction gate: no stock change proposed', 'انوینٹری کی درستگی کی حد: اسٹاک میں تبدیلی تجویز نہیں کی گئی')}{correction ? `: ${thresholdText(Math.abs(correction), thresholds.inventoryAdjustmentGrams)}` : ''}</p>
+      </div>}
+      {issue.status === 'open' && <>
+        <Field>{t('Correction (kg, optional)', 'درستگی (کلوگرام، اختیاری)')}<input value={values.correctionKg} onChange={event => setIssueDrafts(old => ({ ...old, [issue.id]: { ...values, correctionKg: event.target.value } }))} inputMode="decimal" placeholder="+0.000 / -0.000" /></Field>
+        <Field>{t('Decision reason', 'فیصلے کی وجہ')}<textarea value={values.reason} onChange={event => setIssueDrafts(old => ({ ...old, [issue.id]: { ...values, reason: event.target.value } }))} rows={2} minLength={5} maxLength={1000} required /></Field>
+        <div className="live-actions"><button className="button primary" disabled={busy || values.reason.trim().length < 5} onClick={() => void decideIssue(issue, 'accept')}><CheckCheck size={18} aria-hidden="true" />{t('Accept', 'قبول کریں')}</button><button className="button" disabled={busy || values.reason.trim().length < 5} onClick={() => void decideIssue(issue, 'reject')}>{t('Reject', 'مسترد کریں')}</button></div>
+      </>}
+    </article>;
+  };
+
+  // Requests are a split view: stock queries or stock issues on the left, the chosen one's form on the right.
+  const requestTabs = [
+    { id: 'queries', label: t('Stock queries', 'اسٹاک کی درخواستیں'), count: queries.length },
+    { id: 'stock-issues', label: t('Stock issues', 'اسٹاک کے مسائل'), count: issues.length },
+  ];
+  const requestItems: SplitItem[] = issueTab
+    ? issues.map(issue => ({ id: issue.id, title: `${issue.product_name} · ${issue.lot_batch}`, meta: `${t(...pair(kindWords, issue.kind))} · ${weight(issue.difference_grams)} kg`, status: <StatusTag status={issue.status} /> }))
+    : queries.map(query => ({ id: query.id, title: `${query.product_name}${query.quantity_milli !== null ? ` · ${quantity(query.quantity_milli)} kg` : ''}`, meta: `${query.asked_by_name} · ${query.question}`, status: <StatusTag status={query.status} /> }));
+  const requestDetail = (rowId: string) => {
+    const missing = <p className="split-none">{t('This item is not in the list.', 'یہ آئٹم فہرست میں نہیں۔')}</p>;
+    if (issueTab) { const issue = issues.find(item => item.id === rowId); return issue ? issueCard(issue) : missing; }
+    const query = queries.find(item => item.id === rowId); return query ? queryCard(query) : missing;
+  };
+  // The route carries the chosen request; the stock-issues tab keeps its own segment.
+  const openRequest = (next: string) => { location.hash = `#/requests${issueTab ? '/stock-issues' : ''}${next ? `/${next}` : ''}`; };
+  const requestsStatus = listStatus(queries.length + issues.length, t('No stock queries or stock issues are waiting.', 'کوئی اسٹاک درخواست یا مسئلہ منتظر نہیں۔'));
+
   const actions = <button className="button" type="button" disabled={busy} onClick={() => void refresh()}><RefreshCw size={18} aria-hidden="true" />{t('Refresh', 'تازہ کریں')}</button>;
   return <section className="live-panel" aria-label={t('Supervisor workspace', 'سپروائزر کا کام')}>
     <div className="live-panel-heading"><h2>{section === 'requests' ? t('Requests', 'درخواستیں') : t('Report to admin', 'ایڈمن کو رپورٹ')}</h2>{actions}</div>
@@ -170,50 +225,13 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
     {error && <p className="live-error" role="alert"><TriangleAlert size={18} aria-hidden="true" />{t(error)}</p>}
     {notice && <p className="live-success" role="status"><CheckCheck size={18} aria-hidden="true" />{notice}</p>}
 
-    {section === 'requests' && <>
-      <SectionTabs tabs={[{ id: 'queries', en: 'Stock queries', ur: 'اسٹاک کی درخواستیں' }, { id: 'stock-issues', en: 'Stock issues', ur: 'اسٹاک کے مسائل' }]} value={issueTab ? 'stock-issues' : 'queries'} onChange={value => { location.hash = `#/requests/${value}`; }} />
-      {!issueTab && <section className="yf-section">
-        <h3 className="live-subheading">{t('Stock queries from sales', 'سیلز کی اسٹاک درخواستیں')}</h3>
-        {listStatus(queries.length, t('No stock queries have been raised.', 'اسٹاک کی کوئی درخواست موصول نہیں ہوئی۔'))}
-        <div className="erp-records">{queries.map(query => <article className="erp-record" key={query.id} id={query.id}>
-          <h3>{query.product_name}{query.quantity_milli !== null && ` · ${quantity(query.quantity_milli)} kg`}</h3><p>{query.question}</p><p>{query.asked_by_name} · <StatusTag status={query.status} /></p>
-          {query.status === 'answered' ? <>
-            <p style={query.void_reason ? { textDecoration: 'line-through' } : undefined}>{t('Available', 'دستیاب')}: {weight(query.available_grams || 0)} kg{query.answer ? ` · ${query.answer}` : ''}</p>
-            {query.void_reason ? <p className="live-error">{t('Voided', 'منسوخ')}: {query.void_reason}</p> : <ReverseControl label={t('Void answer', 'جواب منسوخ کریں')} confirm={t('Void answer', 'جواب منسوخ کریں')} isAdmin={member.role === 'admin'}
-              impact={t('The answer is struck through and kept on record. Sales can ask the question again.', 'جواب پر لکیر لگ جائے گی اور ریکارڈ میں رہے گا۔ سیلز دوبارہ سوال کر سکتی ہے۔')}
-              run={async ({ id, reason, interventionReason }) => { await portal('/stock/queries/void', { id, queryId: query.id, reason, ...(interventionReason ? { interventionReason } : {}) }); await loadRequests(); setNotice(t('Answer voided. Sales can ask again.', 'جواب منسوخ ہو گیا۔ سیلز دوبارہ پوچھ سکتی ہے۔')); }} />}
-          </> : <form onSubmit={event => void answer(query, event)} aria-label={t('Answer stock query', 'اسٹاک کی درخواست کا جواب')}>
-            <Field>{t('Available (kg)', 'دستیاب مقدار (کلوگرام)')}<input value={queryDrafts[query.id]?.kg || ''} onChange={event => setQueryDrafts(old => ({ ...old, [query.id]: { ...(old[query.id] || { kg: '', answer: '' }), kg: event.target.value } }))} inputMode="decimal" placeholder="0.000" required /></Field>
-            <Field>{t('Answer', 'جواب')}<textarea value={queryDrafts[query.id]?.answer || ''} onChange={event => setQueryDrafts(old => ({ ...old, [query.id]: { ...(old[query.id] || { kg: '', answer: '' }), answer: event.target.value } }))} rows={2} maxLength={1000} /></Field>
-            <button className="button primary" disabled={busy}>{t('Save answer', 'جواب محفوظ کریں')}</button>
-          </form>}
-        </article>)}</div>
-      </section>}
-      {issueTab && <section className="yf-section">
-        <h3 className="live-subheading">{t('Stock issues from dispatch', 'ڈسپیچ کے اسٹاک مسائل')}</h3>
-        {thresholds && <p className="live-muted">{t('Gate previews use the threshold snapshots returned by the stock issue service.', 'منظوری کے جائزے اسٹاک مسئلے کی سروس سے موصول شدہ حدوں کے مطابق ہیں۔')}</p>}
-        {listStatus(issues.length, t('No dispatch stock issues are waiting.', 'ڈسپیچ کا کوئی اسٹاک مسئلہ منتظر نہیں۔'))}
-        <div className="erp-records">{issues.map(issue => {
-          const values = issueDrafts[issue.id] || { correctionKg: '', reason: '' };
-          const correction = tryKgToGrams(values.correctionKg, { signed: true }) || 0;
-          return <article className="erp-record" key={issue.id} id={issue.id}>
-            <h3>{issue.product_name} · {issue.lot_batch} · {t(issue.stage === 'raw' ? 'Raw' : 'Finished', issue.stage === 'raw' ? 'خام مال' : 'تیار مال')}</h3>
-            <p>{t(...pair(kindWords, issue.kind))} · {issue.description}</p>
-            <p>{t('Reported difference', 'درج شدہ فرق')}: {weight(issue.difference_grams)} kg · <StatusTag status={issue.status} /></p>
-            {issue.decision_reason && <p>{t('Decision reason', 'فیصلے کی وجہ')}: {issue.decision_reason}</p>}
-            {issue.status === 'open' && thresholds && <div className="live-muted" aria-label={t('Approval previews', 'منظوری کا پیش نظارہ')}>
-              <p>{t('Dispatch issue gate', 'ڈسپیچ مسئلے کی حد')}: {thresholdText(issue.difference_grams, thresholds.dispatchStockIssueGrams)}</p>
-              <p>{correction ? t('Inventory correction gate', 'انوینٹری کی درستگی کی حد') : t('Inventory correction gate: no stock change proposed', 'انوینٹری کی درستگی کی حد: اسٹاک میں تبدیلی تجویز نہیں کی گئی')}{correction ? `: ${thresholdText(Math.abs(correction), thresholds.inventoryAdjustmentGrams)}` : ''}</p>
-            </div>}
-            {issue.status === 'open' && <>
-              <Field>{t('Correction (kg, optional)', 'درستگی (کلوگرام، اختیاری)')}<input value={values.correctionKg} onChange={event => setIssueDrafts(old => ({ ...old, [issue.id]: { ...values, correctionKg: event.target.value } }))} inputMode="decimal" placeholder="+0.000 / -0.000" /></Field>
-              <Field>{t('Decision reason', 'فیصلے کی وجہ')}<textarea value={values.reason} onChange={event => setIssueDrafts(old => ({ ...old, [issue.id]: { ...values, reason: event.target.value } }))} rows={2} minLength={5} maxLength={1000} required /></Field>
-              <div className="live-actions"><button className="button primary" disabled={busy || values.reason.trim().length < 5} onClick={() => void decideIssue(issue, 'accept')}><CheckCheck size={18} aria-hidden="true" />{t('Accept', 'قبول کریں')}</button><button className="button" disabled={busy || values.reason.trim().length < 5} onClick={() => void decideIssue(issue, 'reject')}>{t('Reject', 'مسترد کریں')}</button></div>
-            </>}
-          </article>;
-        })}</div>
-      </section>}
-    </>}
+    {section === 'requests' && (requestsStatus ?? <div className="yf-supervisor">
+      <SplitView label={issueTab ? t('Stock issues from dispatch', 'ڈسپیچ کے اسٹاک مسائل') : t('Stock queries from sales', 'سیلز کی اسٹاک درخواستیں')}
+        tabs={requestTabs} tab={issueTab ? 'stock-issues' : 'queries'} onTab={value => { location.hash = `#/requests/${value}`; }}
+        items={requestItems} selectedId={itemId} onSelect={openRequest} renderDetail={requestDetail}
+        empty={issueTab ? t('No dispatch stock issues are waiting.', 'ڈسپیچ کا کوئی اسٹاک مسئلہ منتظر نہیں۔') : t('No stock queries have been raised.', 'اسٹاک کی کوئی درخواست موصول نہیں ہوئی۔')}
+        emptyDetail={t('Choose a request to answer it or decide it.', 'جواب دینے یا فیصلہ کرنے کے لیے درخواست منتخب کریں۔')} />
+    </div>)}
 
     {section === 'report' && <>
       <p className="live-muted">{t('Choose a factory date period, preview its evidence, flag items that need attention, then submit an immutable snapshot.', 'فیکٹری کی تاریخیں منتخب کریں، شواہد دیکھیں، ضروری آئٹمز نشان زد کریں اور محفوظ رپورٹ جمع کریں۔')}</p>

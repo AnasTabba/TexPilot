@@ -436,5 +436,16 @@ export default function Chat({ member, state, navigate, onUnread }: { member: Me
   useEffect(() => { if (team) unreadRef.current?.(0); }, [team?.id]);
   if (failure !== null && !list) return <section className="yf-chat" aria-label={t('Chat', 'چیٹ')}><p className="live-error" role="alert">{errorMessage(failure, language)}</p><button className="button" onClick={() => void loadList()}>{t('Try again', 'دوبارہ کوشش')}</button></section>;
   if (!list || !team) return <section className="yf-chat" aria-label={t('Chat', 'چیٹ')}><p className="yf-chat-note" role="status">{t('Opening the Factory room…', 'فیکٹری روم کھل رہا ہے…')}</p></section>;
-  return <Thread key={team.id} member={member} state={state} threadId={team.id} title={t('Factory room', 'فیکٹری روم')} people={list.people} />;
+  // Two panes: conversations on the left, the open thread on the right. Stacked on phones (see chat.css).
+  return <section className="yf-chat yf-chat-split" aria-label={t('Chat', 'چیٹ')}>
+    <aside className="yf-chat-side" aria-label={t('Conversations', 'گفتگو')}>
+      <h2 className="yf-chat-side-title">{t('Conversations', 'گفتگو')}</h2>
+      <ul className="yf-chat-list"><li><div className="yf-chat-row is-active" aria-current="true">
+        <span className="yf-chat-team"><Factory size={18} aria-hidden="true" /></span>
+        <span className="yf-chat-row-text"><strong>{t('Factory room', 'فیکٹری روم')}</strong><small>{preview(team.last, t)}</small></span>
+        <span className="yf-chat-row-meta">{team.last && <time dateTime={new Date(team.last.created_at).toISOString()}>{stamp(team.last.created_at)}</time>}{team.unread > 0 && <span className="yf-chat-unread">{team.unread}</span>}</span>
+      </div></li></ul>
+    </aside>
+    <Thread key={team.id} member={member} state={state} threadId={team.id} title={t('Factory room', 'فیکٹری روم')} people={list.people} />
+  </section>;
 }

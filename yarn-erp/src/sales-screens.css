@@ -41,3 +41,24 @@
 .buyer-rating-void { font-size: 13px; color: var(--muted); }
 .invoice-payments { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
 .invoice-payments li { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; }
+
+/* Dispatch step flow: request, approve, dispatch, deliver. Numbered steps joined by a rule; the chip under each step is the state. */
+.yf-dispatch-thread { display: block; padding-inline-start: 0; margin-block: 8px 4px; }
+.yf-dispatch-thread ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.yf-dispatch-thread li { position: relative; display: grid; justify-items: start; gap: 10px; padding: 0; color: var(--ink-3); min-width: 0; }
+.yf-dispatch-thread li > span[aria-hidden="true"] {
+  position: absolute; top: 26px; inset-inline-start: 26px; z-index: 1; display: grid; place-items: center; width: 22px; height: 22px; border: 2px solid var(--line-strong);
+  border-radius: 50%; background: var(--panel); color: var(--ink-2); font-weight: 700; font-size: 12px;
+}
+.yf-dispatch-thread li:not(:last-child)::after {
+  content: ""; position: absolute; left: 52px; right: 8px; top: 19px; height: 2px; border-radius: 2px; background: var(--line-strong);
+}
+.yf-dispatch-thread li.done > span[aria-hidden="true"] { border-color: var(--brand); background: var(--brand); color: var(--brand-ink); }
+.yf-dispatch-thread li.done:not(:last-child)::after { background: var(--brand); }
+.yf-dispatch-thread li[aria-current="step"] > span[aria-hidden="true"] { border-color: var(--pop); background: var(--pop); color: var(--pop-ink); }
+.yf-dispatch-thread li[aria-current="step"] { font-weight: 600; }
+.yf-dispatch-thread .live-warning { margin-top: 12px; }
+@media (max-width: 640px) {
+  .yf-dispatch-thread ol { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 18px; }
+  .yf-dispatch-thread li:nth-child(2n)::after { display: none; }
+}

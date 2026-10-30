@@ -7,6 +7,7 @@ import { when } from './WorkspaceDashboard';
 import { inventoryRequest as api, roleLabel, type Role, type Member, type Permission } from './inventory-client';
 import { translate, useLanguage } from './i18n';
 import { kg, money } from './PortalCommon';
+import './people-ui.css';
 
 interface Person { id: string; name: string; role: Role | null; status: 'active' | 'pending' | 'deactivated'; created_at: number; locked: boolean; needsPin?: boolean }
 
@@ -135,7 +136,7 @@ export default function Team({ me, onChanged }: { me: Member; onChanged: () => P
 /** A removed person comes back with no PIN: they cannot sign in until an admin sets one. */
 function RemovedPerson({ person, me, onDone }: { person: Person; me: Member; onDone: () => Promise<void> }) {
   const { t } = useLanguage();
-  return <li className="yf-member"><div className="yf-member-row"><Avatar name={person.name} /><span><strong>{person.name}</strong><span>{person.role ? accessSummary(person.role) : t('Role not assigned', 'کردار مقرر نہیں')}</span></span></div>
+  return <li className="yf-member"><div className="yf-member-row"><Avatar name={person.name} /><span><strong>{person.name}</strong><span>{person.role ? <span className="pp-role">{accessSummary(person.role)}</span> : t('Role not assigned', 'کردار مقرر نہیں')}</span></span></div>
     <div className="yf-member-body"><Correction member={me} label={t('Restore this person', 'یہ فرد بحال کریں')} title={t('Restore this person', 'یہ فرد بحال کریں')} effect={t('They return to the team with no PIN. Set a new PIN before they can sign in.', 'وہ ٹیم میں واپس آ جائیں گے مگر بغیر پن کے۔ سائن اِن سے پہلے نیا پن مقرر کریں۔')} submit={t('Restore person', 'فرد بحال کریں')} owners={['admin']} path="/erp/admin/users/restore" payload={() => ({ userId: person.id })} onSaved={onDone} /></div>
   </li>;
 }
@@ -188,7 +189,7 @@ function Member({ person, self, open, onToggle, onDone, canLimits, factory }: { 
   }
   return <li className={`yf-member${open ? ' is-open' : ''}`}>
     <button className="yf-member-row" aria-expanded={open} onClick={onToggle}>
-      <Avatar name={person.name} /><span><strong>{person.name}{self && <small> · {t('you', 'آپ')}</small>}</strong><span>{person.role ? accessSummary(person.role, language) : t('Role not assigned', 'کردار مقرر نہیں')}</span></span>
+      <Avatar name={person.name} /><span><strong>{person.name}{self && <small> · {t('you', 'آپ')}</small>}</strong><span>{person.role ? <><span className="pp-role">{accessSummary(person.role, language)}</span>{canLimits && person.role === 'supervisor' && <span className="pp-limit">{t('Approval limits', 'منظوری کی حدیں')}</span>}</> : t('Role not assigned', 'کردار مقرر نہیں')}</span></span>
       {person.status === 'deactivated' && <span className="live-quality hold"><ShieldCheck size={16} aria-hidden="true" />{t('Deactivated', 'غیر فعال')}</span>}{person.needsPin && <span className="live-quality hold">{t('Needs a new PIN', 'نئے پن کی ضرورت')}</span>}{person.locked && <span className="live-quality hold">{t('Locked', 'مقفل')}</span>}<ChevronDown size={20} aria-hidden="true" />
     </button>
     {open && <div className="yf-member-body">

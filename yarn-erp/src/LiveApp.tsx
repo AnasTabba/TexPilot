@@ -10,7 +10,8 @@ import { NoticeToast } from './NoticeToast';
 import Profile from './Profile';
 import AppSettings from './AppSettings';
 import { portal } from './PortalCommon';
-import { APP_SETTINGS, CHAT, COMMON, NAV, PROFILE } from './roles';
+import { EmptyIso } from './iso/EmptyIso';
+import { APP_SETTINGS, CHAT, COMMON, NAV, PROFILE, type Section } from './roles';
 import Chat from './Chat';
 import Inspections from './Inspections';
 import InspectArrival, { type Arrival } from './InspectArrival';
@@ -24,7 +25,8 @@ import { parseHash } from './routes.ts';
 import SignIn, { Avatar } from './SignIn';
 import Team, { permissionInfo } from './Team';
 import Procurement from './Procurement';
-import { Menu, Package, Truck, Search, ChevronRight, ShieldAlert, ArrowRightLeft, ClipboardCheck, ScanBarcode, LogOut } from 'lucide-react';
+import { Menu, Package, Truck, Search, ChevronRight, ShieldAlert, ArrowRightLeft, ClipboardCheck, ScanBarcode, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import CommandPalette, { type PaletteItem } from './CommandPalette';
 import BarcodeScanner from './BarcodeScanner';
 import Scanner from './Scanner';
 import SpecScan from './SpecScan';
@@ -38,6 +40,17 @@ type Action = { type: FormType; lotId?: string; productId?: string };
 type View = 'all' | 'quality' | 'production' | 'dispatch';
 const aliases: Record<string, [string, View]> = { tracking: ['procurement', 'all'], materials: ['inventory', 'all'], production: ['inventory', 'production'], quality: ['inventory', 'quality'], dispatch: ['inventory', 'dispatch'], overview: ['dashboard', 'all'] };
 const sections = [...new Set([...Object.values(NAV).flat(), CHAT, ...COMMON, PROFILE, APP_SETTINGS])];
+/** Sidebar groups by the job a person comes to do. A section no group names lands under Today. */
+const JOB_GROUPS: { en: string; ur: string; ids: string[] }[] = [
+  { en: 'Today', ur: 'آج', ids: ['dashboard', 'scanner', 'approvals', 'reviews', 'lots'] },
+  { en: 'Stock', ur: 'اسٹاک', ids: ['inventory', 'procurement', 'dispatches', 'new-dispatch', 'requests', 'report', 'history', 'activity', 'admin-activity', 'claims', 'reports'] },
+  { en: 'Sales', ur: 'سیلز', ids: ['buyers', 'buyer-rfqs', 'invoices', 'dispatch-requests', 'analytics'] },
+  { en: 'People', ur: 'لوگ', ids: ['team', 'chat', 'help'] },
+];
+function jobGroups(items: Section[]) {
+  const named = new Set(JOB_GROUPS.flatMap(group => group.ids));
+  return JOB_GROUPS.map((group, index) => ({ group, items: items.filter(section => group.ids.includes(section.id) || (index === 0 && !named.has(section.id))) })).filter(({ items }) => items.length);
+}
 const tabsOf = Object.fromEntries(sections.flatMap(section => section.tabs ? [[section.id, section.tabs.map(tab => tab.id)]] : []));
 const routeFromHash = () => {
   const { section } = parseHash(location.hash, tabsOf);
@@ -247,6 +260,10 @@ export default function LiveApp() {
   const [exportBusy, setExportBusy] = useState(false); const [integration, setIntegration] = useState('');
   const [inbox, setInbox] = useState<Inbox>({ notifications: [], unread: 0 });
   const [chatUnread, setChatUnread] = useState(0);
+  // Desktop rail: collapsed to icons or expanded with job labels. Remembered per browser; storage may be blocked.
+  const [railCollapsed, setRailCollapsed] = useState(() => { try { return localStorage.getItem('yf-rail') === 'collapsed'; } catch { return false; } });
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const toggleRail = () => { const next = !railCollapsed; setRailCollapsed(next); try { localStorage.setItem('yf-rail', next ? 'collapsed' : 'expanded'); } catch { /* The toggle still works for this visit. */ } };
   const [toast, setToast] = useState<Notice | null>(null); const inboxSeen = useRef<number | null>(null);
   const workspaceSnapshot = useRef('');
   const dismissToast = useCallback(() => setToast(null), []);
@@ -261,7 +278,7 @@ export default function LiveApp() {
     sessionLocked.current = true; requestSequence.current++;
     menuDialog.current?.close(); setState(null); setAuthNeeded(true); setLoading(false); setRefreshing(false);
     setError(''); setNotice(''); setAction(null); setHistory([]); setMoreHistory(true);
-    setLastResult(null); setMatches([]); setQuery(''); setIntegration(''); setInbox({ notifications: [], unread: 0 }); inboxSeen.current = null; workspaceSnapshot.current = ''; setToast(null);
+    setLastResult(null); setMatches([]); setQuery(''); setPaletteOpen(false); setIntegration(''); setInbox({ notifications: [], unread: 0 }); inboxSeen.current = null; workspaceSnapshot.current = ''; setToast(null);
     if (!preserveRoute) location.hash = '/dashboard';
     if (logoutRequest.current) return logoutRequest.current;
     setEndingSession(true);
@@ -333,7 +350,7 @@ export default function LiveApp() {
         if (tab) {
           nav.style.setProperty('--glide-w', `${tab.offsetWidth}px`); nav.style.setProperty('--glide-h', `${tab.offsetHeight}px`);
           nav.style.setProperty('--glide-x', `${tab.offsetLeft}px`); nav.style.setProperty('--glide-y', `${tab.offsetTop}px`);
-        }
+        } else nav.style.setProperty('--glide-w', '0px'); // The phone Scan button is not a tab: no pill behind it.
         nav.dataset.glide = 'on';
       });
       pending.clear();
@@ -417,7 +434,7 @@ export default function LiveApp() {
       {lots.map(lot => <div key={lot.id} className="yf-lot-line"><button className="live-lot-row" onClick={() => { navigate('inventory', lot.id); }}><span className="live-lot-name"><strong>{t("Batch")} {lot.batch}</strong><span>{lot.supplier || 'Supplier not recorded'}</span></span><QualityBadge value={lot.quality} /><strong className="live-row-weight">{weight(lotGrams(lot.id))} <small>kg</small></strong><ChevronRight size={20} aria-hidden="true" /></button>{view === 'all' && canProduce(lot) && <button className="button yf-to-production" onClick={() => openProduction(lot)} aria-label={`${t("To production")}: ${t("Batch")} ${lot.batch}`}><Factory size={18} aria-hidden="true" /><span>{t("To production")}</span></button>}</div>)}
       {waiting.map(a => <button key={a.id} className="live-lot-row" onClick={() => { if (me.role === 'quality_inspector' || me.role === 'admin') setInspecting(a); else location.hash = '#/procurement'; }}><span className="live-lot-name"><strong>{t("Arrival")} {a.reference}</strong><span>{a.supplier_name} · {t("Awaiting inspection", "معائنے کا منتظر")}</span></span><QualityBadge value="uninspected" /><strong className="live-row-weight">{weight(a.open_milli * (a.unit === 'tonne' ? 1000 : 1))} <small>kg</small></strong><ChevronRight size={20} aria-hidden="true" /></button>)}
       {!lots.length && !waiting.length && <p className="yf-stock-empty">{t('No batches yet.')}</p>}
-    </section>)}{!groups.length && <div className="live-empty"><h3>{workspace.products.length ? 'Nothing matches' : 'Start with your first material'}</h3><p>{workspace.products.length ? 'Try another name, batch or filter.' : 'Add a material (for example Cotton 30/1), then add its batches.'}</p></div>}</div>;
+    </section>)}{!groups.length && <div className="live-empty"><EmptyIso kind={workspace.products.length ? 'inbox' : 'stock'} /><h3>{workspace.products.length ? 'Nothing matches' : 'Start with your first material'}</h3><p>{workspace.products.length ? 'Try another name, batch or filter.' : 'Add a material (for example Cotton 30/1), then add its batches.'}</p></div>}</div>;
   }
   function activityList(movements: StockMovement[]) {
     const hueOf = (lotId: string) => materialHue(workspace.products, workspace.lots.find(l => l.id === lotId)?.product_id);
@@ -431,7 +448,7 @@ export default function LiveApp() {
       <div><strong>{t(movedName[m.action] || m.action)} · <button className="live-text-button" onClick={() => { navigate('inventory', m.lot_id); }}>{yarnName(productName(m.lot_id))} · {batchName(m.lot_id)}</button></strong>
         <span><Cone hue={hueOf(m.lot_id)} size={14} />{m.from_stage ? t(stageName[m.from_stage]) : t('External')} → {m.to_stage ? t(stageName[m.to_stage]) : m.action === 'waste' ? t('Waste') : t('Dispatched')} · {m.cartons} {t("cartons ·")} {m.cones} {t("cones")}{m.note ? ` · ${m.note}` : ''}</span>
         <span>{t("Recorded by")} {m.actor_name}</span></div>
-      <div className="yf-side"><span className="yf-kg">{weight(m.grams)} <small>kg</small></span><time dateTime={new Date(m.created_at).toISOString()}>{clock.format(m.created_at)}</time></div></li>; })])}</ol> : <div className="live-empty"><ClipboardList size={32} aria-hidden="true" /><h3>{t("No movements yet")}</h3><p>{t("Receive stock into a batch to start its audit history.")}</p></div>;
+      <div className="yf-side"><span className="yf-kg">{weight(m.grams)} <small>kg</small></span><time dateTime={new Date(m.created_at).toISOString()}>{clock.format(m.created_at)}</time></div></li>; })])}</ol> : <div className="live-empty"><EmptyIso kind="orders" /><ClipboardList size={32} aria-hidden="true" /><h3>{t("No movements yet")}</h3><p>{t("Receive stock into a batch to start its audit history.")}</p></div>;
   }
   async function lookup(code: string) {
     const found = await api<{ lotId?: string; lots?: typeof matches }>('/lookup?code=' + encodeURIComponent(code));
@@ -454,7 +471,17 @@ export default function LiveApp() {
   // Counts that wait on the person: unread notifications, and sign-in requests for admins in Team.
   const badge = (id: string) => id === 'chat' && chatUnread > 0 ? <b className="yf-nav-count" aria-label={`, ${chatUnread} ${t('unread', 'نہ پڑھی ہوئی')}`}>{chatUnread}</b> : id === 'notifications' && inbox.unread > 0 ? <b className="yf-nav-count" aria-label={`, ${inbox.unread} ${t('unread', 'نہ پڑھی ہوئی')}`}>{inbox.unread}</b>
     : id === 'team' && workspace.pending > 0 ? <b className="yf-nav-count" aria-label={`, ${workspace.pending} waiting`}>{workspace.pending}</b> : null;
-  const brand = <a className="live-brand" href="#/dashboard"><Cone hue="#2f6fd6" size={30} />yarnflow</a>;
+  const brand = <a className="live-brand" href="#/dashboard"><Cone hue="#2f6fd6" size={30} /><span className="yf-brand-word">yarnflow</span></a>;
+  // Breadcrumb group: the job group the page sits under (none for profile and settings).
+  const crumbGroup = page === PROFILE.id || page === APP_SETTINGS.id ? undefined : JOB_GROUPS.find(group => group.ids.includes(page)) ?? JOB_GROUPS[0];
+  const crumbName = crumbGroup ? t(crumbGroup.en, crumbGroup.ur) : '';
+  const shortcut = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K';
+  // Palette: every page the role can open, then the most recent batches for roles that work with stock.
+  const paletteItems: PaletteItem[] = [
+    ...pages.map(section => ({ id: `page:${section.id}`, label: t(section.en, section.ur), detail: section.id === PROFILE.id || section.id === APP_SETTINGS.id ? t('Account') : t(JOB_GROUPS.find(group => group.ids.includes(section.id))?.en ?? 'Today'), text: t(section.en, section.ur), icon: section.icon, run: () => navigate(section.id) })),
+    ...(shown.some(section => section.id === 'inventory') ? [...workspace.lots].sort((a, b) => b.created_at - a.created_at).slice(0, 8).map(lot => ({ id: `lot:${lot.id}`, label: `${t("Batch")} ${lot.batch}`, detail: `${productName(lot.id)} · ${t("Stock")}`, text: `${t("Batch")} ${lot.batch} ${productName(lot.id)} ${lot.supplier}`, icon: Boxes, run: () => navigate('inventory', lot.id) })) : []),
+  ];
+  const barTab = ({ id, en, ur, icon: Icon }: Section) => <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={23} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>;
   const whoAmI = <div className="yf-me"><button className="yf-me-open" onClick={() => navigate('profile')} aria-label={t('Open my profile', 'میری پروفائل کھولیں')}><Avatar name={me.name} /><span><strong>{me.name}</strong><span>{t(...roleLabel[me.role])}</span></span></button><button className="live-icon-button" onClick={() => void signOut()} aria-label={`${t('Sign out')} ${me.name}`} title={t("Sign out")}><LogOut size={20} aria-hidden="true" /></button></div>;
   // Settings is the admin screen; everyone else's settings (language) live on their profile.
   const settingsPage = 'app-settings';
@@ -463,14 +490,14 @@ export default function LiveApp() {
     <button className="live-icon-button" onClick={() => navigate('notifications')} aria-current={page === 'notifications' ? 'page' : undefined} aria-label={`${t('Notifications', 'اطلاعات')}${unread > 0 ? `, ${unread} ${t('unread', 'نہ پڑھی ہوئی')}` : ''}`} title={t('Notifications', 'اطلاعات')}><Bell size={22} aria-hidden="true" />{unread > 0 && <b className="yf-nav-count" aria-hidden="true">{unread}</b>}</button>
     <button className="live-icon-button" onClick={() => navigate(settingsPage)} aria-current={page === settingsPage ? 'page' : undefined} aria-label={t('Settings', 'ترتیبات')} title={t('Settings', 'ترتیبات')}><Settings size={22} aria-hidden="true" /></button>
   </>;
-  return <div className="live-app"><a className="skip-link" href="#live-main" onClick={event => { event.preventDefault(); document.getElementById('live-main')?.focus(); }}>{t("Skip to content")}</a>
-    <aside className="live-sidebar">{brand}<div className="live-factory">{workspace.workspace.name}</div><nav aria-label={t("Main navigation")}>{shown.filter(section => section.id !== 'notifications').map(({ id, en, ur, icon: Icon }) => [id === COMMON[1].id && <span className="yf-nav-gap" key="gap" />, <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={19} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>])}</nav>{whoAmI}</aside>
+  return <div className="live-app" data-rail={railCollapsed ? 'collapsed' : 'expanded'}><a className="skip-link" href="#live-main" onClick={event => { event.preventDefault(); document.getElementById('live-main')?.focus(); }}>{t("Skip to content")}</a>
+    <aside className="live-sidebar"><div className="yf-rail-head">{brand}<button className="live-icon-button yf-rail-toggle" onClick={toggleRail} aria-expanded={!railCollapsed} aria-controls="live-nav" aria-label={railCollapsed ? t("Expand navigation") : t("Collapse navigation")} title={railCollapsed ? t("Expand navigation") : t("Collapse navigation")}>{railCollapsed ? <PanelLeftOpen size={20} aria-hidden="true" /> : <PanelLeftClose size={20} aria-hidden="true" />}</button></div><div className="live-factory">{workspace.workspace.name}</div><nav id="live-nav" aria-label={t("Main navigation")}>{jobGroups(shown.filter(section => section.id !== 'notifications')).map(({ group, items }) => <div className="yf-nav-group" key={group.en}><span className="yf-nav-label" aria-hidden="true">{t(group.en, group.ur)}</span>{items.map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)} title={railCollapsed ? t(en, ur) : undefined}><Icon size={19} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>)}</div>)}</nav>{whoAmI}</aside>
     {inspecting && <InspectArrival arrival={inspecting} isAdmin={me.role === 'admin'} onClose={() => setInspecting(null)} onDone={async message => { setInspecting(null); setNotice(message); await refresh(true); }} />}
     {producing && <ToProduction {...producing} isAdmin={me.role === 'admin'} onClose={() => setProducing(null)} onDone={async message => { setProducing(null); setNotice(message); await refresh(true); }} />}
     <dialog className="yf-mobile-menu" ref={menuDialog} onClick={e=>{if(e.target===e.currentTarget)menuDialog.current?.close();}} aria-label={t("Navigation menu")}><div>{brand}<button className="live-icon-button" onClick={()=>menuDialog.current?.close()} aria-label={t("Close navigation")}><X aria-hidden="true" /></button></div><nav aria-label={t("All pages")}>{shown.map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} onClick={()=>navigate(id)}><Icon size={22} aria-hidden="true" />{t(en, ur)}{badge(id)}</button>)}</nav>{whoAmI}</dialog>
-    <div className="live-main-shell"><header className="live-topbar">{brand}<div className="live-head-actions">{shown.some(section => section.id === 'inventory') && <button className="live-icon-button" aria-label={t("Find a batch")} onClick={()=>{navigate('inventory');setTimeout(()=>document.querySelector<HTMLInputElement>('input[type="search"]')?.focus(),0);}}><Search size={22} aria-hidden="true" /></button>}{actionIcons}</div></header>
+    <div className="live-main-shell"><header className="live-topbar">{brand}<p className="live-topbar-title">{crumbName && crumbName !== pageTitle && <span className="yf-crumb-group">{crumbName}<ChevronRight size={14} aria-hidden="true" /></span>}{pageTitle}</p><div className="live-head-actions"><button className="yf-search" onClick={() => setPaletteOpen(true)} aria-label={t("Search pages and batches")} aria-keyshortcuts="Control+K Meta+K" title={`${t("Search")} (${shortcut})`}><Search size={20} aria-hidden="true" /><span>{t("Search")}</span><kbd aria-hidden="true">{shortcut}</kbd></button>{actionIcons}</div></header>
     <main id="live-main" key={`${route}:${selected?.id || ''}:${action?.type || ''}`} className="live-content" data-page={action ? 'form' : selected ? 'batch' : page} tabIndex={-1}>
-      <div className="live-page-heading"><div><h1>{pageTitle}</h1><p hidden={!!(action || selected) || !['dashboard', 'inventory', 'scanner', 'activity', 'notifications', 'help', 'lots', 'team', 'procurement', 'profile'].includes(page)}>{page === 'dashboard' && !action && !selected ? `${workspace.workspace.name} · ${today}` : page === 'inventory' ? t("Your materials and their batches, from delivery to dispatch.") : page === 'scanner' ? t("Photograph a fabric, measure its yarn, or scan a stock label.") : page === 'activity' ? t("Every stock movement, oldest records kept.") : page === 'notifications' ? t('What needs your attention, newest first.', 'جن چیزوں پر توجہ چاہیے، تازہ ترین پہلے۔') : page === 'help' ? t("Answers to common questions.") : page === 'lots' ? t("Arrived lots waiting for you, and your inspection drafts.", "آپ کے منتظر آمد شدہ لاٹس اور معائنے کے مسودے۔") : page === 'team' ? t("Who can sign in, and what each person can record.") : page === 'procurement' ? t("Buying from suppliers: directory, bids, orders and incoming stock.", "سپلائرز سے خریداری: ڈائریکٹری، بولیاں، آرڈر اور آنے والا اسٹاک۔") : page === 'profile' ? t("Your access, and the records everyone shares.") : ''}</p></div><div className="live-head-actions">{actionIcons}</div></div>
+      <div className="live-page-heading"><div><h1>{pageTitle}</h1><p hidden={!!(action || selected) || !['dashboard', 'inventory', 'scanner', 'activity', 'notifications', 'help', 'lots', 'team', 'procurement', 'profile'].includes(page)}>{page === 'dashboard' && !action && !selected ? `${workspace.workspace.name} · ${today}` : page === 'inventory' ? t("Your materials and their batches, from delivery to dispatch.") : page === 'scanner' ? t("Photograph a fabric, measure its yarn, or scan a stock label.") : page === 'activity' ? t("Every stock movement, oldest records kept.") : page === 'notifications' ? t('What needs your attention, newest first.', 'جن چیزوں پر توجہ چاہیے، تازہ ترین پہلے۔') : page === 'help' ? t("Answers to common questions.") : page === 'lots' ? t("Arrived lots waiting for you, and your inspection drafts.", "آپ کے منتظر آمد شدہ لاٹس اور معائنے کے مسودے۔") : page === 'team' ? t("Who can sign in, and what each person can record.") : page === 'procurement' ? t("Buying from suppliers: directory, bids, orders and incoming stock.", "سپلائرز سے خریداری: ڈائریکٹری، بولیاں، آرڈر اور آنے والا اسٹاک۔") : page === 'profile' ? t("Your access, and the records everyone shares.") : ''}</p></div></div>
       {error && <div className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{t(error)}<button className="live-text-button" onClick={() => void refresh()}>{t("Retry connection")}</button></div>}
       {!online && <div className="live-warning" role="status"><WifiOff size={18} />{t("You are offline. Entries can be saved again once the connection is back.")}</div>}
       {notice && <div className="live-success" role="status"><CheckCheck size={19} /><span>{t(notice)}</span><button aria-label={t("Dismiss message")} className="live-icon-button" onClick={() => setNotice('')}><X size={17} /></button></div>}
@@ -495,7 +522,9 @@ export default function LiveApp() {
 
       </>}
     </main><footer className="live-sync" role="status"><CheckCheck size={17} aria-hidden="true"/><span>{t("All changes saved")}{savedAt ? ' · '+t('checked', 'چیک کیا')+' '+new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK' : 'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Karachi'}).format(savedAt) : ''}</span></footer></div>
-    <nav className="live-bottom-nav" aria-label={t("Phone navigation")}>{[...NAV[me.role].slice(0, 2), CHAT, COMMON[0]].map(({ id, en, ur, icon: Icon }) => <button key={id} aria-current={page===id?'page':undefined} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={23} aria-hidden="true" /><span>{t(en, ur)}</span>{badge(id)}</button>)}<button onClick={()=>menuDialog.current?.showModal()} aria-label={workspace.pending > 0 ? `More pages, ${workspace.pending} waiting in Team` : t("More pages")}><Menu size={23} aria-hidden="true" /><span>{t("More")}</span>{workspace.pending > 0 && <b className="yf-nav-count" aria-hidden="true">{workspace.pending}</b>}</button></nav>
+    {/* Floating glass pill: two job tabs, the raised Scan button, Chat, and everything else under More. */}
+    <nav className="live-bottom-nav" aria-label={t("Phone navigation")}>{NAV[me.role].filter(section => section.id !== 'scanner').slice(0, 2).map(barTab)}<button className="yf-scan-fab" aria-current={page==='scanner'?'page':undefined} onClick={()=>navigate('scanner')}><ScanLine size={26} aria-hidden="true" /><span>{t("Scan")}</span></button>{barTab(CHAT)}<button onClick={()=>menuDialog.current?.showModal()} aria-label={workspace.pending > 0 ? `More pages, ${workspace.pending} waiting in Team` : t("More pages")}><Menu size={23} aria-hidden="true" /><span>{t("More")}</span>{workspace.pending > 0 && <b className="yf-nav-count" aria-hidden="true">{workspace.pending}</b>}</button></nav>
+  <CommandPalette items={paletteItems} open={paletteOpen} onOpenChange={setPaletteOpen} />
   <NoticeToast notice={toast} onDismiss={dismissToast} />
   </div>;
 }

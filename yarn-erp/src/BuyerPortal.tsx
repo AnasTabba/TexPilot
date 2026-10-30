@@ -12,7 +12,10 @@ import {
 import type { SalesDispatch } from './sales-client';
 import { PdfDownloadButton } from './InvoiceDocument';
 import { invoiceDocData, type BuyerSource, type InvoiceSource, type SaleLineSource } from './invoice-pdf';
+import { SplitView, StepFlow, type SplitItem } from './SplitView';
 import './erp.css';
+import './sales-screens.css';
+import './approvals-ui.css';
 
 type BuyerInvoiceResponse = { invoice: InvoiceSource; lines: SaleLineSource[]; buyer: BuyerSource; factoryName: string };
 /** The buyer's own invoice with its balance, from the buyer invoice route; the PDF is built here from that data. */
@@ -44,7 +47,7 @@ export default function BuyerPortal() {
   }, [load]);
   const saved = async (message?: string) => { setOpen(''); setNotice(message ?? t('Saved.', 'محفوظ ہو گیا۔')); await load(); };
   const signOut = async () => { try { await buyerRequest('/logout', {}); setIdentity(null); setState(null); setNotice(''); } catch (e) { setError(errorMessage(e)); } };
-  return <div className="erp-portal"><header className="erp-portal-header">
+  return <div className="erp-portal yf-buyer"><header className="erp-portal-header">
     <a href="#/overview" className="live-brand"><Cone size={28} hue="#2f6fd6" />yarnflow</a>
     <span>{t('Buyer portal', 'خریدار پورٹل')}</span><LanguageSelect />
     {identity && <button className="button" onClick={signOut}><LogOut size={18} />{t('Sign out', 'سائن آؤٹ')}</button>}
@@ -71,54 +74,131 @@ export default function BuyerPortal() {
       <p>{t('The factory sales team reviews your company details. Quotes, orders and invoices appear here after activation. Your assigned sales manager is shown once active.',
         'فیکٹری کی فروخت ٹیم آپ کی کمپنی کی تفصیلات کا جائزہ لیتی ہے۔ فعال ہونے کے بعد کوٹیشنز، آرڈرز اور انوائسز یہاں نظر آئیں گے۔ مقررہ مینیگر فعال ہونے پر دکھے گا۔')}</p>
       <p className="live-muted">{identity.buyer.manager_name ? t('Sales manager:', 'فروخت مینیجر:').replace(':', '') + ' ' + identity.buyer.manager_name : ''}</p>
-    </section> : state && <>
-      <QuotesToApprove state={state} open={open} setOpen={setOpen} saved={saved} />
-      <section className="live-panel"><h2>{t('Your purchase orders', 'آپ کے پرچیز آرڈرز')}</h2>
-        {!state.pos.length && <p className="live-muted">{t('No purchase orders yet. Submit one from this screen; the factory quotes it.', 'ابھی کوئی آرڈر نہیں۔ اس اسکرین سے جمع کروائیں؛ فیکٹری کوٹیشن دے گی۔')}</p>}
-        {open === 'po:new' ? <BuyerPoForm onSaved={saved} onCancel={() => setOpen('')} /> :
-          <button className="button primary" onClick={() => setOpen('po:new')}>{t('Submit a purchase order', 'پرچیز آرڈر جمع کروائیں')}</button>}
-        <div className="erp-records">{state.pos.map(p => <article className="erp-record" key={p.id}>
-          <div className="erp-record-head"><div><h3>{p.reference}</h3><p>{quantity(p.quantity_milli)} {p.unit} · {t('requested', 'مطلوبہ')} {factoryTime(p.requested_delivery_at)}</p></div>
-            <span className="erp-status">{t(p.status, { entered: 'موصول', quoted: 'کوٹیشن موصول', confirmed: 'مستقل', cancelled: 'منسوخ' }[p.status])}</span></div>
-          <p className="erp-multiline">{p.specifications}</p><p className="live-muted">{t('Our payment terms:', 'ہماری ادائیگی کی شرائط:')} {p.payment_terms}</p>
-        </article>)}</div>
-      </section>
-      <section className="live-panel"><h2>{t('Confirmed orders and invoices', 'مستقل آرڈرز اور انوائسز')}</h2>
-        {!state.orders.length && <p className="live-muted">{t('Approved quotes appear here as confirmed orders with one invoice.', 'منظور شدہ کوٹیشنز یہاں مستقل آرڈرز کے طور پر ایک انوائس کے ساتھ نظر آئیں گے۔')}</p>}
-        <div className="erp-records">{state.orders.map(o => <article className="erp-record" key={o.id}>
-          <div className="erp-record-head"><div><h3>{o.reference}</h3><p>{t('Approved', 'منظور')} {factoryTime(o.terms.approved_at)} · {t('revision', 'ترمیم')} {o.terms.revision}</p></div>
-            <span className="erp-status">{t(o.status, { confirmed: 'مستقل', partially_dispatched: 'جزوی روانگی', dispatched: 'روانہ', cancelled: 'منسوخ' }[o.status])}</span></div>
-          <p>{quantity(o.terms.quantity_milli)} {o.terms.unit} × {rate(o.terms.price_minor, o.terms.currency)} = <b>{rate(o.terms.price_minor * o.terms.quantity_milli / 1000, o.terms.currency)}</b></p>
-          <p className="live-muted">{t('Payment terms:', 'ادائیگی کی شرائط:')} {o.terms.payment_terms} · {t('requested delivery', 'مطلوبہ ترسیل')} {factoryTime(o.terms.requested_delivery_at)}</p>
-          {state.invoices.filter(i => i.sales_order_id === o.id).map(i => <div className="sales-invoice" key={i.id}>
-            <div className="erp-record-head"><div><h4><FileText size={18} /> {i.number}</h4><p>{rate(i.total_minor, i.currency)} · {factoryTime(i.issued_at)}</p></div>
-              <PdfDownloadButton build={() => buyerInvoiceDocument(i.id)} /></div>
-            <ul className="sales-lines">{(JSON.parse(i.lines_json) as { specifications: string; quantity_milli: number; unit: string; price_minor: number; amount_minor: number }[]).map((l, n) =>
-              <li key={n}><span className="erp-multiline">{l.specifications}</span><span>{quantity(l.quantity_milli)} {l.unit} × {rate(l.price_minor, i.currency)} = <b>{rate(l.amount_minor, i.currency)}</b></span></li>)}</ul>
-          </div>)}
-          {state.dispatches.filter(d => d.sales_order_id === o.id).map(d => <div className="sales-dispatch" key={d.id}>
-            <strong><Truck size={18} /> {quantity(d.quantity_milli)} {d.unit} · {d.carrier}</strong>
-            <span>{t('Dispatched', 'روانہ')} {factoryTime(d.dispatched_at)}</span>
-            {!state.deliveries.some(y => y.dispatch_id === d.id) && (open === `delivery:${d.id}`
-              ? <BuyerDeliveryForm dispatch={d} onCancel={() => setOpen('')} onSaved={saved} />
-              : <button className="button primary" onClick={() => setOpen(`delivery:${d.id}`)}><CheckCircle2 size={18} />{t('Confirm delivery received', 'ترسیل موصول ہونے کی تصدیق')}</button>)}
-            {state.deliveries.filter(y => y.dispatch_id === d.id).map(y => <span key={y.id} className="live-muted">
-              {t('Delivered', 'ترسیل')} {factoryTime(y.delivery_date)}{y.evidence_note ? ' · ' + y.evidence_note : ''}</span>)}
-          </div>)}
-        </article>)}</div>
-      </section>
-      <section className="live-panel"><h2>{t('Your account', 'آپ کا حساب')}</h2>
-        {!state.invoices.length && <p className="live-muted">{t('Your issued invoices and payment balances appear here.', 'آپ کی جاری شدہ انوائسز اور ادائیگی کا بقایا یہاں نظر آئے گا۔')}</p>}
-        <div className="erp-records">{state.invoices.map(invoice => <article className="erp-record" key={invoice.id}>
-          <div className="erp-record-head"><div><h3>{invoice.number}</h3>
-            <p>{t('Total', 'کل')}: {rate(invoice.total_minor, invoice.currency)} · {t('Paid', 'ادا شدہ')}: {rate(invoice.paid_minor ?? 0, invoice.currency)}</p></div>
-            <span className="erp-status">{(invoice.outstanding_minor ?? invoice.total_minor) === 0 ? t('Settled', 'مکمل وصول') : t('Outstanding', 'بقایا')}</span></div>
-          <p>{t('Balance', 'بقایا')}: {rate(invoice.outstanding_minor ?? invoice.total_minor, invoice.currency)}</p>
-          {invoice.due_at && <p className="live-muted">{t('Payment due under your invoice terms', 'انوائس کی شرائط کے مطابق ادائیگی کی تاریخ')}: {factoryTime(invoice.due_at)}</p>}
-        </article>)}</div>
-      </section>
-    </>}
+    </section> : state && <BuyerWorkspaceView state={state} open={open} setOpen={setOpen} saved={saved} />}
    </main></div>;
+}
+
+type BuyerTab = 'approve' | 'orders' | 'purchase' | 'account';
+
+/** The signed-in buyer work as one split view: a list per job on the left, the chosen record and its next step on the right. */
+function BuyerWorkspaceView({ state, open, setOpen, saved }: { state: BuyerWorkspace; open: string; setOpen: (v: string) => void; saved: (message?: string) => Promise<void> }) {
+  const { t } = useLanguage();
+  const [tab, setTab] = useState<BuyerTab>('approve'), [picked, setPicked] = useState('');
+  // A quote waits for approval while it is the newest sent revision and no revision of its purchase order is approved yet.
+  const approvable = state.revisions.filter(r => {
+    if (r.status !== 'sent') return false;
+    const approved = state.revisions.some(x => x.status === 'approved' && x.buyer_po_id === r.buyer_po_id);
+    const stale = state.revisions.some(x => x.buyer_po_id === r.buyer_po_id && x.version > r.version);
+    return !approved && !stale;
+  });
+  const tabs = [
+    { id: 'approve', label: t('To approve', 'منظوری کے لیے'), count: approvable.length },
+    { id: 'orders', label: t('Orders', 'آرڈرز'), count: state.orders.length },
+    { id: 'purchase', label: t('Purchase orders', 'پرچیز آرڈرز'), count: state.pos.length },
+    { id: 'account', label: t('Account', 'حساب'), count: state.invoices.length },
+  ];
+  const items: Record<BuyerTab, SplitItem[]> = {
+    approve: approvable.map(r => {
+      const po = state.pos.find(p => p.id === r.buyer_po_id);
+      return { id: r.id, title: `${po?.reference ?? ''} · ${t('revision', 'ترمیم')} ${r.version}`, meta: `${quantity(r.quantity_milli)} ${r.unit} · ${rate(r.price_minor * r.quantity_milli / 1000, r.currency)}`, status: <span className="erp-status is-pending">{t('Needs your approval', 'آپ کی منظوری درکار')}</span> };
+    }),
+    orders: state.orders.map(o => ({ id: o.id, title: o.reference, meta: `${quantity(o.terms.quantity_milli)} ${o.terms.unit} · ${rate(o.terms.price_minor * o.terms.quantity_milli / 1000, o.terms.currency)}`, status: <span className="erp-status">{t(o.status, { confirmed: 'مستقل', partially_dispatched: 'جزوی روانگی', dispatched: 'روانہ', cancelled: 'منسوخ' }[o.status])}</span> })),
+    purchase: state.pos.map(p => ({ id: p.id, title: p.reference, meta: `${quantity(p.quantity_milli)} ${p.unit} · ${t('requested', 'مطلوبہ')} ${factoryTime(p.requested_delivery_at)}`, status: <span className="erp-status">{t(p.status, { entered: 'موصول', quoted: 'کوٹیشن موصول', confirmed: 'مستقل', cancelled: 'منسوخ' }[p.status])}</span> })),
+    account: state.invoices.map(i => ({ id: i.id, title: i.number, meta: `${rate(i.total_minor, i.currency)} · ${factoryTime(i.issued_at)}`, status: <span className="erp-status">{(i.outstanding_minor ?? i.total_minor) === 0 ? t('Settled', 'مکمل وصول') : t('Outstanding', 'بقایا')}</span> })),
+  };
+  const emptyLists: Record<BuyerTab, string> = {
+    approve: t('Nothing to approve right now. New quotes from the factory appear here.', 'ابھی منظوری کے لیے کچھ نہیں۔ فیکٹری کے نئے کوٹیشنز یہاں آئیں گے۔'),
+    orders: t('Approved quotes appear here as confirmed orders with one invoice.', 'منظور شدہ کوٹیشنز یہاں مستقل آرڈرز کے طور پر ایک انوائس کے ساتھ نظر آئیں گے۔'),
+    purchase: t('No purchase orders yet. Submit one from this screen; the factory quotes it.', 'ابھی کوئی آرڈر نہیں۔ اس اسکرین سے جمع کروائیں؛ فیکٹری کوٹیشن دے گی۔'),
+    account: t('Your issued invoices and payment balances appear here.', 'آپ کی جاری شدہ انوائسز اور ادائیگی کا بقایا یہاں نظر آئے گا۔'),
+  };
+  const chooseTab = (next: string) => { setTab(next as BuyerTab); setPicked(''); };
+
+  // The new purchase order form replaces the split while it is open.
+  if (open === 'po:new') return <section className="live-panel"><BuyerPoForm onSaved={saved} onCancel={() => setOpen('')} /></section>;
+
+  const approveDetail = (id: string) => {
+    const r = approvable.find(item => item.id === id);
+    if (!r) return null;
+    const po = state.pos.find(p => p.id === r.buyer_po_id);
+    return <section className="yf-detail-stack">
+      <div className="yf-detail-head"><div><h2>{po?.reference} · {t('revision', 'ترمیم')} {r.version}</h2>
+        <p>{rate(r.price_minor, r.currency)} / {r.unit} · {t('total', 'کل')} <b>{rate(r.price_minor * r.quantity_milli / 1000, r.currency)}</b></p></div></div>
+      <StepFlow label={t('Quote steps', 'کوٹیشن کے مراحل')} current={1} steps={[{ icon: 'rfq', label: t('Quoted', 'کوٹیشن') }, { icon: 'approve', label: t('Your approval', 'آپ کی منظوری') }, { icon: 'deliver', label: t('Confirmed order', 'مستقل آرڈر') }]} />
+      <p className="erp-multiline">{r.specifications}</p>
+      <p className="live-muted">{quantity(r.quantity_milli)} {r.unit} · {t('promised delivery', 'وعدہ شدہ ترسیل')} {factoryTime(r.requested_delivery_at)} · {t('payment terms', 'ادائیگی کی شرائط')}: {r.payment_terms}</p>
+      {r.note && <p className="live-muted">{t('Note from the factory:', 'فیکٹری کا نوٹ:')} {r.note}</p>}
+      {open === 'approve:' + r.id ? <ApproveForm revision={r} onSaved={saved} onCancel={() => setOpen('')} />
+        : <div className="live-actions"><button className="button primary" onClick={() => setOpen('approve:' + r.id)}><CheckCircle2 size={18} />{t('Review and approve', 'جائزہ لیں اور منظور کریں')}</button></div>}
+    </section>;
+  };
+
+  const orderDetail = (id: string) => {
+    const o = state.orders.find(item => item.id === id);
+    if (!o) return null;
+    const dispatches = state.dispatches.filter(d => d.sales_order_id === o.id);
+    const delivered = dispatches.length > 0 && dispatches.every(d => state.deliveries.some(y => y.dispatch_id === d.id));
+    return <section className="yf-detail-stack">
+      <div className="yf-detail-head"><div><h2>{o.reference}</h2><p>{t('Approved', 'منظور')} {factoryTime(o.terms.approved_at)} · {t('revision', 'ترمیم')} {o.terms.revision}</p></div></div>
+      <StepFlow label={t('Order progress', 'آرڈر کی پیش رفت')} current={delivered ? 3 : dispatches.length ? 2 : 1}
+        steps={[{ icon: 'approve', label: t('Confirmed', 'مستقل') }, { icon: 'dispatch', label: t('Dispatched', 'روانہ') }, { icon: 'deliver', label: t('Delivered', 'پہنچائی گئی') }]} />
+      <p>{quantity(o.terms.quantity_milli)} {o.terms.unit} × {rate(o.terms.price_minor, o.terms.currency)} = <b>{rate(o.terms.price_minor * o.terms.quantity_milli / 1000, o.terms.currency)}</b></p>
+      <p className="live-muted">{t('Payment terms:', 'ادائیگی کی شرائط:')} {o.terms.payment_terms} · {t('requested delivery', 'مطلوبہ ترسیل')} {factoryTime(o.terms.requested_delivery_at)}</p>
+      {state.invoices.filter(i => i.sales_order_id === o.id).map(i => <div className="sales-invoice" key={i.id}>
+        <div className="erp-record-head"><div><h4><FileText size={18} /> {i.number}</h4><p>{rate(i.total_minor, i.currency)} · {factoryTime(i.issued_at)}</p></div>
+          <PdfDownloadButton build={() => buyerInvoiceDocument(i.id)} /></div>
+        <ul className="sales-lines">{(JSON.parse(i.lines_json) as { specifications: string; quantity_milli: number; unit: string; price_minor: number; amount_minor: number }[]).map((l, n) =>
+          <li key={n}><span className="erp-multiline">{l.specifications}</span><span>{quantity(l.quantity_milli)} {l.unit} × {rate(l.price_minor, i.currency)} = <b>{rate(l.amount_minor, i.currency)}</b></span></li>)}</ul>
+      </div>)}
+      {dispatches.map(d => <div className="sales-dispatch" key={d.id}>
+        <strong><Truck size={18} /> {quantity(d.quantity_milli)} {d.unit} · {d.carrier}</strong>
+        <span>{t('Dispatched', 'روانہ')} {factoryTime(d.dispatched_at)}</span>
+        {!state.deliveries.some(y => y.dispatch_id === d.id) && (open === `delivery:${d.id}`
+          ? <BuyerDeliveryForm dispatch={d} onCancel={() => setOpen('')} onSaved={saved} />
+          : <button className="button primary" onClick={() => setOpen(`delivery:${d.id}`)}><CheckCircle2 size={18} />{t('Confirm delivery received', 'ترسیل موصول ہونے کی تصدیق')}</button>)}
+        {state.deliveries.filter(y => y.dispatch_id === d.id).map(y => <span key={y.id} className="live-muted">
+          {t('Delivered', 'ترسیل')} {factoryTime(y.delivery_date)}{y.evidence_note ? ' · ' + y.evidence_note : ''}</span>)}
+      </div>)}
+    </section>;
+  };
+
+  const purchaseDetail = (id: string) => {
+    const p = state.pos.find(item => item.id === id);
+    if (!p) return null;
+    // Entered, then quoted, then confirmed; a cancelled order shows no progress.
+    const stage: Record<string, number> = { entered: 0, quoted: 1, confirmed: 3 };
+    return <section className="yf-detail-stack">
+      <div className="yf-detail-head"><div><h2>{p.reference}</h2><p>{quantity(p.quantity_milli)} {p.unit} · {t('requested', 'مطلوبہ')} {factoryTime(p.requested_delivery_at)}</p></div></div>
+      {p.status !== 'cancelled' && <StepFlow label={t('Purchase order steps', 'پرچیز آرڈر کے مراحل')} current={stage[p.status] ?? 0}
+        steps={[{ icon: 'po', label: t('Sent', 'بھیجا') }, { icon: 'rfq', label: t('Quoted', 'کوٹیشن') }, { icon: 'deliver', label: t('Confirmed', 'مستقل') }]} />}
+      <p className="erp-multiline">{p.specifications}</p>
+      <p className="live-muted">{t('Our payment terms:', 'ہماری ادائیگی کی شرائط:')} {p.payment_terms}</p>
+    </section>;
+  };
+
+  const invoiceDetail = (id: string) => {
+    const invoice = state.invoices.find(item => item.id === id);
+    if (!invoice) return null;
+    return <section className="yf-detail-stack">
+      <div className="yf-detail-head"><div><h2>{invoice.number}</h2>
+        <p>{t('Total', 'کل')}: {rate(invoice.total_minor, invoice.currency)} · {t('Paid', 'ادا شدہ')}: {rate(invoice.paid_minor ?? 0, invoice.currency)}</p></div></div>
+      <p>{t('Balance', 'بقایا')}: <b>{rate(invoice.outstanding_minor ?? invoice.total_minor, invoice.currency)}</b></p>
+      {invoice.due_at && <p className="live-muted">{t('Payment due under your invoice terms', 'انوائس کی شرائط کے مطابق ادائیگی کی تاریخ')}: {factoryTime(invoice.due_at)}</p>}
+    </section>;
+  };
+
+  const renderDetail = (id: string) => (tab === 'approve' ? approveDetail(id) : tab === 'orders' ? orderDetail(id) : tab === 'purchase' ? purchaseDetail(id) : invoiceDetail(id))
+    ?? <p className="split-none">{t('This item is no longer in the list.', 'یہ آئٹم اب فہرست میں نہیں۔')}</p>;
+
+  return <>
+    {tab === 'purchase' && <div className="yf-buyer-toolbar">
+      <p className="live-muted">{t('The factory enters this order and quotes it.', 'فیکٹری یہ آرڈر درج کرکے کوٹیشن دے گی۔')}</p>
+      <button className="button primary" onClick={() => setOpen('po:new')}>{t('Submit a purchase order', 'پرچیز آرڈر جمع کروائیں')}</button>
+    </div>}
+    <SplitView label={tabs.find(item => item.id === tab)?.label ?? ''} tabs={tabs} tab={tab} onTab={chooseTab}
+      items={items[tab]} selectedId={picked} onSelect={setPicked} renderDetail={renderDetail}
+      empty={emptyLists[tab]} emptyDetail={t('Choose a record to see its details and next step.', 'تفصیل اور اگلا قدم دیکھنے کے لیے ریکارڈ منتخب کریں۔')} />
+  </>;
 }
 
 function BuyerDeliveryForm({ dispatch, onCancel, onSaved }: { dispatch: SalesDispatch; onCancel: () => void; onSaved: (message?: string) => Promise<void> }) {
@@ -137,29 +217,6 @@ function BuyerDeliveryForm({ dispatch, onCancel, onSaved }: { dispatch: SalesDis
     <Field>{t('Receipt note (optional)', 'وصولی کا نوٹ (اختیاری)')}<textarea value={note} onChange={e => setNote(e.target.value)} maxLength={500} /></Field>
     <Field><input type="checkbox" required />{t('I have received this shipment.', 'مجھے یہ کھیپ موصول ہو گئی ہے۔')}</Field>
   </AsyncForm>;
-}
-
-function QuotesToApprove({ state, open, setOpen, saved }: { state: BuyerWorkspace; open: string; setOpen: (v: string) => void; saved: (message?: string) => Promise<void> }) {
-  const { t } = useLanguage();
-  const sent = state.revisions.filter(r => r.status === 'sent');
-  return <section className="live-panel"><h2>{t('Quotes waiting for your approval', 'منظوری کے انتظار میں کوٹیشنز')}</h2>
-    {!sent.length && <p className="live-muted">{t('Nothing to approve right now. New quotes from the factory appear here.', 'ابھی منظوری کے لیے کچھ نہیں۔ فیکٹری کے نئے کوٹیشنز یہاں آئیں گے۔')}</p>}
-    <div className="erp-records">{sent.map(r => {
-      const po = state.pos.find(p => p.id === r.buyer_po_id); const approved = state.revisions.some(x => x.status === 'approved' && x.buyer_po_id === r.buyer_po_id);
-      const stale = state.revisions.some(x => x.buyer_po_id === r.buyer_po_id && x.version > r.version);
-      if (approved || stale) return null;
-      return <article className="erp-record" key={r.id}>
-        <div className="erp-record-head"><div><h3>{po?.reference} · {t('revision', 'ترمیم')} {r.version}</h3>
-          <p>{rate(r.price_minor, r.currency)} / {r.unit} · {t('total', 'کل')} <b>{rate(r.price_minor * r.quantity_milli / 1000, r.currency)}</b></p></div>
-          <span className="erp-status is-pending">{t('Needs your approval', 'آپ کی منظوری درکار')}</span></div>
-        <p className="erp-multiline">{r.specifications}</p>
-        <p className="live-muted">{quantity(r.quantity_milli)} {r.unit} · {t('promised delivery', 'وعدہ شدہ ترسیل')} {factoryTime(r.requested_delivery_at)} · {t('payment terms', 'ادائیگی کی شرائط')}: {r.payment_terms}</p>
-        {r.note && <p className="live-muted">{t('Note from the factory:', 'فیکٹری کا نوٹ:')} {r.note}</p>}
-        {open === 'approve:' + r.id ? <ApproveForm revision={r} onSaved={saved} onCancel={() => setOpen('')} />
-          : <button className="button primary" onClick={() => setOpen('approve:' + r.id)}><CheckCircle2 size={18} />{t('Review and approve', 'جائزہ لیں اور منظور کریں')}</button>}
-      </article>;
-    })}</div>
-  </section>;
 }
 
 function ApproveForm({ revision, onSaved, onCancel }: { revision: QuoteRevision; onSaved: (message?: string) => Promise<void>; onCancel: () => void }) {

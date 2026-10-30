@@ -44,13 +44,13 @@
 
 /* Status pills */
 .po-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.po-pill { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; color: #fff; }
-.po-pill.is-accepted { background: #4f5bd5; }
-.po-pill.is-dispatched { background: #0f8b8d; }
-.po-pill.is-received { background: #1d6b3e; }
-.po-pill.is-cancelled { background: #8a847b; }
-.po-pill.is-other { background: #f2a541; color: var(--ink); }
-.po-pill.is-pending { background: transparent; border: 1px solid #f2a541; color: #8a5a00; }
+.po-pill { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--on-ink); }
+.po-pill.is-accepted { background: var(--rail); }
+.po-pill.is-dispatched { background: var(--brand-ink); }
+.po-pill.is-received { background: var(--ok); }
+.po-pill.is-cancelled { background: var(--ink-3); }
+.po-pill.is-other { background: var(--warn-bg); color: var(--warn); }
+.po-pill.is-pending { background: transparent; border: 1px solid var(--warn); color: var(--warn); }
 
 /* Expanded detail: animates grid rows 0fr -> 1fr */
 .po-detail td { padding: 0; border-bottom: 0; background: var(--ground); }

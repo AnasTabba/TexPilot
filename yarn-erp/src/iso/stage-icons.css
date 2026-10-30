@@ -1,0 +1,22 @@
+/* Isometric stage icons: tones come from tokens only; the state sets which token. */
+.iso-stage { --iso-tone: var(--brand); --iso-accent: var(--pop); display: block; flex: none; width: 40px; height: 40px; overflow: visible; }
+.iso-stage.st-current { --iso-tone: var(--pop); --iso-accent: var(--brand); transform: translateY(-2px); transition: transform 220ms var(--ease-out); }
+.iso-stage.st-done { --iso-tone: var(--ink-3); --iso-accent: var(--line-strong); }
+
+.iso-face { stroke: var(--line-strong); stroke-width: .6; stroke-linejoin: round; }
+.iso-face.is-brand { --c: var(--iso-tone); }
+.iso-face.is-accent { --c: var(--iso-accent); }
+.iso-face.is-brand.iso-top, .iso-face.is-accent.iso-top { fill: color-mix(in srgb, var(--c) 70%, white); }
+.iso-face.is-brand.iso-left, .iso-face.is-accent.iso-left { fill: var(--c); }
+.iso-face.is-brand.iso-right, .iso-face.is-accent.iso-right { fill: color-mix(in srgb, var(--c) 70%, black); }
+.iso-face.is-paper.iso-top { fill: var(--panel); }
+.iso-face.is-paper.iso-left { fill: color-mix(in srgb, var(--panel) 88%, var(--line-strong)); }
+.iso-face.is-paper.iso-right { fill: color-mix(in srgb, var(--panel) 94%, var(--line-strong)); }
+
+.iso-rule { fill: none; stroke: var(--line-strong); stroke-width: .7; stroke-linecap: round; }
+.iso-rule.is-accent { stroke: var(--iso-accent); stroke-width: 2.2; }
+.iso-lens { fill: var(--panel); stroke: var(--iso-accent); stroke-width: 1.6; stroke-linejoin: round; }
+
+@media (prefers-reduced-motion: reduce) {
+  .iso-stage.st-current { transform: none; transition: none; }
+}

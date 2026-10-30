@@ -48,7 +48,7 @@ test.describe("desktop", () => {
   test("sign-in: names, a wrong PIN on the keypad, the right one, and signing out", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1, name: "Who’s signing in?" })).toBeVisible();
-    await expect(page.locator(".yf-person")).toHaveText(["AAnas", "DDanish", "FFahad", "PPervaiz", "QQasim", "SSaima", "SSana", "ZZuhair"]);
+    await expect(page.locator(".yf-person")).toHaveText([/^AAnas/, /^DDanish/, /^FFahad/, /^PPervaiz/, /^QQasim/, /^SSaima/, /^SSana/, /^ZZuhair/]);
     await page.getByRole("button", { name: "Fahad", exact: true }).click();
     await page.getByRole("button", { name: "Not Fahad?" }).click();
     await page.getByRole("button", { name: "Anas", exact: true }).click();
@@ -111,9 +111,9 @@ test.describe("desktop", () => {
     await page.locator(".live-sidebar .live-brand").click();
     await title(page, "Dashboard");
 
-    // With nothing unread the next step is an all-clear, and See all opens the inbox.
-    await expect(page.getByRole("heading", { level: 2, name: "Nothing is waiting for you" })).toBeVisible();
-    await page.locator(".yf-head").getByRole("button", { name: "See all" }).click();
+    // The Today screen's activity card links to the full inbox with See all.
+    await expect(page.getByRole("heading", { level: 2, name: "At a glance" })).toBeVisible();
+    await page.locator(".nw-card").getByRole("button", { name: "See all" }).click();
     await title(page, "Notifications");
     await expect(page.getByRole("heading", { name: "No notifications yet" })).toBeVisible();
   });
@@ -275,23 +275,38 @@ test.describe("phone", () => {
   test("bottom bar, More sheet and the search button", async ({ page }) => {
     await page.goto("/#/dashboard");
     const bar = page.getByRole("navigation", { name: "Phone navigation" });
-    for (const [label, h1] of [["Stock", "Stock"], ["History", "History"], ["Notifications", "Notifications"], ["Dashboard", "Dashboard"]]) {
+    for (const [label, h1] of [["Dashboard", "Dashboard"], ["Approvals", "Approvals"], ["Chat", "Chat"]]) {
       await bar.getByRole("button", { name: label, exact: true }).click();
       await title(page, h1);
     }
+    await bar.getByRole("button", { name: "Scan", exact: true }).click();
+    await title(page, "Scan");
     await bar.getByRole("button", { name: "More pages" }).click();
     const sheet = page.getByRole("dialog", { name: "Navigation menu" });
     await expect(sheet).toBeVisible();
     await expect(sheet.getByRole("button", { name: "Team" })).toBeVisible();
     await expect(sheet.locator(".yf-me")).toContainText("Anas");
+    await sheet.getByRole("button", { name: "Stock", exact: true }).click();
+    await title(page, "Stock");
+    await expect(sheet).toBeHidden();
+    await bar.getByRole("button", { name: "More pages" }).click();
     await sheet.getByRole("button", { name: "Open my profile" }).click();
     await title(page, "My profile");
     await expect(sheet).toBeHidden();
     await bar.getByRole("button", { name: "More pages" }).click();
     await sheet.getByRole("button", { name: "Close navigation" }).click();
     await expect(sheet).toBeHidden();
-    await page.getByRole("button", { name: "Find a batch" }).click();
-    await title(page, "Stock");
-    await expect(page.getByLabel("Search", { exact: true })).toBeFocused();
+    // The search button opens the palette; Enter on a filtered page navigates there.
+    await page.getByRole("button", { name: "Search pages and batches" }).click();
+    const palette = page.getByRole("dialog", { name: "Search pages and batches" });
+    await expect(palette).toBeVisible();
+    await palette.getByRole("combobox").fill("team");
+    await page.keyboard.press("Enter");
+    await title(page, "Team");
+    await expect(palette).toBeHidden();
+    await page.keyboard.press("Control+k");
+    await expect(palette).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
   });
 });

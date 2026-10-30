@@ -14,8 +14,9 @@ const PLOT_H = VB_H - PAD_TOP - PAD_BOTTOM;
 type Point = Bucket & { total: number };
 // The sales API returns invoices with their balances (invoice_balances + balanceData), not separate receivables.
 type Data = { invoices: (SalesOverview['invoices'][number] & { paid_minor: number; outstanding_minor: number; status: string })[] };
+export type SalesState = { kind: 'loading' } | { kind: 'ready'; data: Data } | { kind: 'error' };
 
-const money = (minor: number, currency: string) =>
+export const money = (minor: number, currency: string) =>
   new Intl.NumberFormat('en-PK', { style: 'currency', currency, maximumFractionDigits: 0 }).format(minor / 100);
 
 const reduceMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
@@ -41,14 +42,14 @@ function useCountUp(target: number) {
   return value;
 }
 
-function Kpi({ label, target, currency, tone, alert = false }: {
-  label: string; target: number; currency: string; tone: 'teal' | 'indigo' | 'coral'; alert?: boolean;
-}) {
+// Figures lead; only an overdue balance takes the alert colour.
+function Kpi({ label, target, currency, alert = false }: { label: string; target: number; currency: string; alert?: boolean }) {
   const value = useCountUp(target);
   return (
-    <div className={`sw-kpi sw-kpi--${tone}${alert ? ' is-alert' : ''}`}>
+    <div className={`sw-kpi${alert ? ' is-alert' : ''}`}>
       <span className="sw-kpi-label">{label}</span>
       <strong className="sw-kpi-value">{money(value, currency)}</strong>
+      {alert && <span className="sw-kpi-note">Overdue</span>}
     </div>
   );
 }
@@ -82,12 +83,12 @@ function Chart({ days, currency }: { days: Point[]; currency: string }) {
       <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="sw-svg" role="group" aria-label="Invoiced over the selected period">
         <defs>
           <linearGradient id={`${uid}-line`} x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0" stopColor="#0f8b8d" />
-            <stop offset="1" stopColor="#4f5bd5" />
+            <stop offset="0" style={{ stopColor: 'var(--brand)' }} />
+            <stop offset="1" style={{ stopColor: 'var(--brand-ink)' }} />
           </linearGradient>
           <linearGradient id={`${uid}-area`} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="#0f8b8d" stopOpacity="0.28" />
-            <stop offset="1" stopColor="#4f5bd5" stopOpacity="0" />
+            <stop offset="0" style={{ stopColor: 'var(--brand)', stopOpacity: 0.22 }} />
+            <stop offset="1" style={{ stopColor: 'var(--brand)', stopOpacity: 0 }} />
           </linearGradient>
         </defs>
         <line className="sw-base" x1={PAD_X} x2={VB_W - PAD_X} y1={BASELINE} y2={BASELINE} />
@@ -196,9 +197,9 @@ function Ready({ data }: { data: Data }) {
         <RangeSelect value={range} onChange={setRange} label="Sales period" />
       </div>
       <div className="sw-kpis">
-        <Kpi label="Invoiced" target={stats.invoiced} currency={currency} tone="indigo" />
-        <Kpi label="Collected" target={stats.collected} currency={currency} tone="teal" />
-        <Kpi label="Outstanding" target={stats.outstanding} currency={currency} tone="coral" alert={stats.overdue} />
+        <Kpi label="Invoiced" target={stats.invoiced} currency={currency} />
+        <Kpi label="Collected" target={stats.collected} currency={currency} />
+        <Kpi label="Outstanding" target={stats.outstanding} currency={currency} alert={stats.overdue} />
       </div>
       {/* Keyed by range so the line draw and area fade play again on change. */}
       <Chart key={range} days={stats.days} currency={currency} />
@@ -226,8 +227,9 @@ function Skeleton() {
   );
 }
 
-export function SalesWidget() {
-  const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: Data } | { kind: 'error' }>({ kind: 'loading' });
+/** The sales overview (every invoice with its paid and outstanding amounts), loaded once per mount. */
+export function useSalesData(): SalesState {
+  const [state, setState] = useState<SalesState>({ kind: 'loading' });
 
   useEffect(() => {
     let alive = true;
@@ -237,6 +239,12 @@ export function SalesWidget() {
     );
     return () => { alive = false; };
   }, []);
+
+  return state;
+}
+
+export function SalesWidget() {
+  const state = useSalesData();
 
   if (state.kind === 'error') return null;
   if (state.kind === 'loading') return <Skeleton />;

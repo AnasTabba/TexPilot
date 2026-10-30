@@ -1,0 +1,62 @@
+/* Isometric scanning stage (empty capture state only). Tokens only; motion is transform on the sweep line. */
+.scan-stage {
+  display: block;
+  width: min(100%, 200px);
+  height: auto;
+  overflow: visible;
+  --iso-top: color-mix(in srgb, var(--brand) 70%, white);
+  --iso-left: var(--brand);
+  --iso-right: color-mix(in srgb, var(--brand) 70%, black);
+  pointer-events: none;
+}
+.scan-stage path {
+  stroke: var(--line-strong);
+  stroke-width: 0.75;
+  stroke-linejoin: round;
+}
+.scan-stage .iso-top { fill: var(--iso-top); }
+.scan-stage .iso-left { fill: var(--iso-left); }
+.scan-stage .iso-right { fill: var(--iso-right); }
+
+/* Plinth is the rail-tinted base so the fabric swatch reads on top of it. */
+.scan-stage .scan-stage-plinth {
+  --iso-top: color-mix(in srgb, var(--brand) 35%, var(--rail));
+  --iso-left: color-mix(in srgb, var(--brand) 25%, var(--rail));
+  --iso-right: color-mix(in srgb, var(--brand) 15%, var(--rail));
+}
+.scan-stage-ground {
+  fill: color-mix(in srgb, var(--rail) 55%, black);
+  opacity: 0.45;
+  filter: blur(3px);
+}
+.scan-stage line {
+  stroke: var(--line-strong);
+  stroke-width: 0.6;
+  opacity: 0.5;
+}
+.scan-stage-line {
+  stroke: var(--pop) !important;
+  stroke-width: 2 !important;
+  opacity: 1 !important;
+  stroke-linecap: round;
+}
+.scan-stage-sweep {
+  animation: scan-stage-sweep 4.8s var(--ease-in-out) infinite alternate;
+  will-change: transform;
+}
+@keyframes scan-stage-sweep {
+  from { transform: translate(0, 0); }
+  to { transform: translate(-54px, 31px); }
+}
+
+@media (max-width: 480px) {
+  /* Too little height on a phone viewfinder; the capture copy and buttons stay. */
+  .scan-stage { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-stage-sweep {
+    animation: none;
+    transform: translate(-27px, 15.5px);
+  }
+}

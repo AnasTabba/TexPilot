@@ -5,7 +5,7 @@ export const origin = `http://127.0.0.1:${process.env.YARNFLOW_TEST_PORT || 8794
 /** Sign in with a name and 4-digit PIN. The app now opens on the PIN screen, not a workspace form. */
 export async function signIn(page: Page, name = 'Anas', pin = '2468') {
   await page.goto('/');
-  await page.getByRole('button', { name, exact: true }).click();
+  await page.getByRole('button', { name: new RegExp(`^${name}\\b`) }).click();
   await page.getByLabel('4-digit PIN', { exact: true }).fill(pin);
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 }

@@ -39,7 +39,9 @@ import {
   type HeadPrediction,
 } from "./scanner-client";
 import ScannerArtwork from "./ScannerArtwork";
+import ScanStage from "./iso/ScanStage";
 import type { ArtworkKind } from "./scanner-artwork";
+import "./scan.css";
 type T = (en: string, ur?: string) => string;
 type Photo = {
   file: File;
@@ -84,6 +86,7 @@ export default function Scanner({
   const [connectionError, setConnectionError] = useState("");
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
   const mounted = useRef(true);
@@ -94,6 +97,8 @@ export default function Scanner({
   const nativeCamera = useRef<HTMLInputElement>(null);
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const activePhoto = slot === "surface" ? surface : label;
+  // Guided path: 0 = capture, 1 = result on screen, 2 = result confirmed.
+  const step = !result ? 0 : confirmed ? 2 : 1;
   const msg = (e: unknown) => {
     const code = e instanceof ScanError ? e.code : "server";
     return {
@@ -298,6 +303,7 @@ export default function Scanner({
     stopCamera();
     setError("");
     setResult(null);
+    setConfirmed(false);
     setScanning(true);
     const controller = new AbortController();
     scanRequest.current = controller;
@@ -476,14 +482,14 @@ export default function Scanner({
         </div>
       )}
       {/* Where the scan is: photo, optional care label, analysis, answer. */}
-      <ol className="yf-steps yf-scansteps" aria-label="Scan steps">
+      <ol className="yf-steps yf-scansteps scan-stepper" aria-label="Scan steps">
         {([
-          [t("Photograph", "تصویر"), !!surface],
-          [t("Care label (optional)", "کیئر لیبل (اختیاری)"), !!label || !!labelText.trim()],
-          [t("Analyse", "تجزیہ"), !!result],
-          [t("Answer", "جواب"), !!result],
-        ] as const).map(([name, done], i) => {
-          const current = i === (!surface ? 0 : result ? 3 : 2);
+          t("Capture", "تصویر"),
+          t("Result", "نتیجہ"),
+          t("Confirm", "تصدیق"),
+        ] as const).map((name, i) => {
+          const done = i < step;
+          const current = i === step;
           return (
             <li key={name} className={done ? "done" : current ? "current" : ""} aria-current={current ? "step" : undefined}>
               <span>{done ? <Check size={14} aria-hidden="true" /> : i + 1}</span>
@@ -569,6 +575,7 @@ export default function Scanner({
               />
             ) : (
               <div className="scan-camera-empty">
+                <ScanStage />
                 <span>
                   <Camera size={37} strokeWidth={1.75} />
                 </span>
@@ -738,6 +745,9 @@ export default function Scanner({
             <div className="error-banner" role="alert">
               <AlertTriangle size={18} />
               {error}
+              <small className="scan-retry-note">
+                {t("Your photo is still here. Analyse again when you are ready.", "آپ کی تصویر موجود ہے۔ تیار ہوں تو دوبارہ تجزیہ کریں۔")}
+              </small>
             </div>
           )}
           <div className="scan-analyze-row">
@@ -752,7 +762,7 @@ export default function Scanner({
               </button>
             ) : (
               <button
-                className="button primary"
+                className={camera ? "button" : "button primary"}
                 disabled={!surface || !info || !online || connecting}
                 onClick={analyze}
               >
@@ -851,14 +861,28 @@ export default function Scanner({
                     </div>
                   </div>
                 )}
+                {!confirmed ? (
+                  <div className="scan-next">
+                    <p>{t("Check the answer against the photo, then confirm it.", "جواب کو تصویر سے ملائیں، پھر تصدیق کریں۔")}</p>
+                    <button className="button primary" onClick={() => setConfirmed(true)}>
+                      <Check size={19} aria-hidden="true" />
+                      {t("Confirm result", "نتیجہ تصدیق کریں")}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="scan-confirmed" role="status">
+                    <CheckCheck size={18} aria-hidden="true" />
+                    {t("Result confirmed. Choose what to do next.", "نتیجہ تصدیق ہو گیا۔ آگے کیا کرنا ہے چنیں۔")}
+                  </p>
+                )}
                 <div className="scan-actions">
                   {onMeasure && (
-                    <button className="button" onClick={onMeasure}>
+                    <button className={confirmed ? "button primary" : "button"} onClick={onMeasure}>
                       <Ruler size={20} aria-hidden="true" />
                       {t("Measure yarn count", "یارن کاؤنٹ ناپیں")}
                     </button>
                   )}
-                  <button className="button" onClick={download}>
+                  <button className={confirmed && !onMeasure ? "button primary" : "button"} onClick={download}>
                     <Download size={20} aria-hidden="true" />
                     {t("Download result", "نتیجہ ڈاؤن لوڈ کریں")}
                   </button>

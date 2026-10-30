@@ -1,0 +1,23 @@
+/* Sign-in hero scene: isometric mill floor. Tones come from the brand tokens only. Shown beside the picker on laptop and wider. */
+@keyframes yf-iso-rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes yf-iso-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+.yf-iso-scene { display: none; position: absolute; inset-inline-end: clamp(12px, 3cqw, 40px); bottom: clamp(16px, 7cqh, 64px); width: min(240px, 24cqw); height: auto; overflow: visible; pointer-events: none; }
+@media (min-width: 1200px) { .yf-iso-scene { display: block; } }
+
+.yf-iso-scene path { stroke: var(--line-strong); stroke-width: 1px; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.yf-iso-shadow { fill: var(--brand-ink); stroke: none !important; opacity: 0.16; filter: blur(4px); }
+
+.yf-iso-top { fill: color-mix(in srgb, var(--brand) 70%, white); }
+.yf-iso-left { fill: var(--brand); }
+.yf-iso-right { fill: color-mix(in srgb, var(--brand) 70%, black); }
+.yf-iso-pop .yf-iso-top { fill: color-mix(in srgb, var(--pop) 70%, white); }
+.yf-iso-pop .yf-iso-left { fill: var(--pop); }
+.yf-iso-pop .yf-iso-right { fill: color-mix(in srgb, var(--pop) 70%, black); }
+
+.yf-iso-part { animation: yf-iso-rise 220ms var(--ease-out) backwards; }
+.yf-iso-float { animation: yf-iso-float 6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .yf-iso-part, .yf-iso-float { animation: none; }
+}
