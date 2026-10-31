@@ -51,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     with open(args.verified, newline="") as f:
         rows = [Record(v["path"], v["label"], "test", "archive", "") for v in csv.DictReader(f)]
     rows = rescope(rows, args.partition)  # drops photos whose verified class is out of scope
+    rows = [r for r in rows if (args.data_root / r.path).exists()]  # as train.py's load_rows does
 
     base = timm.create_model(args.timm_name, pretrained=True, num_classes=0, img_size=args.img_size)
     with safe_open(str(args.lora), "pt") as f:
