@@ -127,7 +127,7 @@ export async function analyticsApi(request, env, member, path) {
       payments: await paymentsBlock(db, workspaceId, range, now),
       dispatch: await dispatchBlock(db, workspaceId, range),
       users: await all(db, `SELECT u.name, u.portal_role AS role, (SELECT COUNT(*) FROM erp_audit_events e WHERE e.actor_id=u.id
-        AND e.actor_type='staff' AND e.created_at BETWEEN ? AND ?) AS actions FROM users u WHERE u.workspace_id=? AND u.portal_role IS NOT NULL
+        AND e.actor_type='staff' AND e.created_at BETWEEN ? AND ?) AS actions FROM users u WHERE u.workspace_id=? AND u.portal_role IS NOT NULL AND u.removed_at IS NULL
         ORDER BY actions DESC, u.name`, ...range, workspaceId),
     });
   }

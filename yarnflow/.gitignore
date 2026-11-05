@@ -9,5 +9,3 @@ playwright-report/
 .local/
 server/assets.generated.mjs
 .wrangler/
-# Screenshots the e2e suite writes
-docs/progress/

@@ -1,0 +1,99 @@
+/* Shared sales-side UI for Sales, Dispatch, Analytics and Invoice screens.
+ * Status chips, filter tabs, one pop primary action, designed empty states. Tokens only. */
+
+/* Status chips: a dot plus the label, so the state never rests on colour alone. */
+:is(.yf-sales-screens, .yf-dispatch-screens, .ak-page, .invoice-screen) .erp-status {
+  gap: 6px; height: 28px; padding: 0 12px; align-items: center; font-size: 13px; line-height: 1; white-space: nowrap;
+}
+:is(.yf-sales-screens, .yf-dispatch-screens, .ak-page, .invoice-screen) .erp-status::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none;
+}
+
+/* Filter tabs: a quiet track, the selected tab in brand blue (selection, not action). */
+:is(.yf-sales-screens, .yf-dispatch-screens) > .live-segments {
+  display: flex; flex-wrap: wrap; gap: 4px; width: max-content; max-width: 100%; padding: 4px;
+  border-radius: var(--r-pill); background: var(--sunken);
+}
+:is(.yf-sales-screens, .yf-dispatch-screens) > .live-segments > button {
+  min-height: 44px; padding: 0 16px; border: 0; border-radius: var(--r-pill);
+  background: transparent; color: var(--ink-2); font: inherit; font-weight: 600; cursor: pointer;
+  transition: background-color 180ms var(--ease-out), color 180ms var(--ease-out);
+}
+:is(.yf-sales-screens, .yf-dispatch-screens) > .live-segments > button:hover { color: var(--ink); }
+:is(.yf-sales-screens, .yf-dispatch-screens) > .live-segments > button[aria-pressed="true"] {
+  background: var(--brand); color: var(--brand-ink);
+}
+:is(.yf-sales-screens, .yf-dispatch-screens) > .live-segments > button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* The one pop action on a screen. Other buttons stay quiet. */
+:is(.yf-sales-screens, .yf-dispatch-screens, .invoice-screen) .button.primary:not(:disabled) {
+  border-color: var(--pop); background: var(--pop); color: var(--pop-ink);
+}
+:is(.yf-sales-screens, .yf-dispatch-screens, .invoice-screen) .button.primary:not(:disabled):hover { background: var(--pop); opacity: .92; }
+
+/* Designed empty state: a soft ground panel that names what to do next. */
+:is(.yf-sales-screens, .yf-dispatch-screens, .ak-page) .live-empty { text-wrap: balance; }
+:is(.yf-sales-screens, .yf-dispatch-screens, .ak-page) .live-empty:not(p) { padding: 40px 24px; }
+
+/* Press feedback: transform and colour only, quick ease-out. */
+:is(.yf-sales-screens, .yf-dispatch-screens, .ak-page, .invoice-screen) button:not(:disabled) {
+  transition: transform 160ms var(--ease-out), background-color 180ms var(--ease-out), color 180ms var(--ease-out);
+}
+:is(.yf-sales-screens, .yf-dispatch-screens, .ak-page, .invoice-screen) button:not(:disabled):active { transform: scale(.97); }
+:is(.yf-sales-screens, .yf-dispatch-screens, .ak-page, .invoice-screen) button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.yf-sales-screens, .yf-dispatch-screens, .ak-page, .invoice-screen) button:not(:disabled) { transition: none; }
+  :is(.yf-sales-screens, .yf-dispatch-screens, .ak-page, .invoice-screen) button:not(:disabled):active { transform: none; }
+}
+
+/* Split views: a filterable list on the left, the selected record on the right. Phones open the record as a sheet. */
+.yf-split { display: grid; grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.5fr); gap: 24px; align-items: start; }
+.split-list-pane { position: sticky; top: 16px; display: grid; gap: 12px; min-width: 0; }
+.split-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: var(--r-pill); background: var(--sunken); }
+.split-tabs button { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--ink-2); font: inherit; font-weight: 600; cursor: pointer; transition: background-color 180ms var(--ease-out), color 180ms var(--ease-out); }
+.split-tabs button:hover { color: var(--ink); }
+.split-tabs button[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); }
+.split-tabs button:focus-visible, .split-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.split-count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--panel); color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.split-tabs button[aria-pressed="true"] .split-count { background: var(--brand-ink); color: var(--brand); }
+.split-search { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--panel); color: var(--ink-2); }
+.split-search input { flex: 1; min-width: 0; min-height: 42px; border: 0; background: transparent; color: var(--ink); font: inherit; }
+.split-search input:focus-visible { outline: none; }
+.split-search:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.split-list { display: grid; gap: 6px; max-height: calc(100vh - 280px); margin: 0; padding: 0; list-style: none; overflow: auto; }
+.split-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 56px; padding: 10px 14px; border: 1px solid transparent; border-radius: var(--r-row); background: transparent; color: var(--ink); font: inherit; text-align: start; cursor: pointer; transition: background-color 180ms var(--ease-out), border-color 180ms var(--ease-out), transform 160ms var(--ease-out); }
+.split-row:hover { background: var(--panel); }
+.split-row[aria-current="true"] { background: var(--panel); border-color: var(--brand); }
+.split-row:active { transform: scale(.97); }
+.split-row-text { display: grid; gap: 2px; min-width: 0; }
+.split-row-text strong { overflow-wrap: anywhere; }
+.split-row-text small { overflow: hidden; color: var(--ink-2); text-overflow: ellipsis; white-space: nowrap; }
+.split-detail { display: grid; align-content: start; gap: 16px; min-width: 0; }
+.split-detail:focus { outline: none; }
+.split-back { display: none; justify-self: start; }
+.split-none { padding: 40px 24px; color: var(--ink-2); text-align: center; text-wrap: balance; }
+
+/* Step flow: the stage icon, the step name and its state in words. */
+.yf-dispatch-thread li small { color: var(--ink-2); font-size: 13px; }
+.yf-dispatch-thread li strong { font-size: 15px; }
+
+@media (max-width: 860px) {
+  .yf-split { display: block; }
+  .split-list-pane { position: static; }
+  .split-list { max-height: none; }
+  .split-detail { position: fixed; inset: 0; z-index: 40; overflow: auto; padding: calc(16px + var(--safe-top)) 16px calc(24px + var(--safe-bottom)); background: var(--ground); transform: translateX(100%); visibility: hidden; transition: transform 240ms var(--ease-out), visibility 240ms; }
+  .yf-split.has-detail .split-detail { transform: none; visibility: visible; }
+  .split-back { display: inline-flex; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .split-detail { transition: none; }
+  .split-row:active { transform: none; }
+}
+
+/* Analytics: three headline figures lead, then one chart per question. The monthly detail sits behind a disclosure. */
+.ak-page .ak-kpis dd { font-size: clamp(30px, 4.5vw, 44px); font-weight: 700; letter-spacing: -.02em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.ak-more > summary { display: flex; align-items: center; min-height: 52px; padding: 14px 20px; cursor: pointer; font-weight: 600; list-style: none; }
+.ak-more > summary::-webkit-details-marker { display: none; }
+.ak-more[open] > summary { border-bottom: 1px solid var(--line); }
+.ak-more > .ak-section { padding: 0 20px; }

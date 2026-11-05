@@ -5,8 +5,8 @@ interfaces use Yarnflow's own stock and inspection workflows, with larger text.
 UI/UX Pro Max supplied the accessibility and native guidance; the supplied images
 and approved demo remain visual authority over generic search recommendations.
 
-Web app: `yarnflow/src/LiveApp.tsx`, `LoginPage.tsx`, `WorkspaceDashboard.tsx`,
-`approved.css`. Start the API and Vite from `yarnflow/`:
+Web app: `yarn-erp/src/LiveApp.tsx`, `LoginPage.tsx`, `WorkspaceDashboard.tsx`,
+`approved.css`. Start the API and Vite from `yarn-erp/`:
 
 ```sh
 YARNFLOW_LOCAL_DEV=1 YARNFLOW_SQLITE_PATH=.local/review-ui.sqlite npm run api:dev
@@ -24,7 +24,7 @@ explicitly creates illustrative review stock; it refuses to populate a different
 existing workspace. Production data is never automatically seeded.
 
 The separate native SwiftUI source, simulator build instructions, and remaining
-native release requirements are in `../ios/README.md`.
+native release requirements are in `../../ios/README.md`.
 
 Verification completed: TypeScript check; 44 Node tests including ledger, API,
 scanner, and stock-summary checks; web page sweep across all 12 destinations;

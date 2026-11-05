@@ -1,0 +1,35 @@
+{
+  "verified_at": "2026-10-24T17:41:00Z",
+  "project_id": "appgprj_6adca2038be88191912efc425cd46f2c",
+  "deployment_id": "appgdep_6adcec96ca188191a0f25e8d9e2a2d3d",
+  "version_id": "appgprj_6adca2038be88191912efc425cd46f2c~appgver_8be408061930819190f0f09a2ae6cf7d",
+  "source_commit": "d42c7f7f263bfebdfbe174fa66fd671097c0840c",
+  "status": "succeeded",
+  "url": "https://yarnflow-factory-glass.thryuil.chatgpt.site",
+  "audience": "existing private Site access preserved",
+  "database": "Cloudflare D1, DB binding; 11 inventory tables verified through native database overview",
+  "photos": "Cloudflare R2, BUCKET binding; app icon uploaded as explicitly labelled system-test evidence through the hosted UI",
+  "unit_api_tests": 31,
+  "browser_tests": 14,
+  "browsers": [
+    "desktop Chromium",
+    "iPhone WebKit emulation"
+  ],
+  "hosted_smoke": {
+    "authenticated_account": true,
+    "workspace": "Yarnflow testing",
+    "material": "TEST \u2014 Cotton 30/1",
+    "batch": "TEST-001",
+    "received_grams": 1000,
+    "real_factory_receipt": false,
+    "quality": "uninspected",
+    "physical_inspection_performed": false,
+    "inspection_photo_saved": true
+  },
+  "limitations": [
+    "No trained TexPilot bundle was available; real fabric inference remains unavailable.",
+    "InvenTree is not installed or synchronized; its deployment recipe and connectivity check are optional.",
+    "Friend still needs Site access and a single-use workspace invite.",
+    "Physical iPhone camera/Home Screen acceptance remains a device check."
+  ]
+}

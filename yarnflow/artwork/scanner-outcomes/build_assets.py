@@ -1,6 +1,6 @@
 """Extract generated atlases and export the scanner's gentle 4.2-second float loop.
 
-Run from the repository root with PYTHONPATH=scanner with Python and Pillow. Sources are preserved verbatim.
+Run from the repository root with Python and Pillow. Sources are preserved verbatim.
 These illustrations are reference artwork, never prediction evidence.
 """
 
@@ -15,7 +15,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent
-APP = ROOT.parents[1]
+REPO = ROOT.parents[2]
 BATCHES = [
     'canvas chambray chenille chiffon corduroy crepe faux_fur faux_leather flannel fleece gingham jersey knit lace lawn neoprene'.split(),
     'organza plush satin serge taffeta tulle tweed twill velvet vinyl cellulosic protein synthetic blend printed piece_dyed'.split(),
@@ -104,7 +104,7 @@ def main() -> None:
             assets[name] = export(name, subject_crop(crop), True)
     assets['uncertain'] = export('uncertain', Image.open(ROOT / 'sources' / 'uncertain.png'), True)
     for name in ('denim', 'cotton', 'polyester'):
-        assets[name] = export(name, Image.open(APP / 'src' / 'assets' / 'fabrics' / f'{name}.webp'), False)
+        assets[name] = export(name, Image.open(REPO / 'yarn-erp' / 'src' / 'assets' / 'fabrics' / f'{name}.webp'), False)
 
     from services.vision.taxonomy import FABRIC_CLASSES, FIBRE_FAMILIES, TREATMENT_CLASSES
     from services.vision.garment import GARMENT_VOCAB

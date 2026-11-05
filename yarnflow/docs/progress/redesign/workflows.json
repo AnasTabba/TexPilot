@@ -1,0 +1,15 @@
+{
+  "checks": [
+    "Skip link moves focus without changing the route",
+    "Negative weight blocked with an inline explanation",
+    "Date, machine, quantities and notes survive closing and reloading",
+    "Offline save confirms exact quantity and undo restores the ledger",
+    "QC hold and over-issue cannot advance to saving",
+    "Orders use persistent drafts, review and a saved result",
+    "Sign in and return to Today without a hook error",
+    "Practice mode cannot pretend to switch to an unconnected factory",
+    "Storage failure retains the draft and blocks false save confirmation",
+    "200% desktop-equivalent viewport keeps navigation and entry fields usable"
+  ],
+  "errors": []
+}

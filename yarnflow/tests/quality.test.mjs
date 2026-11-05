@@ -163,16 +163,16 @@ test('issue severity is minor, major or critical', async () => {
 test('inspectors cannot add inventory or change catalogue items; the old receive and QC writes are closed', async () => {
   const f = await fixture();
   assert.equal((await f.call('/products', { sku: 'NEW', name: 'New material' }, 'Qasim')).status, 403);
-  assert.equal((await f.call('/lots', { productId: f.productId, batch: 'B1', supplier: 'Mill' }, 'Qasim')).status, 404, 'batches are no longer created by hand');
-  assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: crypto.randomUUID(), action: 'receive', stage: 'raw', grams: 1000 }, 'Qasim')).status, 404);
+  assert.equal((await f.call('/lots', { productId: f.productId, batch: 'B1', supplier: 'Mill' }, 'Qasim')).status, 410, 'batches are no longer created by hand');
+  assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: crypto.randomUUID(), action: 'receive', stage: 'raw', grams: 1000 }, 'Qasim')).status, 410);
   const legacy = { id: crypto.randomUUID() };
   f.sql.prepare('INSERT INTO lots(id,workspace_id,product_id,batch,supplier,created_at) VALUES(?,?,?,?,?,?)').run(legacy.id, f.workspaceId, f.productId, 'OLD-1', 'Mill', Date.now());
-  assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: legacy.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: '' }, 'Pervaiz')).status, 404, 'raw stock enters only through a report decision');
-  assert.equal((await f.call('/quality', { lotId: legacy.id, status: 'approved', note: 'Inspector approves' }, 'Qasim')).status, 404);
-  assert.equal((await f.call('/inspections', { id: crypto.randomUUID(), lotId: legacy.id, labelText: '', note: 'Looks fine', result: null }, 'Qasim')).status, 404);
-  assert.equal((await f.call('/photos', { inspectionId: crypto.randomUUID() }, 'Qasim')).status, 404);
+  assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: legacy.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: '' }, 'Pervaiz')).status, 410, 'raw stock enters only through a report decision');
+  assert.equal((await f.call('/quality', { lotId: legacy.id, status: 'approved', note: 'Inspector approves' }, 'Qasim')).status, 410);
+  assert.equal((await f.call('/inspections', { id: crypto.randomUUID(), lotId: legacy.id, labelText: '', note: 'Looks fine', result: null }, 'Qasim')).status, 403);
+  assert.equal((await f.call('/photos', { inspectionId: crypto.randomUUID() }, 'Qasim')).status, 403);
   assert.equal(count(f, 'movements'), 0); assert.equal(count(f, 'quality_events'), 0); assert.equal(count(f, 'inspections'), 0);
-  assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: legacy.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: '' }, 'Anas')).status, 404, 'not even admins receive raw stock outside a report decision');
+  assert.equal((await f.call('/movements', { id: crypto.randomUUID(), lotId: legacy.id, action: 'receive', stage: 'raw', grams: 1000, cartons: 0, cones: 0, note: '' }, 'Anas')).status, 410, 'not even admins receive raw stock outside a report decision');
   assert.equal((await f.call('/erp/receipts', { id: crypto.randomUUID(), orderId: f.orderId, productId: f.productId, batch: 'R', quantityMilli: 1000 }, 'Anas')).status, 410);
 });
 
@@ -367,3 +367,28 @@ for (const [from, to] of [['open', 'confirmed'], ['open', 'dismissed'], ['open',
     assert.deepEqual(row(f, 'qc_issues', id), before);
   });
 }
+
+test('without an R2 binding, inspection photos are stored in D1 and a failed-photo draft stays on Stock', async () => {
+  const f = await fixture(); delete f.env.BUCKET;
+  const lotId = await lotOf(f), id = await draft(f, lotId, 100000, 0);
+  // Before the photo lands, the draft keeps the arrival listed with its full quantity so it can be resumed.
+  const waiting = (await f.call('/workspace', undefined, 'Qasim')).data.qcArrivals.find(a => a.id === lotId);
+  assert.deepEqual([waiting.draft_id, waiting.open_milli], [id, 100000]);
+  const bytes = Uint8Array.from([255, 216, 255, 224, ...new Array(3000).fill(7)]);
+  const photo = await f.upload({ id: crypto.randomUUID(), inspectionId: id }, 'Qasim', bytes, 'goods.jpg', 'image/jpeg');
+  assert.equal(photo.status, 201, photo.text);
+  const read = await f.call('/erp/qc/photos/' + photo.data.id, undefined, 'Saima');
+  assert.equal(read.status, 200);
+  assert.equal((await submit(f, id)).status, 200);
+  assert.equal((await f.call('/workspace', undefined, 'Qasim')).data.qcArrivals.some(a => a.id === lotId), false);
+});
+
+test('the purchase manager is told the claim outcome and the final amount', async () => {
+  const f = await fixture(), { id, lotId } = await submitted(f, 0, 20000);
+  assert.equal((await f.call('/erp/qc/rejections/decide', { inspectionId: id, decision: 'confirm' }, 'Saima')).status, 200);
+  const claimId = f.sql.prepare('SELECT id FROM claims WHERE inspection_id=?').get(id).id, reference = row(f, 'qc_lots', lotId).reference;
+  const decided = await f.call('/erp/qc/claims/decide', { id: claimId, outcome: 'claim', adjustedMinor: 2000000, reason: 'Supplier credited part in advance' }, 'Anas');
+  assert.equal(decided.status, 200, decided.text);
+  const labels = f.sql.prepare("SELECT label FROM notifications WHERE event='claim.decided' AND object_id=?").all(claimId).map(n => n.label);
+  assert.deepEqual(labels, [`${reference} · claim · PKR 20000.00`]);
+});

@@ -1,0 +1,176 @@
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { AlertCircle, ArrowRight, BellRing, Check, CheckCircle2, Factory, LoaderCircle, RotateCcw } from 'lucide-react';
+import { errorMessage } from './forms';
+import { useLanguage } from './i18n';
+import { portal } from './PortalCommon';
+import { InventoryError, weight, type Member } from './inventory-client';
+import ToProduction, { type ProductionJob } from './ToProduction';
+import { when } from './WorkspaceDashboard';
+import { INSTALLED_MODULES, objectRoute } from './roles';
+import './attention-widget.css';
+
+interface Report { inspectionId: string; lotReference: string; supplierName: string; acceptedMilli: number; unit: 'kg' | 'tonne'; submittedAt: number }
+interface Attention { reports: Report[]; readyForProduction: ProductionJob[] }
+
+const REFRESH_MS = 30000;
+// Arrivals store milli-units of kg or tonne; the same conversion as the Stock page.
+const kgOf = (milli: number, unit: 'kg' | 'tonne') => weight(milli * (unit === 'tonne' ? 1000 : 1));
+
+/** The supervisor or admin queue: QC reports to accept and batches ready for production. Refreshes every 30s while the tab is visible. */
+export function useAttentionQueue(member: Member) {
+  const { language } = useLanguage();
+  const canAct = member.role === 'supervisor' || member.role === 'admin';
+  const [data, setData] = useState<Attention | null>(null);
+  const [hidden, setHidden] = useState(false);
+  const [loadError, setLoadError] = useState('');
+
+  const load = useCallback(async () => {
+    try { setData(await portal<Attention>('/stock/attention')); setLoadError(''); }
+    catch (caught) {
+      // Roles without access, or a server that has not shipped the route yet, get no card at all.
+      if (caught instanceof InventoryError && (caught.status === 403 || caught.status === 404)) { setHidden(true); return; }
+      setLoadError(errorMessage(caught, language));
+    }
+  }, [language]);
+
+  useEffect(() => {
+    if (!canAct) return;
+    void load();
+    const timer = setInterval(() => { if (!document.hidden) void load(); }, REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [canAct, load]);
+
+  const total = (data?.reports.length ?? 0) + (data?.readyForProduction.length ?? 0);
+  return { canAct, hidden, data, loadError, load, total };
+}
+
+export type AttentionQueue = ReturnType<typeof useAttentionQueue>;
+
+/** Needs attention, prioritised: QC reports first (they block stock), then batches ready for production. Each row opens its item. */
+export function AttentionWidget({ member, onChanged, queue }: { member: Member; onChanged?: () => Promise<void>; queue: AttentionQueue }) {
+  const { t, language } = useLanguage();
+  const { canAct, hidden, data, loadError, load, total } = queue;
+  const isAdmin = member.role === 'admin';
+  const [error, setError] = useState(''), [notice, setNotice] = useState('');
+  const [reason, setReason] = useState('');
+  const [busyId, setBusyId] = useState('');
+  const [rejecting, setRejecting] = useState<{ id: string; text: string } | null>(null);
+  const [producing, setProducing] = useState<ProductionJob | null>(null);
+  // The decision made here can be undone from this card until another decision replaces it.
+  const [last, setLast] = useState<{ inspectionId: string; decision: 'accept' | 'reject' } | null>(null), [undoing, setUndoing] = useState(false), [undoText, setUndoText] = useState('');
+
+  // The workspace (stock, balances) refreshes first, then this card reads the new queue.
+  async function changed(message: string) {
+    setNotice(message);
+    await onChanged?.();
+    await load();
+  }
+
+  async function decide(inspectionId: string, decision: 'accept' | 'reject', why = '') {
+    const admin = isAdmin ? reason.trim() : '';
+    if (isAdmin && admin.length < 5) { setError(t('Give a reason of at least 5 characters for this admin action.', 'ایڈمن کارروائی کی کم از کم 5 حروف کی وجہ لکھیں۔')); return; }
+    setBusyId(inspectionId); setError(''); setNotice('');
+    try {
+      await portal('/qc/reports/decide', { inspectionId, decision, ...(decision === 'reject' ? { reason: why } : {}), ...(isAdmin ? { interventionReason: admin } : {}) });
+      setRejecting(null); setLast({ inspectionId, decision }); setUndoing(false); setUndoText('');
+      await changed(decision === 'accept'
+        ? t('QC report accepted. The stock is now in raw material.', 'QC رپورٹ قبول ہو گئی۔ اسٹاک اب خام مال میں ہے۔')
+        : t('QC report rejected.', 'QC رپورٹ مسترد ہو گئی۔'));
+    } catch (caught) { setError(errorMessage(caught, language)); }
+    finally { setBusyId(''); }
+  }
+
+  // Undo the decision just made: the report goes back to waiting for a decision. Refused by the server once its stock has moved on.
+  async function undoLast() {
+    if (!last) return;
+    setBusyId(last.inspectionId); setError(''); setNotice('');
+    try {
+      await portal('/qc/reports/undo', { id: crypto.randomUUID(), inspectionId: last.inspectionId, reason: undoText.trim() });
+      setLast(null); setUndoing(false); setUndoText('');
+      await changed(t('Decision undone. The report is waiting for a decision again.', 'فیصلہ واپس ہو گیا۔ رپورٹ دوبارہ فیصلے کے انتظار میں ہے۔'));
+    } catch (caught) { setError(errorMessage(caught, language)); }
+    finally { setBusyId(''); }
+  }
+
+  if (!canAct || hidden) return null;
+  const reports = data?.reports ?? [], ready = data?.readyForProduction ?? [];
+  const shownError = error || loadError;
+  // Entrance stagger: 40ms per row, as the motion brief allows.
+  const rowDelay = (index: number) => ({ '--d': `${index * 40}ms` }) as CSSProperties;
+  // One tap opens the item where this role has a screen for it; admins without one get no link.
+  const openRoute = (type: string, id: string) => objectRoute(type, id, { role: member.role, installedModules: INSTALLED_MODULES });
+  const openLink = (href: string, label: string) => href === '#/notifications' ? null
+    : <a className="button att-open" href={href} aria-label={`${t('Open', 'کھولیں')}: ${label}`}>{t('Open', 'کھولیں')}<ArrowRight size={18} aria-hidden="true" /></a>;
+
+  return <section className="att-card" aria-labelledby="att-title">
+    <div className="att-head">
+      <h2 id="att-title"><BellRing size={18} aria-hidden="true" />{t('Needs attention', 'توجہ طلب')}</h2>
+      {total > 0 && <span className="att-count" aria-label={`${total} ${t('items', 'اشیاء')}`}>{total}</span>}
+    </div>
+    {isAdmin && total > 0 && <div className="att-reason">
+      <label htmlFor="att-reason">{t('Admin reason', 'ایڈمن کی وجہ')}</label>
+      <input id="att-reason" className="att-input" value={reason} maxLength={1000} onChange={e => setReason(e.target.value)} />
+      <small>{t('Admins act outside their role, so each action needs a reason of at least 5 characters.', 'ایڈمن اپنے کردار سے باہر کام کرتے ہیں، اس لیے ہر کارروائی کے لیے کم از کم 5 حروف کی وجہ ضروری ہے۔')}</small>
+    </div>}
+    {shownError && <p className="live-error" role="alert"><AlertCircle size={18} aria-hidden="true" />{shownError}</p>}
+    {notice && <p className="live-success" role="status">{notice}</p>}
+    {last && <div className="att-reason" role="group" aria-label={t('Undo the last decision', 'آخری فیصلہ واپس لیں')}>
+      {!undoing
+        ? <button className="button" disabled={!!busyId} onClick={() => setUndoing(true)}><RotateCcw size={18} aria-hidden="true" />{t('Undo this decision', 'یہ فیصلہ واپس لیں')}</button>
+        : <form onSubmit={event => { event.preventDefault(); void undoLast(); }}>
+          <label htmlFor="att-undo-reason">{t('Reason for undoing (at least 3 characters)', 'واپس لینے کی وجہ (کم از کم 3 حروف)')}</label>
+          <input id="att-undo-reason" className="att-input" value={undoText} maxLength={500} onChange={e => setUndoText(e.target.value)} />
+          <small className="att-muted">{t('Accepted stock goes back out of raw material. Refused if it has already moved or been used.', 'قبول شدہ اسٹاک خام مال سے واپس ہوگا۔ اگر یہ حرکت یا استعمال ہو چکا ہو تو منظور نہیں ہوگا۔')}</small>
+          <div className="att-row-actions">
+            <button type="submit" className="button primary" disabled={undoText.trim().length < 3 || !!busyId}>{t('Undo decision', 'فیصلہ واپس لیں')}</button>
+            <button type="button" className="button" disabled={!!busyId} onClick={() => setUndoing(false)}>{t('Cancel', 'منسوخ کریں')}</button>
+          </div>
+        </form>}
+    </div>}
+    {!data && !shownError && <div className="att-skel-list" role="status" aria-label={t('Checking…', 'جانچ ہو رہی ہے…')}>{[0, 1].map(i => <span key={i} className="att-skel" />)}</div>}
+    {data && total === 0 && <div className="att-empty"><CheckCircle2 size={28} aria-hidden="true" /><p>{t('Nothing needs attention', 'کسی چیز کو توجہ کی ضرورت نہیں')}</p></div>}
+
+    {reports.length > 0 && <section className="att-section" aria-labelledby="att-reports">
+      <h3 id="att-reports"><span className="att-tally">{reports.length}</span>{t('QC reports to accept', 'قبول کرنے کے لیے QC رپورٹیں')}</h3>
+      <ul>{reports.map((report, index) => <li key={report.inspectionId} className="att-row" style={rowDelay(index)}>
+        <div className="att-row-main">
+          <strong>{report.lotReference}</strong>
+          <span>{report.supplierName} · {kgOf(report.acceptedMilli, report.unit)} kg · {when.format(report.submittedAt, language)}</span>
+        </div>
+        <div className="att-row-actions">
+          <button className="button primary" disabled={!!busyId} onClick={() => void decide(report.inspectionId, 'accept')} aria-label={`${t('Accept', 'قبول کریں')}: ${report.lotReference}`}>
+            {busyId === report.inspectionId ? <LoaderCircle className="live-spinning" size={18} aria-hidden="true" /> : <Check size={18} aria-hidden="true" />}{t('Accept', 'قبول کریں')}
+          </button>
+          <button className="button" disabled={!!busyId} onClick={() => setRejecting({ id: report.inspectionId, text: '' })} aria-label={`${t('Reject', 'مسترد کریں')}: ${report.lotReference}`}>{t('Reject', 'مسترد کریں')}</button>
+          {openLink(openRoute('qc_inspection', report.inspectionId), report.lotReference)}
+        </div>
+        {rejecting?.id === report.inspectionId && <form className="att-reject" onSubmit={event => { event.preventDefault(); void decide(report.inspectionId, 'reject', rejecting.text.trim()); }}>
+          <label htmlFor="att-reject-reason">{t('Reason for rejecting', 'مسترد کرنے کی وجہ')}</label>
+          <input id="att-reject-reason" className="att-input" value={rejecting.text} maxLength={1000} onChange={e => setRejecting({ id: report.inspectionId, text: e.target.value })} />
+          <small className="att-muted">{t('At least 5 characters.', 'کم از کم 5 حروف۔')}</small>
+          <div className="att-row-actions">
+            <button type="submit" className="button primary" disabled={rejecting.text.trim().length < 5 || !!busyId}>{t('Confirm rejection', 'مسترد کرنے کی تصدیق کریں')}</button>
+            <button type="button" className="button" disabled={!!busyId} onClick={() => setRejecting(null)}>{t('Cancel', 'منسوخ کریں')}</button>
+          </div>
+        </form>}
+      </li>)}</ul>
+    </section>}
+
+    {ready.length > 0 && <section className="att-section" aria-labelledby="att-ready">
+      <h3 id="att-ready"><span className="att-tally">{ready.length}</span>{t('Ready for production', 'پیداوار کے لیے تیار')}</h3>
+      <ul>{ready.map((batch, index) => <li key={batch.lotId} className="att-row" style={rowDelay(index)}>
+        <div className="att-row-main">
+          <strong>{t('Batch', 'بیچ')} {batch.batch}</strong>
+          <span>{batch.productName} · {weight(batch.rawGrams)} kg {t('raw', 'خام')}</span>
+        </div>
+        <div className="att-row-actions">
+          <button className="button primary" onClick={() => setProducing(batch)} aria-label={`${t('To production', 'پیداوار کے لیے')}: ${t('Batch', 'بیچ')} ${batch.batch}`}><Factory size={18} aria-hidden="true" />{t('To production', 'پیداوار کے لیے')}</button>
+          {openLink(openRoute('lot', batch.lotId), `${t('Batch', 'بیچ')} ${batch.batch}`)}
+        </div>
+      </li>)}</ul>
+    </section>}
+
+    {producing && <ToProduction {...producing} isAdmin={isAdmin} onClose={() => setProducing(null)}
+      onDone={async message => { setProducing(null); await changed(message); }} />}
+  </section>;
+}

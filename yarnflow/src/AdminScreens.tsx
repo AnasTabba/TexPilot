@@ -1,90 +1,412 @@
-import { useEffect, useState } from 'react';
-import { ArrowUpRight, ChevronDown, UserPlus } from 'lucide-react';
-import { AsyncForm, Field, errorMessage } from './forms';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { ArrowLeft, ArrowUpRight, Check, ChevronDown, ClipboardCheck, RotateCw, Save, X } from 'lucide-react';
+import { AnalyticsSection, BarList, KpiStrip, StackedBar, firstCurrency, type BarRow, type Kpi, type Segment, type Tone } from './AnalyticsKit';
+import { Field, errorMessage } from './forms';
 import { useLanguage } from './i18n';
 import { inventoryRequest as api, roleLabel, type Member, type Role, type WorkspaceState } from './inventory-client';
-import { InterventionField, NextStep, ReasonField, SectionTabs, kg, money, portal } from './PortalCommon';
+import { InterventionField, NextStep, ReasonField, SectionTabs, StatusTag, kg, money, portal } from './PortalCommon';
+import { Correction } from './CorrectionForm';
 import { when } from './WorkspaceDashboard';
-import { MODULES } from './ModuleViews';
+import { SplitView, StepFlow } from './SplitView';
+import './admin-screens.css';
+import './approvals-ui.css';
+import './sales-screens.css';
 
 type Props = { member: Member; section: string; tab: string; id: string; navigate: (to: string, id?: string) => void; state?: WorkspaceState; onInventoryChanged?: () => Promise<void> };
+type Navigate = Props['navigate'];
 type Settings = { currency: string; tax_rate_bp: number; invoice_format: string; reminder_hours: number; credit_alert_days: number[] };
 type Threshold = { type: string; value: number; currency: string | null; updated_by_name: string; updated_at: number };
 type ThresholdHistory = { type: string; old_value: number | null; new_value: number; old_currency: string | null; new_currency: string | null; changed_by_name: string; changed_at: number };
-type Person = { id: string; name: string; role: Role | null; status: string; created_at: number; locked: boolean };
+
+/** Sections this screen serves. User management lives in Team; role modules are not ported. */
+export const ADMIN_SECTIONS = ['approvals', 'thresholds', 'claims', 'admin-activity', 'reports', 'analytics', 'settings'];
+
 const types = ['purchase', 'inventory_adjustment', 'claim', 'dispatch_stock_issue'];
-const thresholdName: Record<string, [string,string]> = { purchase: ['Purchase threshold', 'خریداری کی حد'], inventory_adjustment: ['Inventory adjustment', 'اسٹاک کی تبدیلی'], claim: ['Claim threshold', 'دعوے کی حد'], dispatch_stock_issue: ['Dispatch stock issue', 'ڈسپیچ اسٹاک مسئلہ'] };
-const groups = [{id:'purchase',en:'Purchase awards',ur:'خریداری ایوارڈ',types:['purchase_award','po_change']},{id:'inventory',en:'Inventory adjustments',ur:'اسٹاک کی تبدیلی',types:['inventory_adjustment']},{id:'claims',en:'Claims',ur:'دعوے',types:['claim']},{id:'dispatch',en:'Dispatch issues',ur:'ڈسپیچ مسائل',types:['dispatch_stock_issue']},{id:'escalation',en:'Escalations',ur:'اضافہ شدہ معاملات',types:['escalation']}];
-const words: Record<string,[string,string]> = {purchase_award:['Purchase award','خریداری ایوارڈ'],po_change:['PO change','پی او تبدیلی'],inventory_adjustment:['Inventory adjustment','اسٹاک کی تبدیلی'],claim:['Claim','دعویٰ'],dispatch_stock_issue:['Dispatch stock issue','ڈسپیچ اسٹاک مسئلہ'],escalation:['Escalation','اضافہ شدہ معاملہ']};
-const tabFor = (section:string,tab:string) => section === 'settings' ? (['thresholds','invoices','users'].includes(tab)?tab:'thresholds') : section === 'admin-activity' ? (tab === 'audit'?'audit':'monitor') : '';
-function useLoad<T>(path:string) { const [value,setValue]=useState<T|null>(null),[error,setError]=useState(''),[revision,setRevision]=useState(0); useEffect(()=>{let active=true; api<T>(path).then(v=>{if(active){setValue(v);setError('');}}).catch(e=>{if(active)setError(errorMessage(e));}); return ()=>{active=false;};},[path,revision]); return {value,error,reload:()=>setRevision(x=>x+1)}; }
-function price(value:number,currency:string) { return money(value,currency); }
-export default function AdminScreens({member,section,tab,id,navigate,state,onInventoryChanged}:Props) {
- const {t}=useLanguage();
- const settings=useLoad<{settings:Settings}>('/erp/admin/settings');
- const approvals=useLoad<{approvals:any[]}>('/erp/approvals');
- const claims=useLoad<{claims:any[]}>('/erp/qc/claims');
- const audits=useLoad<{events:any[];next:string|null}>('/erp/admin/audit');
- const reports=useLoad<{reports:any[]}>('/erp/stock/reports');
+const thresholdName: Record<string, [string, string]> = { purchase: ['Purchase threshold', 'خریداری کی حد'], inventory_adjustment: ['Inventory adjustment', 'اسٹاک کی تبدیلی'], claim: ['Claim threshold', 'دعوے کی حد'], dispatch_stock_issue: ['Dispatch stock issue', 'ڈسپیچ اسٹاک مسئلہ'] };
+// Money thresholds are stored in minor units, stock thresholds in grams.
+const isAmount = (type: string) => ['purchase', 'claim'].includes(type);
+const scaleOf = (type: string) => (isAmount(type) ? 100 : 1000);
+const groups = [{ id: 'purchase', en: 'Purchase awards', ur: 'خریداری ایوارڈ', types: ['purchase_award', 'po_change'] }, { id: 'inventory', en: 'Inventory adjustments', ur: 'اسٹاک کی تبدیلی', types: ['inventory_adjustment'] }, { id: 'claims', en: 'Claims', ur: 'دعوے', types: ['claim'] }, { id: 'dispatch', en: 'Dispatch issues', ur: 'ڈسپیچ مسائل', types: ['dispatch_stock_issue'] }, { id: 'escalation', en: 'Escalations', ur: 'اضافہ شدہ معاملات', types: ['escalation'] }];
+const words: Record<string, [string, string]> = { purchase_award: ['Purchase award', 'خریداری ایوارڈ'], po_change: ['PO change', 'پی او تبدیلی'], inventory_adjustment: ['Inventory adjustment', 'اسٹاک کی تبدیلی'], claim: ['Claim', 'دعویٰ'], dispatch_stock_issue: ['Dispatch stock issue', 'ڈسپیچ اسٹاک مسئلہ'], escalation: ['Escalation', 'اضافہ شدہ معاملہ'] };
+const named = (type: string): [string, string] => words[type] || [type, type];
+const outcomes: [string, string, string][] = [['return', 'Return', 'واپسی'], ['replacement', 'Replacement', 'تبدیلی'], ['claim', 'Claim', 'دعویٰ']];
+const auditRoutes: Record<string, string> = { approval: 'approvals', claim: 'claims', supervisor_report: 'reports', user: 'team', threshold: 'thresholds', setting: 'settings' };
+const auditRoute = (event: any): [string, string | undefined] => [auditRoutes[event.object_type] || 'notifications', event.record_id || undefined];
+const amountOf = (row: any, value: number, currency: string) => (row.unit === 'minor' ? money(value, row.currency || currency) : kg(value));
 
- const analytics=useLoad<any>('/erp/analytics/admin');
- const thresholds=useLoad<{thresholds:Threshold[];history:ThresholdHistory[]}>('/erp/admin/thresholds');
- 
- const activeTab=tabFor(section,tab);
- const commonError=[settings.error,section==='approvals'?approvals.error:'',section==='claims'?claims.error:'',section==='admin-activity'?audits.error:'',section==='reports'?reports.error:'',section==='settings'&&activeTab==='thresholds'?thresholds.error:''].find(Boolean);
- const refresh=()=>{settings.reload();approvals.reload();claims.reload();audits.reload();reports.reload();thresholds.reload();};
- return <div className="yf-admin">
-   {commonError&&<p className="live-error" role="alert">{t(commonError)} <button className="live-text-button" onClick={refresh}>{t('Retry','دوبارہ کوشش کریں')}</button></p>}
-   {section==='dashboard'&&<Dashboard analytics={analytics} member={member} approvals={approvals.value?.approvals||[]} thresholds={thresholds.value?.thresholds||[]} currency={settings.value?.settings.currency||'PKR'} navigate={navigate} />}
-   {section==='approvals'&&<Approvals member={member} list={approvals.value?.approvals||[]} id={id} currency={settings.value?.settings.currency||'PKR'} reload={approvals.reload} />}
-   {section==='claims'&&<Claims member={member} list={claims.value?.claims||[]} id={id} currency={settings.value?.settings.currency||'PKR'} reload={claims.reload} />}
-   {section==='settings'&&<><SectionTabs tabs={[{id:'thresholds',en:'Thresholds',ur:'حدود'},{id:'invoices',en:'Invoices',ur:'انوائس'},{id:'users',en:'Users',ur:'صارفین'}]} value={activeTab} onChange={v=>{history.replaceState(null,'',`#/settings/${v}`);window.dispatchEvent(new HashChangeEvent('hashchange'));navigate('settings',v);}} />{activeTab==='thresholds'?<Thresholds data={thresholds.value} currency={settings.value?.settings.currency||'PKR'} reload={()=>{thresholds.reload();settings.reload();}}/>:activeTab==='invoices'?<InvoiceSettings value={settings.value?.settings} reload={settings.reload}/>:<Users member={member} />}</>}
-   {section==='admin-activity'&&<><SectionTabs tabs={[{id:'monitor',en:'Monitor',ur:'نگرانی'},{id:'audit',en:'Audit log',ur:'آڈٹ لاگ'}]} value={activeTab} onChange={v=>navigate('admin-activity',v)} />{activeTab==='monitor'?<AuditMonitor events={audits.value?.events||[]} reload={audits.reload}/>:<AuditLog />}</>}
-   {section==='reports'&&<Reports list={reports.value?.reports||[]} id={id}/>}
-   {section==='analytics'&&<Analytics data={analytics.value} error={analytics.error}/>}
-   {section==='modules'&&<Modules member={member} navigate={navigate} tab={tab} state={state} onInventoryChanged={onInventoryChanged}/>}
- </div>;
+type Filter = { objectType: string; action: string; actor: string; from: string; to: string };
+function auditQuery(filter: Filter, before?: string) {
+  const query = new URLSearchParams();
+  if (filter.objectType) query.set('objectType', filter.objectType);
+  if (filter.action) query.set('action', filter.action);
+  if (filter.actor) query.set('actor', filter.actor);
+  if (filter.from) query.set('from', String(new Date(filter.from).getTime()));
+  if (filter.to) query.set('to', String(new Date(filter.to).getTime() + 86399999));
+  if (before) query.set('before', before);
+  return query.toString();
 }
-function Dashboard({analytics,member,approvals,thresholds,currency,navigate}:{analytics:{value:any;error:string};member:Member;approvals:any[];thresholds:Threshold[];currency:string;navigate:Props['navigate']}) { const {t}=useLanguage(); const unset=types.filter(type=>!thresholds.some(row=>row.type===type)); const oldest=approvals[approvals.length-1]; return <div className="yf-admin-sections">
- <NextStep tone={oldest?'warn':'ok'} title={oldest?t('Review the oldest pending approval','پرانے زیرِ التوا فیصلے کا جائزہ لیں'):t('No approvals are waiting','کوئی منظوری منتظر نہیں')} reason={oldest?`${t(words[oldest.type]?.[0]||oldest.type)} · ${oldest.requested_by_name||''}`:t('New requests will appear in the approvals queue.','نئی درخواستیں منظوریوں کی فہرست میں آئیں گی۔')} action={oldest?<button className="button primary" onClick={()=>navigate('approvals',oldest.id)}>{t('Review','جائزہ')}</button>:undefined}/>
- <section className="yf-section"><h2>{t('Pending approvals','زیرِ التوا منظوری')}</h2><ul className="yf-facts">{groups.map(group=><li key={group.id}><span>{t(group.en,group.ur)}</span><strong>{approvals.filter(a=>group.types.includes(a.type)).length}</strong></li>)}</ul></section>
- {unset.length>0&&<section className="yf-section"><h2>{t('Thresholds not set','غیر مقررہ حدود')}</h2><ul className="yf-facts">{unset.map(type=><li key={type}><span>{t(...thresholdName[type])}</span><span>{t('Not configured','ترتیب نہیں دی گئی')}</span></li>)}</ul><button className="button" onClick={()=>navigate('settings','thresholds')}>{t('Set thresholds','حدود مقرر کریں')}</button></section>}
- <section className="yf-section"><h2>{t('Current thresholds','موجودہ حدود')}</h2><ul className="yf-facts">{types.map(type=>{const row=thresholds.find(v=>v.type===type);return <li key={type}><span>{t(...thresholdName[type])}</span><strong>{row?price(row.value,row.currency||currency):t('Not set','مقرر نہیں')}</strong></li>})}</ul></section>
- <KeyFigures data={analytics.value} error={analytics.error}/>
- </div>; }
-function Approvals({member,list,id,currency,reload}:{member:Member;list:any[];id:string;currency:string;reload:()=>void}) { const {t}=useLanguage(); const [group,setGroup]=useState('all'),[detail,setDetail]=useState<any>(null),[reason,setReason]=useState(''),[intervention,setIntervention]=useState(''),[error,setError]=useState(''); const selected=id?list.find(a=>a.id===id):null; const visible=list.filter(a=>group==='all'||groups.find(g=>g.id===group)?.types.includes(a.type)); useEffect(()=>{if(selected)portal<any>(`/approvals/${selected.id}`).then(setDetail).catch(e=>setError(errorMessage(e)));else setDetail(null);},[selected?.id]);
- async function decide(decision:'approve'|'reject'){setError('');try{await portal('/approvals/decide',{id:selected.id,decision,...(decision==='reject'?{reason}:{}),...(member.role==='admin'?{interventionReason:intervention}:{})});setDetail(null);setReason('');reload();}catch(e){setError(errorMessage(e));}}
- if(selected)return <section className="yf-section"><button className="live-text-button" onClick={()=>{location.hash='#/approvals';}}>← {t('All approvals','تمام منظوری')}</button><h2>{t(words[selected.type]?.[0]||selected.type,words[selected.type]?.[1])}</h2>{detail?.object&&<><dl className="yf-facts"><div><dt>{t('Item','آئٹم')}</dt><dd>{detail.object.label}</dd></div><div><dt>{t('Requested by','درخواست گزار')}</dt><dd>{selected.requested_by_name}</dd></div><div><dt>{t('Amount','رقم')}</dt><dd>{selected.unit==='minor'?price(selected.amount,selected.currency||currency):kg(selected.amount)}</dd></div><div><dt>{t('Threshold at request','درخواست کے وقت حد')}</dt><dd>{selected.unit==='minor'?price(selected.threshold,selected.currency||currency):kg(selected.threshold)}</dd></div><div><dt>{t('Evidence','ثبوت')}</dt><dd><pre>{JSON.stringify(detail.object.evidence,null,2)}</pre></dd></div><div><dt>{t('Proposed change','مجوزہ تبدیلی')}</dt><dd><pre>{JSON.stringify(detail.object.proposed,null,2)}</pre></dd></div></dl><ReasonField label={t('Reason for rejection','مسترد کرنے کی وجہ')} value={reason} onChange={setReason}/><InterventionField member={member} owners={['purchase_manager','supervisor','dispatch']} value={intervention} onChange={setIntervention}/><div className="live-actions"><button className="button primary" onClick={()=>void decide('approve')}>{t('Approve','منظور کریں')}</button><button className="button" disabled={reason.trim().length<5} onClick={()=>void decide('reject')}>{t('Reject','مسترد کریں')}</button></div></>}{error&&<p className="live-error" role="alert">{t(error)}</p>}</section>;
- return <><SectionTabs tabs={[{id:'all',en:'All',ur:'سب'},...groups]} value={group} onChange={setGroup}/><section className="yf-section"><h2>{t('Pending approval requests','منظوری کی منتظر درخواستیں')}</h2>{visible.length?<ul className="yf-admin-list">{visible.map(row=><li key={row.id}><button onClick={()=>location.hash=`#/approvals/${row.id}`}><span><strong>{t(words[row.type]?.[0]||row.type,words[row.type]?.[1])}</strong><small>{row.requested_by_name} · {when.format(row.created_at)}</small></span><b>{row.unit==='minor'?price(row.amount,row.currency||currency):kg(row.amount)}</b><ArrowUpRight aria-hidden="true"/></button></li>)}</ul>:<p className="live-empty">{t('No pending requests in this group.','اس گروپ میں کوئی زیرِ التوا درخواست نہیں۔')}</p>}</section></>;
-}
-function Thresholds({data,currency,reload}:{data:{thresholds:Threshold[];history:ThresholdHistory[]}|null;currency:string;reload:()=>void}) { const {t}=useLanguage(); const [values,setValues]=useState<Record<string,string>>({}),[error,setError]=useState(''); useEffect(()=>{const next:Record<string,string>={}; for(const type of types){const row=data?.thresholds.find(x=>x.type===type);next[type]=String(row?(type==='purchase'||type==='claim'?row.value/100:row.value/1000):'');}setValues(next);},[data]); async function save(type:string){setError('');try{const parsed=Number(values[type]);if(!Number.isFinite(parsed)||parsed<0)throw new Error('Enter a valid non-negative threshold.');await portal('/admin/thresholds',{type,value:Math.round(parsed*(type==='purchase'||type==='claim'?100:1000))});reload();}catch(e){setError(errorMessage(e));}} return <div className="yf-admin-sections"><p>{t('Amounts are entered in the displayed currency; stock limits are entered in kg.','رقم دکھائی گئی کرنسی میں اور اسٹاک کی حد کلوگرام میں درج کریں۔')}</p>{types.map(type=>{const row=data?.thresholds.find(x=>x.type===type);return <section className="yf-section" key={type}><h2>{t(...thresholdName[type])}</h2><p className="live-muted">{['purchase','claim'].includes(type)?currency:t('kg','کلوگرام')}</p><div className="live-actions"><Field>{['purchase','claim'].includes(type)?t('Amount', 'رقم'):t('Weight (kg)','وزن (کلوگرام)')}<input aria-label={t(...thresholdName[type])} inputMode="decimal" value={values[type]??''} onChange={e=>setValues(v=>({...v,[type]:e.target.value}))} placeholder={t('Not configured','ترتیب نہیں دی گئی')}/></Field><button className="button primary" onClick={()=>void save(type)}>{t('Save','محفوظ کریں')}</button></div>{row&&<p>{t('Last changed by','آخری تبدیلی')}: {row.updated_by_name} · {when.format(row.updated_at)}</p>}<ul className="yf-facts">{(data?.history||[]).filter(h=>h.type===type).map((h,i)=><li key={`${h.changed_at}-${i}`}><span>{h.changed_by_name} · {when.format(h.changed_at)}</span><strong>{h.old_value===null?'—':price(h.old_value,h.old_currency||currency)} → {price(h.new_value,h.new_currency||currency)}</strong></li>)}</ul></section>})}{error&&<p role="alert" className="live-error">{t(error)}</p>}</div>; }
-function InvoiceSettings({value,reload}:{value?:Settings;reload:()=>void}) { const {t}=useLanguage(); const [draft,setDraft]=useState<Settings|null>(null),[error,setError]=useState(''); useEffect(()=>{if(value)setDraft({...value});},[value]); async function save(key:keyof Settings,v:unknown){setError('');try{await portal('/admin/settings',{key,value:v});reload();}catch(e){setError(errorMessage(e));}} if(!draft)return <p role="status">{t('Loading settings…','ترتیبات لوڈ ہو رہی ہیں…')}</p>; return <div className="yf-admin-sections"><section className="yf-section"><h2>{t('Invoice and factory settings','انوائس اور فیکٹری کی ترتیبات')}</h2><form onSubmit={e=>{e.preventDefault();void (async()=>{for(const [key,value] of [['currency',draft.currency],['tax_rate_bp',draft.tax_rate_bp],['invoice_format',draft.invoice_format],['reminder_hours',draft.reminder_hours],['credit_alert_days',draft.credit_alert_days]] as const){await save(key as keyof Settings,value);}reload();})();}}><Field>{t('Currency','کرنسی')}<select value={draft.currency} onChange={e=>setDraft({...draft,currency:e.target.value})}>{['PKR','USD','EUR','GBP'].map(v=><option key={v}>{v}</option>)}</select></Field><Field>{t('GST (%)','جی ایس ٹی (%)')}<input type="number" min="0" max="100" step="0.01" value={draft.tax_rate_bp/100} onChange={e=>setDraft({...draft,tax_rate_bp:Math.round(Number(e.target.value)*100)})}/></Field><Field>{t('Invoice number format','انوائس نمبر کی ترتیب')}<input value={draft.invoice_format} onChange={e=>setDraft({...draft,invoice_format:e.target.value})}/></Field><Field>{t('Reminder hours','یاددہانی کے گھنٹے')}<input type="number" min="1" max="720" value={draft.reminder_hours} onChange={e=>setDraft({...draft,reminder_hours:Number(e.target.value)})}/></Field><Field>{t('Credit alert days (comma separated)','ادھار یاددہانی کے دن')}<input value={draft.credit_alert_days.join(', ')} onChange={e=>setDraft({...draft,credit_alert_days:e.target.value.split(',').map(Number).filter(Number.isFinite)})}/></Field><button className="button primary">{t('Save settings','ترتیبات محفوظ کریں')}</button></form>{error&&<p className="live-error" role="alert">{t(error)}</p>}</section></div>; }
-function Users({member}:{member:Member}) { const {t,language}=useLanguage(); const {value,error,reload}=useLoad<{users:Person[]}>('/erp/admin/users'); const [add,setAdd]=useState(false); return <section className="yf-section"><div className="yf-head"><h2>{t('People','افراد')}</h2><button className="button" onClick={()=>setAdd(v=>!v)}><UserPlus size={18}/>{t('Add a person','نیا فرد شامل کریں')}</button></div>{error&&<p className="live-error" role="alert">{t(error)}</p>}{add&&<AddPerson onDone={()=>{setAdd(false);reload();}} onCancel={()=>setAdd(false)}/>}<ul className="yf-admin-list">{(value?.users||[]).map(person=><UserRow key={person.id} person={person} self={person.id===member.user_id} reload={reload} language={language}/>)}</ul></section>; }
-function UserRow({person,self,reload,language}:{person:Person;self:boolean;reload:()=>void;language:'en'|'ur'}) { const {t}=useLanguage(); const [open,setOpen]=useState(false),[role,setRole]=useState<Role>(person.role||'supervisor'),[pin,setPin]=useState(''),[error,setError]=useState(''); async function update(body:object){setError('');try{await portal('/admin/users/update',{id:person.id,...body});reload();}catch(e){setError(errorMessage(e));}} return <li><button className="yf-admin-user" aria-expanded={open} onClick={()=>setOpen(!open)}><span><strong>{person.name}{self?` · ${t('you','آپ')}`:''}</strong><small>{person.role?t(...roleLabel[person.role]):t('Role not assigned','کردار مقرر نہیں')} · {person.status==='deactivated'?t('Deactivated','غیر فعال'):t('Active','فعال')}</small></span><ChevronDown/></button>{open&&<div className="yf-admin-user-controls"><Field>{t('Role','کردار')}<select value={role} onChange={e=>setRole(e.target.value as Role)}>{Object.keys(roleLabel).map(r=><option key={r} value={r}>{t(...roleLabel[r as Role])}</option>)}</select></Field>{role!==person.role&&<button className="button" onClick={()=>void update({role})}>{t('Save role','کردار محفوظ کریں')}</button>}<form onSubmit={e=>{e.preventDefault();void update({pin}).then(()=>setPin(''));}}><Field>{t('Reset 4-digit PIN','چار ہندسوں کا پن بدلیں')}<input type="password" dir="ltr" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,''))} required/></Field><button className="button">{t('Reset PIN','پن بدلیں')}</button></form>{!self&&<button className="live-text-button yf-danger" onClick={()=>void update({active:person.status==='deactivated'})}>{person.status==='deactivated'?t('Reactivate','دوبارہ فعال کریں'):t('Deactivate','غیر فعال کریں')}</button>}{error&&<p className="live-error" role="alert">{t(error)}</p>}</div>}</li>; }
-function AddPerson({onDone,onCancel}:{onDone:()=>void;onCancel:()=>void}) { const {t}=useLanguage(); const [name,setName]=useState(''),[pin,setPin]=useState(''),[again,setAgain]=useState(''),[role,setRole]=useState<Role>('supervisor'); return <AsyncForm title={t('Add a person','نیا فرد شامل کریں')} submit={t('Add person','فرد شامل کریں')} onCancel={onCancel} onSubmit={async()=>{if(pin!==again)throw new Error(t('The two PINs are different.','دونوں پن مختلف ہیں۔'));await portal('/admin/users',{name,pin,role});onDone();}}><Field>{t('Name','نام')}<input minLength={2} maxLength={40} value={name} onChange={e=>setName(e.target.value)} required/></Field><div className="live-fields"><Field>{t('4-digit PIN','چار ہندسوں کا پن')}<input type="password" dir="ltr" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,''))} required/></Field><Field>{t('Type it again','دوبارہ درج کریں')}<input type="password" dir="ltr" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} value={again} onChange={e=>setAgain(e.target.value.replace(/\D/g,''))} required/></Field></div><Field>{t('Role','کردار')}<select value={role} onChange={e=>setRole(e.target.value as Role)}>{Object.keys(roleLabel).map(r=><option key={r} value={r}>{t(...roleLabel[r as Role])}</option>)}</select></Field></AsyncForm>; }
-function AuditMonitor({events,reload}:{events:any[];reload:()=>void}) { const {t}=useLanguage(); useEffect(()=>{void api<any>('/erp/admin/audit').then(value=>{if(value.events?.length)reload();});},[]); const days=new Map<string,any[]>(); for(const event of events){const label=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Karachi',dateStyle:'full'}).format(event.created_at);days.set(label,[...(days.get(label)||[]),event]);} return <section className="yf-section"><h2>{t('Recent activity','حالیہ سرگرمی')}</h2>{[...days].map(([day,rows])=><section key={day}><h3>{day}</h3><ul className="yf-admin-list">{rows.map(event=><li key={event.id}><button onClick={()=>{location.hash=objectRouteFor(event);}}><span><strong>{event.actor_name||'—'} · {t(event.action)}</strong><small>{event.object_type} · {when.format(event.created_at)}</small></span><ArrowUpRight/></button></li>)}</ul></section>)}</section>; }
-function objectRouteFor(event:any) { const id=encodeURIComponent(event.record_id||''); const routes:Record<string,string>={approval:'approvals',claim:'claims',supervisor_report:'reports',user:'settings/users',threshold:'settings/thresholds',setting:'settings/invoices'}; const path=routes[event.object_type]; return path?`#/${path}${id?'/'+id:''}`:'#/notifications'; }
-function AuditLog() { const {t}=useLanguage(); const [filter,setFilter]=useState({objectType:'',action:'',actor:'',from:'',to:''}),[next,setNext]=useState<string|null>(null),[rows,setRows]=useState<any[]>([]); const params=()=>{const query=new URLSearchParams();if(filter.objectType)query.set('objectType',filter.objectType);if(filter.action)query.set('action',filter.action);if(filter.actor)query.set('actor',filter.actor);if(filter.from)query.set('from',String(new Date(filter.from).getTime()));if(filter.to)query.set('to',String(new Date(filter.to).getTime()+86399999));return query;}; useEffect(()=>{api<any>(`/erp/admin/audit?${params()}`).then(x=>{setRows(x.events);setNext(x.next)}).catch(()=>{});},[JSON.stringify(filter)]); const loadOlder=async()=>{if(!next)return;const query=params();query.set('before',next);const x=await api<any>(`/erp/admin/audit?${query}`);setRows(old=>[...old,...x.events]);setNext(x.next);}; return <section className="yf-section"><h2>{t('Audit log','آڈٹ لاگ')}</h2><div className="live-fields"><Field>{t('Object','آبجیکٹ')}<input value={filter.objectType} onChange={e=>setFilter({...filter,objectType:e.target.value})} placeholder="user"/></Field><Field>{t('Action','عمل')}<input value={filter.action} onChange={e=>setFilter({...filter,action:e.target.value})}/></Field><Field>{t('Person ID','شخص کی شناخت')}<input value={filter.actor} onChange={e=>setFilter({...filter,actor:e.target.value})}/></Field><Field>{t('From date','ابتدائی تاریخ')}<input type="date" value={filter.from} onChange={e=>setFilter({...filter,from:e.target.value})}/></Field><Field>{t('To date','آخری تاریخ')}<input type="date" value={filter.to} onChange={e=>setFilter({...filter,to:e.target.value})}/></Field></div><ul className="yf-admin-list">{rows.map(event=><li key={event.id}><div><strong>{event.actor_name||'—'} · {t(event.action)}</strong><small>{event.object_type} · {event.record_id} · {when.format(event.created_at)}</small><p>{event.old_json||'—'} → {event.new_json||'—'}</p>{event.reason&&<p>{t('Reason','وجہ')}: {event.reason}</p>}{event.intervention_reason&&<p>{t('Intervention','مداخلت')}: {event.intervention_reason}</p>}</div></li>)}</ul>{next&&<button className="button" onClick={()=>void loadOlder()}>{t('Load older','پرانے ریکارڈ')}</button>}</section>; }
-function Reports({list,id}:{list:any[];id:string}) { const {t}=useLanguage(); const report=list.find(x=>x.id===id); return <section className="yf-section"><h2>{t('Supervisor reports','سپروائزر رپورٹس')}</h2>{report?<dl className="yf-facts"><div><dt>{t('Period','مدت')}</dt><dd>{report.period_from} – {report.period_to}</dd></div><div><dt>{t('Created by','تیار کردہ')}</dt><dd>{report.created_by_name}</dd></div><div><dt>{t('Sections','حصے')}</dt><dd><pre>{JSON.stringify(report.content,null,2)}</pre></dd></div><div><dt>{t('Flagged items','نشان زد آئٹمز')}</dt><dd><pre>{JSON.stringify(report.flagged,null,2)}</pre></dd></div></dl>:list.length?<ul className="yf-admin-list">{list.map(r=><li key={r.id}><button onClick={()=>location.hash=`#/reports/${r.id}`}><span><strong>{r.period_from} – {r.period_to}</strong><small>{r.created_by_name} · {when.format(r.created_at)}</small></span><ArrowUpRight/></button></li>)}</ul>:<p className="live-empty">{t('No supervisor reports yet.','ابھی سپروائزر رپورٹ موجود نہیں۔')}</p>}</section>; }
-function Claims({member,list,id,currency,reload}:{member:Member;list:any[];id:string;currency:string;reload:()=>void}) { const {t}=useLanguage(); const claim=list.find(c=>c.id===id),[outcome,setOutcome]=useState('claim'),[amount,setAmount]=useState(''),[reason,setReason]=useState(''),[intervention,setIntervention]=useState(''),[error,setError]=useState(''); async function decide(){try{await portal('/qc/claims/decide',{id:claim.id,outcome,...(amount?{adjustedMinor:Math.round(Number(amount)*100),reason}: {}),...(member.role==='admin'?{interventionReason:intervention}:{})});reload();}catch(e){setError(errorMessage(e));}} return <section className="yf-section"><h2>{claim?t('Claim detail','دعوے کی تفصیل'):t('Claims','دعوے')}</h2>{claim?<><dl className="yf-facts">{Object.entries({supplier:claim.supplier_name,product:claim.product_name,rejected:kg(claim.rejected_milli),rate:price(claim.po_rate_minor,currency),calculated:price(claim.calculated_minor,currency),status:claim.status}).map(([k,v])=><div key={k}><dt>{t(k)}</dt><dd>{String(v)}</dd></div>)}</dl>{claim.status!=='decided'&&<><Field>{t('Outcome','نتیجہ')}<select value={outcome} onChange={e=>setOutcome(e.target.value)}>{['return','replacement','claim'].map(x=><option key={x}>{t(x)}</option>)}</select></Field><Field>{t('Adjusted amount (optional)','تبدیل شدہ رقم (اختیاری)')}<input value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal"/></Field><ReasonField label={t('Decision reason','فیصلے کی وجہ')} value={reason} onChange={setReason} required={!!amount}/><InterventionField member={member} owners={['admin']} value={intervention} onChange={setIntervention}/><button className="button primary" onClick={()=>void decide()}>{t('Save outcome','نتیجہ محفوظ کریں')}</button>{error&&<p role="alert" className="live-error">{t(error)}</p>}</>}</>:list.length?<ul className="yf-admin-list">{list.map(c=><li key={c.id}><button onClick={()=>location.hash=`#/claims/${c.id}`}><span><strong>{c.supplier_name} · {c.product_name}</strong><small>{kg(c.rejected_milli)} · {c.status}</small></span><b>{price(c.calculated_minor,currency)}</b></button></li>)}</ul>:<p className="live-empty">{t('No claims have been raised.','کوئی دعویٰ درج نہیں ہوا۔')}</p>}</section>; }
-function Modules({member,navigate,tab,state,onInventoryChanged}:{member:Member;navigate:Props['navigate'];tab:string;state?:WorkspaceState;onInventoryChanged?:()=>Promise<void>}) { const {t}=useLanguage();const role:Role=(['purchase_manager','quality_inspector','supervisor','sales_manager','dispatch'].includes(tab)?tab:'purchase_manager') as Role;const Screen=MODULES[role]!;return <section className="yf-section"><h2>{t('Role modules','کردار کے ماڈیول')}</h2><SectionTabs tabs={(['purchase_manager','quality_inspector','supervisor','sales_manager','dispatch'] as Role[]).map(r=>({id:r,en:roleLabel[r][0],ur:roleLabel[r][1]}))} value={role} onChange={x=>navigate('modules',x)}/><Screen member={member} section="" tab="" id="" navigate={navigate} state={state} onInventoryChanged={onInventoryChanged}/></section>; }
-function Unavailable({title,detail}:{title:string;detail:string}) { return <NextStep tone="warn" title={title} reason={detail}/>; }
 
-const ucur=(rows:any[]=[],key:string)=>rows.map(r=>r.currency?money(r[key],r.currency):'').filter(Boolean).join(' · ')||'—';
-function KeyFigures({data,error}:{data:any;error:string}) { const {t}=useLanguage(); if(error)return <Unavailable title={t('Key figures unavailable','اہم اعداد دستیاب نہیں')} detail={error}/>; if(!data)return null;
- const rows:[string,string,string][]=[['RFQs awarded','آرڈر ہونے والے RFQ',String(data.purchasing?.awards??0)],['Purchase orders','خریداری آرڈر',ucur(data.purchasing?.totalsByCurrency,'poTotalMinor')],['Outstanding payments','واجب الادا ادائیگیاں',ucur(data.payments?.byCurrency,'outstandingMinor')],['Inspection pass rate','معائنہ پاس شرح',data.quality?.passRate==null?'—':`${Math.round(data.quality.passRate*100)}%`]];
- return <section className="yf-section"><h2>{t('Key figures','اہم اعداد')}</h2><ul className="yf-facts">{rows.map(([en,ur,v])=><li key={en}><span>{t(en,ur)}</span><strong>{v}</strong></li>)}</ul></section>; }
-function Analytics({data,error}:{data:any;error:string}) { const {t}=useLanguage(); if(error)return <Unavailable title={t('Analytics data is not available yet.','تجزیاتی ڈیٹا ابھی دستیاب نہیں۔')} detail={error}/>; if(!data)return <p className="live-empty">{t('Loading…','لوڈ ہو رہا ہے…')}</p>;
- const table=(title:[string,string],head:string[],body:string[][])=><section className="yf-section" key={title[0]}><h2>{t(...title)}</h2>{body.length?<table className="yf-table"><thead><tr>{head.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{body.map((r,i)=><tr key={i}>{r.map((c,k)=><td key={k}>{c}</td>)}</tr>)}</tbody></table>:<p className="live-empty">{t('No data for this period.','اس مدت کا کوئی ڈیٹا نہیں۔')}</p>}</section>;
- const o=(x:any)=>Object.entries(x||{}).map(([k,v])=>[k,String(v)]);
- return <div className="yf-admin-sections">
-  {table(['Purchasing: RFQs by status','خریداری: RFQ بلحاظ حالت'],['Status','Count'],o(data.purchasing?.rfqs))}
-  {table(['Purchase orders by currency','خریداری آرڈر بلحاظ کرنسی'],['Currency','Total'],(data.purchasing?.totalsByCurrency||[]).map((r:any)=>[r.currency||'—',money(r.poTotalMinor,r.currency||undefined)]))}
-  {table(['Quality: claims','معیار: دعوے'],['Outcome','Count'],o(data.quality?.claims))}
-  {table(['Claims by currency','دعوے بلحاظ کرنسی'],['Currency','Total'],(data.quality?.totalsByCurrency||[]).map((r:any)=>[r.currency||'—',money(r.claimMinor,r.currency||undefined)]))}
-  {table(['Inventory','اسٹاک'],['Stage','Weight'],[['Raw',kg(data.inventory?.rawGrams||0)],['Cops',kg(data.inventory?.copsGrams||0)],['WIP',kg(data.inventory?.wipGrams||0)],['Finished',kg(data.inventory?.finishedGrams||0)]])}
-  {table(['Sales: by buyer','فروخت: بلحاظ خریدار'],['Buyer','Currency','Total'],(data.sales?.byBuyer||[]).map((r:any)=>[r.buyer,r.currency,money(r.totalMinor,r.currency)]))}
-  {table(['Payments outstanding','بقایا ادائیگیاں'],['Currency','Outstanding','Overdue'],(data.payments?.byCurrency||[]).map((r:any)=>[r.currency,money(r.outstandingMinor,r.currency),money(r.overdueMinor,r.currency)]))}
-  {table(['Dispatch','ڈسپیچ'],['Status','Count'],o(data.dispatch))}
-  {table(['Staff activity','عملے کی سرگرمی'],['Person','Role','Actions'],(data.users||[]).map((r:any)=>[r.name,r.role,String(r.actions)]))}
- </div>; }
+function useLoad<T>(path: string) {
+  const [value, setValue] = useState<T | null>(null);
+  const [error, setError] = useState('');
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let active = true;
+    api<T>(path).then(next => { if (active) { setValue(next); setError(''); } }).catch(e => { if (active) setError(errorMessage(e)); });
+    return () => { active = false; };
+  }, [path, revision]);
+  return { value, error, reload: () => { setError(''); setRevision(x => x + 1); } };
+}
+
+function RetryError({ error, reload }: { error: string; reload: () => void }) {
+  const { t } = useLanguage();
+  return <p className="live-error" role="alert">{t(error)} <button className="live-text-button" onClick={reload}><RotateCw size={16} aria-hidden="true" />{t('Retry', 'دوبارہ کوشش کریں')}</button></p>;
+}
+
+/** Loading, error (with retry) and then the loaded content. */
+function Loaded<T>({ res, children }: { res: { value: T | null; error: string; reload: () => void }; children: (value: T) => ReactNode }) {
+  const { t } = useLanguage();
+  if (res.error) return <RetryError error={res.error} reload={res.reload} />;
+  if (res.value === null) return <p className="live-muted" role="status">{t('Loading…', 'لوڈ ہو رہا ہے…')}</p>;
+  return <>{children(res.value)}</>;
+}
+
+export default function AdminScreens({ member, section, tab, id, navigate }: Props) {
+  const { t } = useLanguage();
+  // Currency comes from settings; the screens that show money need it, the rest do not.
+  const settings = useLoad<{ settings: Settings }>('/erp/admin/settings');
+  const currency = settings.value?.settings.currency || 'PKR';
+  if (!ADMIN_SECTIONS.includes(section)) return null;
+  const activeTab = tab === 'audit' ? 'audit' : 'monitor';
+  return <div className="yf-admin">
+    {['approvals', 'claims', 'thresholds'].includes(section) && settings.error && <RetryError error={settings.error} reload={settings.reload} />}
+    {section === 'approvals' && <Approvals member={member} id={id} currency={currency} navigate={navigate} />}
+    {section === 'thresholds' && <section className="yf-factory-limits"><h2>{t('Factory default limits', 'فیکٹری کی بنیادی حدیں')}</h2><p className="live-muted">{t('Used for anyone who has no approval limit of their own. Set a supervisor’s own limits by opening them above.', 'ان سب کے لیے جن کی اپنی منظوری کی حد نہیں۔ کسی سپروائزر کی اپنی حدیں اوپر ان کو کھول کر مقرر کریں۔')}</p><Thresholds currency={currency} /></section>}
+    {section === 'claims' && <Claims member={member} id={id} currency={currency} navigate={navigate} />}
+    {section === 'admin-activity' && <>
+      <SectionTabs tabs={[{ id: 'monitor', en: 'Monitor', ur: 'نگرانی' }, { id: 'audit', en: 'Audit log', ur: 'آڈٹ لاگ' }]} value={activeTab} onChange={v => navigate('admin-activity', v)} />
+      {activeTab === 'monitor' ? <AuditMonitor navigate={navigate} /> : <AuditLog />}
+    </>}
+    {section === 'reports' && <Reports id={id} navigate={navigate} />}
+    {section === 'analytics' && <Analytics />}
+    {section === 'settings' && <InvoiceSettings settings={settings.value?.settings ?? null} loadError={settings.error} reload={settings.reload} />}
+  </div>;
+}
+
+/** Approvals as a split view: groups filter the list, the chosen request sits beside it with one Approve action. */
+function Approvals({ member, id, currency, navigate }: { member: Member; id: string; currency: string; navigate: Navigate }) {
+  const { t, language } = useLanguage();
+  const list = useLoad<{ approvals: any[] }>('/erp/approvals');
+  const [group, setGroup] = useState('all');
+  return <Loaded res={list}>{data => {
+    const rows = data.approvals || [];
+    const inGroup = (row: any) => group === 'all' || !!groups.find(g => g.id === group)?.types.includes(row.type);
+    const tabs = [{ id: 'all', label: t('All', 'سب'), count: rows.length }, ...groups.map(g => ({ id: g.id, label: t(g.en, g.ur), count: rows.filter(row => g.types.includes(row.type)).length }))];
+    return <div className="yf-approvals">
+      <SplitView label={t('Pending approval requests', 'منظوری کی منتظر درخواستیں')} tabs={tabs} tab={group} onTab={setGroup}
+        items={rows.filter(inGroup).map(row => ({ id: row.id, title: t(...named(row.type)), meta: `${row.requested_by_name} · ${when.format(row.created_at, language)}`, status: <b className="yf-approval-amount">{amountOf(row, row.amount, currency)}</b> }))}
+        selectedId={id} onSelect={next => navigate('approvals', next)}
+        renderDetail={rowId => { const row = rows.find(item => item.id === rowId); return row ? <ApprovalDetail key={row.id} member={member} row={row} currency={currency} navigate={navigate} reload={list.reload} /> : <p className="split-none">{t('This request is no longer in the list.', 'یہ درخواست اب فہرست میں نہیں۔')}</p>; }}
+        empty={t('No pending requests in this group.', 'اس گروپ میں کوئی زیرِ التوا درخواست نہیں۔')} emptyDetail={t('Choose a request to review it.', 'جائزہ لینے کے لیے کوئی درخواست منتخب کریں۔')} />
+    </div>;
+  }}</Loaded>;
+}
+
+function ApprovalDetail({ member, row, currency, navigate, reload }: { member: Member; row: any; currency: string; navigate: Navigate; reload: () => void }) {
+  const { t, language } = useLanguage();
+  const detail = useLoad<any>(`/erp/approvals/${row.id}`);
+  const [reason, setReason] = useState(''), [intervention, setIntervention] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  async function decide(decision: 'approve' | 'reject') {
+    setError(''); setBusy(true);
+    try {
+      await portal('/approvals/decide', { id: row.id, decision, ...(decision === 'reject' ? { reason } : {}), ...(member.role === 'admin' ? { interventionReason: intervention } : {}) });
+      reload(); navigate('approvals');
+    } catch (e) { setError(errorMessage(e)); setBusy(false); }
+  }
+  // Two steps: the request is raised, then someone decides it.
+  const decided = row.status !== 'pending';
+  return <section className="yf-detail-stack">
+    <div className="yf-detail-head"><div><h2>{t(...named(row.type))}</h2><p>{row.requested_by_name} · {when.format(row.created_at, language)}</p></div><b className="yf-approval-amount">{amountOf(row, row.amount, currency)}</b></div>
+    <StepFlow label={t('Approval steps', 'منظوری کے مراحل')} current={decided ? 2 : 1}
+      steps={[{ icon: 'request', label: t('Requested', 'درخواست'), note: row.requested_by_name }, { icon: 'approve', label: t('Decision', 'فیصلہ') }]} />
+    <Loaded res={detail}>{data => data.object ? <>
+      <dl className="yf-facts">
+        <div><dt>{t('Item', 'آئٹم')}</dt><dd>{data.object.label}</dd></div>
+        <div><dt>{t('Threshold at request', 'درخواست کے وقت حد')}</dt><dd>{amountOf(row, row.threshold, currency)}</dd></div>
+        <div><dt>{t('Evidence', 'ثبوت')}</dt><dd><pre>{JSON.stringify(data.object.evidence, null, 2)}</pre></dd></div>
+        <div><dt>{t('Proposed change', 'مجوزہ تبدیلی')}</dt><dd><pre>{JSON.stringify(data.object.proposed, null, 2)}</pre></dd></div>
+      </dl>
+      <ReasonField label={t('Reason for rejection', 'مسترد کرنے کی وجہ')} value={reason} onChange={setReason} />
+      <InterventionField member={member} owners={['purchase_manager', 'supervisor', 'dispatch']} value={intervention} onChange={setIntervention} />
+      <div className="live-actions">
+        <button className="button primary" disabled={busy} onClick={() => void decide('approve')}><Check size={18} aria-hidden="true" />{t('Approve', 'منظور کریں')}</button>
+        <button className="button" disabled={busy || reason.trim().length < 5} onClick={() => void decide('reject')}><X size={18} aria-hidden="true" />{t('Reject', 'مسترد کریں')}</button>
+      </div>
+    </> : <p className="live-empty">{t('This request has no details to show.', 'اس درخواست کی کوئی تفصیل نہیں۔')}</p>}</Loaded>
+    {row.status === 'approved' && row.undo && <UndoApproval member={member} row={row} reload={reload} />}
+    {error && <p className="live-error" role="alert">{t(error)}</p>}
+  </section>;
+}
+
+/** Undo is offered only where the server can compensate (an award, undone by cancelling its order). Other decisions say they are final. */
+function UndoApproval({ member, row, reload }: { member: Member; row: any; reload: () => void }) {
+  const { t } = useLanguage();
+  if (!row.undo.available) return <p className="live-muted" role="status">{row.undo.message}</p>;
+  return <Correction member={member} label={t('Undo this approval', 'یہ منظوری واپس لیں')} title={t('Undo this approval', 'یہ منظوری واپس لیں')} effect={t('The purchase order this approval created is cancelled and the RFQ reopens for awarding. Only possible before dispatch, arrival or a bill of lading.', 'اس منظوری سے بنا خریداری آرڈر منسوخ ہوگا اور درخواست دوبارہ منظوری کے لیے کھل جائے گی۔ صرف روانگی، آمد یا بل آف لیڈنگ سے پہلے ممکن ہے۔')} submit={t('Undo approval', 'منظوری واپس لیں')} owners={['admin']} path="/erp/approvals/undo" requestField="requestId" payload={() => ({ id: row.id })} onSaved={async () => reload()} />;
+}
+
+export function Thresholds({ currency }: { currency: string }) {
+  const { t, language } = useLanguage();
+  const data = useLoad<{ thresholds: Threshold[]; history: ThresholdHistory[] }>('/erp/admin/thresholds');
+  const [values, setValues] = useState<Record<string, string>>({}), [error, setError] = useState('');
+  useEffect(() => {
+    if (!data.value) return;
+    const next: Record<string, string> = {};
+    for (const type of types) { const row = (data.value.thresholds || []).find(x => x.type === type); next[type] = row ? String(row.value / scaleOf(type)) : ''; }
+    setValues(next);
+  }, [data.value]);
+  async function save(type: string) {
+    setError('');
+    try {
+      const parsed = Number(values[type]);
+      if (!values[type]?.trim() || !Number.isFinite(parsed) || parsed < 0) throw new Error('Enter a valid non-negative threshold.');
+      await portal('/admin/thresholds', { type, value: Math.round(parsed * scaleOf(type)) });
+      data.reload();
+    } catch (e) { setError(errorMessage(e)); }
+  }
+  return <div className="yf-admin-sections">
+    <p className="live-muted">{t('Amounts are entered in the displayed currency; stock limits are entered in kg.', 'رقم دکھائی گئی کرنسی میں اور اسٹاک کی حد کلوگرام میں درج کریں۔')}</p>
+    <Loaded res={data}>{loaded => <>{types.map(type => {
+      const row = (loaded.thresholds || []).find(x => x.type === type);
+      const history = (loaded.history || []).filter(h => h.type === type);
+      const show = (value: number, cur: string | null) => (isAmount(type) ? money(value, cur || currency) : kg(value));
+      return <section className="yf-section" key={type}>
+        <h2>{t(...thresholdName[type])}</h2>
+        <div className="live-actions">
+          <Field>{isAmount(type) ? t('Amount', 'رقم') : t('Weight (kg)', 'وزن (کلوگرام)')}<input aria-label={t(...thresholdName[type])} inputMode="decimal" value={values[type] ?? ''} onChange={e => setValues(v => ({ ...v, [type]: e.target.value }))} placeholder={t('Not configured', 'ترتیب نہیں دی گئی')} /></Field>
+          <button className="button primary" onClick={() => void save(type)}><Save size={18} aria-hidden="true" />{t('Save', 'محفوظ کریں')}</button>
+        </div>
+        {row ? <p className="live-muted">{t('Last changed by', 'آخری تبدیلی')}: {row.updated_by_name} · {when.format(row.updated_at, language)}</p> : <p className="live-muted">{t('Not set', 'مقرر نہیں')}</p>}
+        <h3>{t('Change history', 'تبدیلی کی تاریخ')}</h3>
+        {history.length ? <ul className="yf-facts">{history.map((h, i) => <li key={`${h.changed_at}-${i}`}><span>{h.changed_by_name} · {when.format(h.changed_at, language)}</span><strong>{h.old_value === null ? '—' : show(h.old_value, h.old_currency)} → {show(h.new_value, h.new_currency)}</strong></li>)}</ul>
+          : <p className="live-empty">{t('No changes recorded yet.', 'ابھی کوئی تبدیلی درج نہیں ہوئی۔')}</p>}
+      </section>;
+    })}</>}</Loaded>
+    {error && <p role="alert" className="live-error">{t(error)}</p>}
+  </div>;
+}
+
+export function InvoiceSettings({ settings, loadError, reload }: { settings: Settings | null; loadError: string; reload: () => void }) {
+  const { t } = useLanguage();
+  const [draft, setDraft] = useState<Settings | null>(null), [creditText, setCreditText] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  useEffect(() => { if (settings) { setDraft({ ...settings }); setCreditText(settings.credit_alert_days.join(', ')); } }, [settings]);
+  if (!draft) return loadError ? <RetryError error={loadError} reload={reload} /> : <p className="live-muted" role="status">{t('Loading settings…', 'ترتیبات لوڈ ہو رہی ہیں…')}</p>;
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    const credit = creditText.split(',').map(s => s.trim()).filter(Boolean).map(Number).filter(Number.isFinite);
+    const entries = [['currency', draft!.currency], ['tax_rate_bp', draft!.tax_rate_bp], ['invoice_format', draft!.invoice_format], ['reminder_hours', draft!.reminder_hours], ['credit_alert_days', credit]] as const;
+    setError(''); setBusy(true);
+    try { for (const [key, value] of entries) await portal('/admin/settings', { key, value }); reload(); }
+    catch (e) { setError(errorMessage(e)); }
+    finally { setBusy(false); }
+  }
+  return <section className="yf-section">
+    <h2>{t('Invoice and factory settings', 'انوائس اور فیکٹری کی ترتیبات')}</h2>
+    <form onSubmit={save}>
+      <Field>{t('Currency', 'کرنسی')}<select value={draft.currency} onChange={e => setDraft({ ...draft, currency: e.target.value })}>{['PKR', 'USD', 'EUR', 'GBP'].map(v => <option key={v}>{v}</option>)}</select></Field>
+      <Field>{t('GST (%)', 'جی ایس ٹی (%)')}<input type="number" min="0" max="100" step="0.01" value={draft.tax_rate_bp / 100} onChange={e => setDraft({ ...draft, tax_rate_bp: Math.round(Number(e.target.value) * 100) })} /></Field>
+      <Field>{t('Invoice number format', 'انوائس نمبر کی ترتیب')}<input value={draft.invoice_format} onChange={e => setDraft({ ...draft, invoice_format: e.target.value })} /></Field>
+      <Field>{t('Reminder hours', 'یاددہانی کے گھنٹے')}<input type="number" min="1" max="720" value={draft.reminder_hours} onChange={e => setDraft({ ...draft, reminder_hours: Number(e.target.value) })} /></Field>
+      <Field>{t('Credit alert days (comma separated)', 'ادھار یاددہانی کے دن')}<input value={creditText} onChange={e => setCreditText(e.target.value)} /></Field>
+      <button className="button primary" disabled={busy}><Save size={18} aria-hidden="true" />{t('Save settings', 'ترتیبات محفوظ کریں')}</button>
+    </form>
+    {error && <p className="live-error" role="alert">{t(error)}</p>}
+  </section>;
+}
+
+function AuditMonitor({ navigate }: { navigate: Navigate }) {
+  const { t, language } = useLanguage();
+  const audit = useLoad<{ events: any[] }>('/erp/admin/audit');
+  return <section className="yf-section"><h2>{t('Recent activity', 'حالیہ سرگرمی')}</h2>
+    <Loaded res={audit}>{data => {
+      const events = data.events || [];
+      if (!events.length) return <p className="live-empty">{t('No activity recorded yet.', 'ابھی کوئی سرگرمی درج نہیں ہوئی۔')}</p>;
+      const days = new Map<string, any[]>();
+      for (const event of events) {
+        const label = new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK-u-nu-latn' : 'en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'full' }).format(event.created_at);
+        days.set(label, [...(days.get(label) || []), event]);
+      }
+      return [...days].map(([day, rows]) => <section key={day}><h3>{day}</h3><ul className="yf-admin-list">{rows.map(event => <li key={event.id}><button onClick={() => { const [to, recordId] = auditRoute(event); navigate(to, recordId); }}><span><strong>{event.actor_name || '—'} · {t(event.action)}</strong><small>{event.object_type} · {when.format(event.created_at, language)}</small></span><ArrowUpRight aria-hidden="true" /></button></li>)}</ul></section>);
+    }}</Loaded>
+  </section>;
+}
+
+/** Read-only, paged view of the audit trail: entries are only ever appended, never edited here. */
+function AuditLog() {
+  const { t, language } = useLanguage();
+  const [filter, setFilter] = useState<Filter>({ objectType: '', action: '', actor: '', from: '', to: '' });
+  const [rows, setRows] = useState<any[] | null>(null), [next, setNext] = useState<string | null>(null), [error, setError] = useState(''), [revision, setRevision] = useState(0), [busy, setBusy] = useState(false);
+  const key = JSON.stringify(filter);
+  useEffect(() => {
+    let active = true;
+    setRows(null); setError('');
+    api<any>(`/erp/admin/audit?${auditQuery(filter)}`).then(page => { if (active) { setRows(page.events || []); setNext(page.next ?? null); } }).catch(e => { if (active) setError(errorMessage(e)); });
+    return () => { active = false; };
+  }, [key, revision]);
+  async function loadOlder() {
+    if (!next) return;
+    setBusy(true); setError('');
+    try {
+      const page = await api<any>(`/erp/admin/audit?${auditQuery(filter, next)}`);
+      setRows(old => [...(old || []), ...(page.events || [])]); setNext(page.next ?? null);
+    } catch (e) { setError(errorMessage(e)); }
+    finally { setBusy(false); }
+  }
+  const retry = () => { setError(''); setRevision(x => x + 1); };
+  return <section className="yf-section">
+    <h2>{t('Audit log', 'آڈٹ لاگ')}</h2>
+    <p className="live-muted">{t('Entries are written by the system and cannot be edited or deleted.', 'اندراجات نظام خود درج کرتا ہے اور ان میں تبدیلی یا حذف ممکن نہیں۔')}</p>
+    <div className="live-fields">
+      <Field>{t('Object', 'آبجیکٹ')}<input value={filter.objectType} onChange={e => setFilter({ ...filter, objectType: e.target.value })} placeholder="user" /></Field>
+      <Field>{t('Action', 'عمل')}<input value={filter.action} onChange={e => setFilter({ ...filter, action: e.target.value })} /></Field>
+      <Field>{t('Person ID', 'شخص کی شناخت')}<input value={filter.actor} onChange={e => setFilter({ ...filter, actor: e.target.value })} /></Field>
+      <Field>{t('From date', 'ابتدائی تاریخ')}<input type="date" value={filter.from} onChange={e => setFilter({ ...filter, from: e.target.value })} /></Field>
+      <Field>{t('To date', 'آخری تاریخ')}<input type="date" value={filter.to} onChange={e => setFilter({ ...filter, to: e.target.value })} /></Field>
+    </div>
+    {error && <RetryError error={error} reload={retry} />}
+    {!error && rows === null && <p className="live-muted" role="status">{t('Loading…', 'لوڈ ہو رہا ہے…')}</p>}
+    {rows && !rows.length && !error && <p className="live-empty">{t('No audit entries match these filters.', 'ان فلٹرز سے کوئی آڈٹ اندراج نہیں ملا۔')}</p>}
+    {rows && rows.length > 0 && <ul className="yf-admin-list">{rows.map(event => <li key={event.id}><div>
+      <strong>{event.actor_name || '—'} · {t(event.action)}</strong>
+      <small>{event.object_type} · {event.record_id} · {when.format(event.created_at, language)}</small>
+      <p>{event.old_json || '—'} → {event.new_json || '—'}</p>
+      {event.reason && <p>{t('Reason', 'وجہ')}: {event.reason}</p>}
+      {event.intervention_reason && <p>{t('Intervention', 'مداخلت')}: {event.intervention_reason}</p>}
+    </div></li>)}</ul>}
+    {rows && next && <button className="button" disabled={busy} onClick={() => void loadOlder()}><ChevronDown size={18} aria-hidden="true" />{t('Load older', 'پرانے ریکارڈ')}</button>}
+  </section>;
+}
+
+function Reports({ id, navigate }: { id: string; navigate: Navigate }) {
+  const { t, language } = useLanguage();
+  const list = useLoad<{ reports: any[] }>('/erp/stock/reports');
+  return <section className="yf-section"><h2>{t('Supervisor reports', 'سپروائزر رپورٹس')}</h2>
+    <Loaded res={list}>{data => {
+      const rows = data.reports || [];
+      const report = id ? rows.find(x => x.id === id) : undefined;
+      if (report) return <>
+        <button className="live-text-button" onClick={() => navigate('reports')}><ArrowLeft size={18} aria-hidden="true" />{t('All reports', 'تمام رپورٹس')}</button>
+        <dl className="yf-facts">
+          <div><dt>{t('Period', 'مدت')}</dt><dd>{report.period_from} – {report.period_to}</dd></div>
+          <div><dt>{t('Created by', 'تیار کردہ')}</dt><dd>{report.created_by_name}</dd></div>
+          <div><dt>{t('Sections', 'حصے')}</dt><dd><pre>{JSON.stringify(report.content, null, 2)}</pre></dd></div>
+          <div><dt>{t('Flagged items', 'نشان زد آئٹمز')}</dt><dd><pre>{JSON.stringify(report.flagged, null, 2)}</pre></dd></div>
+        </dl>
+      </>;
+      if (!rows.length) return <p className="live-empty">{t('No supervisor reports yet.', 'ابھی سپروائزر رپورٹ موجود نہیں۔')}</p>;
+      return <ul className="yf-admin-list">{rows.map(r => <li key={r.id}><button onClick={() => navigate('reports', r.id)}><span><strong>{r.period_from} – {r.period_to}</strong><small>{r.created_by_name} · {when.format(r.created_at, language)}</small></span><ArrowUpRight aria-hidden="true" /></button></li>)}</ul>;
+    }}</Loaded>
+  </section>;
+}
+
+function Claims({ member, id, currency, navigate }: { member: Member; id: string; currency: string; navigate: Navigate }) {
+  const { t } = useLanguage();
+  const list = useLoad<{ claims: any[] }>('/erp/qc/claims');
+  return <section className="yf-section"><h2>{t('Claims', 'دعوے')}</h2>
+    <Loaded res={list}>{data => {
+      const rows = data.claims || [];
+      const claim = id ? rows.find(c => c.id === id) : undefined;
+      if (claim) return <ClaimDetail key={claim.id} member={member} claim={claim} currency={currency} navigate={navigate} reload={list.reload} />;
+      if (!rows.length) return <p className="live-empty">{t('No claims have been raised.', 'کوئی دعویٰ درج نہیں ہوا۔')}</p>;
+      return <ul className="yf-admin-list">{rows.map(c => <li key={c.id}><button onClick={() => navigate('claims', c.id)}><span><strong>{c.supplier_name} · {c.product_name}</strong><small>{kg(c.rejected_milli)} · <StatusTag status={c.status} /></small></span><b>{money(c.calculated_minor, currency)}</b></button></li>)}</ul>;
+    }}</Loaded>
+  </section>;
+}
+
+function ClaimDetail({ member, claim, currency, navigate, reload }: { member: Member; claim: any; currency: string; navigate: Navigate; reload: () => void }) {
+  const { t } = useLanguage();
+  const [outcome, setOutcome] = useState('claim'), [amount, setAmount] = useState(''), [reason, setReason] = useState(''), [intervention, setIntervention] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const facts: [string, string, ReactNode][] = [
+    ['Supplier', 'سپلائر', claim.supplier_name], ['Product', 'پروڈکٹ', claim.product_name], ['Rejected', 'رد شدہ', kg(claim.rejected_milli)],
+    ['Rate', 'ریٹ', money(claim.po_rate_minor, currency)], ['Calculated', 'حسابی رقم', money(claim.calculated_minor, currency)], ['Status', 'حالت', <StatusTag status={claim.status} />],
+  ];
+  async function decide() {
+    setError('');
+    const adjusted = amount.trim();
+    if (adjusted && (!Number.isFinite(Number(adjusted)) || Number(adjusted) < 0)) { setError('Enter a valid adjusted amount.'); return; }
+    if (adjusted && reason.trim().length < 5) { setError('Give a reason of at least 5 characters for an adjusted amount.'); return; }
+    setBusy(true);
+    try {
+      await portal('/qc/claims/decide', { id: claim.id, outcome, ...(adjusted ? { adjustedMinor: Math.round(Number(adjusted) * 100), reason } : {}), ...(member.role === 'admin' ? { interventionReason: intervention } : {}) });
+      reload();
+    } catch (e) { setError(errorMessage(e)); }
+    finally { setBusy(false); }
+  }
+  return <>
+    <button className="live-text-button" onClick={() => navigate('claims')}><ArrowLeft size={18} aria-hidden="true" />{t('All claims', 'تمام دعوے')}</button>
+    <h2>{t('Claim detail', 'دعوے کی تفصیل')}</h2>
+    <dl className="yf-facts">{facts.map(([en, ur, value]) => <div key={en}><dt>{t(en, ur)}</dt><dd>{value}</dd></div>)}</dl>
+    {claim.status !== 'decided' && <>
+      <Field>{t('Outcome', 'نتیجہ')}<select value={outcome} onChange={e => setOutcome(e.target.value)}>{outcomes.map(([v, en, ur]) => <option key={v} value={v}>{t(en, ur)}</option>)}</select></Field>
+      <Field>{t('Adjusted amount (optional)', 'تبدیل شدہ رقم (اختیاری)')}<input value={amount} onChange={e => setAmount(e.target.value)} inputMode="decimal" /></Field>
+      <ReasonField label={t('Decision reason', 'فیصلے کی وجہ')} value={reason} onChange={setReason} required={!!amount.trim()} />
+      <InterventionField member={member} owners={['admin']} value={intervention} onChange={setIntervention} />
+      <div className="live-actions"><button className="button primary" disabled={busy} onClick={() => void decide()}><ClipboardCheck size={18} aria-hidden="true" />{t('Save outcome', 'نتیجہ محفوظ کریں')}</button></div>
+    </>}
+    {error && <p role="alert" className="live-error">{t(error)}</p>}
+  </>;
+}
+
+function Analytics() {
+  const { t } = useLanguage();
+  const data = useLoad<any>('/erp/analytics/admin');
+  if (data.error) return <NextStep tone="warn" title={t('Analytics data is not available yet.', 'تجزیاتی ڈیٹا ابھی دستیاب نہیں۔')} reason={t(data.error)} action={<button className="button" onClick={data.reload}><RotateCw size={18} aria-hidden="true" />{t('Retry', 'دوبارہ کوشش کریں')}</button>} />;
+  if (data.value === null) return <p className="live-muted" role="status">{t('Loading…', 'لوڈ ہو رہا ہے…')}</p>;
+  const d = data.value;
+  const buyers: any[] = d.sales?.byBuyer || [];
+  const payments: any[] = d.payments?.byCurrency || [];
+  const currency = firstCurrency(buyers, payments);
+  const sumBuyers = currency ? money(buyers.filter(row => row.currency === currency).reduce((sum, row) => sum + row.totalMinor, 0), currency) : null;
+  const owed = currency ? payments.find(row => row.currency === currency) : undefined;
+  const kpis: Kpi[] = [
+    { label: t('Sales total', 'کل فروخت'), value: sumBuyers },
+    { label: t('Outstanding', 'بقایا'), value: currency ? money(owed?.outstandingMinor ?? 0, currency) : null },
+    { label: t('Overdue', 'مدت گزر گئی'), value: currency ? money(owed?.overdueMinor ?? 0, currency) : null },
+    { label: t('Finished stock', 'تیار مال'), value: kg(d.inventory?.finishedGrams || 0) },
+  ];
+  const roleText = (role: string) => (roleLabel[role as Role] ? t(...roleLabel[role as Role]) : role);
+  const rfqTone: Record<string, Tone> = { draft: 'stone', open: 'warn', closed: 'ink', awarded: 'ok', cancelled: 'bad' };
+  const dispatchTone: Record<string, Tone> = { pending_approval: 'warn', approved: 'kraft', on_hold: 'bad', dispatched: 'ink', delivered: 'ok' };
+  const segmentsOf = (counts: Record<string, number> | undefined, tones: Record<string, Tone>): Segment[] => Object.entries(counts || {}).map(([status, count]) => ({ key: status, label: <StatusTag status={status} />, value: Number(count), text: String(count), tone: tones[status] ?? 'stone' }));
+  const claimOutcomes: Segment[] = outcomes.map(([value, en, ur]) => ({ key: value, label: t(en, ur), value: Number(d.quality?.claims?.[value] ?? 0), text: String(d.quality?.claims?.[value] ?? 0), tone: value === 'return' ? 'bad' : value === 'replacement' ? 'warn' : 'kraft' }));
+  const stock: Segment[] = [
+    { key: 'raw', label: t('Raw material', 'خام مال'), value: d.inventory?.rawGrams || 0, text: kg(d.inventory?.rawGrams || 0), tone: 'kraft' },
+    { key: 'wip', label: t('Work in progress', 'زیرِ تیاری'), value: d.inventory?.wipGrams || 0, text: kg(d.inventory?.wipGrams || 0), tone: 'stone' },
+    { key: 'finished', label: t('Finished stock', 'تیار مال'), value: d.inventory?.finishedGrams || 0, text: kg(d.inventory?.finishedGrams || 0), tone: 'ink' },
+  ];
+  const people: BarRow[] = (d.users || []).map((row: any, i: number) => ({ key: `${row.name}-${i}`, label: row.name, sub: roleText(row.role), value: Number(row.actions), text: String(row.actions) }));
+  return <div className="ak-page">
+    <KpiStrip items={kpis} />
+    <div className="ak-grid">
+      <AnalyticsSection className="ak-money" title={t('Money', 'رقم')} note={t('Sales, balances and purchase values, each in its own currency. Amounts are never converted.', 'فروخت، بقایا اور خریداری کی قدریں، ہر کرنسی میں الگ۔ رقم کو تبدیل نہیں کیا جاتا۔')}>
+        <BarList rows={buyers.map(row => ({ key: `${row.buyer}-${row.currency}`, label: row.buyer, value: row.totalMinor, text: money(row.totalMinor, row.currency), group: row.currency }))} empty={t('No sales in this period.', 'اس مدت میں کوئی فروخت نہیں۔')} />
+        <BarList rows={payments.map(row => ({ key: `owed-${row.currency}`, label: t('Outstanding', 'بقایا'), sub: `${t('Overdue', 'مدت گزر گئی')}: ${money(row.overdueMinor, row.currency)}`, value: row.outstandingMinor, text: money(row.outstandingMinor, row.currency), group: row.currency }))} empty={t('No balances owed.', 'کوئی رقم بقایا نہیں۔')} />
+        <BarList rows={(d.purchasing?.totalsByCurrency || []).map((row: any) => ({ key: `po-${row.currency}`, label: t('Purchase orders', 'خریداری آرڈر'), value: row.poTotalMinor, text: money(row.poTotalMinor, row.currency), group: row.currency }))} empty={t('No purchase orders in this period.', 'اس مدت میں کوئی خریداری آرڈر نہیں۔')} />
+        <BarList rows={(d.quality?.totalsByCurrency || []).map((row: any) => ({ key: `claim-${row.currency}`, label: t('Claims decided', 'طے شدہ دعوے'), value: row.claimMinor, text: money(row.claimMinor, row.currency), group: row.currency }))} empty={t('No claims decided in this period.', 'اس مدت میں کوئی دعویٰ طے نہیں ہوا۔')} />
+      </AnalyticsSection>
+      <AnalyticsSection className="ak-ops" title={t('Operations', 'کاروبار')} note={t('Where requests, dispatches, claims and stock stand.', 'درخواستیں، ڈسپیچ، دعوے اور اسٹاک کہاں کھڑے ہیں۔')}>
+        <h3 className="ak-group-title">{t('Purchasing: RFQs by status', 'خریداری: RFQ بلحاظ حالت')}</h3>
+        <StackedBar segments={segmentsOf(d.purchasing?.rfqs, rfqTone)} />
+        <h3 className="ak-group-title">{t('Dispatch', 'ڈسپیچ')}</h3>
+        <StackedBar segments={segmentsOf(d.dispatch, dispatchTone)} />
+        <h3 className="ak-group-title">{t('Quality: claims', 'معیار: دعوے')}</h3>
+        <StackedBar segments={claimOutcomes} />
+        <h3 className="ak-group-title">{t('Inventory', 'اسٹاک')}</h3>
+        <StackedBar segments={stock} />
+      </AnalyticsSection>
+      <AnalyticsSection className="ak-people" title={t('People', 'عملہ')} note={t('Recorded actions by each team member in this period.', 'اس مدت میں ہر ٹیم ممبر کے ریکارڈ شدہ اعمال۔')}>
+        <BarList rows={people} empty={t('No staff activity in this period.', 'اس مدت میں عملے کی کوئی سرگرمی نہیں۔')} />
+      </AnalyticsSection>
+    </div>
+  </div>;
+}

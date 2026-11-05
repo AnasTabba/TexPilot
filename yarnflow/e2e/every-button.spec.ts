@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { apiPost } from "./helpers";
 
 // Every control on every screen does what it says. Stock lives in the shared database of the dev
 // server, reset to the demo's opening stock before each test; the scanner's model answer is a fixture
@@ -10,7 +11,7 @@ const PIN = "2468"; // YARNFLOW_SEED_PIN in playwright.config.ts
 
 async function signIn(page: Page, name = "Anas", pin = PIN) {
   await page.goto("/");
-  await page.getByRole("button", { name, exact: true }).click();
+  await page.getByRole("button", { name: new RegExp(`^${name}\\b`) }).click();
   await page.getByLabel("4-digit PIN").fill(pin);
   await expect(page.getByRole("heading", { level: 1, name: "Dashboard", exact: true })).toBeVisible();
 }
@@ -35,6 +36,11 @@ async function mockScanner(page: Page) {
   await page.route("**/api/v1/scan", (route) => route.fulfill({ json: answer }));
 }
 const title = (page: Page, name: string) => expect(page.getByRole("heading", { level: 1, name, exact: true })).toBeVisible();
+async function reviewAndSave(page: Page, save: string) {
+  await page.getByRole("button", { name: "Review entry", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Review before saving" })).toBeVisible();
+  await page.getByRole("button", { name: save, exact: true }).click();
+}
 
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false });
@@ -42,10 +48,10 @@ test.describe("desktop", () => {
   test("sign-in: names, a wrong PIN on the keypad, the right one, and signing out", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1, name: "Who’s signing in?" })).toBeVisible();
-    await expect(page.locator(".yf-person")).toHaveText(["AAnas", "DDanish", "FFahad", "PPervaiz", "QQasim", "SSaima", "SSana", "ZZuhair"]);
-    await page.getByRole("button", { name: "Fahad", exact: true }).click();
+    await expect(page.locator(".yf-person")).toHaveText([/^AAnas/, /^DDanish/, /^FFahad/, /^PPervaiz/, /^QQasim/, /^SSaima/, /^SSana/, /^ZZuhair/]);
+    await page.getByRole("button", { name: /^Fahad\b/ }).click();
     await page.getByRole("button", { name: "Not Fahad?" }).click();
-    await page.getByRole("button", { name: "Anas", exact: true }).click();
+    await page.getByRole("button", { name: /^Anas\b/ }).click();
     const keypad = page.locator(".yf-keypad");
     for (const key of "1111") await keypad.getByRole("button", { name: key, exact: true }).click();
     await expect(page.getByRole("alert")).toHaveText("That name and PIN do not match.");
@@ -62,7 +68,7 @@ test.describe("desktop", () => {
   });
 
   test("an admin adds a supervisor; both see the same stock; deactivation signs them out", async ({ page, browser }, info) => {
-    await page.goto("/#/settings/users");
+    await page.goto("/#/team");
     await page.getByRole("button", { name: "Add a person" }).click();
     await page.getByLabel("Name", { exact: true }).fill("Bilal");
     await page.getByLabel("4-digit PIN", { exact: true }).fill("1357");
@@ -72,21 +78,21 @@ test.describe("desktop", () => {
     await expect(page.getByRole("alert")).toContainText("The two PINs are different.");
     await page.getByLabel("Type it again").fill("1357");
     await page.getByRole("button", { name: "Add person", exact: true }).click();
-    await expect(page.locator(".yf-admin-user", { hasText: "Bilal" })).toContainText("Supervisor");
+    await expect(page.locator(".yf-member-row", { hasText: "Bilal" })).toContainText("Supervisor");
     const other = await browser.newContext({ ...options.contextOptions, baseURL: info.project.use.baseURL, viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
     const bilal = await other.newPage();
     await signIn(bilal, "Bilal", "1357");
     await expect(bilal.locator(".live-sidebar .yf-me")).toContainText("Supervisor");
-    await expect(bilal.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: /^Settings/ })).toHaveCount(0);
+    await expect(bilal.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: /^Team/ })).toHaveCount(0);
     await page.goto("/#/inventory");
-    await expect(page.locator(".yf-stock-panel")).toBeVisible();
+    await expect(page.locator(".live-lot-row").first()).toBeVisible();
     await bilal.goto("/#/inventory");
-    await expect(bilal.locator(".erp-record").first()).toBeVisible();
-    expect(await bilal.locator(".erp-record").count()).toBe(await page.locator(".live-lot-row").count());
-    await page.goto("/#/settings/users");
-    await page.locator(".yf-admin-user", { hasText: "Bilal" }).click();
+    await expect(bilal.locator(".live-lot-row").first()).toBeVisible();
+    expect(await bilal.locator(".live-lot-row").allTextContents()).toEqual(await page.locator(".live-lot-row").allTextContents());
+    await page.goto("/#/team");
+    await page.locator(".yf-member-row", { hasText: "Bilal" }).click();
     await page.getByRole("button", { name: "Deactivate", exact: true }).click();
-    await expect(page.locator(".yf-admin-user", { hasText: "Bilal" })).toContainText("Deactivated");
+    await expect(page.locator(".yf-member-row", { hasText: "Bilal" })).toContainText("Deactivated");
     await bilal.reload();
     await expect(bilal.getByRole("heading", { level: 1, name: "Who’s signing in?" })).toBeVisible();
     await other.close();
@@ -96,25 +102,26 @@ test.describe("desktop", () => {
     await page.goto("/#/dashboard");
     await title(page, "Dashboard");
     const nav = page.getByRole("navigation", { name: "Main navigation" });
-    for (const [label, h1] of [["Scan", "Scan"], ["Settings", "Settings"], ["My profile", "My profile"], ["Notifications", "Notifications"], ["Help", "Help"], ["Dashboard", "Dashboard"], ["Approvals", "Approvals"], ["Claims", "Claims"], ["Activity", "Activity"], ["Reports", "Reports"], ["Analytics", "Analytics"], ["Modules", "Modules"]]) {
+    for (const [label, h1] of [["Stock", "Stock"], ["Scan", "Scan"], ["Activity", "Activity"], ["Team", "Team"], ["Help", "Help"], ["Dashboard", "Dashboard"]]) {
       await nav.getByRole("button", { name: label, exact: true }).click();
       await title(page, h1);
       await expect(nav.getByRole("button", { name: label, exact: true })).toHaveAttribute("aria-current", "page");
     }
+    await nav.getByRole("button", { name: "Stock" }).click();
     await page.locator(".live-sidebar .live-brand").click();
     await title(page, "Dashboard");
 
-    // With nothing unread the next step is an all-clear, and See all opens the inbox.
-    await expect(page.getByRole("heading", { level: 2, name: "Nothing is waiting for you" })).toBeVisible();
-    await page.locator(".yf-head").getByRole("button", { name: "See all" }).click();
+    // The Today screen's activity card links to the full inbox with See all.
+    await expect(page.getByRole("heading", { level: 2, name: "At a glance" })).toBeVisible();
+    await page.locator(".nw-card").getByRole("button", { name: "See all" }).click();
     await title(page, "Notifications");
     await expect(page.getByRole("heading", { name: "No notifications yet" })).toBeVisible();
   });
 
-  test("stock filters, search and a batch's details", async ({ page }) => {
+  test("stock filters, search, new material, new batch and a batch's whole life", async ({ page }) => {
     await page.goto("/#/inventory");
     const views = page.getByRole("group", { name: "Show" });
-    for (const [name, rows] of [[/^Needs QC/, 0], [/^In production/, 0], [/^To dispatch/, 4], [/^All/, 4]] as const) {
+    for (const [name, rows] of [[/^Needs QC/, 2], [/^In production/, 1], [/^To dispatch/, 2], [/^All/, 4]] as const) {
       await views.getByRole("button", { name }).click();
       await expect(page.locator(".live-lot-row")).toHaveCount(rows);
     }
@@ -122,28 +129,93 @@ test.describe("desktop", () => {
     await expect(page.locator(".live-lot-row")).toHaveCount(1);
     await page.getByLabel("Search", { exact: true }).fill("");
 
-    // Stock is entered and corrected on the supervisor screens, never on the admin stock page.
-    for (const name of ["New material", "Finished goods", "Adjust stock", "Add inspection"]) await expect(page.getByRole("button", { name })).toHaveCount(0);
+    // A form opens, closes with its X and with Cancel.
+    await page.getByRole("button", { name: "New material" }).click();
+    await page.getByRole("button", { name: "Close form" }).click();
+    await title(page, "Stock");
+    await page.getByRole("button", { name: "New material" }).click();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await title(page, "Stock");
+
+    await page.getByRole("button", { name: "New material" }).click();
+    await page.getByLabel("Material name", { exact: true }).fill("Carded cotton Ne 20/1");
+    await page.getByLabel("SKU", { exact: true }).fill("CTN-20");
+    await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
+    await page.getByRole("button", { name: "Review entry", exact: true }).click();
+    await page.getByRole("button", { name: "Edit entry", exact: true }).click();
+    await expect(page.getByLabel("SKU", { exact: true })).toHaveValue("CTN-20");
+    await reviewAndSave(page, "Save entry");
+    await expect(page.getByRole("status").filter({ hasText: "Saved. Everyone on the team sees it now." })).toBeVisible();
+
+    await page.getByRole("button", { name: /Add finished Carded cotton/ }).click();
+    await page.getByLabel("Batch / dye lot", { exact: true }).fill("LOT-2001");
+    await page.getByLabel("Weight (kg)", { exact: true }).fill("40");
+    await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
+    await reviewAndSave(page, "Save entry");
+    await title(page, "Batch details");
+    await expect(page.locator(".yf-flow")).toContainText("40");
+    await expect(page.getByRole("button", { name: "Receive stock", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Review quality", exact: true })).toHaveCount(0);
+
+    // The rest of a batch's life runs on QC-approved stock that arrived through the inspection flow.
+    await page.goto("/#/inventory");
     await page.locator(".live-lot-row", { hasText: "LOT-1024" }).click();
     await title(page, "Batch details");
-    await expect(page.locator(".yf-batch .live-panel-heading .live-quality")).toHaveText("QC approved");
-    await expect(page.getByText("Request and approve a sale dispatch from the Dispatch page.")).toBeVisible();
-    for (const name of ["Move stage", "Dispatch", "Receive stock", "Review quality", "Adjust stock"]) await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+    await expect(page.locator(".yf-steps li.done", { hasText: "QC approved" })).toHaveCount(1);
+    await expect(page.getByRole("heading", { level: 3, name: "Dispatch finished stock" })).toBeVisible();
+
+    await expect(page.getByRole("button", { name: "Move stage", exact: true })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Dispatch", exact: true }).click();
+    await page.getByLabel("Weight (kg)", { exact: true }).fill("10");
+    await page.getByLabel("Notes", { exact: true }).fill("Order 77");
+    await reviewAndSave(page, "Save entry");
+    // A write-off needs a reason; below the (unset) threshold it applies at once.
+    await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
+    await page.getByLabel("Weight (kg)", { exact: true }).fill("1");
+    await page.getByLabel("Reason", { exact: true }).fill("Counted one kilogram short");
+    await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
+    await reviewAndSave(page, "Save entry");
+    await expect(page.locator(".yf-flow")).toContainText("6,739");
+
+    // Guarded stock workflow: at the threshold the change waits for admin approval and the stock stays put.
+    await apiPost(page, "/erp/admin/thresholds", { type: "inventory_adjustment", value: 5000 });
+    await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
+    await page.getByLabel("Weight (kg)", { exact: true }).fill("6");
+    await page.getByLabel("Reason", { exact: true }).fill("Water damage in bay 3");
+    await page.getByLabel("Why are you stepping in?", { exact: true }).fill("Supervisor is away today");
+    await reviewAndSave(page, "Save entry");
+    await expect(page.getByRole("status").filter({ hasText: "Sent to the admin for approval" })).toBeVisible();
+    await expect(page.locator(".yf-flow")).toContainText("6,739");
+    const pending = (await (await page.request.get("/api/erp/approvals?type=inventory_adjustment")).json()).approvals;
+    expect(pending).toHaveLength(1);
+    await apiPost(page, "/erp/approvals/decide", { id: pending[0].id, decision: "approve" });
+    await page.reload();
+    await expect(page.locator(".yf-flow")).toContainText("6,733");
+
+    await page.goto("/#/inventory");
+    await page.locator(".live-lot-row", { hasText: "LOT-2001" }).click();
     await page.evaluate(() => { (window as unknown as { printed: number }).printed = 0; window.print = () => { (window as unknown as { printed: number }).printed++; }; });
     await page.getByRole("button", { name: "Print batch label" }).click();
     expect(await page.evaluate(() => (window as unknown as { printed: number }).printed)).toBe(1);
   });
 
   test("history links, profile access and backup, help", async ({ page }) => {
-    await page.goto("/#/history");
+    // The stock movement register belongs to the supervisor's History; the admin's Activity is the monitor and audit log.
+    await page.getByRole("button", { name: /^Sign out Anas/ }).click();
+    await signIn(page, "Saima");
+    await page.goto("/#/activity");
     await page.locator(".live-history .live-text-button", { hasText: "LOT-1024" }).first().click();
     await title(page, "Batch details");
-    await page.goto("/#/history");
+    await page.goto("/#/activity");
     await expect(page.getByRole("button", { name: "Reverse entry" })).toHaveCount(0);
+    await page.getByRole("button", { name: /^Sign out Saima/ }).click();
+    await signIn(page);
 
     await page.goto("/#/profile");
     const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download backup" }).click()]);
     expect(JSON.parse(await (await import("node:fs/promises")).readFile((await download.path())!, "utf8")).products).toHaveLength(4);
+    await expect(page.locator(".yf-access li.is-on")).toHaveCount(13);
     await expect(page.locator(".yf-counts")).toContainText("Materials4");
     await expect(page.locator(".yf-counts")).toContainText("People8");
 
@@ -154,7 +226,7 @@ test.describe("desktop", () => {
     }
   });
 
-  test("scan: tabs, connection, upload, analyse, details, download, measure, stock label", async ({ page }) => {
+  test("scan: tabs, connection, upload, analyse, details, download, measure, save to a batch, stock label", async ({ page }) => {
     await mockScanner(page);
     await page.goto("/#/scanner");
     await expect(page.getByText("TexPilot model connected")).toBeVisible();
@@ -192,6 +264,13 @@ test.describe("desktop", () => {
     await page.getByRole("button", { name: "Find batch" }).click();
     await title(page, "Batch details");
 
+    await page.goto("/#/scanner");
+    await page.getByRole("button", { name: "Fabric", exact: true }).click();
+    await page.getByRole("button", { name: "Save to a batch" }).click();
+    await expect(page.getByRole("heading", { name: "Attach TexPilot evidence" })).toBeVisible();
+    await page.getByLabel("Notes", { exact: true }).fill("Scan matches the order");
+    await reviewAndSave(page, "Save inspection");
+    await expect(page.locator(".yf-timeline")).toContainText("TexPilot evidence");
   });
 });
 
@@ -201,21 +280,38 @@ test.describe("phone", () => {
   test("bottom bar, More sheet and the search button", async ({ page }) => {
     await page.goto("/#/dashboard");
     const bar = page.getByRole("navigation", { name: "Phone navigation" });
-    for (const [label, h1] of [["Dashboard", "Dashboard"], ["Approvals", "Approvals"], ["Claims", "Claims"], ["Notifications", "Notifications"]]) {
+    for (const [label, h1] of [["Dashboard", "Dashboard"], ["Approvals", "Approvals"], ["Chat", "Chat"]]) {
       await bar.getByRole("button", { name: label, exact: true }).click();
       await title(page, h1);
     }
+    await bar.getByRole("button", { name: "Scan", exact: true }).click();
+    await title(page, "Scan");
     await bar.getByRole("button", { name: "More pages" }).click();
     const sheet = page.getByRole("dialog", { name: "Navigation menu" });
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByRole("button", { name: "Settings" })).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "Team" })).toBeVisible();
     await expect(sheet.locator(".yf-me")).toContainText("Anas");
-    await sheet.getByRole("button", { name: "My profile" }).click();
+    await sheet.getByRole("button", { name: "Stock", exact: true }).click();
+    await title(page, "Stock");
+    await expect(sheet).toBeHidden();
+    await bar.getByRole("button", { name: "More pages" }).click();
+    await sheet.getByRole("button", { name: "Open my profile" }).click();
     await title(page, "My profile");
     await expect(sheet).toBeHidden();
     await bar.getByRole("button", { name: "More pages" }).click();
     await sheet.getByRole("button", { name: "Close navigation" }).click();
     await expect(sheet).toBeHidden();
-    await expect(page.getByRole("button", { name: "Find a batch" })).toHaveCount(0);
+    // The search button opens the palette; Enter on a filtered page navigates there.
+    await page.getByRole("button", { name: "Search pages and batches" }).click();
+    const palette = page.getByRole("dialog", { name: "Search pages and batches" });
+    await expect(palette).toBeVisible();
+    await palette.getByRole("combobox").fill("team");
+    await page.keyboard.press("Enter");
+    await title(page, "Team");
+    await expect(palette).toBeHidden();
+    await page.keyboard.press("Control+k");
+    await expect(palette).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
   });
 });

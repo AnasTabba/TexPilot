@@ -4,7 +4,7 @@ The user requested multiple liquid-glass screens, including login and sidebar, u
 
 ## Delivered scope
 
-A separate React + strict TypeScript + Vite practice application in `yarnflow/` preserves the existing TexPilot work. It includes overview, PIN login, daily quick actions, production, inventory, customer orders, dispatch, paper-style registers, reports, search, day close, local save status, settings, master data, people/device previews, CSV import preview, help, component states, entry details, lot timelines, entry confirmation and reversal.
+A separate React + strict TypeScript + Vite practice application in `yarn-erp/` preserves the existing TexPilot work. It includes overview, PIN login, daily quick actions, production, inventory, customer orders, dispatch, paper-style registers, reports, search, day close, local save status, settings, master data, people/device previews, CSV import preview, help, component states, entry details, lot timelines, entry confirmation and reversal.
 
 Liquid glass uses translucent white surfaces, background blur, subtle gradients, violet accents, rounded panels, and original vector yarn art. The Dribbble URL is a search collection, not an identifiable licensed template. No third-party logo or shot has been copied.
 

@@ -13,7 +13,8 @@ export const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0
 export const dir = new URL('../drizzle/', import.meta.url);
 export const legacyMigrations = ['0000_inventory.sql','0001_users.sql','0002_procurement.sql','0003_purchase_receipts.sql'];
 export function migrate(sql, names = readdirSync(dir).filter(f => f.endsWith('.sql')).sort()) {
-  for (const name of names) sql.exec(readFileSync(new URL(name, dir), 'utf8'));
+  // Each file runs as one transaction, as D1 applies it, so PRAGMA defer_foreign_keys holds until the file commits.
+  for (const name of names) { sql.exec('BEGIN'); try { sql.exec(readFileSync(new URL(name, dir), 'utf8')); sql.exec('COMMIT'); } catch (error) { sql.exec('ROLLBACK'); throw error; } }
 }
 export async function portalFixture(database) {
   const sql = database ?? new DatabaseSync(':memory:');

@@ -1,7 +1,7 @@
-import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, website, recordId, reason as decisionReason, role, viewer, audit } from './erp-utils.mjs';
+import { all, one, query, json, fail, text, multiline, keys, integer, date, email, phone, website, recordId, allow, reason as decisionReason, role, viewer, audit } from './erp-utils.mjs';
 import { trackingConfigured, trackingStatus } from './tracking.mjs';
 import { sha256 } from './auth.mjs';
-import { settingsOf, needsApproval, approvalQueries } from './governance.mjs';
+import { settingsOf, needsApproval, approvalQueries, reversalReason, replayed, reversalRow } from './governance.mjs';
 import { notifyRole } from './notify.mjs';
 
 export const categories = db => all(db, 'SELECT * FROM supplier_categories ORDER BY sort_order');
@@ -18,18 +18,23 @@ export async function supplierView(db, value) {
   if (!value) return null;
   return { ...value, categories: (await all(db, 'SELECT category_id FROM supplier_category_links WHERE supplier_id=? ORDER BY category_id', value.id)).map(c => c.category_id) };
 }
+// Each rating counts its three criteria; legacy single-score rows (NULL criteria) count their score for all three.
+const RATED = "SELECT workspace_id,supplier_id,COALESCE(delivery,rating) AS d,COALESCE(quality,rating) AS q,COALESCE(terms,rating) AS t FROM supplier_ratings WHERE NOT EXISTS(SELECT 1 FROM erp_reversals v WHERE v.action='rating.voided' AND v.object_id=supplier_ratings.id)";
+const round1 = value => Math.round(value * 10) / 10;
 const supplierFields = 'id,workspace_id,name,contact_name,email,phone,city,website,source_url,source_checked_at,status,version,created_at,updated_at';
 const LISTED = ['pending','approved','rejected','suspended'];
 // pending→approved|rejected, approved↔suspended; everything else is final or must go through the supplier again.
-const MOVES = { pending: ['approved','rejected'], approved: ['suspended'], suspended: ['approved'], rejected: [] };
+const MOVES = { pending: ['approved','rejected'], approved: ['suspended'], suspended: ['approved'], rejected: ['pending'] };
 export async function suppliers(db, workspaceId, status, category) {
   if (status && !LISTED.includes(status)) fail(422, 'Choose pending, approved, rejected or suspended.');
   if (category) await categoryIds(db, [category]);
+  const aggregates = new Map((await all(db, `SELECT supplier_id,COUNT(*) AS count,AVG((d+q+t)/3.0) AS average,AVG(d) AS delivery,AVG(q) AS quality,AVG(t) AS terms FROM (${RATED} AND workspace_id=?) GROUP BY supplier_id`, workspaceId))
+    .map(r => [r.supplier_id, { average: round1(r.average), delivery: round1(r.delivery), quality: round1(r.quality), terms: round1(r.terms), count: r.count }]));
   return Promise.all((await all(db, `SELECT ${supplierFields} FROM suppliers WHERE workspace_id=? AND status IN (${LISTED.map(() => '?').join(',')}) AND (? IS NULL OR status=?) AND (? IS NULL OR id IN (SELECT supplier_id FROM supplier_category_links WHERE category_id=?)) ORDER BY name COLLATE NOCASE LIMIT 500`,
-    workspaceId, ...LISTED, status || null, status || null, category || null, category || null)).map(s => supplierView(db, s)));
+    workspaceId, ...LISTED, status || null, status || null, category || null, category || null)).map(async s => ({ ...await supplierView(db, s), rating: aggregates.get(s.id) ?? null })));
 }
 export async function supplierPerformance(db, supplierId) {
-  const { average, n } = await one(db, 'SELECT AVG(rating) AS average, COUNT(*) AS n FROM supplier_ratings WHERE supplier_id=?', supplierId);
+  const { average, n } = await one(db, `SELECT AVG((d+q+t)/3.0) AS average, COUNT(*) AS n FROM (${RATED} AND supplier_id=?)`, supplierId);
   // Final dispositions of settled lots only: accepted reports and deviation acceptances count as accepted, confirmed rejections as rejected.
   // Returned or re-inspect quantities count as neither, and the lot stays out until its replacement inspection settles it, so nothing is counted twice.
   const qc = await one(db, `SELECT COALESCE(SUM(CASE WHEN i.report_status='accepted' THEN i.accepted_milli END),0) + COALESCE(SUM(CASE WHEN i.rejection_status='dismissed' AND i.dismiss_outcome='accept_with_deviation' THEN i.rejected_milli END),0) AS accepted,
@@ -53,6 +58,23 @@ const ARRIVED = "(SELECT arrived_milli FROM po_arrived WHERE order_id=supplier_p
 const rfqView = (r, now) => ({ ...r, status: r.cancelled_at ? 'cancelled' : r.status === 'open' && r.deadline_at <= now ? 'closed' : r.status });
 // A zero-row conditional write cannot guard later statements, so this aborts the whole batch when the write before it lost.
 const lostRace = db => query(db, "SELECT json('!') WHERE changes()=0");
+// Why a live PO cannot be cancelled, or null. Dispatch, a bill of lading, arrived goods or a waiting quantity change all block it.
+export async function cancelBlock(db, order) {
+  if (order.status !== 'accepted') return 'Goods have been dispatched on this order, so it cannot be cancelled. Record a correction instead.';
+  if (order.approval_status !== 'approved') return 'A quantity change is waiting for admin approval. Decide it first.';
+  if (((await one(db, 'SELECT arrived_milli FROM po_arrived WHERE order_id=?', order.id))?.arrived_milli ?? 0) > 0) return 'Goods have already arrived on this order.';
+  if (await one(db, 'SELECT 1 AS x FROM shipments WHERE purchase_order_id=? UNION ALL SELECT 1 FROM procurement_shipments WHERE purchase_order_id=? LIMIT 1', order.id, order.id)) return 'A bill of lading is already attached to this order.';
+  return null;
+}
+// Cancelling a live PO and reopening its RFQ for a new award. Every guard is repeated in SQL, so a race aborts the batch.
+export function cancelOrderQueries(db, member, order, { reversalId, reason, now, intervention = null }) {
+  return [query(db, `UPDATE supplier_purchase_orders SET status='cancelled',version=version+1,updated_at=? WHERE id=? AND status='accepted' AND approval_status='approved' AND version=?
+      AND NOT EXISTS(SELECT 1 FROM shipments WHERE purchase_order_id=supplier_purchase_orders.id) AND NOT EXISTS(SELECT 1 FROM procurement_shipments WHERE purchase_order_id=supplier_purchase_orders.id)
+      AND COALESCE((SELECT arrived_milli FROM po_arrived WHERE order_id=supplier_purchase_orders.id),0)=0`, now, order.id, order.version), lostRace(db),
+    query(db, "UPDATE procurement_rfqs SET status='closed',updated_at=? WHERE id=? AND status='awarded' AND cancelled_at IS NULL", now, order.rfq_id), lostRace(db),
+    reversalRow(db, member, reversalId, 'order.cancelled', order.id, reason, now),
+    audit(db, member, 'po.cancelled', order.id, { rfqId: order.rfq_id, reason }, 'staff', { objectType: 'po', before: { status: order.status }, after: { status: 'cancelled' }, reason, intervention })];
+}
 const closeQueries = (db, r, now) => [query(db, "UPDATE procurement_rfqs SET status='closed',closed_at=?,updated_at=? WHERE id=? AND status='open' AND cancelled_at IS NULL", now, now, r.id), lostRace(db),
   notifyRole(db, r.workspace_id, 'purchase_manager', 'bidding.closed', 'rfq', r.id, r.reference)];
 // A change to the arrived quantity also moves the status: covered means received, and an increase reopens a received order.
@@ -66,11 +88,14 @@ const quantityAudit = (db, member, order, quantity, total, intervention = null) 
 export function poInsertQueries(db, member, { bidId, bidVersion, termsSnapshot: t, currency, acceptedBy = member.user_id, intervention = null }, now) {
   const id = crypto.randomUUID(), w = member.workspace_id, total = orderTotal(t.price_minor, t.quantity_milli);
   return [query(db, `SELECT json('!') WHERE NOT EXISTS(SELECT 1 FROM supplier_bids b WHERE b.id=? AND b.version=? AND b.status='submitted' AND b.valid_until>=? AND b.price_minor=? AND b.currency=? AND b.payment_terms=? AND b.delivery_at=? AND b.valid_until=? AND b.note=? AND b.quantity_milli>=?
-      AND ?=COALESCE((SELECT json_extract(value_json,'$') FROM settings WHERE workspace_id=? AND key='currency'),'PKR'))`,
+      AND ?=COALESCE((SELECT json_extract(value_json,'$') FROM settings WHERE workspace_id=? AND key='currency'),'PKR')
+      AND EXISTS(SELECT 1 FROM suppliers s WHERE s.id=b.supplier_id AND s.status='approved'))`,
       bidId, bidVersion, now, t.price_minor, t.currency, t.payment_terms, t.delivery_at, t.valid_until, t.note, t.quantity_milli, currency, w),
     query(db, "INSERT INTO supplier_purchase_orders(id,workspace_id,rfq_id,bid_id,supplier_id,reference,terms_snapshot,status,accepted_by,created_at,quantity_milli,total_minor,approval_status,version,updated_at,created_by) VALUES(?,?,?,?,?,?,?,'accepted',?,?,?,?,'approved',1,?,?)",
       id, w, t.rfq_id, bidId, t.supplier_id, reference('PO'), JSON.stringify(t), acceptedBy, now, t.quantity_milli, total, now, acceptedBy),
     query(db, "UPDATE procurement_rfqs SET status='awarded',updated_at=? WHERE id=? AND status IN ('open','closed') AND cancelled_at IS NULL", now, t.rfq_id), lostRace(db),
+    notifyRole(db, w, 'purchase_manager', 'po.created', 'purchase_order', id, t.title, member.user_id),
+    notifyRole(db, w, 'admin', 'po.created', 'purchase_order', id, t.title, member.user_id),
     audit(db, member, 'po.created', id, { bidId, bidVersion }, 'staff', { objectType: 'po', after: { total_minor: total, quantity_milli: t.quantity_milli }, intervention })];
 }
 const sameCurrency = async (db, workspaceId, currency) => { if ((await settingsOf(db, workspaceId)).currency !== currency) throw new Error('currency changed'); };
@@ -78,6 +103,20 @@ export const approvalHandlers = {
   purchase_award: {
     async approve(db, member, request, { now }) { await sameCurrency(db, member.workspace_id, request.payload.currency); return poInsertQueries(db, member, { ...request.payload, acceptedBy: request.requested_by }, now); },
     reject: async () => [],
+    // An approved award can be undone only by cancelling the PO it created, which needs the same conditions as a cancel.
+    async undoability(db, request) {
+      const order = await one(db, "SELECT * FROM supplier_purchase_orders WHERE rfq_id=? AND status!='cancelled'", request.object_id);
+      if (!order || order.bid_id !== request.payload.bidId) return { available: false, message: 'A later award replaced this one, so it cannot be undone here.' };
+      const block = await cancelBlock(db, order);
+      return block ? { available: false, message: block } : { available: true, message: '' };
+    },
+    async undo(db, member, request, { reason, now, requestId }) {
+      const order = await one(db, "SELECT * FROM supplier_purchase_orders WHERE rfq_id=? AND status!='cancelled'", request.object_id);
+      if (!order || order.bid_id !== request.payload.bidId) fail(409, 'A later award replaced this one, so it cannot be undone here.');
+      const block = await cancelBlock(db, order);
+      if (block) fail(409, block);
+      return cancelOrderQueries(db, member, order, { reversalId: crypto.randomUUID(), reason, now });
+    },
     async describe(db, request) {
       const p = request.payload, rfq = await one(db, 'SELECT * FROM procurement_rfqs WHERE id=? AND workspace_id=?', request.object_id, request.workspace_id);
       const bid = await one(db, 'SELECT * FROM supplier_bids WHERE id=?', p.bidId), supplier = await one(db, 'SELECT id,name FROM suppliers WHERE id=?', bid.supplier_id);
@@ -127,26 +166,30 @@ export async function staffProcurement(request, env, member, path, data) {
       const id = path.slice('/api/erp/suppliers/'.length);
       if (!id.includes('/')) {
         const s = await listed(recordId(id));
-        const ratings = await all(db, 'SELECT r.rating,r.feedback,u.name AS created_by_name,r.created_at FROM supplier_ratings r LEFT JOIN users u ON u.id=r.created_by WHERE r.supplier_id=? ORDER BY r.created_at DESC,r.id', s.id);
+        const ratings = await all(db, "SELECT r.id,r.rating,r.delivery,r.quality,r.terms,r.feedback,u.name AS created_by_name,r.created_at,v.reason AS void_reason,v.created_at AS voided_at FROM supplier_ratings r LEFT JOIN users u ON u.id=r.created_by LEFT JOIN erp_reversals v ON v.action='rating.voided' AND v.object_id=r.id WHERE r.supplier_id=? ORDER BY r.created_at DESC,r.id", s.id);
         return json({ supplier: await supplierView(db, s), ratings, performance: await supplierPerformance(db, s.id) });
       }
     }
     if (path === '/api/erp/suppliers/review' && data) {
-      const intervention = role(member, data, 'purchase_manager');
+      const reinstating = data.status === 'pending';
+      // Reinstating a rejected supplier is an admin decision; the purchase manager's own reviews are unchanged.
+      const intervention = reinstating ? role(member, data, 'admin') : role(member, data, 'purchase_manager');
       keys(data, ['id','status','reason','categories','version','interventionReason']);
       const s = await one(db, 'SELECT * FROM suppliers WHERE id=? AND workspace_id=?', recordId(data.id), w);
       if (!s) fail(404, 'Supplier not found.');
-      if (!['approved','rejected','suspended'].includes(data.status)) fail(422, 'Choose approved, rejected or suspended.');
+      if (!['approved','rejected','suspended','pending'].includes(data.status)) fail(422, 'Choose approved, rejected, suspended or pending.');
       if (!LISTED.includes(s.status)) fail(409, 'This directory contact has no supplier registration to review.');
       if (!MOVES[s.status].includes(data.status)) fail(409, `This supplier cannot move from ${s.status} to ${data.status}.`);
-      const reason = ['rejected','suspended'].includes(data.status) || data.reason !== undefined ? decisionReason(data.reason, 'Review reason') : ''; const version = integer(data.version, 'Version');
+      const reason = ['rejected','suspended'].includes(data.status) || data.reason ? decisionReason(data.reason, 'Review reason') : ''; const version = integer(data.version, 'Version');
+      if (reinstating) reversalReason(data.reason);
       const ids = await categoryIds(db, data.categories ?? (await supplierView(db,s)).categories);
       if(s.version!==version) fail(409,'Supplier changed. Reload before reviewing.');
       try { await db.batch([query(db, 'UPDATE suppliers SET status=?,version=version+1,updated_at=? WHERE id=? AND workspace_id=? AND version=?', data.status,now,s.id,w,version),
         lostRace(db),
         query(db,'INSERT INTO supplier_registration_reviews(id,supplier_id,version,status,reason,actor_id,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',crypto.randomUUID(),s.id,version+1,data.status,reason,member.user_id,member.user_id,now,now),
         ...categoryQueries(db,s.id,ids), query(db, 'DELETE FROM supplier_sessions WHERE user_id IN (SELECT id FROM supplier_users WHERE supplier_id=?)', s.id),
-        audit(db,member,`supplier.${data.status}`,s.id,{reason,categories:ids,previousStatus:s.status},'staff',{reason,before:{status:s.status},after:{status:data.status},intervention})]); }
+        ...(reinstating ? [reversalRow(db, member, crypto.randomUUID(), 'supplier.reopened', s.id, reason, now)] : []),
+        audit(db,member,reinstating ? 'supplier.reopened' : `supplier.${data.status}`,s.id,{reason,categories:ids,previousStatus:s.status},'staff',{reason,before:{status:s.status},after:{status:data.status},intervention})]); }
       catch { fail(409,'Supplier changed. Reload before reviewing.'); }
       return json({ saved: true });
     }
@@ -173,6 +216,38 @@ export async function staffProcurement(request, env, member, path, data) {
       catch { fail(409, 'Supplier changed. Reload before editing.'); }
       return json({ supplier: await supplierView(db, await one(db, `SELECT ${supplierFields} FROM suppliers WHERE id=?`, s.id)) });
     }
+    if (path === '/api/erp/suppliers/ratings' && data) {
+      const intervention = role(member, data, 'purchase_manager');
+      keys(data, ['id','supplierId','delivery','quality','terms','comment','orderId','interventionReason']);
+      const id = recordId(data.id), s = await one(db, 'SELECT * FROM suppliers WHERE id=? AND workspace_id=?', recordId(data.supplierId), w);
+      if (!s) fail(404, 'Supplier not found.');
+      if (s.status !== 'approved') fail(409, 'Only an approved supplier can be rated.');
+      const delivery = integer(data.delivery, 'Delivery rating', 1, 5), quality = integer(data.quality, 'Quality rating', 1, 5), terms = integer(data.terms, 'Terms rating', 1, 5);
+      const comment = data.comment === undefined ? '' : multiline(data.comment, 'Comment', 0, 500);
+      const orderId = data.orderId == null ? null : recordId(data.orderId);
+      if (orderId && !await one(db, 'SELECT id FROM supplier_purchase_orders WHERE id=? AND supplier_id=? AND workspace_id=?', orderId, s.id, w)) fail(404, 'Purchase order not found.');
+      const rating = Math.round((delivery + quality + terms) / 3);
+      const previous = await one(db, 'SELECT * FROM supplier_ratings WHERE id=?', id);
+      if (previous) { if (previous.supplier_id !== s.id || previous.delivery !== delivery || previous.quality !== quality || previous.terms !== terms || previous.feedback !== comment || previous.order_id !== orderId) fail(409, 'This record ID was already used for a different rating.'); return json({ saved: true }); }
+      await db.batch([query(db, 'INSERT INTO supplier_ratings(id,workspace_id,supplier_id,rating,feedback,status,created_by,created_at,updated_at,delivery,quality,terms,order_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', id, w, s.id, rating, comment, 'active', member.user_id, now, now, delivery, quality, terms, orderId),
+        notifyRole(db, w, 'purchase_manager', 'supplier.rated', 'supplier', s.id, s.name, member.user_id),
+        notifyRole(db, w, 'admin', 'supplier.rated', 'supplier', s.id, s.name, member.user_id),
+        audit(db, member, 'supplier.rated', s.id, { delivery, quality, terms, comment, orderId }, 'staff', { intervention })]);
+      return json({ saved: true });
+    }
+    if (path === '/api/erp/suppliers/ratings/void' && data) {
+      const intervention = role(member, data, 'purchase_manager');
+      keys(data, ['id','ratingId','reason','interventionReason']);
+      const requestId = recordId(data.id), text = reversalReason(data.reason);
+      const rating = await one(db, 'SELECT * FROM supplier_ratings WHERE id=? AND workspace_id=?', recordId(data.ratingId), w);
+      if (!rating) fail(404, 'Rating not found.');
+      if (await replayed(db, requestId, 'rating.voided', rating.id)) return json({ saved: true });
+      if (await one(db, "SELECT 1 AS x FROM erp_reversals WHERE action='rating.voided' AND object_id=?", rating.id)) fail(409, 'This rating is already voided.');
+      try { await db.batch([reversalRow(db, member, requestId, 'rating.voided', rating.id, text, now),
+        audit(db, member, 'supplier.rating_voided', rating.supplier_id, { ratingId: rating.id, reason: text }, 'staff', { objectType: 'supplier', before: { voided: false }, after: { voided: true }, reason: text, intervention })]); }
+      catch { fail(409, 'This rating was just voided. Reload first.'); }
+      return json({ saved: true });
+    }
     if (path === '/api/erp/suppliers/rate' && data) {
       const intervention = role(member, data, 'purchase_manager');
       keys(data, ['id','supplierId','rating','feedback','interventionReason']);
@@ -180,6 +255,8 @@ export async function staffProcurement(request, env, member, path, data) {
       const previous = await one(db, 'SELECT * FROM supplier_ratings WHERE id=?', id);
       if (previous) { if (previous.supplier_id !== s.id || previous.rating !== rating || previous.feedback !== feedback) fail(409, 'This record ID was already used for a different rating.'); return json({ saved: true }); }
       await db.batch([query(db, 'INSERT INTO supplier_ratings(id,workspace_id,supplier_id,rating,feedback,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)', id, w, s.id, rating, feedback, 'active', member.user_id, now, now),
+        notifyRole(db, w, 'purchase_manager', 'supplier.rated', 'supplier', s.id, s.name, member.user_id),
+        notifyRole(db, w, 'admin', 'supplier.rated', 'supplier', s.id, s.name, member.user_id),
         audit(db, member, 'supplier.rated', s.id, { rating, feedback }, 'staff', { intervention })]);
       return json({ saved: true });
     }
@@ -260,14 +337,49 @@ export async function staffProcurement(request, env, member, path, data) {
     catch { fail(409,'The bid or RFQ changed. Reload first.'); }
     return json({saved:true});
   }
+  if (path === '/api/erp/rfqs/reopen' && data) {
+    const intervention = role(member, data, 'purchase_manager');
+    keys(data,['id','rfqId','reason','interventionReason']);
+    const requestId = recordId(data.id), text = reversalReason(data.reason);
+    const r = await one(db,'SELECT * FROM procurement_rfqs WHERE id=? AND workspace_id=?',recordId(data.rfqId),w);
+    if (!r) fail(404,'RFQ not found.');
+    if (await replayed(db, requestId, 'rfq.reopened', r.id)) return json({reopened:true});
+    if (r.cancelled_at) fail(409,'A cancelled RFQ cannot be reopened.');
+    if (r.status==='awarded') fail(409,'An awarded RFQ cannot be reopened. Cancel its purchase order first.');
+    if (r.status!=='closed') fail(409,'Only a closed RFQ can be reopened.');
+    if (r.deadline_at<=now) fail(409,'The bid deadline has passed, so suppliers cannot bid again. Create a new RFQ instead.');
+    try { await db.batch([query(db,"UPDATE procurement_rfqs SET status='open',closed_at=NULL,updated_at=? WHERE id=? AND status='closed' AND cancelled_at IS NULL AND deadline_at>?",now,r.id,now), lostRace(db),
+      reversalRow(db,member,requestId,'rfq.reopened',r.id,text,now),
+      audit(db,member,'rfq.reopened',r.id,{reason:text},'staff',{objectType:'rfq',before:{status:'closed'},after:{status:'open'},reason:text,intervention})]); }
+    catch { fail(409,'The RFQ changed, or a bid in another currency is still open. Reload first.'); }
+    return json({reopened:true});
+  }
+  if (path === '/api/erp/bids/reject/undo' && data) {
+    const intervention = role(member, data, 'purchase_manager');
+    keys(data,['id','bidId','version','reason','interventionReason']);
+    const requestId = recordId(data.id), text = reversalReason(data.reason), version = integer(data.version,'Version',0);
+    const b = await one(db,'SELECT b.*,r.status AS rfq_status,r.cancelled_at AS rfq_cancelled_at FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id WHERE b.id=? AND r.workspace_id=?',recordId(data.bidId),w);
+    if (!b) fail(404,'Bid not found.');
+    if (await replayed(db, requestId, 'bid.reject_undone', b.id)) return json({saved:true});
+    if (b.status!=='rejected') fail(409,'Only a rejected bid can be restored.');
+    if (b.rfq_cancelled_at) fail(409,'This RFQ was cancelled, so its bids cannot come back.');
+    if (b.rfq_status==='awarded') fail(409,'This RFQ is already awarded, so the bid cannot come back.');
+    if (b.version!==version) fail(409,'This bid changed. Reload before restoring it.');
+    try { await db.batch([query(db,"UPDATE supplier_bids SET status='submitted',rejection_reason=NULL,updated_at=? WHERE id=? AND version=? AND status='rejected' AND EXISTS(SELECT 1 FROM procurement_rfqs WHERE id=supplier_bids.rfq_id AND status IN ('open','closed') AND cancelled_at IS NULL)",now,b.id,version), lostRace(db),
+      reversalRow(db,member,requestId,'bid.reject_undone',b.id,text,now),
+      audit(db,member,'bid.reject_undone',b.id,{reason:text},'staff',{objectType:'bid',before:{status:'rejected'},after:{status:'submitted'},reason:text,intervention})]); }
+    catch { fail(409,'The bid or RFQ changed. Reload first.'); }
+    return json({saved:true});
+  }
   if (path === '/api/erp/bids/award' && data) {
     const intervention = role(member, data, 'purchase_manager');
     keys(data,['id','version','interventionReason']); const bid = await one(db,'SELECT b.*,r.workspace_id,r.reference AS rfq_reference,r.title,r.specifications,r.unit,r.quantity_milli AS required_quantity FROM supplier_bids b JOIN procurement_rfqs r ON r.id=b.rfq_id WHERE b.id=? AND r.workspace_id=?',recordId(data.id),w);
     if(!bid) fail(404,'Bid not found.');
-    const previous=await one(db,'SELECT * FROM supplier_purchase_orders WHERE rfq_id=?',bid.rfq_id);
+    const previous=await one(db,"SELECT * FROM supplier_purchase_orders WHERE rfq_id=? AND status!='cancelled'",bid.rfq_id);
     if(previous) {if(previous.bid_id!==bid.id||JSON.parse(previous.terms_snapshot).accepted_bid_version!==data.version) fail(409,'Another bid or revision has already been accepted.'); return json({order:previous});}
-    const rfq=await one(db,'SELECT status,cancelled_at FROM procurement_rfqs WHERE id=?',bid.rfq_id), settings=await settingsOf(db,w);
+    const rfq=await one(db,'SELECT status,cancelled_at FROM procurement_rfqs WHERE id=?',bid.rfq_id), supplier=await one(db,'SELECT status FROM suppliers WHERE id=?',bid.supplier_id), settings=await settingsOf(db,w);
     if(rfq.cancelled_at||!['open','closed'].includes(rfq.status)) fail(409,'This RFQ is not open for awarding.');
+    if(supplier?.status!=='approved') fail(409,'Only an approved supplier can win an RFQ.');
     if(bid.currency!==settings.currency) fail(409,`This bid is in ${bid.currency}, but the factory currency is ${settings.currency}.`);
     if(bid.status!=='submitted'||bid.valid_until<now||bid.version!==data.version||bid.quantity_milli<bid.required_quantity) fail(409,'Use a current, valid bid covering the full requested quantity.');
     if(await one(db,"SELECT id FROM approval_requests WHERE object_type='rfq' AND object_id=? AND status='pending'",bid.rfq_id)) fail(409,'An award for this RFQ is waiting for admin approval.');
@@ -275,19 +387,45 @@ export async function staffProcurement(request, env, member, path, data) {
     const total=orderTotal(bid.price_minor,bid.required_quantity), gate=await needsApproval(db,w,'purchase',total);
     // Each side re-checks the other inside its transaction: a pending request blocks an immediate PO and a PO blocks a new request.
     const pending=query(db,"SELECT json('!') WHERE EXISTS(SELECT 1 FROM approval_requests WHERE object_type='rfq' AND object_id=? AND status='pending')",bid.rfq_id);
-    const awarded=query(db,"SELECT json('!') WHERE EXISTS(SELECT 1 FROM supplier_purchase_orders WHERE rfq_id=?)",bid.rfq_id);
+    const awarded=query(db,"SELECT json('!') WHERE EXISTS(SELECT 1 FROM supplier_purchase_orders WHERE rfq_id=? AND status!='cancelled')",bid.rfq_id);
     const approvalId=crypto.randomUUID();
     try {
       await db.batch(gate.required ? [awarded,...approvalQueries(db,member,{id:approvalId,type:'purchase_award',objectType:'rfq',objectId:bid.rfq_id,amount:total,threshold:gate.threshold,unit:'minor',payload:award},now)] : [pending,...poInsertQueries(db,member,{...award,intervention},now)]);
     } catch {
-      const raced=await one(db,'SELECT * FROM supplier_purchase_orders WHERE rfq_id=?',bid.rfq_id);
+      const raced=await one(db,"SELECT * FROM supplier_purchase_orders WHERE rfq_id=? AND status!='cancelled'",bid.rfq_id);
       if(raced?.bid_id===bid.id) return json({order:raced});
       fail(409,'Another award won, or the bid changed. Reload the RFQ.');
     }
     if(gate.required) return json({pendingApproval:true,approvalId},202);
-    const order=await one(db,'SELECT * FROM supplier_purchase_orders WHERE rfq_id=?',bid.rfq_id);
+    const order=await one(db,"SELECT * FROM supplier_purchase_orders WHERE rfq_id=? AND status!='cancelled'",bid.rfq_id);
     if(!order) fail(409,'The bid or supplier status changed. Reload before accepting.');
     return json({order},201);
+  }
+  if (path === '/api/erp/orders/cancel' && data) {
+    const intervention = role(member, data, 'purchase_manager');
+    keys(data,['id','orderId','approvalId','reason','interventionReason']);
+    const requestId = recordId(data.id), text = reversalReason(data.reason);
+    if (data.approvalId !== undefined) {
+      // A pending award is withdrawn before any PO exists. The stored reason starts "Withdrawn:" so it meets the approval reason rule.
+      const approval = await one(db,"SELECT * FROM approval_requests WHERE id=? AND workspace_id=? AND type='purchase_award'",recordId(data.approvalId),w);
+      if (!approval) fail(404,'Award request not found.');
+      if (await replayed(db, requestId, 'award.withdrawn', approval.id)) return json({saved:true});
+      if (approval.status!=='pending') fail(409,'This award was already decided, so it cannot be withdrawn.');
+      try { await db.batch([query(db,"UPDATE approval_requests SET status='rejected',decided_by=?,decided_at=?,updated_at=?,reason=? WHERE id=? AND status='pending'",member.user_id,now,now,`Withdrawn: ${text}`,approval.id), lostRace(db),
+        reversalRow(db,member,requestId,'award.withdrawn',approval.id,text,now),
+        audit(db,member,'award.withdrawn',approval.object_id,{approvalId:approval.id,reason:text},'staff',{objectType:'rfq',before:{status:'pending'},after:{status:'withdrawn'},reason:text,intervention})]); }
+      catch { fail(409,'This award was just decided. Reload first.'); }
+      return json({saved:true});
+    }
+    const order = await one(db,'SELECT * FROM supplier_purchase_orders WHERE id=? AND workspace_id=?',recordId(data.orderId),w);
+    if (!order) fail(404,'Purchase order not found.');
+    if (await replayed(db, requestId, 'order.cancelled', order.id)) return json({saved:true});
+    if (order.status==='cancelled') fail(409,'This order is already cancelled.');
+    const block = await cancelBlock(db, order);
+    if (block) fail(409, block);
+    try { await db.batch(cancelOrderQueries(db, member, order, { reversalId: requestId, reason: text, now, intervention })); }
+    catch { fail(409,'The order changed, or goods have arrived since. Reload before cancelling.'); }
+    return json({saved:true});
   }
   if (path === '/api/erp/orders/quantity' && data) {
     const intervention = role(member, data, 'purchase_manager');
@@ -338,12 +476,11 @@ export async function submitBid(db, supplier, actor, data, now) {
   };
   const repeated = await replay(); if (repeated) return repeated;
   if(r.status!=='open'||r.cancelled_at||r.deadline_at<=now) fail(409,'This RFQ is no longer open for bids.');
-  if(previous?.status==='rejected') fail(409,'This bid was rejected. Contact the purchase manager.');
   const { currency } = await settingsOf(db,actor.workspace_id);
   if(data.currency!==currency) fail(422,`Bid in ${currency}.`);
   if((previous?.version??0)!==version) fail(409,'This bid changed. Reload before editing.');
   date(delivery,'Delivery date',true);date(valid,'Valid until',true);
-  const write=previous ? query(db,'UPDATE supplier_bids SET quantity_milli=?,price_minor=?,currency=?,payment_terms=?,delivery_at=?,valid_until=?,note=?,version=version+1,updated_at=? WHERE id=? AND version=?',quantity,price,data.currency,payment,delivery,valid,note,now,id,version)
+  const write=previous ? query(db,'UPDATE supplier_bids SET quantity_milli=?,price_minor=?,currency=?,payment_terms=?,delivery_at=?,valid_until=?,note=?,status=\'submitted\',rejection_reason=NULL,version=version+1,updated_at=? WHERE id=? AND version=?',quantity,price,data.currency,payment,delivery,valid,note,now,id,version)
     : query(db,"INSERT INTO supplier_bids(id,rfq_id,supplier_id,quantity_milli,price_minor,currency,payment_terms,delivery_at,valid_until,note,version,status,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,1,'submitted',?,?,?)",id,r.id,sid,quantity,price,data.currency,payment,delivery,valid,note,'supplier:'+actor.user_id,now,now);
   try {await db.batch([
     query(db, `SELECT json('!') WHERE NOT EXISTS(SELECT 1 FROM procurement_rfqs r JOIN rfq_recipients x ON x.rfq_id=r.id JOIN suppliers s ON s.id=x.supplier_id WHERE r.id=? AND r.workspace_id=? AND s.id=? AND s.workspace_id=r.workspace_id AND s.status='approved' AND r.status='open' AND r.cancelled_at IS NULL AND r.deadline_at>? AND ?=COALESCE((SELECT json_extract(value_json,'$') FROM settings WHERE workspace_id=r.workspace_id AND key='currency'),'PKR'))`, r.id, actor.workspace_id, sid, now, data.currency),
@@ -354,3 +491,41 @@ export async function submitBid(db, supplier, actor, data, now) {
   return { bid:await one(db,'SELECT * FROM supplier_bids WHERE id=? AND supplier_id=?',id,sid), created:true };
 }
 
+export async function supplierOperations(request, env, user, path, data) {
+  const db=env.DB; const sid=user.supplier_id; const now=Date.now();
+  if (user.status!=='approved') fail(403,'An admin must approve your supplier account before you can use RFQs or orders.');
+  if(path==='/api/portal/workspace'&&!data) {
+    const rfqs=await all(db, "SELECT r.* FROM procurement_rfqs r JOIN rfq_recipients x ON x.rfq_id=r.id WHERE x.supplier_id=? ORDER BY r.created_at DESC LIMIT 100",sid);
+    const bids=await all(db,'SELECT * FROM supplier_bids WHERE supplier_id=? ORDER BY updated_at DESC LIMIT 100',sid);
+    const orders=await all(db,'SELECT * FROM supplier_purchase_orders WHERE supplier_id=? ORDER BY created_at DESC LIMIT 100',sid);
+    const shipments=await all(db,'SELECT * FROM procurement_shipments WHERE supplier_id=? ORDER BY created_at DESC LIMIT 100',sid);
+    return json({rfqs,bids,orders:orders.map(o=>({...o,terms:JSON.parse(o.terms_snapshot)})),shipments});
+  }
+  if(path==='/api/portal/bids'&&data) {
+    const result = await submitBid(db, { id: sid, workspace_id: user.workspace_id, status: user.status }, { user_id: user.user_id, workspace_id: user.workspace_id, role: 'supplier' }, data, now);
+    return json({ bid: result.bid }, result.created && data.version === 0 ? 201 : 200);
+  }
+  if(path==='/api/portal/dispatches'&&data) {
+    keys(data,['id','orderId','billOfLading','carrier','containers','quantityMilli','dispatchedAt','note']);
+    const order=await one(db,'SELECT * FROM supplier_purchase_orders WHERE id=? AND supplier_id=? AND workspace_id=?',recordId(data.orderId),sid,user.workspace_id);
+    if(!order) fail(404,'Purchase order not found.');
+    const id=recordId(data.id), bl=text(data.billOfLading,'Bill of lading',3,100), carrier=text(data.carrier,'Carrier',2,100), qty=integer(data.quantityMilli,'Dispatched quantity'), dispatched=date(data.dispatchedAt,'Dispatch date'), note=multiline(data.note??'','Note',0,2000);
+    if(dispatched>now+60000) fail(422,'Dispatch date cannot be in the future.');
+    if(!Array.isArray(data.containers)||data.containers.length>100||data.containers.some(c=>typeof c!=='string'||! /^[A-Z]{4}[0-9]{7}$/.test(c))) fail(422,'Use container numbers with four capital letters and seven digits, or leave the list empty.');
+    const containers=[...new Set(data.containers)]; const digest=await sha256(JSON.stringify({order:order.id,bl,carrier,qty,dispatched,note,containers}));
+    const trackedBl=bl.toUpperCase().replace(/\s+/g,'');
+    const previous=await one(db,'SELECT * FROM procurement_shipments WHERE id=?',id);
+    if(previous) {if(previous.supplier_id!==sid||previous.request_hash!==digest) fail(409,'This request ID was used for different values.');return json({shipment:previous});}
+    try {await db.batch([query(db,'INSERT INTO procurement_shipments(id,workspace_id,purchase_order_id,supplier_id,bill_of_lading,carrier,containers_json,quantity_milli,dispatched_at,note,request_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',id,user.workspace_id,order.id,sid,bl,carrier,JSON.stringify(containers),qty,dispatched,note,digest,now),
+      query(db,"UPDATE supplier_purchase_orders SET status='dispatched' WHERE id=?",order.id),
+      // The supplier's bill of lading also becomes the order's shipment, so Incoming stock can register the arrival without re-entering it.
+      query(db,'INSERT INTO shipments(id,workspace_id,purchase_order_id,bill_of_lading,created_by,created_at,updated_at) SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM shipments WHERE purchase_order_id=? AND bill_of_lading=?)',id,user.workspace_id,order.id,trackedBl,user.user_id,now,now,order.id,trackedBl),
+      query(db,"UPDATE supplier_purchase_orders SET bill_of_lading=?,updated_at=? WHERE id=? AND bill_of_lading=''",trackedBl,now,order.id),
+      notifyRole(db,user.workspace_id,'purchase_manager','shipment.dispatched','purchase_order',order.id,order.reference),
+      notifyRole(db,user.workspace_id,'admin','shipment.dispatched','purchase_order',order.id,order.reference),
+      audit(db,user,'shipment.dispatched',id,{order:order.id,billOfLading:bl},'supplier')]);}
+    catch {fail(409,'This dispatch exceeds the order quantity or the order is no longer dispatchable. Reload first.');}
+    return json({shipment:await one(db,'SELECT * FROM procurement_shipments WHERE id=?',id)},201);
+  }
+  fail(404,'Supplier portal route not found.');
+}

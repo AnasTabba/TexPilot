@@ -1,0 +1,21 @@
+/* Approvals, supervisor requests and the buyer portal: split views with one pop action per screen. Tokens only. */
+:is(.yf-approvals, .yf-supervisor, .yf-buyer) .button.primary:not(:disabled) { border-color: var(--pop); background: var(--pop); color: var(--pop-ink); }
+:is(.yf-approvals, .yf-supervisor, .yf-buyer) .button.primary:not(:disabled):hover { background: var(--pop); opacity: .92; }
+:is(.yf-approvals, .yf-supervisor, .yf-buyer) .button.primary:not(:disabled):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* The detail pane: one clear title, then the step flow, then the single action. */
+.yf-detail-stack { display: grid; gap: 16px; min-width: 0; }
+.yf-detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.yf-detail-head h2 { margin: 0; font-size: clamp(24px, 3vw, 32px); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; text-wrap: balance; }
+.yf-detail-head p { margin: 4px 0 0; color: var(--ink-2); }
+.yf-approval-amount { font-size: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Buyer portal: a soft wash of brand and pop behind the header, CSS gradients only. */
+.yf-buyer { position: relative; isolation: isolate; }
+.yf-buyer::before { content: ""; position: absolute; inset: 0 0 auto; height: 320px; z-index: -1; pointer-events: none; background: radial-gradient(60% 70% at 20% 0%, color-mix(in srgb, var(--brand) 18%, transparent), transparent 70%), radial-gradient(40% 60% at 90% 0%, color-mix(in srgb, var(--pop) 12%, transparent), transparent 70%); }
+.yf-buyer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.yf-buyer-toolbar p { margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .yf-buyer::before { transition: none; }
+}

@@ -1,0 +1,201 @@
+/* Stock widgets: production bars and stock donut. Open sections on the sheet, no boxes.
+   Data colour is one brand ramp; --pop is never used here. */
+
+.stw-card {
+  --st-raw: color-mix(in srgb, var(--brand) 38%, var(--sheet));
+  --st-wip: var(--brand);
+  --st-finished: var(--brand-ink);
+  --st-cops: var(--ink-3);
+  display: grid;
+  align-content: start;
+  gap: 0;
+  min-width: 0;
+  color: var(--ink);
+}
+
+.stw-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-right: 64px; flex-wrap: wrap; }
+.stw-label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+/* Number first: the figure is the section; the label is a caption above it. */
+.stw-kpi {
+  margin-top: 2px;
+  font-size: clamp(36px, 4.4vw, 52px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+.stw-kpi small { margin-left: 6px; font-size: 16px; font-weight: 600; letter-spacing: 0; color: var(--ink-2); }
+.stw-side { display: grid; justify-items: end; gap: 6px; }
+.stw-sub { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+.stw-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 10px 3px 4px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.stw-delta.up { color: var(--up); background: var(--up-bg); }
+.stw-delta.down { color: var(--down); background: var(--down-bg); }
+
+/* Bar chart */
+.stw-chart { position: relative; margin-top: 16px; }
+.stw-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.stw-col { outline: none; cursor: default; }
+.stw-hit { fill: transparent; }
+.stw-bar {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: stw-grow 600ms var(--ease-out) both;
+  animation-delay: calc(var(--i) * 25ms);
+  transition: opacity 180ms var(--ease-out), filter 180ms var(--ease-out);
+}
+.stw-bar--empty { fill: var(--sunken); }
+.stw-chart.is-hover .stw-col:not(.is-on) .stw-bar { opacity: 0.4; }
+.stw-col.is-on .stw-bar { filter: brightness(1.06); }
+.stw-col:focus-visible .stw-bar { stroke: var(--focus); stroke-width: 2; }
+.stw-tick { font-size: 11px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
+.stw-tip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  border-radius: var(--r-control);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  animation: stw-rise 160ms var(--ease-out) both;
+}
+.stw-tip b { color: var(--ink-2); font-weight: 600; }
+
+/* Donut: segments keep the stage ramp; the ring track is the sunken token. */
+.stw-donut-wrap {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  margin-top: 18px;
+}
+.stw-donut { position: relative; width: 200px; height: 200px; }
+.stw-donut > svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.stw-donut-ring { fill: none; stroke: var(--sunken); stroke-width: 22; }
+.stw-seg {
+  fill: none;
+  stroke-width: 22;
+  cursor: pointer;
+  outline: none;
+  transition: stroke-dasharray 800ms var(--ease-out), stroke-width 180ms var(--ease-out), opacity 180ms var(--ease-out);
+}
+.stw-seg:hover,
+.stw-seg:focus-visible,
+.stw-seg.is-on { stroke-width: 27; }
+.stw-seg.is-dim { opacity: 0.35; }
+.stw-donut-centre {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  pointer-events: none;
+}
+.stw-donut-centre b { font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.stw-donut-centre span { font-size: 13px; color: var(--ink-2); }
+
+/* Stage chips: a swatch and a figure. Selection tints the chip, it does not fill it. */
+.stw-chips { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.stw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 140ms var(--ease-out), background-color 180ms var(--ease-out), border-color 180ms var(--ease-out);
+}
+.stw-chip i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }
+.stw-chip b { font-weight: 700; font-variant-numeric: tabular-nums; }
+.stw-chip:hover { border-color: var(--c); }
+.stw-chip:active { transform: scale(0.97); }
+.stw-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.stw-chip.is-on { background: color-mix(in srgb, var(--c) 16%, transparent); border-color: var(--c); }
+
+/* Lots table: hairline rows, no boxes. */
+.stw-scroll { margin-top: 18px; overflow-x: auto; }
+.stw-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+.stw-table th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.stw-table td { padding: 10px; border-bottom: 1px solid var(--line); }
+.stw-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.stw-row {
+  cursor: pointer;
+  outline: none;
+  animation: stw-rise 240ms var(--ease-out) backwards;
+  animation-delay: calc(var(--i) * 40ms);
+}
+.stw-row:hover td { background: var(--raised); }
+.stw-row:active td { background: var(--sunken); }
+.stw-row:focus-visible td:first-child { box-shadow: inset 3px 0 0 var(--focus); }
+.stw-cell { display: inline-block; font-weight: 600; transition: transform 140ms var(--ease-out); }
+.stw-row:active .stw-cell { transform: scale(0.97); }
+.stw-stage { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+.stw-stage::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.stw-q { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.stw-q--approved { color: var(--ok); background: var(--ok-bg); }
+.stw-q--hold { color: var(--down); background: var(--down-bg); }
+.stw-q--uninspected { color: var(--warn); background: var(--warn-bg); }
+.stw-empty td { border-bottom: 0; }
+/* Empty state: a quiet line where the rows would be, not a broken table. */
+.stw-empty-bar { display: block; height: 10px; border-radius: 999px; background: var(--sunken); }
+
+@keyframes stw-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes stw-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.stw-title { margin: 0 0 14px; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); padding-right: 64px; }
+
+/* Sections are as wide as their grid cell: keep the donut beside compact chips, and one line per batch. */
+.stw-inv { container-type: inline-size; }
+@container (max-width: 560px) {
+  .stw-donut-wrap { grid-template-columns: 150px minmax(0, 1fr); justify-items: stretch; gap: 16px; }
+  .stw-donut { width: 150px; height: 150px; }
+  .stw-donut-centre b { font-size: 22px; }
+  .stw-chips { flex-direction: column; flex-wrap: nowrap; gap: 6px; }
+  .stw-chip { justify-content: space-between; white-space: nowrap; padding-block: 6px; font-size: 13px; }
+  .stw-table { font-size: 13px; table-layout: fixed; }
+  .stw-table th:nth-child(3), .stw-table td:nth-child(3) { display: none; }
+  .stw-table td { padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stw-table th:nth-child(1) { width: 26%; } .stw-table th:nth-child(4) { width: 18%; } .stw-table th:nth-child(5) { width: 30%; }
+}
+
+@media (max-width: 560px) {
+  .stw-donut-wrap { grid-template-columns: 1fr; justify-items: center; }
+  .stw-chips { justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stw-bar,
+  .stw-row,
+  .stw-tip,
+  .stw-seg,
+  .stw-chip,
+  .stw-cell { animation: none; transition: none; }
+  .stw-chip:active, .stw-cell { transform: none; }
+}

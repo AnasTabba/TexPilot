@@ -1,8 +1,9 @@
 export interface SupplierCategory { id: string; name: string; urdu_name: string }
 export type SupplierStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
+export interface SupplierRating { average: number; delivery: number; quality: number; terms: number; count: number }
 export interface Supplier {
  id: string; name: string; contact_name: string; email: string; phone: string; city: string; website: string;
- source_url: string; source_checked_at: number | null; status: SupplierStatus; version: number; categories: string[];
+ source_url: string; source_checked_at: number | null; status: SupplierStatus; version: number; categories: string[]; rating: SupplierRating | null;
 }
 export interface ProcurementRfq {
  id: string; reference: string; title: string; category_id: string; specifications: string;
@@ -28,7 +29,7 @@ export interface ProcurementState {
 }
 export interface SupplierIdentity { user: { id: string; name: string; email: string }; supplier: Supplier }
 export const quantity = (milli: number) => new Intl.NumberFormat('en', { maximumFractionDigits: 3 }).format(milli / 1000);
-export const rate = (minor: number, currency: string) => new Intl.NumberFormat('en', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(minor / 100);
+export const rate = (minor: number, currency: string) => new Intl.NumberFormat('en', { style: 'currency', currency }).format(minor / 100);
 export const factoryTime = (time: number) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium', timeStyle: 'short' }).format(time);
 export function fixedInput(value: string, precision: number, name: string) {
  if (!new RegExp(`^\\d+(?:\\.\\d{1,${precision}})?$`).test(value.trim())) throw new Error(`${name}: use a positive number with up to ${precision} decimal places.`);
@@ -46,4 +47,4 @@ export function localFactoryInput(time: number) {
  return new Date(time + 5 * 3600_000).toISOString().slice(0, 16);
 }
 
-export interface PendingPurchasing { awards: { approvalId: string; rfqId: string; bidId: string; bidVersion: number; amount: number; currency: string }[]; changes: { approvalId: string; orderId: string; quantityMilli: number; fromQuantityMilli: number }[] }
+export interface PendingPurchasing { awards: { approvalId: string; rfqId: string; bidId: string; bidVersion: number; amount: number }[]; changes: { approvalId: string; orderId: string; quantityMilli: number }[] }

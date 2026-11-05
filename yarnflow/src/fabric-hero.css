@@ -1,29 +1,42 @@
-/* feat/app-scaffold's fabric explorer in Yarnflow's burnt orange, espresso and ochre: one colour per garment, a floating
-   illustration on a soft circle and ring, white type, a white call to action. */
+/* Fabric explorer hero and the scan illustrations, themed with the Yarnflow tokens only.
+   One blue per garment, a soft blue-to-pop glow behind it, light type on the blue, and a pop call to action. */
 .fabric-hero {
-  --hero: #b4441b;
-  --hero-soft: rgb(255 255 255 / 74%);
+  --hero: var(--rail-line);
+  --hero-soft: color-mix(in oklab, var(--rail-ink) 76%, transparent);
   position: relative;
+  isolation: isolate;
   display: grid;
   justify-items: center;
   gap: 10px;
   padding: 22px 22px 18px;
-  border-radius: 24px;
-  background: var(--hero);
-  color: #fff;
+  border-radius: var(--r-field);
+  background: linear-gradient(165deg, var(--hero), var(--rail));
+  color: var(--rail-ink);
   text-align: center;
   overflow: hidden;
-  transition: background-color 0.6s ease;
+  transition: background 0.6s ease;
   margin-bottom: 18px;
 }
+/* Atmosphere: a blue bloom with a faint pop warmth in the corner. Static, gradients only. */
+.fabric-hero::before {
+  content: "";
+  position: absolute;
+  inset: -30% -20% auto;
+  height: 80%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(closest-side, color-mix(in oklab, var(--brand) 40%, transparent), transparent),
+    radial-gradient(closest-side at 85% 90%, color-mix(in oklab, var(--pop) 26%, transparent), transparent);
+}
 .fabric-hero-denim {
-  --hero: #b4441b;
+  --hero: var(--rail-line);
 }
 .fabric-hero-cotton {
-  --hero: #3a261b;
+  --hero: var(--rail);
 }
 .fabric-hero-polyester {
-  --hero: #8a5a12;
+  --hero: color-mix(in oklab, var(--rail-line) 75%, var(--brand));
 }
 .fabric-hero-brand {
   display: flex;
@@ -58,12 +71,17 @@
 .fabric-hero-ring {
   width: 236px;
   height: 236px;
-  border: 1px solid rgb(255 255 255 / 45%);
+  border: 1px solid color-mix(in oklab, var(--rail-ink) 45%, transparent);
 }
 .fabric-hero-circle {
   width: 204px;
   height: 204px;
-  background: rgb(255 255 255 / 16%);
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--rail-ink) 30%, transparent),
+    color-mix(in oklab, var(--rail-ink) 10%, transparent) 70%
+  );
+  animation: warm-breathe 4.2s ease-in-out infinite;
 }
 .fabric-hero-art img {
   position: absolute;
@@ -81,6 +99,7 @@
   opacity: 1;
   transform: rotate(-12deg) scale(1);
   animation: fabric-float 4.2s ease-in-out infinite;
+  will-change: transform;
 }
 @keyframes fabric-float {
   0%,
@@ -99,8 +118,8 @@
   align-items: center;
   gap: 6px;
   padding: 7px 11px;
-  border-radius: 12px;
-  background: #fff;
+  border-radius: var(--r-control);
+  background: var(--panel);
   color: var(--hero);
   font-size: 0.72rem;
   font-weight: 700;
@@ -113,7 +132,7 @@
   font-size: 1.75rem;
   line-height: 1.15;
   letter-spacing: -0.03em;
-  color: #fff;
+  color: var(--rail-ink);
 }
 .fabric-hero p {
   color: var(--hero-soft);
@@ -139,15 +158,16 @@
   width: 6px;
   height: 6px;
   border-radius: 6px;
-  background: rgb(255 255 255 / 45%);
+  background: color-mix(in oklab, var(--rail-ink) 45%, transparent);
   transition:
     width 0.3s ease,
     background-color 0.3s ease;
 }
 .fabric-hero-dots button[aria-pressed="true"] i {
   width: 20px;
-  background: #fff;
+  background: var(--rail-ink);
 }
+/* The one primary action on the hero: pop on blue. */
 .fabric-hero-action {
   width: 100%;
   min-height: 52px;
@@ -156,18 +176,21 @@
   justify-content: center;
   gap: 10px;
   border: 0;
-  border-radius: 14px;
-  background: #fff;
-  color: var(--hero);
+  border-radius: var(--r-control);
+  background: var(--pop);
+  color: var(--pop-ink);
   font: inherit;
   font-size: 1.05rem;
   font-weight: 700;
   cursor: pointer;
-  transition: color 0.6s ease;
+  transition: transform 160ms var(--ease-out);
+}
+.fabric-hero-action:active:not(:disabled) {
+  transform: scale(0.97);
 }
 .fabric-hero-action:focus-visible,
 .fabric-hero-dots button:focus-visible {
-  outline: 3px solid #fff;
+  outline: 3px solid var(--rail-ink);
   outline-offset: 2px;
 }
 .fabric-hero-action:disabled {
@@ -181,21 +204,21 @@
 
 /* The result's garment art: the same circle and floating illustration, smaller. */
 .scan-guide-art {
-  --hero: #b4441b;
+  --hero: var(--rail-line);
   position: relative;
   height: 190px;
   display: grid;
   place-items: center;
-  border-radius: 20px;
-  background: var(--hero);
+  border-radius: var(--r-field);
+  background: linear-gradient(165deg, var(--hero), var(--rail));
   overflow: hidden;
   margin-bottom: 14px;
 }
 .scan-guide-art.fabric-hero-cotton {
-  --hero: #3a261b;
+  --hero: var(--rail);
 }
 .scan-guide-art.fabric-hero-polyester {
-  --hero: #8a5a12;
+  --hero: color-mix(in oklab, var(--rail-line) 75%, var(--brand));
 }
 .scan-guide-art .fabric-hero-circle {
   width: 150px;
@@ -214,8 +237,8 @@
   left: 12px;
   top: 12px;
   padding: 5px 10px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 92%);
+  border-radius: var(--r-pill);
+  background: var(--panel);
   color: var(--hero);
   font-size: 0.72rem;
   font-weight: 700;
@@ -292,7 +315,7 @@
   text-transform: capitalize;
 }
 
-/* Warm light: a slow gold sheen crosses the panel, and a glow breathes behind the garment. */
+/* Warm light: a slow sheen crosses the panel, and a glow breathes behind the garment. */
 .fabric-hero::after {
   content: "";
   position: absolute;
@@ -301,7 +324,7 @@
   background: linear-gradient(
     100deg,
     transparent,
-    rgb(255 214 140 / 16%) 50%,
+    color-mix(in oklab, var(--rail-ink) 16%, transparent) 50%,
     transparent
   );
   transform: translateX(-130%) skewX(-12deg);
@@ -309,11 +332,6 @@
   pointer-events: none;
 }
 .fabric-hero-circle {
-  background: radial-gradient(
-    circle,
-    rgb(255 222 160 / 34%),
-    rgb(255 255 255 / 10%) 70%
-  );
   animation: warm-breathe 4.2s ease-in-out infinite;
 }
 @keyframes warm-breathe {
@@ -321,9 +339,6 @@
     transform: scale(1.06);
     opacity: 0.85;
   }
-}
-.fabric-hero-art img.is-active {
-  will-change: transform;
 }
 @media (prefers-reduced-motion: reduce) {
   .fabric-hero::after,
@@ -345,14 +360,14 @@
 .weave-loader i {
   width: 5px;
   border-radius: 3px;
-  background: var(--chrome, #2b1b13);
+  background: var(--ink);
   position: relative;
   z-index: 1;
   animation: warp-lift 1.6s var(--ease-out) infinite;
 }
 .weave-loader i:nth-child(even) {
   z-index: 3;
-  background: var(--gold, #d6a23c);
+  background: var(--brand);
   animation-delay: 0.8s;
 }
 .weave-loader b {
@@ -367,8 +382,8 @@
   background: linear-gradient(
     90deg,
     transparent,
-    var(--brand, #b4441b) 30%,
-    var(--brand, #b4441b) 70%,
+    var(--brand) 30%,
+    var(--brand) 70%,
     transparent
   );
   animation: weft-shuttle 1.6s var(--ease-out) infinite alternate;
@@ -453,7 +468,7 @@
 .scan-seen {
   position: relative;
   margin: 0 0 14px;
-  border-radius: 14px;
+  border-radius: var(--r-row);
   overflow: hidden;
   background: var(--sunken);
   animation: answer-in 420ms var(--ease-out) backwards;
@@ -466,9 +481,9 @@
 }
 .scan-seen-box {
   position: absolute;
-  border: 2px solid var(--gold);
+  border: 2px solid var(--brand-ink);
   border-radius: 6px;
-  box-shadow: 0 0 0 9999px rgb(23 14 9 / 28%);
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 28%);
   animation: box-find 500ms var(--ease-out) 150ms backwards;
 }
 .scan-seen-box b {
@@ -477,8 +492,8 @@
   top: -2px;
   padding: 3px 8px;
   border-radius: 6px 0 6px 0;
-  background: var(--gold);
-  color: var(--chrome);
+  background: var(--brand-ink);
+  color: var(--on-ink);
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: capitalize;
@@ -497,7 +512,7 @@
 .scan-likely {
   margin-left: 8px;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--sunken);
   color: var(--muted);
   font-size: 0.75rem;
@@ -509,14 +524,14 @@
 .scan-work {
   margin: 0 0 14px;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--r-control);
   background: var(--sunken);
   color: var(--muted);
   font-size: 0.88rem;
   line-height: 1.5;
 }
 .scan-work bdi {
-  color: var(--text);
+  color: var(--ink);
   font-weight: 600;
 }
 @media (prefers-reduced-motion: reduce) {

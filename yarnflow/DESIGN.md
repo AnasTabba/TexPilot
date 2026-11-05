@@ -241,7 +241,7 @@ The shell is one continuous surface rather than a grid of boxes: an ink sidebar,
 
 Motion makes the flow feel alive without performing: each screen settles in from below in a short stagger, the mix bar grows in, the stock thread's dash keeps running toward dispatch, a white pill glides under the nav, buttons press in and their arrow leans forward, scan answers arrive in sequence, and a small loom weaves while a photo is analysed. Reduced motion removes all travel, including the running thread.
 
-The native iOS app (`ios/Yarnflow/YarnflowApp.swift`, `enum YF` and `ConeMark`) mirrors these tokens and the same cone drawing, now with capsule buttons, tags and nav and borderless 24pt continuous-corner panels; it is a mirror of this system, not a separate one.
+The native iOS app (`../ios/Yarnflow/YarnflowApp.swift`, `enum YF` and `ConeMark`) mirrors these tokens and the same cone drawing, now with capsule buttons, tags and nav and borderless 24pt continuous-corner panels; it is a mirror of this system, not a separate one.
 
 **Key Characteristics:**
 - One tube colour per material, carried everywhere that material appears.

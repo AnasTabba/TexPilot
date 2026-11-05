@@ -65,7 +65,7 @@ Model recovery and startup: see [MODEL-LOCATION.md](MODEL-LOCATION.md) and [MODE
 
 ## Local development
 
-From `yarnflow/`, use Node 24+:
+From `yarn-erp/`, use Node 24+:
 
 ```sh
 npm ci

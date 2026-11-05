@@ -1,0 +1,64 @@
+/* Sales and dispatch screens: only the rules the shared erp.css, yarnflow.css and sales.css do not already carry. */
+
+/* Dispatch status history, shown on sales and dispatch detail views. */
+.yf-dispatch-thread { display:grid; gap:10px; padding-inline-start:22px; }
+.yf-dispatch-thread li { padding:8px 0; color:var(--ink-2); }
+.yf-dispatch-thread li.done { color:var(--ink); }
+.yf-dispatch-thread li[aria-current="step"] { font-weight:600; }
+
+/* Analytics tables scroll sideways on phones instead of pushing the page wider. */
+.erp-table-wrap { overflow-x:auto; max-width:100%; }
+.erp-table { width:100%; border-collapse:collapse; }
+.erp-table th, .erp-table td { padding:10px 12px; text-align:start; border-bottom:1px solid var(--line); vertical-align:top; }
+.erp-table thead th { color:var(--ink-2); font-size:14px; font-weight:600; }
+.erp-table td { white-space:nowrap; font-variant-numeric:tabular-nums; }
+
+/* Buyer directory records use erp-record; the money position and credit bar sit inside them. */
+.buyer-facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px 20px; margin:0; }
+.buyer-facts div { display:grid; gap:2px; }
+.buyer-facts dt { color:var(--ink-2); font-size:14px; }
+.buyer-facts dd { margin:0; font-weight:600; font-variant-numeric:tabular-nums; }
+.buyer-facts dd.is-warn { color:var(--warn); }
+.buyer-facts dd.is-bad { color:var(--bad); }
+.buyer-credit, .buyer-credit-note { display:grid; gap:6px; margin:0; }
+.buyer-credit-note { color:var(--ink-2); font-size:14px; }
+.buyer-credit-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; color:var(--ink-2); font-size:14px; font-variant-numeric:tabular-nums; }
+.buyer-over { display:inline-flex; align-items:center; height:26px; padding:0 10px; border-radius:var(--r-pill); background:var(--warn-bg); color:var(--warn); font-weight:600; font-size:14px; }
+.buyer-meter { height:6px; border-radius:3px; background:var(--line); overflow:hidden; }
+.buyer-meter span { display:block; height:100%; background:var(--ink-2); }
+.buyer-meter.is-warn span { background:var(--warn); }
+.buyer-detail { display:grid; gap:6px; }
+.buyer-detail h4 { margin:10px 0 0; font-size:15px; }
+.buyer-invoices { display:grid; gap:6px; margin:0; padding:0; list-style:none; font-size:14px; }
+.buyer-invoices li { display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline; }
+.buyer-clear { display:flex; align-items:center; gap:8px; font-size:15px; }
+
+.buyer-head-side { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+
+/* Corrections: a voided rating stays in the history struck through; payments list with reversal state. */
+.buyer-rating-history li.is-voided .buyer-rating-scores,
+.buyer-rating-history li.is-voided p:not(.buyer-rating-void) { text-decoration: line-through; opacity: .55; }
+.buyer-rating-void { font-size: 13px; color: var(--muted); }
+.invoice-payments { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; }
+.invoice-payments li { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; }
+
+/* Dispatch step flow: request, approve, dispatch, deliver. Numbered steps joined by a rule; the chip under each step is the state. */
+.yf-dispatch-thread { display: block; padding-inline-start: 0; margin-block: 8px 4px; }
+.yf-dispatch-thread ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.yf-dispatch-thread li { position: relative; display: grid; justify-items: start; gap: 10px; padding: 0; color: var(--ink-3); min-width: 0; }
+.yf-dispatch-thread li > span[aria-hidden="true"] {
+  position: absolute; top: 26px; inset-inline-start: 26px; z-index: 1; display: grid; place-items: center; width: 22px; height: 22px; border: 2px solid var(--line-strong);
+  border-radius: 50%; background: var(--panel); color: var(--ink-2); font-weight: 700; font-size: 12px;
+}
+.yf-dispatch-thread li:not(:last-child)::after {
+  content: ""; position: absolute; left: 52px; right: 8px; top: 19px; height: 2px; border-radius: 2px; background: var(--line-strong);
+}
+.yf-dispatch-thread li.done > span[aria-hidden="true"] { border-color: var(--brand); background: var(--brand); color: var(--brand-ink); }
+.yf-dispatch-thread li.done:not(:last-child)::after { background: var(--brand); }
+.yf-dispatch-thread li[aria-current="step"] > span[aria-hidden="true"] { border-color: var(--pop); background: var(--pop); color: var(--pop-ink); }
+.yf-dispatch-thread li[aria-current="step"] { font-weight: 600; }
+.yf-dispatch-thread .live-warning { margin-top: 12px; }
+@media (max-width: 640px) {
+  .yf-dispatch-thread ol { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 18px; }
+  .yf-dispatch-thread li:nth-child(2n)::after { display: none; }
+}

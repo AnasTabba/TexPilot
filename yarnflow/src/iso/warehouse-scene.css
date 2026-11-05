@@ -1,0 +1,13 @@
+/* Isometric warehouse corner. Tokens only; each solid sets --tone, faces derive from it. */
+.wsc { display: block; width: 100%; height: auto; overflow: visible; }
+.wsc-solid { --tone: var(--brand); }
+.wsc-solid.is-pop { --tone: var(--pop); }
+.wsc-top { fill: color-mix(in srgb, var(--tone) 70%, white); }
+.wsc-left { fill: var(--tone); }
+.wsc-right { fill: color-mix(in srgb, var(--tone) 70%, black); }
+.wsc-face { stroke: var(--line-strong); stroke-width: 1; stroke-linejoin: round; }
+.wsc-ground { fill: var(--ink); opacity: 0.12; }
+@media (prefers-reduced-motion: no-preference) {
+  .wsc-group { animation: wsc-in 240ms var(--ease-out) both; animation-delay: calc(var(--i) * 40ms); }
+}
+@keyframes wsc-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

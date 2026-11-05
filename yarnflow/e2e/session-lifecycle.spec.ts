@@ -5,7 +5,7 @@ test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); 
 
 async function signIn(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Anas', exact: true }).click();
+  await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
   await page.getByLabel('4-digit PIN', { exact: true }).fill('2468');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 }

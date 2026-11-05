@@ -13,4 +13,4 @@ These are illustrative assets, not scanner evidence. Exact composition comes fro
 
 The gallery supports pause/play and respects the operating system’s reduced-motion preference by loading still images. Production integration should do the same; animated WebP itself cannot read a motion preference.
 
-Regenerate exports from the repository root: `PYTHONPATH=scanner scanner/.venv/bin/python yarnflow/artwork/scanner-outcomes/build_assets.py` (Pillow required). This reads the current scanner taxonomies and fails if an outcome has no illustration.
+Regenerate exports from the repository root: `PYTHONPATH=. .venv/bin/python yarn-erp/artwork/scanner-outcomes/build_assets.py` (Pillow required). This reads the current scanner taxonomies and fails if an outcome has no illustration.

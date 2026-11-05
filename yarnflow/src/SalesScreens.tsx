@@ -1,21 +1,39 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, BadgeCheck, ChartNoAxesCombined, Download, FileText, RefreshCw, Truck } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Ban, Banknote, ChartNoAxesCombined, ClipboardList, ExternalLink, FileText, Pencil, Plus, Receipt, RefreshCw, RotateCcw, Send, Star, Truck } from 'lucide-react';
+import { AnalyticsSection, BarList, KpiStrip, StackedBar, firstCurrency, type BarRow, type Tone } from './AnalyticsKit';
 import { AsyncForm, Field } from './forms';
 import { useLanguage } from './i18n';
 import { InterventionField, NextStep, ReasonField, SectionTabs, StatusTag, kg, money } from './PortalCommon';
+import { StageIcon, stageState, type StageIconName } from './iso/StageIcons';
+import { SplitView, StepFlow } from './SplitView';
 import { inventoryRequest, type Member } from './inventory-client';
-import { factoryTime, fixedInput, localFactoryInput } from './erp-client';
+import { factoryTime, fixedInput } from './erp-client';
+import { InvoiceGenerator } from './InvoiceGenerator';
+import { BuyerRatingHistory, BuyerRatingSummary, RateBuyer } from './BuyerRating';
+import { InvoiceDocument } from './InvoiceDocument';
+import { invoiceDocData, type InvoiceDocData } from './invoice-pdf';
+import './sales.css';
+import './sales-screens.css';
+import './sales-ui.css';
 
 type Buyer = { id: string; name: string; contact_name: string; email: string; phone: string; city: string; notes: string; status: string; version: number; created_at: number };
 type Rfq = { id: string; buyer_id: string; buyer_name: string; reference: string; specifications: string; quantity_milli: number; unit: string; requested_delivery_at: number; payment_terms: string; status: string; state: string; created_at: number };
 type Revision = { id: string; buyer_po_id: string; version: number; quantity_milli: number; unit: string; price_minor: number; currency: string; specifications: string; requested_delivery_at: number; payment_terms: string; credit_days: number; note: string; status: string; created_at: number };
-type Invoice = { id: string; number: string; sales_order_id: string; buyer_id: string; buyer_name?: string; order_reference?: string; subtotal_minor: number | null; tax_rate_bp: number | null; tax_minor: number | null; total_minor: number; currency: string; issued_at: number; due_at: number | null; payment_terms?: string; credit_days?: number; credited_minor: number; paid_minor: number; outstanding_minor: number; status: string; days_to_due: number | null; alerts: { id: string; kind: string; created_at: number }[] };
+type Invoice = { id: string; number: string; sales_order_id: string; buyer_id: string; buyer_name?: string; order_reference?: string; lines_json: string; subtotal_minor: number | null; tax_rate_bp: number | null; tax_minor: number | null; total_minor: number; currency: string; issued_at: number; due_at: number | null; payment_terms?: string; credit_days?: number; credited_minor: number; paid_minor: number; outstanding_minor: number; status: string; days_to_due: number | null; voided_at?: number | null; void_reason?: string | null; alerts: { id: string; kind: string; created_at: number }[] };
 type CreditNote = { id: string; invoice_id: string; number: string; amount_minor: number; reason: string; created_at: number };
-type SalesState = { buyers: Buyer[]; rfqs: Rfq[]; revisions: Revision[]; orders: { id: string; revision_id: string }[]; invoices: Invoice[]; creditNotes: CreditNote[]; products: { id: string; sku: string; name: string }[]; settings: { currency: string; tax_rate_bp: number } };
+type InvoicePayment = { id: string; invoice_id: string; amount_minor: number; received_at: number; note: string; reversal_id: string | null; reversal_reason: string | null };
+type SalesOrder = { id: string; revision_id: string; buyer_id: string; reference: string; status: string; terms_snapshot: string; created_at: number };
+type SalesState = { buyers: Buyer[]; rfqs: Rfq[]; revisions: Revision[]; orders: SalesOrder[]; invoices: Invoice[]; creditNotes: CreditNote[]; products: { id: string; sku: string; name: string; product_type: string | null }[]; settings: { currency: string; tax_rate_bp: number };
+  saleLines: { sales_order_id: string; product_id: string | null; product_name: string | null }[]; invoicePayments: InvoicePayment[]; factoryName: string };
 type DispatchRecord = { id: string; sales_order_id: string; status: 'pending_approval' | 'approved' | 'on_hold' | 'dispatched' | 'delivered'; order_reference: string; buyer_name: string; product_name: string; lot_batch: string; quantity_milli: number; grams: number; hold_reason: string | null; approval_request_id: string | null; hold_notice_id: string | null; created_at: number; dispatched_at: number | null; delivered_at: number | null };
 type StockQuery = { id: string; product_id: string; product_name: string; quantity_milli: number | null; buyer_rfq_id: string | null; question: string; status: string; available_grams: number | null; answer: string | null; created_at: number };
 type Props = { member: Member; section: string; tab: string; id: string; navigate: (to: string) => void };
+type BuyerSummary = { id: string; name: string; contact_name: string; email: string; phone: string; city: string; notes: string; version: number; status: string; credit_limit_minor: number | null; credit_limit_currency: string | null; sold: { unit: string; quantity_milli: number }[]; invoiced: { currency: string; total_minor: number; invoices: number }[]; outstanding: { currency: string; outstanding_minor: number }[]; overdue: { currency: string; overdue_minor: number }[]; next_due_at: number | null; days_left: number | null; credit_used_minor: number | null; over_limit: boolean };
+type SalesSettings = { currency: string; tax_rate_bp: number; invoice_format: string; reminder_hours: number; credit_alert_days: number[] };
 type Analytics = { byPeriod: { period: string; currency: string; totalMinor: number }[]; byBuyer: { buyer: string; currency: string; totalMinor: number }[]; byProduct: { product: string | null; currency: string; totalMinor: number }[]; paymentStatus: Record<string, number>; overdueByCurrency: { currency: string; overdueMinor: number }[] };
+
+/** Sections this screen renders; LiveApp routes these to SalesScreens for the sales manager and admin. */
+export const SALES_SECTIONS = ['dashboard', 'buyers', 'buyer-rfqs', 'invoices', 'dispatch-requests', 'analytics'];
 
 const owner = ['sales_manager'] as const;
 const dateInput = (time: number) => new Date(time + 5 * 60 * 60_000).toISOString().slice(0, 10);
@@ -25,10 +43,17 @@ const amountInput = (minor: number) => (minor / 100).toFixed(2);
 const today = () => dateInput(Date.now());
 const dueDate = (time: number | null) => time == null ? '—' : new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium' }).format(time);
 const tabs: Record<string, { id: string; en: string; ur: string }[]> = {
-  buyers: [{ id: 'pending', en: 'Pending', ur: 'زیرِ التوا' }, { id: 'active', en: 'Active', ur: 'فعال' }, { id: 'all', en: 'All', ur: 'سب' }],
+  buyers: [{ id: 'pending', en: 'To approve', ur: 'منظوری کے لیے' }, { id: 'active', en: 'Buyers', ur: 'خریدار' }, { id: 'all', en: 'All', ur: 'سب' }, { id: 'settings', en: 'Settings', ur: 'ترتیبات' }],
   'buyer-rfqs': [{ id: 'open', en: 'To quote', ur: 'قیمت دینے کے لیے' }, { id: 'quoted', en: 'Quoted', ur: 'قیمت دی گئی' }, { id: 'sold', en: 'Sold', ur: 'فروخت شدہ' }, { id: 'all', en: 'All', ur: 'سب' }],
   invoices: [{ id: 'owed', en: 'To collect', ur: 'وصولی کے لیے' }, { id: 'paid', en: 'Paid', ur: 'ادا شدہ' }, { id: 'all', en: 'All', ur: 'سب' }],
   'dispatch-requests': [{ id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'all', en: 'All', ur: 'سب' }],
+};
+// Status moves the sales team can make, mirroring the supplier rules: pending is approved or rejected, approved can be suspended and reinstated, rejected is final.
+type BuyerMove = { en: string; ur: string; options: [string, string, string][] };
+const buyerMoves: Record<string, BuyerMove> = {
+  pending: { en: 'Review buyer', ur: 'خریدار کی جانچ', options: [['active', 'Approve', 'منظور'], ['rejected', 'Reject', 'مسترد']] },
+  active: { en: 'Suspend buyer', ur: 'خریدار معطل کریں', options: [['suspended', 'Suspend access', 'رسائی معطل کریں']] },
+  suspended: { en: 'Reactivate buyer', ur: 'خریدار دوبارہ فعال کریں', options: [['active', 'Reactivate access', 'رسائی بحال کریں']] },
 };
 const termOptions = [
   ['payment_overdue', 'Payment overdue', 'ادائیگی کی مدت گزر گئی'],
@@ -36,197 +61,569 @@ const termOptions = [
   ['other', 'Other', 'دیگر'],
 ] as const;
 
+const rfqStep = (state: string) => state === 'sold' ? 2 : state === 'quoted' || state === 'awaiting_buyer_approval' ? 1 : 0;
+
 export function SalesScreens({ member, section, tab, id, navigate }: Props) {
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
   const [state, setState] = useState<SalesState | null>(null);
   const [dispatches, setDispatches] = useState<DispatchRecord[]>([]);
   const [queries, setQueries] = useState<StockQuery[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [summaries, setSummaries] = useState<BuyerSummary[]>([]);
+  const [salesSettings, setSalesSettings] = useState<SalesSettings | null>(null);
   const [loading, setLoading] = useState(true), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [online, setOnline] = useState(navigator.onLine), [open, setOpen] = useState('');
   const [intervention, setIntervention] = useState(''), [running, setRunning] = useState('');
   const saleIds = useRef<Record<string, string>>({});
+  // Set when a voided invoice's "issue corrected invoice" is used: the generator starts from that invoice's values.
+  const [regenerateFrom, setRegenerateFrom] = useState('');
   const [from, setFrom] = useState(() => dateInput(Date.now() - 30 * 86400000)), [to, setTo] = useState(today);
   const allowed = member.role === 'sales_manager' || member.role === 'admin';
 
   const load = useCallback(async () => {
+    if (!allowed) return;
     setLoading(true);
     try {
       const next = await inventoryRequest<SalesState>('/erp/sales');
       setState(next);
+      if (section === 'buyers' || section === 'analytics') setSummaries((await inventoryRequest<{ buyers: BuyerSummary[] }>('/erp/sales/buyers/summary')).buyers);
+      if (section === 'buyers' && tab === 'settings' && member.admin) setSalesSettings((await inventoryRequest<{ settings: SalesSettings }>('/erp/sales/settings')).settings);
       if (section === 'buyer-rfqs') setQueries((await inventoryRequest<{ queries: StockQuery[] }>('/erp/stock/queries')).queries);
-      if (section === 'dispatch-requests' || section === 'dashboard') setDispatches((await inventoryRequest<{ dispatches: DispatchRecord[] }>('/erp/dispatch')).dispatches);
+      if (section === 'dashboard' || section === 'dispatch-requests' || section === 'buyers') setDispatches((await inventoryRequest<{ dispatches: DispatchRecord[] }>('/erp/dispatch')).dispatches);
       if (section === 'analytics') {
         const start = dateAtStart(from), end = dateAtStart(to) + 24 * 60 * 60_000 - 1;
         if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) throw new Error('Choose a valid date range.');
-        const data = await inventoryRequest<Analytics>(`/erp/analytics/sales?from=${start}&to=${end}`);
-        setAnalytics(data);
+        setAnalytics(await inventoryRequest<Analytics>(`/erp/analytics/sales?from=${start}&to=${end}`));
       }
       setError('');
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not load sales records.'); }
     finally { setLoading(false); }
-  }, [section, from, to]);
+  }, [section, tab, from, to, allowed, member.admin]);
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { const changed = () => setOnline(navigator.onLine); window.addEventListener('online', changed); window.addEventListener('offline', changed); return () => { window.removeEventListener('online', changed); window.removeEventListener('offline', changed); }; }, []);
+  useEffect(() => {
+    const changed = () => setOnline(navigator.onLine);
+    window.addEventListener('online', changed); window.addEventListener('offline', changed);
+    return () => { window.removeEventListener('online', changed); window.removeEventListener('offline', changed); };
+  }, []);
 
-  const saved = async (message: string, urdu: string, path?: string) => { setOpen(''); setNotice(t(message, urdu)); if (path) navigate(path); await load(); };
+  const saved = async (message: string, urdu: string, path?: string) => { setOpen(''); setRegenerateFrom(''); setNotice(t(message, urdu)); if (path) navigate(path); await load(); };
   const act = async (message: string, urdu: string, run: () => Promise<unknown>, path?: string) => { setError(''); await run(); await saved(message, urdu, path); };
-  // Button actions: show the failure, block repeat clicks while one is running.
-  const quick = async (key: string, ...args: Parameters<typeof act>) => { if (running) return; setRunning(key); try { await act(...args); } catch (caught) { setError(caught instanceof Error ? caught.message : 'The change was not saved.'); } finally { setRunning(''); } };
+  // Button actions: show the failure and block repeat clicks while one is running.
+  const quick = async (key: string, ...args: Parameters<typeof act>) => {
+    if (running) return;
+    setRunning(key);
+    try { await act(...args); } catch (caught) { setError(caught instanceof Error ? caught.message : 'The change was not saved.'); }
+    finally { setRunning(''); }
+  };
   const salesPost = (path: string, body: unknown) => inventoryRequest(`/erp/sales${path}`, body);
+  // A new invoice opens its locked document straight away, where the PDF download is offered.
+  const issueInvoice = async (body: unknown) => {
+    const result = await salesPost('/invoices/generate', body) as { invoice: { id: string } };
+    await saved(t('Invoice issued.', 'انوائس جاری ہو گئی۔'), 'انوائس جاری ہو گئی۔', 'invoices/' + result.invoice.id);
+  };
   const dispatchPost = (path: string, body: unknown) => inventoryRequest(`/erp/dispatch${path}`, body);
+  const adminIntervention = (value: string) => member.role === 'admin' && value ? { interventionReason: value } : {};
 
   if (!allowed) return <section className="live-panel" role="alert"><h2>{t('Sales access required', 'فروخت کی رسائی درکار ہے')}</h2><p>{t('Ask an admin to open this screen for your role.', 'ایڈمن سے اپنے کردار کے لیے یہ صفحہ کھولنے کو کہیں۔')}</p></section>;
   if (loading && !state) return <p role="status">{t('Loading sales records…', 'فروخت کا ریکارڈ لوڈ ہو رہا ہے…')}</p>;
-  if (!state && error) return <section className="live-panel"><p className="live-error" role="alert">{t(error, 'ریکارڈ لوڈ نہیں ہو سکا۔')}</p><button className="button" onClick={() => void load()}><RefreshCw size={18} />{t('Retry', 'دوبارہ کوشش کریں')}</button></section>;
+  if (!state && error) return <section className="live-panel"><p className="live-error" role="alert">{t(error, 'ریکارڈ لوڈ نہیں ہو سکا۔')}</p><button className="button" onClick={() => void load()}><RefreshCw size={18} aria-hidden="true" />{t('Retry', 'دوبارہ کوشش کریں')}</button></section>;
   if (!state) return null;
+  const s: SalesState = state;
 
-  const pendingBuyer = state.buyers.find(buyer => buyer.status === 'pending');
-  const openRfq = state.rfqs.find(rfq => rfq.state === 'open');
+  const pendingBuyer = s.buyers.find(buyer => buyer.status === 'pending');
+  const openRfq = s.rfqs.find(rfq => rfq.state === 'open');
   const pendingDispatch = dispatches.find(item => item.status === 'pending_approval');
   const overdue = new Map<string, number>();
-  for (const invoice of state.invoices.filter(item => item.status === 'overdue')) overdue.set(invoice.currency, (overdue.get(invoice.currency) ?? 0) + invoice.outstanding_minor);
-  const selectedInvoice = state.invoices.find(invoice => invoice.id === id);
-  const currentTab = tab || (section === 'buyers' ? 'pending' : section === 'buyer-rfqs' ? 'open' : section === 'invoices' ? 'owed' : 'pending_approval');
-  const currentPath = (to: string) => navigate(to);
+  for (const invoice of s.invoices.filter(item => item.status === 'overdue')) overdue.set(invoice.currency, (overdue.get(invoice.currency) ?? 0) + invoice.outstanding_minor);
+  // An unknown buyers tab (for example a stale link) falls back to the approval queue instead of an empty page.
+  // Settings are admin-only: a sales manager opening buyers/settings by URL lands on the approval queue.
+  const buyerTabs = member.admin ? tabs.buyers : tabs.buyers.filter(item => item.id !== 'settings');
+  const currentTab = section === 'buyers' ? (buyerTabs.some(item => item.id === tab) ? tab : 'pending') : tab || (section === 'buyer-rfqs' ? 'open' : section === 'invoices' ? 'owed' : 'pending_approval');
+  const alerts = s.invoices.flatMap(invoice => invoice.alerts.map(alert => ({ invoice, alert })));
+  // Values for a corrected invoice: the voided invoice's buyer, material and the terms of its sales order.
+  const regenPrefill = (() => {
+    const source = s.invoices.find(invoice => invoice.id === regenerateFrom), order = source && s.orders.find(item => item.id === source.sales_order_id);
+    if (!source || !order) return undefined;
+    const terms = JSON.parse(order.terms_snapshot) as { quantity_milli: number; unit: string; price_minor: number; currency: string; payment_terms: string; credit_days: number; specifications: string; requested_delivery_at: number };
+    return { buyerId: source.buyer_id, productId: s.saleLines.find(line => line.sales_order_id === order.id && line.product_id)?.product_id ?? '', quantity: String(terms.quantity_milli / 1000), unit: terms.unit,
+      rate: (terms.price_minor / 100).toFixed(2), currency: terms.currency, paymentTerms: terms.payment_terms, creditDays: String(terms.credit_days), specifications: terms.specifications,
+      delivery: dateInput(terms.requested_delivery_at), voidedNumber: source.number };
+  })();
 
-  function DashboardView() {
-      const target: [string, string] = pendingBuyer ? ['buyers/' + pendingBuyer.id, 'Review pending buyer'] : openRfq ? ['buyer-rfqs/' + openRfq.id, 'Quote buyer request'] : pendingDispatch ? ['dispatch-requests/' + pendingDispatch.id, 'Review dispatch request'] : ['', 'No sales action is waiting'];
+  const dashboardView = () => {
+    const target: [string, string] = pendingBuyer ? ['buyers/' + pendingBuyer.id, 'Review pending buyer'] : openRfq ? ['buyer-rfqs/' + openRfq.id, 'Quote buyer request'] : pendingDispatch ? ['dispatch-requests/' + pendingDispatch.id, 'Review dispatch request'] : ['', 'No sales action is waiting'];
     return <div className="erp-workspace">
-      <NextStep tone={target[0] ? 'warn' : 'ok'} title={t(target[1], target[0] ? 'زیرِ التوا فروخت کا اگلا کام' : 'فروخت کا کوئی کام منتظر نہیں')} reason={pendingBuyer?.name ?? openRfq?.reference ?? pendingDispatch?.order_reference ?? t('Buyer reviews, quotations and dispatch approvals appear here.', 'خریدار کی جانچ، قیمتیں اور ڈسپیچ کی منظوری یہاں دکھائی دیتی ہے۔')} action={target[0] ? <button className="button primary" onClick={() => currentPath(target[0])}><ArrowRight size={18} />{t('Open next item', 'اگلا کام کھولیں')}</button> : undefined} />
+      <NextStep tone={target[0] ? 'warn' : 'ok'} title={t(target[1], target[0] ? 'زیرِ التوا فروخت کا اگلا کام' : 'فروخت کا کوئی کام منتظر نہیں')}
+        reason={pendingBuyer?.name ?? openRfq?.reference ?? pendingDispatch?.order_reference ?? t('Buyer reviews, quotations and dispatch approvals appear here.', 'خریدار کی جانچ، قیمتیں اور ڈسپیچ کی منظوری یہاں دکھائی دیتی ہے۔')}
+        action={target[0] ? <button className="button primary" onClick={() => navigate(target[0])}><ArrowRight size={18} aria-hidden="true" />{t('Open next item', 'اگلا کام کھولیں')}</button> : undefined} />
       <section className="live-panel"><h2>{t('Overdue invoices', 'مدت سے واجب انوائسز')}</h2>{overdue.size ? <ul className="erp-facts">{[...overdue].map(([currency, amount]) => <li key={currency}><span>{t('Outstanding', 'بقایا')} · {currency}</span><strong>{money(amount, currency)}</strong></li>)}</ul> : <p>{t('No overdue invoice balance.', 'کوئی واجب انوائس بقایا نہیں۔')}</p>}</section>
-      <section className="live-panel"><h2>{t('Sales at a glance', 'فروخت کا خلاصہ')}</h2><ul className="erp-facts"><li><span>{t('Buyers awaiting review', 'جانچ کے منتظر خریدار')}</span><strong>{state!.buyers.filter(b => b.status === 'pending').length}</strong></li><li><span>{t('Buyer RFQs to quote', 'قیمت کے منتظر خریدار RFQ')}</span><strong>{state!.rfqs.filter(r => r.state === 'open').length}</strong></li><li><span>{t('Invoices still owed', 'بقایا انوائسز')}</span><strong>{state!.invoices.filter(i => i.outstanding_minor > 0).length}</strong></li></ul></section>
+      <section className="live-panel"><h2>{t('Sales at a glance', 'فروخت کا خلاصہ')}</h2><ul className="erp-facts">
+        <li><span>{t('Buyers awaiting review', 'جانچ کے منتظر خریدار')}</span><strong>{s.buyers.filter(b => b.status === 'pending').length}</strong></li>
+        <li><span>{t('Buyer RFQs to quote', 'قیمت کے منتظر خریدار RFQ')}</span><strong>{s.rfqs.filter(r => r.state === 'open').length}</strong></li>
+        <li><span>{t('Invoices still owed', 'بقایا انوائسز')}</span><strong>{s.invoices.filter(i => i.outstanding_minor > 0).length}</strong></li>
+      </ul></section>
     </div>;
-  }
+  };
 
-  function BuyersView() {
-    const filtered = state!.buyers.filter(buyer => currentTab === 'all' || buyer.status === currentTab);
-    const selected = filtered.find(buyer => buyer.id === id);
-    return <div className="erp-workspace"><SectionTabs tabs={tabs.buyers} value={currentTab} onChange={value => currentPath('buyers/' + value)} />
-      {selected ? <BuyerDetail buyer={selected} /> : filtered.length ? <div className="erp-records">{filtered.map(buyer => <article className="erp-record" key={buyer.id}><div className="erp-record-head"><div><h2><button className="live-text-button" onClick={() => currentPath('buyers/' + buyer.id)}>{buyer.name}</button></h2><p>{buyer.contact_name} · {buyer.email} · {buyer.city}</p></div><StatusTag status={buyer.status} /></div><p>{buyer.notes || t('No verification note supplied.', 'تصدیق کا نوٹ درج نہیں۔')}</p>{buyer.status === 'pending' && <div className="live-actions"><button className="button primary" onClick={() => setOpen(open === 'buyer:' + buyer.id ? '' : 'buyer:' + buyer.id)}><BadgeCheck size={18} />{t('Review buyer', 'خریدار کی جانچ')}</button></div>}{open === 'buyer:' + buyer.id && <BuyerReview buyer={buyer} onCancel={() => setOpen('')} onSave={(status, reason, intervention) => act(t('Buyer review saved.', 'خریدار کی جانچ محفوظ ہوئی۔'), 'خریدار کی جانچ محفوظ ہوئی۔', () => salesPost('/buyers/review', { id: buyer.id, status, version: buyer.version, ...(reason ? { reason } : {}), ...(intervention ? { interventionReason: intervention } : {}) }))} member={member} />}</article>)}</div> : <p className="live-empty">{t('No buyers in this view.', 'اس حصے میں کوئی خریدار نہیں۔')}</p>}
+  const saveDecision = (buyer: BuyerSummary, status: string, reason: string, intervention: string) =>
+    act(t('Buyer status saved.', 'خریدار کی حالت محفوظ ہوئی۔'), 'خریدار کی حالت محفوظ ہوئی۔', () => salesPost('/buyers/review', { id: buyer.id, status, version: buyer.version, ...(reason ? { reason } : {}), ...(intervention ? { interventionReason: intervention } : {}) }));
+  const saveProfile = (buyer: BuyerSummary, fields: { contactName: string; phone: string; city: string; notes: string }, intervention: string) =>
+    act(t('Buyer profile saved.', 'خریدار کا پروفائل محفوظ ہوا۔'), 'خریدار کا پروفائل محفوظ ہوا۔', () => salesPost('/buyers/profile', { id: buyer.id, version: buyer.version, ...fields, ...(intervention ? { interventionReason: intervention } : {}) }));
+
+  // Material type: saved through the products route (not the sales route); the sales screen reloads so the generator sees it.
+  const saveProductType = async (productId: string, productType: string | null, intervention: string) => {
+    setError('');
+    await inventoryRequest('/erp/products/type', { productId, productType, ...(intervention ? { interventionReason: intervention } : {}) });
+    await load();
+  };
+  const saveReopen = (buyer: BuyerSummary, requestId: string, reason: string) =>
+    act(t('Buyer reopened for review.', 'خریدار دوبارہ جانچ کے لیے کھول دیا گیا۔'), 'خریدار دوبارہ جانچ کے لیے کھول دیا گیا۔', () => salesPost('/buyers/reopen', { id: requestId, buyerId: buyer.id, version: buyer.version, reason }));
+
+  // Lists keep their tab counts; each tab is a filter on the same records.
+  const splitTabs = (section: string, count: (id: string) => number) => tabs[section].map(item => ({ id: item.id, label: t(item.en, item.ur), count: count(item.id) }));
+
+  const buyersView = () => {
+    if (currentTab === 'settings') return <div className="erp-workspace"><SectionTabs tabs={buyerTabs} value={currentTab} onChange={value => navigate('buyers/' + value)} />
+      <CreditLimitForm key={summaries.length} buyers={summaries} currency={s.settings.currency}
+        onSave={payload => act(t('Credit limit saved.', 'ادھار کی حد محفوظ ہوئی۔'), 'ادھار کی حد محفوظ ہوئی۔', () => salesPost('/buyers/credit-limit', payload))} />
+      {salesSettings && <InvoiceSettingsForm key={JSON.stringify(salesSettings)} settings={salesSettings}
+        onSave={changes => act(t('Settings saved.', 'ترتیبات محفوظ ہوئیں۔'), 'ترتیبات محفوظ ہوئیں۔', async () => { for (const change of changes) await salesPost('/settings', change); })} />}
     </div>;
-  }
+    const orderBuyer = new Map(s.orders.map(order => [order.id, order.buyer_id]));
+    const shownBuyers = summaries.filter(buyer => currentTab === 'all' || buyer.status === currentTab);
+    return <div className="erp-workspace">
+      <a className="button" href="#/buyer" target="_blank" rel="noreferrer"><ExternalLink size={18} aria-hidden="true" />{t('Open buyer registration portal', 'خریدار رجسٹریشن پورٹل کھولیں')}</a>
+      {!summaries.length && <p className="live-muted">{t('Share the registration portal link with buyers.', 'خریداروں کو رجسٹریشن پورٹل کا لنک دیں۔')}</p>}
+      <SplitView label={t('Buyer directory', 'خریدار ڈائریکٹری')} tabs={splitTabs('buyers', id => summaries.filter(buyer => id === 'all' || buyer.status === id).length)} tab={currentTab} onTab={value => navigate('buyers/' + value)}
+        items={shownBuyers.map(buyer => ({ id: buyer.id, title: buyer.name, meta: [buyer.contact_name, buyer.city].filter(Boolean).join(' · ') || buyer.email, status: <StatusTag status={buyer.status} />, text: `${buyer.email} ${buyer.phone}` }))}
+        selectedId={id} onSelect={next => navigate(`buyers/${currentTab}${next ? '/' + next : ''}`)}
+        renderDetail={buyerId => { const buyer = summaries.find(item => item.id === buyerId); return buyer ? <BuyerRecord buyer={buyer} sales={s} dispatches={dispatches.filter(item => orderBuyer.get(item.sales_order_id) === buyer.id)} member={member} open={open} setOpen={setOpen} navigate={navigate}
+          onDecide={(status, reason, intervention) => saveDecision(buyer, status, reason, intervention)} onProfile={(fields, intervention) => saveProfile(buyer, fields, intervention)} onReopen={(requestId, reason) => saveReopen(buyer, requestId, reason)} />
+          : <p className="split-none">{t('This buyer is not in the list.', 'یہ خریدار فہرست میں نہیں۔')}</p>; }}
+        empty={t('No buyers in this view.', 'اس حصے میں کوئی خریدار نہیں۔')} emptyDetail={t('Choose a buyer to review, rate or edit.', 'جانچنے، ریٹنگ دینے یا ترمیم کے لیے خریدار منتخب کریں۔')} />
+    </div>;
+  };
 
-  function BuyerDetail({ buyer }: { buyer: Buyer }) {
-    return <section className="live-panel"><div className="live-panel-heading"><div><h2>{buyer.name}</h2><p>{buyer.contact_name} · {buyer.email} · {buyer.phone}</p></div><StatusTag status={buyer.status} /></div><p>{buyer.city || '—'} · {buyer.notes || t('No verification note supplied.', 'تصدیق کا نوٹ درج نہیں۔')}</p>{buyer.status === 'pending' && <button className="button primary" onClick={() => setOpen('buyer:' + buyer.id)}>{t('Review buyer', 'خریدار کی جانچ')}</button>}{open === 'buyer:' + buyer.id && <BuyerReview buyer={buyer} member={member} onCancel={() => setOpen('')} onSave={(status, reason, intervention) => act(t('Buyer review saved.', 'خریدار کی جانچ محفوظ ہوئی۔'), 'خریدار کی جانچ محفوظ ہوئی۔', () => salesPost('/buyers/review', { id: buyer.id, status, version: buyer.version, ...(reason ? { reason } : {}), ...(intervention ? { interventionReason: intervention } : {}) }))} />}</section>;
-  }
-
-  function BuyerRfqsView() {
-    const filtered = state!.rfqs.filter(rfq => currentTab === 'all' || rfq.state === currentTab);
-    const selected = filtered.find(rfq => rfq.id === id) ?? state!.rfqs.find(rfq => rfq.id === id);
-    const revisions = state!.revisions;
-    const newest = selected && revisions.filter(revision => revision.buyer_po_id === selected.id).sort((a, b) => b.version - a.version)[0];
-    const stockQueries = queries.filter(query => query.buyer_rfq_id === selected?.id);
-    return <div className="erp-workspace"><SectionTabs tabs={tabs['buyer-rfqs']} value={currentTab} onChange={value => currentPath('buyer-rfqs/' + value)} />
-      {selected ? <section className="live-panel"><div className="live-panel-heading"><div><h2>{selected.reference} · {selected.buyer_name}</h2><p>{selected.quantity_milli / 1000} {selected.unit} · {selected.specifications}</p></div><StatusTag status={selected.state} /></div>
+  const buyerRfqsView = () => {
+    const rfqDetail = (selected: Rfq) => {
+      const newest = s.revisions.filter(revision => revision.buyer_po_id === selected.id).sort((a, b) => b.version - a.version)[0];
+      const stockQueries = queries.filter(query => query.buyer_rfq_id === selected.id);
+      return <section className="live-panel"><div className="live-panel-heading"><div><h2>{selected.reference} · {selected.buyer_name}</h2><p>{selected.quantity_milli / 1000} {selected.unit} · {selected.specifications}</p></div><StatusTag status={selected.state} /></div>
+        <StepFlow label={t('Request steps', 'درخواست کے مراحل')} current={rfqStep(selected.state)} steps={[{ icon: 'rfq', label: t('Request', 'درخواست') }, { icon: 'bid', label: t('Quote', 'قیمت') }, { icon: 'po', label: t('Sale', 'فروخت') }]} />
         {selected.state === 'awaiting_buyer_approval' && <p className="live-warning">{t('Awaiting buyer approval. A quotation cannot be sent yet.', 'خریدار کی منظوری کا انتظار ہے۔ ابھی قیمت نہیں بھیجی جا سکتی۔')}</p>}
         <dl className="erp-facts"><div><dt>{t('Delivery requested', 'مطلوبہ ترسیل')}</dt><dd>{dueDate(selected.requested_delivery_at)}</dd></div><div><dt>{t('Buyer terms', 'خریدار کی شرائط')}</dt><dd>{selected.payment_terms}</dd></div></dl>
-        {selected.state === 'open' && !newest?.status && <button className="button primary" onClick={() => setOpen(open === 'quote:' + selected.id ? '' : 'quote:' + selected.id)}>{t('Create quotation', 'قیمت بنائیں')}</button>}
-        {newest && <div className="sales-quote"><strong>{t('Quotation', 'قیمت')} · v{newest.version} <StatusTag status={newest.status} /></strong><p>{money(newest.price_minor, newest.currency)} / {selected.unit} · {newest.credit_days} {t('days credit', 'دن ادھار')}</p><p>{newest.specifications} · {newest.payment_terms}</p>{newest.status === 'draft' && <><InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} /><button className="button primary" disabled={!!running} onClick={() => void quick('send:' + newest.id, t('Quotation sent to buyer.', 'قیمت خریدار کو بھیج دی گئی۔'), 'قیمت خریدار کو بھیج دی گئی۔', () => salesPost('/quotes/send', { id: newest.id, ...(member.role === 'admin' && intervention ? { interventionReason: intervention } : {}) }))}>{t('Send quotation', 'قیمت بھیجیں')}</button></>}</div>}
-        {newest?.status === 'approved' && !state!.orders.some(order => order.revision_id === newest.id) && <div><InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} /><button className="button primary" disabled={!!running} onClick={() => void quick('sale:' + newest.id, t('Sale and locked invoice recorded.', 'فروخت اور مقفل انوائس درج ہو گئی۔'), 'فروخت اور مقفل انوائس درج ہو گئی۔', () => salesPost('/sales', { id: (saleIds.current[newest.id] ??= crypto.randomUUID()), revisionId: newest.id, ...(member.role === 'admin' && intervention ? { interventionReason: intervention } : {}) }), 'invoices')}>{t('Note sale and issue invoice', 'فروخت درج کر کے انوائس جاری کریں')}</button></div>}
-        {open === 'quote:' + selected.id && <QuoteForm rfq={selected} currency={state!.settings.currency} member={member} products={state!.products} onCancel={() => setOpen('')} onSave={payload => act(t('Quotation saved as a draft.', 'قیمت کا مسودہ محفوظ ہوا۔'), 'قیمت کا مسودہ محفوظ ہوا۔', () => salesPost('/quotes', payload))} />}
-        <section className="live-panel sales-query"><h3>{t('Check stock availability', 'اسٹاک کی دستیابی معلوم کریں')}</h3><button className="button" onClick={() => setOpen(open === 'query:' + selected.id ? '' : 'query:' + selected.id)}>{t('Ask supervisor', 'سپروائزر سے پوچھیں')}</button>{open === 'query:' + selected.id && <StockQueryForm rfq={selected} products={state!.products} member={member} onCancel={() => setOpen('')} onSave={payload => act(t('Stock question sent to the supervisor.', 'اسٹاک کا سوال سپروائزر کو بھیج دیا گیا۔'), 'اسٹاک کا سوال سپروائزر کو بھیج دیا گیا۔', () => inventoryRequest('/erp/stock/queries', payload))} />}{stockQueries.length > 0 && <div className="erp-records">{stockQueries.map(query => <article className="erp-record" key={query.id}><strong>{query.product_name} · {query.quantity_milli === null ? t('Quantity not specified', 'مقدار درج نہیں') : `${query.quantity_milli / 1000} ${selected.unit}`}</strong><p>{query.question}</p>{query.status === 'answered' ? <p role="status">{kg(query.available_grams ?? 0)} · {query.answer}</p> : <StatusTag status={query.status} />}</article>)}</div>}</section>
-      </section> : filtered.length ? <div className="erp-records">{filtered.map(rfq => <article className="erp-record" key={rfq.id}><div className="erp-record-head"><div><h2><button className="live-text-button" onClick={() => currentPath('buyer-rfqs/' + rfq.id)}>{rfq.reference} · {rfq.buyer_name}</button></h2><p>{rfq.quantity_milli / 1000} {rfq.unit} · {rfq.specifications}</p></div><StatusTag status={rfq.state} /></div>{rfq.state === 'awaiting_buyer_approval' ? <p>{t('Awaiting buyer approval', 'خریدار کی منظوری کا انتظار')}</p> : <button className="button" onClick={() => currentPath('buyer-rfqs/' + rfq.id)}>{t('Open buyer request', 'خریدار کی درخواست کھولیں')}</button>}</article>)}</div> : <p className="live-empty">{t('No buyer RFQs in this view.', 'اس حصے میں خریدار کی کوئی درخواست نہیں۔')}</p>}
+        {selected.state === 'open' && !newest && <button className="button primary" onClick={() => setOpen(open === 'quote:' + selected.id ? '' : 'quote:' + selected.id)}><FileText size={18} aria-hidden="true" />{t('Create quotation', 'قیمت بنائیں')}</button>}
+        {newest && <div className="sales-quote"><strong>{t('Quotation', 'قیمت')} · v{newest.version} <StatusTag status={newest.status} /></strong>
+          <p>{money(newest.price_minor, newest.currency)} / {selected.unit} · {newest.credit_days} {t('days credit', 'دن ادھار')}</p><p>{newest.specifications} · {newest.payment_terms}</p>
+          {newest.status === 'draft' && <><InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+            <button className="button primary" disabled={!!running} onClick={() => void quick('send:' + newest.id, t('Quotation sent to buyer.', 'قیمت خریدار کو بھیج دی گئی۔'), 'قیمت خریدار کو بھیج دی گئی۔', () => salesPost('/quotes/send', { id: newest.id, ...adminIntervention(intervention) }))}><Send size={18} aria-hidden="true" />{t('Send quotation', 'قیمت بھیجیں')}</button></>}
+          {newest.status === 'sent' && <>
+            <button className="button" onClick={() => setOpen(open === 'withdraw:' + newest.id ? '' : 'withdraw:' + newest.id)}><RotateCcw size={18} aria-hidden="true" />{t('Withdraw quotation', 'قیمت واپس لیں')}</button>
+            {open === 'withdraw:' + newest.id && <CorrectionForm title={t('Withdraw quotation', 'قیمت واپس لیں')} detail={t('The buyer has not accepted it. It returns to draft, where you can correct it and send it again.', 'خریدار نے اسے قبول نہیں کیا۔ یہ مسودہ بن جائے گی، جہاں آپ درست کر کے دوبارہ بھیج سکتے ہیں۔')}
+              submit={t('Withdraw quotation', 'قیمت واپس لیں')} member={member} onCancel={() => setOpen('')}
+              onSave={(requestId, reason, intervention) => act(t('Quotation withdrawn. It is back in draft.', 'قیمت واپس لے لی گئی۔ اب یہ مسودہ ہے۔'), 'قیمت واپس لے لی گئی۔ اب یہ مسودہ ہے۔', () => salesPost('/quotes/withdraw', { id: requestId, revisionId: newest.id, reason, ...adminIntervention(intervention) }))} />}
+          </>}
+        </div>}
+        {newest?.status === 'approved' && !s.orders.some(order => order.revision_id === newest.id) && <div>
+          <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+          <button className="button primary" disabled={!!running} onClick={() => void quick('sale:' + newest.id, t('Sale and locked invoice recorded.', 'فروخت اور مقفل انوائس درج ہو گئی۔'), 'فروخت اور مقفل انوائس درج ہو گئی۔', () => salesPost('/sales', { id: (saleIds.current[newest.id] ??= crypto.randomUUID()), revisionId: newest.id, ...adminIntervention(intervention) }), 'invoices')}><Receipt size={18} aria-hidden="true" />{t('Note sale and issue invoice', 'فروخت درج کر کے انوائس جاری کریں')}</button>
+        </div>}
+        {open === 'quote:' + selected.id && <QuoteForm rfq={selected} currency={s.settings.currency} member={member} products={s.products} onCancel={() => setOpen('')} onSave={payload => act(t('Quotation saved as a draft.', 'قیمت کا مسودہ محفوظ ہوا۔'), 'قیمت کا مسودہ محفوظ ہوا۔', () => salesPost('/quotes', payload))} />}
+        <section className="live-panel sales-query"><h3>{t('Check stock availability', 'اسٹاک کی دستیابی معلوم کریں')}</h3>
+          <button className="button" onClick={() => setOpen(open === 'query:' + selected.id ? '' : 'query:' + selected.id)}><ArrowRight size={18} aria-hidden="true" />{t('Ask supervisor', 'سپروائزر سے پوچھیں')}</button>
+          {open === 'query:' + selected.id && <StockQueryForm rfq={selected} products={s.products} member={member} onCancel={() => setOpen('')} onSave={payload => act(t('Stock question sent to the supervisor.', 'اسٹاک کا سوال سپروائزر کو بھیج دیا گیا۔'), 'اسٹاک کا سوال سپروائزر کو بھیج دیا گیا۔', () => inventoryRequest('/erp/stock/queries', payload))} />}
+          {stockQueries.length > 0 && <div className="erp-records">{stockQueries.map(query => <article className="erp-record" key={query.id}><strong>{query.product_name} · {query.quantity_milli === null ? t('Quantity not specified', 'مقدار درج نہیں') : `${query.quantity_milli / 1000} ${selected.unit}`}</strong><p>{query.question}</p>{query.status === 'answered' ? <p role="status">{kg(query.available_grams ?? 0)} · {query.answer}</p> : <StatusTag status={query.status} />}</article>)}</div>}
+        </section>
+      </section>;
+    };
+    const counts = (value: string) => s.rfqs.filter(rfq => value === 'all' || rfq.state === value).length;
+    return <div className="erp-workspace">
+      <SplitView label={t('Buyer RFQs', 'خریدار کی درخواستیں')} tabs={splitTabs('buyer-rfqs', counts)} tab={currentTab} onTab={value => navigate('buyer-rfqs/' + value)}
+        items={s.rfqs.filter(rfq => currentTab === 'all' || rfq.state === currentTab).map(rfq => ({ id: rfq.id, title: `${rfq.reference} · ${rfq.buyer_name}`, meta: `${rfq.quantity_milli / 1000} ${rfq.unit} · ${rfq.specifications}`, status: <StatusTag status={rfq.state} /> }))}
+        selectedId={id} onSelect={next => navigate(`buyer-rfqs/${currentTab}${next ? '/' + next : ''}`)}
+        renderDetail={rfqId => { const rfq = s.rfqs.find(item => item.id === rfqId); return rfq ? rfqDetail(rfq) : <p className="split-none">{t('This request is not in the list.', 'یہ درخواست فہرست میں نہیں۔')}</p>; }}
+        empty={t('No buyer RFQs in this view.', 'اس حصے میں خریدار کی کوئی درخواست نہیں۔')} emptyDetail={t('Choose a buyer request to quote or check stock.', 'قیمت دینے یا اسٹاک دیکھنے کے لیے خریدار کی درخواست منتخب کریں۔')} />
     </div>;
-  }
+  };
 
-  function InvoicesView() {
-    const filtered = state!.invoices.filter(invoice => currentTab === 'all' || (currentTab === 'paid' ? invoice.status === 'paid' : invoice.outstanding_minor > 0));
-    if (selectedInvoice) return <InvoiceDetail invoice={selectedInvoice} creditNotes={state!.creditNotes.filter(note => note.invoice_id === selectedInvoice.id)} member={member} onPayment={payload => act(t('Payment recorded.', 'ادائیگی درج ہو گئی۔'), 'ادائیگی درج ہو گئی۔', () => salesPost('/payments', payload))} onCredit={payload => act(t('Credit note issued.', 'کریڈٹ نوٹ جاری ہو گیا۔'), 'کریڈٹ نوٹ جاری ہو گیا۔', () => salesPost('/credit-notes', payload))} />;
-    return <div className="erp-workspace"><SectionTabs tabs={tabs.invoices} value={currentTab} onChange={value => currentPath('invoices/' + value)} />
-      {filtered.length ? <div className="erp-records">{filtered.map(invoice => <article className="erp-record" key={invoice.id}><div className="erp-record-head"><div><h2><button className="live-text-button" onClick={() => currentPath('invoices/' + invoice.id)}>{invoice.number}</button></h2><p>{invoice.buyer_name} · {invoice.order_reference} · {dueDate(invoice.due_at)}</p></div><StatusTag status={invoice.status} /></div><p>{t('Outstanding', 'بقایا')}: {money(invoice.outstanding_minor, invoice.currency)} · {t('Total', 'کل')}: {money(invoice.total_minor, invoice.currency)}</p><button className="button" onClick={() => currentPath('invoices/' + invoice.id)}>{t('Open locked invoice', 'مقفل انوائس کھولیں')}</button></article>)}</div> : <p className="live-empty">{t('No invoices in this view.', 'اس حصے میں کوئی انوائس نہیں۔')}</p>}
-      <section className="live-panel"><h2>{t('Credit alerts', 'ادائیگی کی یاددہانیاں')}</h2>{state!.invoices.flatMap(invoice => invoice.alerts.map(alert => ({ invoice, alert }))).length ? <ul className="erp-records">{state!.invoices.flatMap(invoice => invoice.alerts.map(alert => ({ invoice, alert }))).map(({ invoice, alert }) => <li className="erp-record" key={alert.id}><strong>{invoice.number} · {invoice.buyer_name}</strong><p><StatusTag status={alert.kind} /> · {money(invoice.outstanding_minor, invoice.currency)} · {dueDate(invoice.due_at)}</p></li>)}</ul> : <p>{t('No credit alerts.', 'ادائیگی کی کوئی یاددہانی نہیں۔')}</p>}</section>
+  const invoicesView = () => {
+    if (open === 'new-invoice') return <div className="erp-workspace"><InvoiceGenerator member={member} buyers={s.buyers} products={s.products} currency={s.settings.currency} taxRateBp={s.settings.tax_rate_bp} prefill={regenPrefill}
+        onCancel={() => { setOpen(''); setRegenerateFrom(''); }} onSave={issueInvoice} onSaveProductType={saveProductType} /></div>;
+    const invoiceDetail = (invoice: Invoice) => {
+      const doc = invoiceDocData(invoice, s.saleLines, s.buyers.find(buyer => buyer.id === invoice.buyer_id), s.factoryName, invoice.buyer_name);
+      return <><InvoiceDocument doc={doc} /><InvoiceDetail invoice={invoice} creditNotes={s.creditNotes.filter(note => note.invoice_id === invoice.id)} member={member}
+        payments={s.invoicePayments.filter(item => item.invoice_id === invoice.id)} orderStatus={s.orders.find(order => order.id === invoice.sales_order_id)?.status ?? ''}
+        onPayment={payload => act(t('Payment recorded.', 'ادائیگی درج ہو گئی۔'), 'ادائیگی درج ہو گئی۔', () => salesPost('/payments', payload))}
+        onCredit={payload => act(t('Credit note issued.', 'کریڈٹ نوٹ جاری ہو گیا۔'), 'کریڈٹ نوٹ جاری ہو گیا۔', () => salesPost('/credit-notes', payload))}
+        onReversePayment={payload => act(t('Payment reversed. The balance is restored.', 'ادائیگی منسوخ ہو گئی۔ بقایا بحال ہو گیا۔'), 'ادائیگی منسوخ ہو گئی۔ بقایا بحال ہو گیا۔', () => salesPost('/payments/reverse', payload))}
+        onVoid={payload => act(t('Invoice voided. Issue a corrected invoice when ready.', 'انوائس منسوخ ہو گئی۔ تیار ہونے پر درست شدہ انوائس جاری کریں۔'), 'انوائس منسوخ ہو گئی۔', () => salesPost('/invoices/void', payload))}
+        onRegenerate={() => { setRegenerateFrom(invoice.id); setOpen('new-invoice'); navigate('invoices'); }} /></>;
+    };
+    const paidOnly = (invoice: Invoice) => currentTab === 'paid' ? invoice.status === 'paid' : invoice.outstanding_minor > 0;
+    const counts = (value: string) => s.invoices.filter(invoice => value === 'all' || (value === 'paid' ? invoice.status === 'paid' : invoice.outstanding_minor > 0)).length;
+    return <div className="erp-workspace">
+      <div className="erp-toolbar"><span>{t('Invoices are locked once issued.', 'جاری انوائس مقفل ہو جاتی ہے۔')}</span><button className="button primary" onClick={() => { setRegenerateFrom(''); setOpen('new-invoice'); }}><Plus size={18} aria-hidden="true" />{t('New invoice', 'نئی انوائس')}</button></div>
+      <SplitView label={t('Invoices', 'انوائسز')} tabs={splitTabs('invoices', counts)} tab={currentTab} onTab={value => navigate('invoices/' + value)}
+        items={s.invoices.filter(invoice => currentTab === 'all' || paidOnly(invoice)).map(invoice => ({ id: invoice.id, title: invoice.number, meta: `${invoice.buyer_name} · ${t('Outstanding', 'بقایا')}: ${money(invoice.outstanding_minor, invoice.currency)}`, status: <StatusTag status={invoice.status} /> }))}
+        selectedId={id} onSelect={next => navigate(`invoices/${currentTab}${next ? '/' + next : ''}`)}
+        renderDetail={invoiceId => { const invoice = s.invoices.find(item => item.id === invoiceId); return invoice ? invoiceDetail(invoice) : <p className="split-none">{t('This invoice is not in the list.', 'یہ انوائس فہرست میں نہیں۔')}</p>; }}
+        empty={t('No invoices in this view.', 'اس حصے میں کوئی انوائس نہیں۔')} emptyDetail={t('Choose an invoice to record a payment or a credit note.', 'ادائیگی یا کریڈٹ نوٹ درج کرنے کے لیے انوائس منتخب کریں۔')} />
+      <section className="live-panel"><h2>{t('Credit alerts', 'ادائیگی کی یاددہانیاں')}</h2>{alerts.length ? <ul className="erp-records">{alerts.map(({ invoice, alert }) => <li className="erp-record" key={alert.id}><strong>{invoice.number} · {invoice.buyer_name}</strong><p><StatusTag status={alert.kind} /> · {money(invoice.outstanding_minor, invoice.currency)} · {dueDate(invoice.due_at)}</p></li>)}</ul> : <p>{t('No credit alerts.', 'ادائیگی کی کوئی یاددہانی نہیں۔')}</p>}</section>
     </div>;
-  }
+  };
 
-  function DispatchRequestsView() {
-    const filtered = dispatches.filter(item => currentTab === 'all' || item.status === currentTab);
-    const selected = filtered.find(item => item.id === id) ?? dispatches.find(item => item.id === id);
-    return <div className="erp-workspace"><SectionTabs tabs={tabs['dispatch-requests']} value={currentTab} onChange={value => currentPath('dispatch-requests/' + value)} />
-      {selected ? <section className="live-panel"><div className="live-panel-heading"><div><h2>{selected.order_reference} · {selected.buyer_name}</h2><p>{selected.product_name} · {selected.lot_batch} · {kg(selected.grams)}</p></div><StatusTag status={selected.status} /></div><DispatchThread status={selected.status} holdReason={selected.hold_reason} />
-        {selected.status === 'pending_approval' && selected.approval_request_id && <><InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} /><div className="live-actions"><button className="button primary" disabled={!!running} onClick={() => void quick('approve:' + selected.id, t('Dispatch approved.', 'ڈسپیچ منظور ہو گیا۔'), 'ڈسپیچ منظور ہو گیا۔', () => dispatchPost('/requests/decide', { requestId: selected.approval_request_id, decision: 'approve', ...(member.role === 'admin' && intervention ? { interventionReason: intervention } : {}) }))}>{t('Approve dispatch', 'ڈسپیچ منظور کریں')}</button><button className="button" onClick={() => setOpen(open === 'hold:' + selected.id ? '' : 'hold:' + selected.id)}>{t('Hold dispatch', 'ڈسپیچ روکیں')}</button></div></>}
-        {open === 'hold:' + selected.id && <DispatchHoldForm member={member} onCancel={() => setOpen('')} onSave={(term, reason, intervention) => act(t('Dispatch placed on hold.', 'ڈسپیچ روک دی گئی۔'), 'ڈسپیچ روک دی گئی۔', () => dispatchPost('/requests/decide', { requestId: selected.approval_request_id, decision: 'hold', term, reason, ...(intervention ? { interventionReason: intervention } : {}) }))} />}
-        {selected.status === 'approved' && <HoldNoticeForm member={member} onCancel={() => setOpen('')} onSave={(term, message, intervention) => act(t('Hold notice sent to dispatch.', 'ڈسپیچ کو روکنے کا نوٹس بھیج دیا گیا۔'), 'ڈسپیچ کو روکنے کا نوٹس بھیج دیا گیا۔', () => dispatchPost('/hold-notices', { dispatchId: selected.id, term, message, ...(intervention ? { interventionReason: intervention } : {}) }))} />}
-      </section> : filtered.length ? <div className="erp-records">{filtered.map(item => <article className="erp-record" key={item.id}><div className="erp-record-head"><div><h2><button className="live-text-button" onClick={() => currentPath('dispatch-requests/' + item.id)}>{item.order_reference} · {item.buyer_name}</button></h2><p>{item.product_name} · {item.lot_batch} · {kg(item.grams)}</p></div><StatusTag status={item.status} /></div><button className="button" onClick={() => currentPath('dispatch-requests/' + item.id)}>{t('Review dispatch', 'ڈسپیچ دیکھیں')}</button></article>)}</div> : <p className="live-empty">{t('No dispatch requests in this view.', 'اس حصے میں کوئی ڈسپیچ درخواست نہیں۔')}</p>}
+  const dispatchRequestsView = () => {
+    const dispatchDetail = (selected: DispatchRecord) => <section className="live-panel"><div className="live-panel-heading"><div><h2>{selected.order_reference} · {selected.buyer_name}</h2><p>{selected.product_name} · {selected.lot_batch} · {kg(selected.grams)}</p></div><StatusTag status={selected.status} /></div>
+        <DispatchThread status={selected.status} holdReason={selected.hold_reason} />
+        {selected.status === 'pending_approval' && selected.approval_request_id && <>
+          <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+          <div className="live-actions"><button className="button primary" disabled={!!running} onClick={() => void quick('approve:' + selected.id, t('Dispatch approved.', 'ڈسپیچ منظور ہو گیا۔'), 'ڈسپیچ منظور ہو گیا۔', () => dispatchPost('/requests/decide', { requestId: selected.approval_request_id, decision: 'approve', ...adminIntervention(intervention) }))}><BadgeCheck size={18} aria-hidden="true" />{t('Approve dispatch', 'ڈسپیچ منظور کریں')}</button>
+            <button className="button" onClick={() => setOpen(open === 'hold:' + selected.id ? '' : 'hold:' + selected.id)}><Ban size={18} aria-hidden="true" />{t('Hold dispatch', 'ڈسپیچ روکیں')}</button></div>
+        </>}
+        {open === 'hold:' + selected.id && <DispatchHoldForm member={member} onCancel={() => setOpen('')} onSave={(term, reason, holdIntervention) => act(t('Dispatch placed on hold.', 'ڈسپیچ روک دی گئی۔'), 'ڈسپیچ روک دی گئی۔', () => dispatchPost('/requests/decide', { requestId: selected.approval_request_id, decision: 'hold', term, reason, ...(holdIntervention ? { interventionReason: holdIntervention } : {}) }))} />}
+        {selected.status === 'approved' && <HoldNoticeForm member={member} onCancel={() => setOpen('')} onSave={(term, message, noticeIntervention) => act(t('Hold notice sent to dispatch.', 'ڈسپیچ کو روکنے کا نوٹس بھیج دیا گیا۔'), 'ڈسپیچ کو روکنے کا نوٹس بھیج دیا گیا۔', () => dispatchPost('/hold-notices', { dispatchId: selected.id, term, message, ...(noticeIntervention ? { interventionReason: noticeIntervention } : {}) }))} />}
+      </section>;
+    const counts = (value: string) => dispatches.filter(item => value === 'all' || item.status === value).length;
+    return <div className="erp-workspace">
+      <SplitView label={t('Dispatch requests', 'ڈسپیچ درخواستیں')} tabs={splitTabs('dispatch-requests', counts)} tab={currentTab} onTab={value => navigate('dispatch-requests/' + value)}
+        items={dispatches.filter(item => currentTab === 'all' || item.status === currentTab).map(item => ({ id: item.id, title: `${item.order_reference} · ${item.buyer_name}`, meta: `${item.product_name} · ${item.lot_batch} · ${kg(item.grams)}`, status: <StatusTag status={item.status} /> }))}
+        selectedId={id} onSelect={next => navigate(`dispatch-requests/${currentTab}${next ? '/' + next : ''}`)}
+        renderDetail={itemId => { const selected = dispatches.find(item => item.id === itemId); return selected ? dispatchDetail(selected) : <p className="split-none">{t('This request is not in the list.', 'یہ درخواست فہرست میں نہیں۔')}</p>; }}
+        empty={t('No dispatch requests in this view.', 'اس حصے میں کوئی ڈسپیچ درخواست نہیں۔')} emptyDetail={t('Choose a dispatch request to approve, hold or review.', 'منظوری، روکنے یا جانچنے کے لیے ڈسپیچ درخواست منتخب کریں۔')} />
     </div>;
-  }
+  };
 
-  function AnalyticsView() {
-    return <div className="erp-workspace"><section className="live-panel"><div className="erp-toolbar"><Field>{t('From', 'سے')}<input type="date" value={from} onChange={event => setFrom(event.target.value)} /></Field><Field>{t('To', 'تک')}<input type="date" value={to} onChange={event => setTo(event.target.value)} /></Field><button className="button" onClick={() => void load()} disabled={loading}><RefreshCw size={18} />{t('Refresh analytics', 'تجزیہ تازہ کریں')}</button></div></section>
+  const analyticsView = () => {
+    const currency = analytics ? firstCurrency(analytics.byPeriod, analytics.byBuyer, analytics.overdueByCurrency) : undefined;
+    const invoiced = analytics && currency ? money(analytics.byPeriod.filter(row => row.currency === currency).reduce((sum, row) => sum + row.totalMinor, 0), currency) : null;
+    const overdue = analytics && currency ? money(analytics.overdueByCurrency.find(row => row.currency === currency)?.overdueMinor ?? 0, currency) : null;
+    const paymentTone: Record<string, Tone> = { unpaid: 'stone', partially_paid: 'warn', paid: 'ok', overdue: 'bad' };
+    const grouped = (rows: { key: string; label: string; currency: string; amount: number }[]): BarRow[] => rows.map(row => ({ key: row.key, label: row.label, value: row.amount, text: money(row.amount, row.currency), group: row.currency }));
+    // Who owes: what each buyer still owes, with the overdue part named on the row. Bars scale per currency.
+    const owed: BarRow[] = summaries.flatMap(buyer => buyer.outstanding.filter(row => row.outstanding_minor > 0).map(row => {
+      const late = buyer.overdue.find(item => item.currency === row.currency)?.overdue_minor ?? 0;
+      return { key: `${buyer.id}-${row.currency}`, label: buyer.name, sub: late > 0 ? `${t('Overdue', 'مدت گزر گئی')} ${money(late, row.currency)}` : undefined, value: row.outstanding_minor, text: money(row.outstanding_minor, row.currency), group: row.currency };
+    })).sort((a, b) => b.value - a.value).slice(0, 8);
+    return <div className="ak-page">
+      <div className="ak-toolbar">
+        <Field>{t('From', 'سے')}<input type="date" value={from} onChange={event => setFrom(event.target.value)} /></Field>
+        <Field>{t('To', 'تک')}<input type="date" value={to} onChange={event => setTo(event.target.value)} /></Field>
+        <button className="button" onClick={() => void load()} disabled={loading}><ChartNoAxesCombined size={18} aria-hidden="true" />{t('Refresh analytics', 'تجزیہ تازہ کریں')}</button>
+      </div>
       {!analytics ? <p role="status">{t('Choose a valid period to load analytics.', 'تجزیے کے لیے درست مدت منتخب کریں۔')}</p> : <>
-        <section className="live-panel"><h2>{t('Sales by month', 'ماہانہ فروخت')}</h2><AnalyticsTable rows={analytics.byPeriod.map(row => ({ label: row.period, currency: row.currency, amount: row.totalMinor }))} empty={t('No invoiced sales in this period.', 'اس مدت میں کوئی انوائس شدہ فروخت نہیں۔')} /></section>
-        <section className="live-panel"><h2>{t('Sales by buyer', 'خریدار کے لحاظ سے فروخت')}</h2><AnalyticsTable rows={analytics.byBuyer.map(row => ({ label: row.buyer, currency: row.currency, amount: row.totalMinor }))} empty={t('No buyer totals in this period.', 'اس مدت میں خریدار کا کوئی مجموعہ نہیں۔')} /></section>
-        <section className="live-panel"><h2>{t('Sales by product', 'مصنوعات کے لحاظ سے فروخت')}</h2><AnalyticsTable rows={analytics.byProduct.map(row => ({ label: row.product ?? t('Unassigned material', 'غیر مختص مواد'), currency: row.currency, amount: row.totalMinor }))} empty={t('No product totals in this period.', 'اس مدت میں مصنوعات کا کوئی مجموعہ نہیں۔')} /></section>
-        <section className="live-panel"><h2>{t('Payment status', 'ادائیگی کی حالت')}</h2><ul className="erp-facts">{Object.entries(analytics.paymentStatus).map(([status, count]) => <li key={status}><StatusTag status={status} /><strong>{count}</strong></li>)}</ul>{analytics.overdueByCurrency.length ? <><h3>{t('Overdue by currency', 'کرنسی کے لحاظ سے واجب')}</h3><ul className="erp-facts">{analytics.overdueByCurrency.map(row => <li key={row.currency}><span>{row.currency}</span><strong>{money(row.overdueMinor, row.currency)}</strong></li>)}</ul></> : <p>{t('No overdue balance.', 'کوئی واجب رقم نہیں۔')}</p>}</section>
+        <KpiStrip items={[
+          { label: t('Total invoiced', 'کل انوائس'), value: invoiced },
+          { label: t('Overdue', 'مدت گزر گئی'), value: overdue },
+          { label: t('Unpaid invoices', 'غیر ادا شدہ انوائس'), value: String(analytics.paymentStatus.unpaid ?? 0) },
+        ]} />
+        <AnalyticsSection title={t('Who owes us', 'کون کتنا دینا ہے')} note={t('Outstanding balance per buyer, largest first.', 'ہر خریدار کا بقایا، سب سے بڑا پہلے۔')}>
+          <BarList rows={owed} empty={t('Nobody owes money right now.', 'اس وقت کوئی بقایا نہیں۔')} />
+        </AnalyticsSection>
+        <AnalyticsSection title={t('What sells', 'کیا بکتا ہے')} note={t('Invoiced sales by material in this period.', 'اس مدت میں مواد کے لحاظ سے انوائس شدہ فروخت۔')}>
+          <BarList rows={grouped(analytics.byProduct.map((row, i) => ({ key: `${row.product}-${row.currency}-${i}`, label: row.product ?? t('Unassigned material', 'غیر مختص مواد'), currency: row.currency, amount: row.totalMinor })))} empty={t('No product totals in this period.', 'اس مدت میں مصنوعات کا کوئی مجموعہ نہیں۔')} />
+        </AnalyticsSection>
+        <details className="live-panel ak-more">
+          <summary>{t('Monthly sales, buyers and payment status', 'ماہانہ فروخت، خریدار اور ادائیگی کی حالت')}</summary>
+          <AnalyticsSection title={t('Sales by month', 'ماہانہ فروخت')}>
+            <BarList rows={grouped(analytics.byPeriod.map(row => ({ key: `${row.period}-${row.currency}`, label: row.period, currency: row.currency, amount: row.totalMinor })))} empty={t('No invoiced sales in this period.', 'اس مدت میں کوئی انوائس شدہ فروخت نہیں۔')} />
+          </AnalyticsSection>
+          <AnalyticsSection title={t('Sales by buyer', 'خریدار کے لحاظ سے فروخت')}>
+            <BarList rows={grouped(analytics.byBuyer.map(row => ({ key: `${row.buyer}-${row.currency}`, label: row.buyer, currency: row.currency, amount: row.totalMinor })))} empty={t('No buyer totals in this period.', 'اس مدت میں خریدار کا کوئی مجموعہ نہیں۔')} />
+          </AnalyticsSection>
+          <AnalyticsSection title={t('Payment status', 'ادائیگی کی حالت')}>
+            <StackedBar segments={Object.entries(analytics.paymentStatus).map(([status, count]) => ({ key: status, label: <StatusTag status={status} />, value: Number(count), text: String(count), tone: paymentTone[status] ?? 'stone' }))} />
+          </AnalyticsSection>
+        </details>
       </>}
     </div>;
-  }
+  };
 
   return <div className="erp-workspace yf-sales-screens">
     {!online && <p role="status" className="live-warning">{t('Offline. Sales records cannot be changed until the connection returns.', 'آف لائن ہیں۔ رابطہ بحال ہونے تک فروخت کا ریکارڈ تبدیل نہیں ہو سکتا۔')}</p>}
     {error && <p className="live-error" role="alert">{t(error, 'درخواست مکمل نہیں ہو سکی۔ رابطہ جانچ کر دوبارہ کوشش کریں۔')} <button className="live-text-button" onClick={() => void load()}>{t('Retry', 'دوبارہ کوشش کریں')}</button></p>}
     {notice && <p role="status" className="live-success">{notice}</p>}
-    <div className="erp-toolbar"><span>{t('Sales records update from the shared factory database.', 'فروخت کا ریکارڈ مشترکہ فیکٹری ڈیٹابیس سے تازہ ہوتا ہے۔')}</span><button className="button" onClick={() => void load()} disabled={loading}><RefreshCw size={18} />{loading ? t('Loading…', 'لوڈ ہو رہا ہے…') : t('Refresh', 'تازہ کریں')}</button></div>
-    {loading && state && <p role="status">{t('Refreshing sales records…', 'فروخت کا ریکارڈ تازہ ہو رہا ہے…')}</p>}
-    {section === 'dashboard' && <DashboardView />}
-    {section === 'buyers' && <BuyersView />}
-    {section === 'buyer-rfqs' && <BuyerRfqsView />}
-    {section === 'invoices' && <InvoicesView />}
-    {section === 'dispatch-requests' && <DispatchRequestsView />}
-    {section === 'analytics' && <AnalyticsView />}
+    <div className="erp-toolbar"><span>{t('Sales records update from the shared factory database.', 'فروخت کا ریکارڈ مشترکہ فیکٹری ڈیٹابیس سے تازہ ہوتا ہے۔')}</span>
+      <button className="button" onClick={() => void load()} disabled={loading}><RefreshCw size={18} aria-hidden="true" />{loading ? t('Loading…', 'لوڈ ہو رہا ہے…') : t('Refresh', 'تازہ کریں')}</button></div>
+    {loading && <p role="status">{t('Refreshing sales records…', 'فروخت کا ریکارڈ تازہ ہو رہا ہے…')}</p>}
+    {section === 'dashboard' && dashboardView()}
+    {section === 'buyers' && buyersView()}
+    {section === 'buyer-rfqs' && buyerRfqsView()}
+    {section === 'invoices' && invoicesView()}
+    {section === 'dispatch-requests' && dispatchRequestsView()}
+    {section === 'analytics' && analyticsView()}
   </div>;
 }
 
-function BuyerReview({ buyer, member, onSave, onCancel }: { buyer: Buyer; member: Member; onCancel: () => void; onSave: (status: string, reason: string, intervention: string) => Promise<void> }) {
-  const { t } = useLanguage(); const [decision, setDecision] = useState<'active' | 'rejected'>('active'), [reason, setReason] = useState(''), [intervention, setIntervention] = useState('');
-  return <AsyncForm title={t('Review buyer', 'خریدار کی جانچ')} submit={decision === 'active' ? t('Approve buyer', 'خریدار منظور کریں') : t('Reject buyer', 'خریدار مسترد کریں')} onSubmit={() => onSave(decision, reason, intervention)} onCancel={onCancel}>
-    <Field>{t('Decision', 'فیصلہ')}<select value={decision} onChange={event => setDecision(event.target.value as typeof decision)}><option value="active">{t('Approve', 'منظور')}</option><option value="rejected">{t('Reject', 'مسترد')}</option></select></Field>
-    {decision === 'rejected' && <ReasonField label={t('Review reason', 'جانچ کی وجہ')} value={reason} onChange={setReason} />}
+function BuyerDecision({ buyer, move, member, onSave, onCancel }: { buyer: BuyerSummary; move: BuyerMove; member: Member; onCancel: () => void; onSave: (status: string, reason: string, intervention: string) => Promise<void> }) {
+  const { t } = useLanguage(); const [decision, setDecision] = useState(move.options[0][0]), [reason, setReason] = useState(''), [intervention, setIntervention] = useState('');
+  return <AsyncForm title={t(move.en, move.ur)} detail={buyer.name} submit={t('Save decision', 'فیصلہ محفوظ کریں')} onCancel={onCancel} onSubmit={() => onSave(decision, decision === 'active' ? '' : reason, intervention)}
+    note={decision === 'active' ? undefined : t('Suspending or rejecting ends the buyer’s open sessions. Past quotations and invoices stay on record.', 'معطل یا مسترد کرنے سے خریدار کے کھلے سیشن ختم ہو جاتے ہیں۔ پرانی قیمتیں اور انوائسز ریکارڈ میں رہتی ہیں۔')}>
+    {move.options.length > 1 && <Field>{t('Decision', 'فیصلہ')}<select value={decision} onChange={event => setDecision(event.target.value)}>{move.options.map(([value, en, ur]) => <option key={value} value={value}>{t(en, ur)}</option>)}</select></Field>}
+    {decision !== 'active' && <ReasonField label={t('Reason', 'وجہ')} value={reason} onChange={setReason} />}
+    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+  </AsyncForm>;
+}
+
+function BuyerProfileForm({ buyer, member, onSave, onCancel }: { buyer: BuyerSummary; member: Member; onCancel: () => void; onSave: (fields: { contactName: string; phone: string; city: string; notes: string }, intervention: string) => Promise<void> }) {
+  const { t } = useLanguage(); const [contactName, setContactName] = useState(buyer.contact_name), [phone, setPhone] = useState(buyer.phone), [city, setCity] = useState(buyer.city), [notes, setNotes] = useState(buyer.notes), [intervention, setIntervention] = useState('');
+  return <AsyncForm title={t('Edit buyer profile', 'خریدار پروفائل میں ترمیم')} detail={buyer.name} submit={t('Save profile', 'پروفائل محفوظ کریں')} onCancel={onCancel} note={t('Changing the profile does not change the buyer’s access or credit limit.', 'پروفائل بدلنے سے خریدار کی رسائی یا ادھار کی حد نہیں بدلتی۔')}
+    onSubmit={() => onSave({ contactName, phone, city, notes }, intervention)}>
+    <Field>{t('Contact name', 'رابطہ کار')}<input value={contactName} onChange={event => setContactName(event.target.value)} minLength={2} maxLength={80} required /></Field>
+    <Field>{t('Phone (with country code)', 'فون (ملک کے کوڈ کے ساتھ)')}<input dir="ltr" inputMode="tel" value={phone} onChange={event => setPhone(event.target.value)} required /></Field>
+    <Field>{t('City', 'شہر')}<input value={city} onChange={event => setCity(event.target.value)} maxLength={100} /></Field>
+    <Field>{t('Notes', 'نوٹس')}<textarea value={notes} onChange={event => setNotes(event.target.value)} maxLength={2000} /></Field>
     <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
   </AsyncForm>;
 }
 
 function QuoteForm({ rfq, currency, member, products, onSave, onCancel }: { rfq: Rfq; currency: string; member: Member; products: SalesState['products']; onSave: (data: unknown) => Promise<void>; onCancel: () => void }) {
   const { t } = useLanguage(); const [price, setPrice] = useState(''), [specs, setSpecs] = useState(rfq.specifications), [terms, setTerms] = useState(rfq.payment_terms), [delivery, setDelivery] = useState(dateInput(rfq.requested_delivery_at)), [creditDays, setCreditDays] = useState('30'), [productId, setProductId] = useState(''), [intervention, setIntervention] = useState('');
-  return <AsyncForm title={t('Quotation terms', 'قیمت کی شرائط')} detail={t('The factory currency is fixed by settings.', 'فیکٹری کی کرنسی سیٹنگز میں مقرر ہے۔')} submit={t('Save draft quotation', 'قیمت کا مسودہ محفوظ کریں')} onCancel={onCancel} onSubmit={async () => onSave({ id: crypto.randomUUID(), poId: rfq.id, priceMinor: fixedInput(price, 2, 'Rate'), specifications: specs, requestedDeliveryAt: dateAtNoon(delivery), paymentTerms: terms, creditDays: Number(creditDays), ...(productId ? { productId } : {}), ...(intervention ? { interventionReason: intervention } : {}) })}>
-    <p><strong>{t('Currency', 'کرنسی')}: {currency}</strong></p><Field>{t('Rate per', 'فی شرح')} {rfq.unit} · {currency}<input inputMode="decimal" value={price} onChange={event => setPrice(event.target.value)} required /></Field><Field>{t('Specifications', 'تفصیلات')}<textarea value={specs} onChange={event => setSpecs(event.target.value)} minLength={5} maxLength={4000} required /></Field><Field>{t('Delivery date', 'ترسیل کی تاریخ')}<input type="date" value={delivery} onChange={event => setDelivery(event.target.value)} required /></Field><Field>{t('Payment terms', 'ادائیگی کی شرائط')}<input value={terms} onChange={event => setTerms(event.target.value)} minLength={3} maxLength={1000} required /></Field><Field>{t('Credit days', 'ادھار کے دن')}<input type="number" min="0" max="365" value={creditDays} onChange={event => setCreditDays(event.target.value)} required /></Field><Field>{t('Material, if specified', 'مواد، اگر طے ہو')}<select value={productId} onChange={event => setProductId(event.target.value)}><option value="">{t('Not assigned', 'مختص نہیں')}</option>{products.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}</select></Field><InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+  return <AsyncForm title={t('Quotation terms', 'قیمت کی شرائط')} detail={t('The factory currency is fixed by settings.', 'فیکٹری کی کرنسی سیٹنگز میں مقرر ہے۔')} submit={t('Save draft quotation', 'قیمت کا مسودہ محفوظ کریں')} onCancel={onCancel}
+    onSubmit={async () => onSave({ id: crypto.randomUUID(), poId: rfq.id, priceMinor: fixedInput(price, 2, 'Rate'), specifications: specs, requestedDeliveryAt: dateAtNoon(delivery), paymentTerms: terms, creditDays: Number(creditDays), ...(productId ? { productId } : {}), ...(intervention ? { interventionReason: intervention } : {}) })}>
+    <p><strong>{t('Currency', 'کرنسی')}: {currency}</strong></p>
+    <Field>{t('Rate per', 'فی شرح')} {rfq.unit} · {currency}<input inputMode="decimal" value={price} onChange={event => setPrice(event.target.value)} required /></Field>
+    <Field>{t('Specifications', 'تفصیلات')}<textarea value={specs} onChange={event => setSpecs(event.target.value)} minLength={5} maxLength={4000} required /></Field>
+    <Field>{t('Delivery date', 'ترسیل کی تاریخ')}<input type="date" value={delivery} onChange={event => setDelivery(event.target.value)} required /></Field>
+    <Field>{t('Payment terms', 'ادائیگی کی شرائط')}<input value={terms} onChange={event => setTerms(event.target.value)} minLength={3} maxLength={1000} required /></Field>
+    <Field>{t('Credit days', 'ادھار کے دن')}<input type="number" min="0" max="365" value={creditDays} onChange={event => setCreditDays(event.target.value)} required /></Field>
+    <Field>{t('Material, if specified', 'مواد، اگر طے ہو')}<select value={productId} onChange={event => setProductId(event.target.value)}><option value="">{t('Not assigned', 'مختص نہیں')}</option>{products.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}</select></Field>
+    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
   </AsyncForm>;
 }
 
 function StockQueryForm({ rfq, products, member, onSave, onCancel }: { rfq: Rfq; products: SalesState['products']; member: Member; onSave: (data: unknown) => Promise<void>; onCancel: () => void }) {
   const { t } = useLanguage(); const [productId, setProductId] = useState(products[0]?.id ?? ''), [question, setQuestion] = useState(t('Please confirm stock availability for this buyer request.', 'براہ کرم اس خریدار کی درخواست کے لیے اسٹاک کی دستیابی کی تصدیق کریں۔')), [intervention, setIntervention] = useState('');
-  return <AsyncForm title={t('Stock availability question', 'اسٹاک کی دستیابی کا سوال')} submit={t('Send to supervisor', 'سپروائزر کو بھیجیں')} onCancel={onCancel} onSubmit={async () => { if (!productId) throw new Error('Choose a material first.'); await onSave({ id: crypto.randomUUID(), productId, quantityMilli: rfq.quantity_milli, buyerRfqId: rfq.id, question, ...(intervention ? { interventionReason: intervention } : {}) }); }}>
-    <Field>{t('Material', 'مواد')}<select value={productId} onChange={event => setProductId(event.target.value)} required>{products.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}</select></Field><Field>{t('Question', 'سوال')}<textarea minLength={5} maxLength={1000} value={question} onChange={event => setQuestion(event.target.value)} required /></Field><InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+  return <AsyncForm title={t('Stock availability question', 'اسٹاک کی دستیابی کا سوال')} submit={t('Send to supervisor', 'سپروائزر کو بھیجیں')} onCancel={onCancel}
+    onSubmit={async () => { if (!productId) throw new Error('Choose a material first.'); await onSave({ id: crypto.randomUUID(), productId, quantityMilli: rfq.quantity_milli, buyerRfqId: rfq.id, question, ...(intervention ? { interventionReason: intervention } : {}) }); }}>
+    <Field>{t('Material', 'مواد')}<select value={productId} onChange={event => setProductId(event.target.value)} required>{products.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}</select></Field>
+    <Field>{t('Question', 'سوال')}<textarea minLength={5} maxLength={1000} value={question} onChange={event => setQuestion(event.target.value)} required /></Field>
+    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
   </AsyncForm>;
 }
 
-function InvoiceDetail({ invoice, creditNotes, member, onPayment, onCredit }: { invoice: Invoice; creditNotes: CreditNote[]; member: Member; onPayment: (data: unknown) => Promise<void>; onCredit: (data: unknown) => Promise<void> }) {
+function InvoiceDetail({ invoice, creditNotes, payments, orderStatus, member, onPayment, onCredit, onReversePayment, onVoid, onRegenerate }: {
+  invoice: Invoice; creditNotes: CreditNote[]; payments: InvoicePayment[]; orderStatus: string; member: Member; onPayment: (data: unknown) => Promise<void>; onCredit: (data: unknown) => Promise<void>;
+  onReversePayment: (data: unknown) => Promise<void>; onVoid: (data: unknown) => Promise<void>; onRegenerate: () => void;
+}) {
   const { t } = useLanguage(); const [open, setOpen] = useState(''), [payment, setPayment] = useState(amountInput(invoice.outstanding_minor)), [received, setReceived] = useState(today()), [paymentNote, setPaymentNote] = useState(''), [credit, setCredit] = useState(''), [creditReason, setCreditReason] = useState(''), [intervention, setIntervention] = useState('');
+  const voided = invoice.status === 'void';
+  // A void is refused while money stands on the invoice or goods left for the order; the reason is shown instead of the button.
+  const voidBlocker = invoice.paid_minor > 0 ? t('A payment stands on this invoice. Reverse the payment to void the invoice, or issue a credit note.', 'اس انوائس پر ادائیگی درج ہے۔ انوائس منسوخ کرنے کے لیے ادائیگی منسوخ کریں، یا کریڈٹ نوٹ جاری کریں۔')
+    : invoice.credited_minor > 0 ? t('A credit note stands on this invoice. Credit notes stay on record.', 'اس انوائس پر کریڈٹ نوٹ جاری ہے۔ کریڈٹ نوٹ ریکارڈ میں رہتے ہیں۔')
+    : orderStatus !== 'confirmed' ? t('Goods were dispatched for this order. Issue a credit note instead.', 'اس آرڈر کا مال روانہ ہو چکا ہے۔ اس کے بجائے کریڈٹ نوٹ جاری کریں۔') : '';
   return <section className="live-panel"><div className="live-panel-heading"><div><h2>{invoice.number}</h2><p>{invoice.buyer_name} · {invoice.order_reference} · {factoryTime(invoice.issued_at)}</p></div><StatusTag status={invoice.status} /></div>
-    <section className="sales-invoice"><h3>{t('Locked invoice', 'مقفل انوائس')}</h3><dl className="erp-facts"><div><dt>{t('Subtotal', 'ذیلی کل')}</dt><dd>{invoice.subtotal_minor == null ? '—' : money(invoice.subtotal_minor, invoice.currency)}</dd></div><div><dt>{t(`GST (${(invoice.tax_rate_bp ?? 0) / 100}%)`, `جی ایس ٹی (${(invoice.tax_rate_bp ?? 0) / 100}%)`)}</dt><dd>{invoice.tax_minor == null ? '—' : money(invoice.tax_minor, invoice.currency)}</dd></div><div><dt>{t('Total', 'کل')}</dt><dd>{money(invoice.total_minor, invoice.currency)}</dd></div><div><dt>{t('Due date', 'آخری تاریخ')}</dt><dd>{dueDate(invoice.due_at)}</dd></div><div><dt>{t('Paid', 'ادا شدہ')}</dt><dd>{money(invoice.paid_minor, invoice.currency)}</dd></div><div><dt>{t('Credit notes', 'کریڈٹ نوٹس')}</dt><dd>{money(invoice.credited_minor, invoice.currency)}</dd></div><div><dt>{t('Outstanding', 'بقایا')}</dt><dd>{money(invoice.outstanding_minor, invoice.currency)}</dd></div></dl><a className="button" href={`/api/erp/sales/invoices/${encodeURIComponent(invoice.id)}`} download><Download size={18} />{t('Download invoice', 'انوائس ڈاؤن لوڈ کریں')}</a></section>
-    <section className="live-panel"><h3>{t('Credit notes', 'کریڈٹ نوٹس')}</h3>{creditNotes.length ? creditNotes.map(note => <article className="erp-record" key={note.id}><strong>{note.number} · {money(note.amount_minor, invoice.currency)}</strong><p>{note.reason} · {dueDate(note.created_at)}</p></article>) : <p>{t('No credit notes.', 'کوئی کریڈٹ نوٹ نہیں۔')}</p>}{invoice.outstanding_minor > 0 && <button className="button" onClick={() => setOpen(open === 'credit' ? '' : 'credit')}>{t('Issue credit note', 'کریڈٹ نوٹ جاری کریں')}</button>}{open === 'credit' && <AsyncForm title={t('Credit note', 'کریڈٹ نوٹ')} submit={t('Issue credit note', 'کریڈٹ نوٹ جاری کریں')} onSubmit={() => onCredit({ id: crypto.randomUUID(), invoiceId: invoice.id, amountMinor: fixedInput(credit, 2, 'Credit amount'), reason: creditReason, ...(intervention ? { interventionReason: intervention } : {}) })}><Field>{t('Credit amount', 'کریڈٹ کی رقم')} · {invoice.currency}<input inputMode="decimal" value={credit} onChange={event => setCredit(event.target.value)} required /></Field><ReasonField label={t('Reason', 'وجہ')} value={creditReason} onChange={setCreditReason} /><InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} /></AsyncForm>}</section>
-    <section className="live-panel"><h3>{t('Payment tracking', 'ادائیگی کا ریکارڈ')}</h3><p>{t('Due', 'آخری تاریخ')}: {dueDate(invoice.due_at)} · {t('Outstanding', 'بقایا')}: {money(invoice.outstanding_minor, invoice.currency)}</p>{invoice.outstanding_minor > 0 && <button className="button primary" onClick={() => setOpen(open === 'payment' ? '' : 'payment')}>{t('Record payment', 'ادائیگی درج کریں')}</button>}{open === 'payment' && <AsyncForm title={t('Record payment', 'ادائیگی درج کریں')} submit={t('Save payment', 'ادائیگی محفوظ کریں')} onSubmit={() => onPayment({ id: crypto.randomUUID(), invoiceId: invoice.id, amountMinor: fixedInput(payment, 2, 'Payment amount'), receivedAt: dateAtNoon(received), note: paymentNote, ...(intervention ? { interventionReason: intervention } : {}) })}><Field>{t('Amount received', 'وصول شدہ رقم')} · {invoice.currency}<input inputMode="decimal" value={payment} onChange={event => setPayment(event.target.value)} required /></Field><Field>{t('Received on', 'وصولی کی تاریخ')}<input type="date" value={received} onChange={event => setReceived(event.target.value)} required /></Field><Field>{t('Note', 'نوٹ')}<input value={paymentNote} onChange={event => setPaymentNote(event.target.value)} maxLength={2000} /></Field><InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} /></AsyncForm>}</section>
+    {voided && <section className="live-panel invoice-void-note"><h3>{t('Voided', 'منسوخ')}</h3>
+      <p>{invoice.voided_at ? factoryTime(invoice.voided_at) : ''}{invoice.void_reason ? ` · ${invoice.void_reason}` : ''}</p>
+      <p>{t('This invoice is not payable. Issue a corrected invoice in its place; the voided number stays on record.', 'یہ انوائس قابلِ ادائیگی نہیں۔ اس کی جگہ درست شدہ انوائس جاری کریں؛ منسوخ شدہ نمبر ریکارڈ میں رہے گا۔')}</p>
+      <button className="button primary" onClick={onRegenerate}><Receipt size={18} aria-hidden="true" />{t('Issue corrected invoice', 'درست شدہ انوائس جاری کریں')}</button></section>}
+    <section className="sales-invoice"><h3>{t('Locked invoice', 'مقفل انوائس')}</h3>
+      <dl className="erp-facts">
+        <div><dt>{t('Subtotal', 'ذیلی کل')}</dt><dd>{invoice.subtotal_minor == null ? '—' : money(invoice.subtotal_minor, invoice.currency)}</dd></div>
+        <div><dt>{t(`GST (${(invoice.tax_rate_bp ?? 0) / 100}%)`, `جی ایس ٹی (${(invoice.tax_rate_bp ?? 0) / 100}%)`)}</dt><dd>{invoice.tax_minor == null ? '—' : money(invoice.tax_minor, invoice.currency)}</dd></div>
+        <div><dt>{t('Total', 'کل')}</dt><dd>{money(invoice.total_minor, invoice.currency)}</dd></div>
+        <div><dt>{t('Due date', 'آخری تاریخ')}</dt><dd>{dueDate(invoice.due_at)}</dd></div>
+        <div><dt>{t('Paid', 'ادا شدہ')}</dt><dd>{money(invoice.paid_minor, invoice.currency)}</dd></div>
+        <div><dt>{t('Credit notes', 'کریڈٹ نوٹس')}</dt><dd>{money(invoice.credited_minor, invoice.currency)}</dd></div>
+        <div><dt>{t('Outstanding', 'بقایا')}</dt><dd>{money(invoice.outstanding_minor, invoice.currency)}</dd></div>
+      </dl></section>
+    <section className="live-panel"><h3>{t('Credit notes', 'کریڈٹ نوٹس')}</h3>
+      {creditNotes.length ? creditNotes.map(note => <article className="erp-record" key={note.id}><strong>{note.number} · {money(note.amount_minor, invoice.currency)}</strong><p>{note.reason} · {dueDate(note.created_at)}</p></article>) : <p>{t('No credit notes.', 'کوئی کریڈٹ نوٹ نہیں۔')}</p>}
+      {invoice.outstanding_minor > 0 && <button className="button" onClick={() => setOpen(open === 'credit' ? '' : 'credit')}><FileText size={18} aria-hidden="true" />{t('Issue credit note', 'کریڈٹ نوٹ جاری کریں')}</button>}
+      {open === 'credit' && <AsyncForm title={t('Credit note', 'کریڈٹ نوٹ')} submit={t('Issue credit note', 'کریڈٹ نوٹ جاری کریں')} onCancel={() => setOpen('')}
+        onSubmit={() => onCredit({ id: crypto.randomUUID(), invoiceId: invoice.id, amountMinor: fixedInput(credit, 2, 'Credit amount'), reason: creditReason, ...(intervention ? { interventionReason: intervention } : {}) })}>
+        <Field>{t('Credit amount', 'کریڈٹ کی رقم')} · {invoice.currency}<input inputMode="decimal" value={credit} onChange={event => setCredit(event.target.value)} required /></Field>
+        <ReasonField label={t('Reason', 'وجہ')} value={creditReason} onChange={setCreditReason} />
+        <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+      </AsyncForm>}
+    </section>
+    <section className="live-panel"><h3>{t('Payment tracking', 'ادائیگی کا ریکارڈ')}</h3>
+      <p>{t('Due', 'آخری تاریخ')}: {dueDate(invoice.due_at)} · {t('Outstanding', 'بقایا')}: {money(invoice.outstanding_minor, invoice.currency)}</p>
+      {payments.length ? <ul className="invoice-payments">{payments.map(item => <li key={item.id}>
+        <span>{factoryTime(item.received_at)} · {money(item.amount_minor, invoice.currency)}{item.note ? ` · ${item.note}` : ''}</span>
+        {item.reversal_id ? <span className="live-muted">{t('Reversed', 'منسوخ')}{item.reversal_reason ? ` · ${item.reversal_reason}` : ''}</span>
+          : open === 'reverse:' + item.id ? <CorrectionForm title={t('Reverse payment', 'ادائیگی منسوخ کریں')} detail={t('The payment stays on record as reversed. The balance goes back up by the same amount.', 'ادائیگی ریکارڈ میں منسوخ شدہ کے طور پر رہے گی۔ بقایا اتنی ہی رقم بڑھ جائے گا۔')} submit={t('Reverse payment', 'ادائیگی منسوخ کریں')} member={member} onCancel={() => setOpen('')}
+            onSave={(requestId, reason, intervention) => onReversePayment({ id: requestId, paymentId: item.id, reason, ...(intervention ? { interventionReason: intervention } : {}) })} />
+          : <button className="button" onClick={() => setOpen('reverse:' + item.id)}><RotateCcw size={18} aria-hidden="true" />{t('Reverse payment', 'ادائیگی منسوخ کریں')}</button>}
+      </li>)}</ul> : <p>{t('No payments yet.', 'ابھی کوئی ادائیگی نہیں۔')}</p>}
+      {invoice.outstanding_minor > 0 && <button className="button primary" onClick={() => setOpen(open === 'payment' ? '' : 'payment')}><Banknote size={18} aria-hidden="true" />{t('Record payment', 'ادائیگی درج کریں')}</button>}
+      {open === 'payment' && <AsyncForm title={t('Record payment', 'ادائیگی درج کریں')} submit={t('Save payment', 'ادائیگی محفوظ کریں')} onCancel={() => setOpen('')}
+        onSubmit={() => onPayment({ id: crypto.randomUUID(), invoiceId: invoice.id, amountMinor: fixedInput(payment, 2, 'Payment amount'), receivedAt: dateAtNoon(received), note: paymentNote, ...(intervention ? { interventionReason: intervention } : {}) })}>
+        <Field>{t('Amount received', 'وصول شدہ رقم')} · {invoice.currency}<input inputMode="decimal" value={payment} onChange={event => setPayment(event.target.value)} required /></Field>
+        <Field>{t('Received on', 'وصولی کی تاریخ')}<input type="date" value={received} onChange={event => setReceived(event.target.value)} required /></Field>
+        <Field>{t('Note', 'نوٹ')}<input value={paymentNote} onChange={event => setPaymentNote(event.target.value)} maxLength={2000} /></Field>
+        <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+      </AsyncForm>}
+    </section>
+    {!voided && <section className="live-panel"><h3>{t('Void invoice', 'انوائس منسوخ کریں')}</h3>
+      {voidBlocker ? <p className="live-muted">{voidBlocker}</p> : <>
+        <p className="live-muted">{t('For an invoice issued by mistake. Nothing has been paid or dispatched, so the order is cancelled and a corrected invoice can replace it.', 'غلطی سے جاری ہونے والی انوائس کے لیے۔ کوئی ادائیگی یا ترسیل نہیں ہوئی، اس لیے آرڈر منسوخ ہوگا اور درست شدہ انوائس اس کی جگہ لے سکتی ہے۔')}</p>
+        {open !== 'void' && <button className="button" onClick={() => setOpen('void')}><Ban size={18} aria-hidden="true" />{t('Void invoice', 'انوائس منسوخ کریں')}</button>}
+        {open === 'void' && <CorrectionForm title={t('Void invoice', 'انوائس منسوخ کریں')} detail={t('The invoice number stays used. The buyer order is cancelled.', 'انوائس کا نمبر استعمال شدہ رہے گا۔ خریدار کا آرڈر منسوخ ہوگا۔')} submit={t('Void invoice', 'انوائس منسوخ کریں')} member={member} onCancel={() => setOpen('')}
+          onSave={(requestId, reason, intervention) => onVoid({ id: requestId, invoiceId: invoice.id, reason, ...(intervention ? { interventionReason: intervention } : {}) })} />}
+      </>}
+    </section>}
   </section>;
+}
+
+/** One correction form: a fixed request ID (retries are safe), a reason of 3 to 500 characters, and the admin's intervention reason when needed. */
+function CorrectionForm({ title, detail, submit, member, onSave, onCancel }: { title: string; detail: string; submit: string; member: Member;
+  onSave: (requestId: string, reason: string, intervention: string) => Promise<void>; onCancel: () => void }) {
+  const [requestId] = useState(() => crypto.randomUUID()), [reason, setReason] = useState(''), [intervention, setIntervention] = useState('');
+  return <AsyncForm title={title} detail={detail} submit={submit} onCancel={onCancel} onSubmit={() => onSave(requestId, reason, intervention)}>
+    <CorrectionReason value={reason} onChange={setReason} />
+    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+  </AsyncForm>;
+}
+
+function CorrectionReason({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { t } = useLanguage();
+  return <Field>{t('Reason for the correction', 'درستی کی وجہ')}<textarea value={value} onChange={event => onChange(event.target.value)} minLength={3} maxLength={500} required /></Field>;
 }
 
 function DispatchHoldForm({ member, onSave, onCancel }: { member: Member; onSave: (term: string, reason: string, intervention: string) => Promise<void>; onCancel: () => void }) {
   const { t } = useLanguage(); const [term, setTerm] = useState('payment_overdue'), [reason, setReason] = useState(''), [intervention, setIntervention] = useState('');
-  return <AsyncForm title={t('Hold dispatch', 'ڈسپیچ روکیں')} submit={t('Place on hold', 'روکیں')} onCancel={onCancel} onSubmit={() => onSave(term, reason, intervention)}><Field>{t('Hold term', 'روکنے کی شرط')}<select value={term} onChange={event => setTerm(event.target.value)}>{termOptions.map(([value, en, ur]) => <option key={value} value={value}>{t(en, ur)}</option>)}</select></Field><ReasonField label={t('Reason', 'وجہ')} value={reason} onChange={setReason} /><InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} /></AsyncForm>;
+  return <AsyncForm title={t('Hold dispatch', 'ڈسپیچ روکیں')} submit={t('Place on hold', 'روکیں')} onCancel={onCancel} onSubmit={() => onSave(term, reason, intervention)}>
+    <Field>{t('Hold term', 'روکنے کی شرط')}<select value={term} onChange={event => setTerm(event.target.value)}>{termOptions.map(([value, en, ur]) => <option key={value} value={value}>{t(en, ur)}</option>)}</select></Field>
+    <ReasonField label={t('Reason', 'وجہ')} value={reason} onChange={setReason} />
+    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+  </AsyncForm>;
 }
 
 function HoldNoticeForm({ member, onSave, onCancel }: { member: Member; onSave: (term: string, message: string, intervention: string) => Promise<void>; onCancel: () => void }) {
   const { t } = useLanguage(); const [term, setTerm] = useState('terms_not_met'), [message, setMessage] = useState(''), [intervention, setIntervention] = useState('');
-  return <AsyncForm title={t('Send a hold notice to dispatch', 'ڈسپیچ کو روکنے کا نوٹس بھیجیں')} submit={t('Send hold notice', 'نوٹس بھیجیں')} onCancel={onCancel} onSubmit={() => onSave(term, message, intervention)}><Field>{t('Hold term', 'روکنے کی شرط')}<select value={term} onChange={event => setTerm(event.target.value)}>{termOptions.map(([value, en, ur]) => <option key={value} value={value}>{t(en, ur)}</option>)}</select></Field><Field>{t('Message', 'پیغام')}<textarea minLength={1} maxLength={1000} value={message} onChange={event => setMessage(event.target.value)} required /></Field><InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} /></AsyncForm>;
+  return <AsyncForm title={t('Send a hold notice to dispatch', 'ڈسپیچ کو روکنے کا نوٹس بھیجیں')} submit={t('Send hold notice', 'نوٹس بھیجیں')} onCancel={onCancel} onSubmit={() => onSave(term, message, intervention)}>
+    <Field>{t('Hold term', 'روکنے کی شرط')}<select value={term} onChange={event => setTerm(event.target.value)}>{termOptions.map(([value, en, ur]) => <option key={value} value={value}>{t(en, ur)}</option>)}</select></Field>
+    <Field>{t('Message', 'پیغام')}<textarea minLength={1} maxLength={1000} value={message} onChange={event => setMessage(event.target.value)} required /></Field>
+    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+  </AsyncForm>;
 }
+
+const dispatchIcons: StageIconName[] = ['request', 'approve', 'dispatch', 'deliver'];
 
 function DispatchThread({ status, holdReason }: { status: DispatchRecord['status']; holdReason: string | null }) {
   const { t } = useLanguage(); const nodes = ['pending_approval', 'approved', 'dispatched', 'delivered'] as const; const index = nodes.indexOf(status as typeof nodes[number]);
-  return <div className="yf-dispatch-thread" aria-label={t('Dispatch status history', 'ڈسپیچ کی حالت کی تاریخ')}><ol>{nodes.map((node, i) => <li key={node} className={i <= index ? 'done' : ''}><span aria-hidden="true">{i + 1}</span><StatusTag status={node} /></li>)}</ol>{status === 'on_hold' && <p className="live-warning"><StatusTag status="on_hold" /> · {holdReason}</p>}</div>;
+  return <div className="yf-dispatch-thread" aria-label={t('Dispatch status history', 'ڈسپیچ کی حالت کی تاریخ')}>
+    <ol>{nodes.map((node, i) => <li key={node} className={i <= index ? 'done' : ''} aria-current={node === status ? 'step' : undefined}><StageIcon name={dispatchIcons[i]} state={stageState(i, index)} /><span aria-hidden="true">{i + 1}</span><StatusTag status={node} /></li>)}</ol>
+    {status === 'on_hold' && <p className="live-warning"><StatusTag status="on_hold" /> · {holdReason}</p>}
+  </div>;
 }
 
-function AnalyticsTable({ rows, empty }: { rows: { label: string; currency: string; amount: number }[]; empty: string }) {
+function BuyerRecord({ buyer, sales, dispatches, member, open, setOpen, navigate, onDecide, onProfile, onReopen }: {
+  buyer: BuyerSummary; sales: SalesState; dispatches: DispatchRecord[]; member: Member; open: string; setOpen: (key: string) => void; navigate: (to: string) => void;
+  onDecide: (status: string, reason: string, intervention: string) => Promise<void>; onProfile: (fields: { contactName: string; phone: string; city: string; notes: string }, intervention: string) => Promise<void>;
+  onReopen: (requestId: string, reason: string) => Promise<void>;
+}) {
   const { t } = useLanguage();
-  return rows.length ? <table className="erp-table"><thead><tr><th scope="col">{t('Group', 'گروپ')}</th><th scope="col">{t('Currency', 'کرنسی')}</th><th scope="col">{t('Total', 'کل')}</th></tr></thead><tbody>{rows.map((row, i) => <tr key={`${row.label}-${row.currency}-${i}`}><th scope="row">{row.label}</th><td>{row.currency}</td><td>{money(row.amount, row.currency)}</td></tr>)}</tbody></table> : <p>{empty}</p>;
+  const invoices = sales.invoices.filter(invoice => invoice.buyer_id === buyer.id), orders = sales.orders.filter(order => order.buyer_id === buyer.id);
+  const move = buyerMoves[buyer.status], decisionKey = 'buyer:' + buyer.id, profileKey = 'profile:' + buyer.id, detailKey = 'detail:' + buyer.id, rateKey = 'rate:' + buyer.id, reopenKey = 'reopen:' + buyer.id;
+  // The rating readers load once on mount; a save bumps this counter so they remount and show the new rating.
+  const [ratingVersion, setRatingVersion] = useState(0), [ratingNotice, setRatingNotice] = useState('');
+  const canRate = buyer.status === 'active' && (member.role === 'sales_manager' || member.admin);
+  const days = buyer.days_left;
+  const dueTone = days === null ? '' : days < 0 ? 'is-bad' : days <= 7 ? 'is-warn' : '';
+  const dueText = days === null ? t('Nothing due', 'کوئی واجب رقم نہیں')
+    : days < 0 ? t(`${-days} ${-days === 1 ? 'day' : 'days'} overdue`, `${-days} دن کی تاخیر`)
+    : days === 0 ? t('Due today', 'آج واجب ہے')
+    : t(`Due in ${days} ${days === 1 ? 'day' : 'days'}`, `${days} دن میں واجب`);
+  const limit = buyer.credit_limit_minor, limitCurrency = buyer.credit_limit_currency, used = buyer.credit_used_minor ?? 0;
+  const pct = !limit ? (used > 0 ? 100 : 0) : Math.min(100, (used / limit) * 100);
+  const list = (values: string[]) => values.length ? values.join(' · ') : '—';
+  return <article className="erp-record">
+    <div className="erp-record-head"><div><h3>{buyer.name}</h3><p>{buyer.contact_name}{buyer.city ? ` · ${buyer.city}` : ''} · {buyer.email} · {buyer.phone}</p></div>
+      <div className="buyer-head-side"><StatusTag status={buyer.status} /><BuyerRatingSummary key={'summary' + ratingVersion} buyerId={buyer.id} /></div></div>
+    {buyer.notes && <p className="live-muted">{buyer.notes}</p>}
+    {ratingNotice && <p role="status" className="live-success">{ratingNotice}</p>}
+    <dl className="buyer-facts">
+      <div><dt>{t('Total sold', 'کل فروخت')}</dt><dd>{buyer.sold.length ? buyer.sold.map(line => `${line.quantity_milli / 1000} ${line.unit}`).join(' · ') : t('Nothing sold yet', 'ابھی کوئی فروخت نہیں')}</dd></div>
+      <div><dt>{t('Invoiced', 'انوائس شدہ')}</dt><dd>{list(buyer.invoiced.map(row => money(row.total_minor, row.currency)))}</dd></div>
+      <div><dt>{t('Outstanding', 'بقایا')}</dt><dd>{list(buyer.outstanding.map(row => money(row.outstanding_minor, row.currency)))}</dd></div>
+      {buyer.overdue.length > 0 && <div><dt>{t('Overdue', 'مدت گزر گئی')}</dt><dd className="is-bad">{list(buyer.overdue.map(row => money(row.overdue_minor, row.currency)))}</dd></div>}
+      <div><dt>{t('Next payment', 'اگلی ادائیگی')}</dt><dd className={dueTone}>{dueText}{buyer.next_due_at !== null && ` · ${dueDate(buyer.next_due_at)}`}</dd></div>
+    </dl>
+    {limit === null || limitCurrency === null ? <p className="buyer-credit-note">{t('No credit limit set.', 'ادھار کی کوئی حد مقرر نہیں۔')}</p>
+      : <div className="buyer-credit">
+        <div className="buyer-credit-head"><span>{t('Credit used', 'استعمال شدہ ادھار')}: {money(used, limitCurrency)} / {money(limit, limitCurrency)}</span>{buyer.over_limit && <span className="buyer-over">{t('Over limit', 'حد سے زیادہ')}</span>}</div>
+        <div className={`buyer-meter${buyer.over_limit ? ' is-warn' : ''}`} role="img" aria-label={`${t('Credit used', 'استعمال شدہ ادھار')}: ${Math.round(pct)}%`}><span style={{ width: `${pct}%` }} /></div>
+      </div>}
+    {open === decisionKey && move && <BuyerDecision buyer={buyer} move={move} member={member} onCancel={() => setOpen('')} onSave={onDecide} />}
+    {open === reopenKey && <ReopenBuyerForm buyer={buyer} onCancel={() => setOpen('')} onSave={onReopen} />}
+    {open === profileKey && <BuyerProfileForm buyer={buyer} member={member} onCancel={() => setOpen('')} onSave={onProfile} />}
+    {open === rateKey && <RateBuyer member={member} buyerId={buyer.id} onCancel={() => setOpen('')}
+      onSaved={async message => { setOpen(''); setRatingNotice(message ?? ''); setRatingVersion(version => version + 1); }} />}
+    <div className="live-actions">
+      {move && open !== decisionKey && <button className="button primary" onClick={() => setOpen(decisionKey)}><BadgeCheck size={18} aria-hidden="true" />{t(move.en, move.ur)}</button>}
+      {canRate && open !== rateKey && <button className="button" onClick={() => setOpen(rateKey)}><Star size={18} aria-hidden="true" />{t('Rate buyer', 'خریدار کی ریٹنگ دیں')}</button>}
+      {buyer.status === 'rejected' && member.admin && open !== reopenKey && <button className="button" onClick={() => setOpen(reopenKey)}><RotateCcw size={18} aria-hidden="true" />{t('Reopen buyer', 'خریدار دوبارہ کھولیں')}</button>}
+      {open !== profileKey && <button className="button" onClick={() => setOpen(profileKey)}><Pencil size={18} aria-hidden="true" />{t('Edit profile', 'پروفائل میں ترمیم')}</button>}
+      <button className="button" aria-expanded={open === detailKey} onClick={() => setOpen(open === detailKey ? '' : detailKey)}><ClipboardList size={18} aria-hidden="true" />{t('Buyer details', 'خریدار کی تفصیلات')}</button>
+    </div>
+    {open === detailKey && <div className="buyer-detail">
+      <h4>{t('Ratings', 'ریٹنگز')}</h4>
+      <BuyerRatingHistory key={'history' + ratingVersion} buyerId={buyer.id} member={member} onChanged={() => setRatingVersion(version => version + 1)} />
+      <h4>{t('Invoices', 'انوائسز')}</h4>
+      {invoices.length ? <ul className="buyer-invoices">{invoices.map(invoice => <li key={invoice.id}><button className="live-text-button" onClick={() => navigate('invoices/' + invoice.id)}>{invoice.number}</button>
+        <span>{money(invoice.total_minor, invoice.currency)} · {money(invoice.outstanding_minor, invoice.currency)} {t('outstanding', 'بقایا')} · {dueDate(invoice.due_at)}</span></li>)}</ul>
+        : <p className="live-muted">{t('No invoices yet.', 'ابھی کوئی انوائس نہیں۔')}</p>}
+      <h4>{t('Sales orders', 'فروخت کے آرڈر')}</h4>
+      {orders.length ? <ul className="buyer-invoices">{orders.map(order => <li key={order.id}><span>{order.reference}</span><span>{dueDate(order.created_at)} · <StatusTag status={order.status} /></span></li>)}</ul>
+        : <p className="live-muted">{t('No sales orders yet.', 'ابھی کوئی فروخت کا آرڈر نہیں۔')}</p>}
+      <h4>{t('Dispatches', 'ڈسپیچ')}</h4>
+      {dispatches.length ? <ul className="buyer-invoices">{dispatches.map(item => <li key={item.id}><span>{item.order_reference} · {item.product_name} · {item.lot_batch} · {kg(item.grams)}</span><StatusTag status={item.status} /></li>)}</ul>
+        : <p className="live-muted">{t('No dispatches yet.', 'ابھی کوئی ڈسپیچ نہیں۔')}</p>}
+    </div>}
+  </article>;
+}
+
+// Admin-only (the admin assigns limits); the sales manager sees each buyer's limit read-only on the buyer record.
+function CreditLimitForm({ buyers, currency, onSave }: { buyers: BuyerSummary[]; currency: string; onSave: (payload: unknown) => Promise<void> }) {
+  const { t } = useLanguage(); const first = buyers[0];
+  const [buyerId, setBuyerId] = useState(first?.id ?? ''), [amount, setAmount] = useState(first?.credit_limit_minor == null ? '' : amountInput(first.credit_limit_minor)),
+    [limitCurrency, setLimitCurrency] = useState(first?.credit_limit_currency ?? currency), [clear, setClear] = useState(false);
+  const pick = (next: string) => {
+    const buyer = buyers.find(item => item.id === next);
+    setBuyerId(next); setClear(false); setAmount(buyer?.credit_limit_minor == null ? '' : amountInput(buyer.credit_limit_minor)); setLimitCurrency(buyer?.credit_limit_currency ?? currency);
+  };
+  if (!buyers.length) return <section className="live-panel"><h2>{t('Credit limit per buyer', 'خریدار کے مطابق ادھار کی حد')}</h2><p className="live-empty">{t('No buyers yet.', 'ابھی کوئی خریدار نہیں۔')}</p></section>;
+  return <AsyncForm title={t('Credit limit per buyer', 'خریدار کے مطابق ادھار کی حد')} detail={t('A warning only. Quotations and invoices are never blocked.', 'صرف انتباہ۔ قیمتیں اور انوائسز کبھی نہیں رکتیں۔')} submit={t('Save credit limit', 'ادھار کی حد محفوظ کریں')}
+    onSubmit={() => onSave({ id: buyerId, ...(clear ? { amountMinor: null } : { amountMinor: fixedInput(amount, 2, 'Credit limit'), currency: limitCurrency }) })}>
+    <Field>{t('Buyer', 'خریدار')}<select value={buyerId} onChange={event => pick(event.target.value)}>{buyers.map(buyer => <option key={buyer.id} value={buyer.id}>{buyer.name}</option>)}</select></Field>
+    <label className="buyer-clear"><input type="checkbox" checked={clear} onChange={event => setClear(event.target.checked)} /> {t('Clear the limit (no limit for this buyer)', 'حد ہٹائیں (اس خریدار کی کوئی حد نہیں)')}</label>
+    <Field>{t('Credit limit', 'ادھار کی حد')}<input inputMode="decimal" value={amount} disabled={clear} required={!clear} onChange={event => setAmount(event.target.value)} /></Field>
+    <Field>{t('Currency', 'کرنسی')}<select value={limitCurrency} disabled={clear} onChange={event => setLimitCurrency(event.target.value)}>{['PKR', 'USD', 'EUR', 'GBP'].map(code => <option key={code} value={code}>{code}</option>)}</select></Field>
+  </AsyncForm>;
+}
+
+// Admin-only, like the credit limits above.
+function InvoiceSettingsForm({ settings, onSave }: { settings: SalesSettings; onSave: (changes: { key: string; value: unknown }[]) => Promise<void> }) {
+  const { t } = useLanguage();
+  const [currency, setCurrency] = useState(settings.currency), [gst, setGst] = useState(String(settings.tax_rate_bp / 100)), [format, setFormat] = useState(settings.invoice_format),
+    [hours, setHours] = useState(String(settings.reminder_hours)), [days, setDays] = useState(settings.credit_alert_days.join(', '));
+  return <AsyncForm title={t('Invoice and factory settings', 'انوائس اور فیکٹری کی ترتیبات')} submit={t('Save settings', 'ترتیبات محفوظ کریں')} onSubmit={() => {
+    // Only changed keys are sent, one at a time; the server validates each value with the admin rules.
+    const changes: { key: string; value: unknown }[] = [], rate = Math.round(Number(gst) * 100), creditDays = days.split(',').map(item => item.trim()).filter(Boolean).map(Number);
+    if (currency !== settings.currency) changes.push({ key: 'currency', value: currency });
+    if (rate !== settings.tax_rate_bp) changes.push({ key: 'tax_rate_bp', value: rate });
+    if (format !== settings.invoice_format) changes.push({ key: 'invoice_format', value: format });
+    if (Number(hours) !== settings.reminder_hours) changes.push({ key: 'reminder_hours', value: Number(hours) });
+    if (creditDays.join() !== settings.credit_alert_days.join()) changes.push({ key: 'credit_alert_days', value: creditDays });
+    return onSave(changes);
+  }}>
+    <Field>{t('Currency', 'کرنسی')}<select value={currency} onChange={event => setCurrency(event.target.value)}>{['PKR', 'USD', 'EUR', 'GBP'].map(code => <option key={code} value={code}>{code}</option>)}</select></Field>
+    <Field>{t('GST (%)', 'جی ایس ٹی (%)')}<input type="number" min="0" max="100" step="0.01" value={gst} onChange={event => setGst(event.target.value)} /></Field>
+    <Field>{t('Invoice number format', 'انوائس نمبر کی ترتیب')}<input value={format} onChange={event => setFormat(event.target.value)} /></Field>
+    <Field>{t('Reminder hours', 'یاددہانی کے گھنٹے')}<input type="number" min="1" max="720" value={hours} onChange={event => setHours(event.target.value)} /></Field>
+    <Field>{t('Credit alert days (comma separated)', 'ادھار یاددہانی کے دن')}<input value={days} onChange={event => setDays(event.target.value)} /></Field>
+  </AsyncForm>;
+}
+
+/** Admin-only: a rejected buyer goes back to pending review. Admins need no intervention reason here; the route takes none. */
+function ReopenBuyerForm({ buyer, onSave, onCancel }: { buyer: BuyerSummary; onSave: (requestId: string, reason: string) => Promise<void>; onCancel: () => void }) {
+  const { t } = useLanguage(); const [requestId] = useState(() => crypto.randomUUID()), [reason, setReason] = useState('');
+  return <AsyncForm title={t('Reopen buyer', 'خریدار دوبارہ کھولیں')} detail={buyer.name} submit={t('Reopen for review', 'جانچ کے لیے دوبارہ کھولیں')} onCancel={onCancel}
+    note={t('The buyer goes back to pending review. RFQs closed when the buyer was rejected stay closed; the buyer must send them again.', 'خریدار دوبارہ زیرِ جانچ ہوگا۔ مسترد ہونے پر بند ہونے والی درخواستیں بند رہیں گی؛ خریدار انہیں دوبارہ بھیجے گا۔')}
+    onSubmit={() => onSave(requestId, reason)}>
+    <CorrectionReason value={reason} onChange={setReason} />
+  </AsyncForm>;
 }
 
 export default SalesScreens;

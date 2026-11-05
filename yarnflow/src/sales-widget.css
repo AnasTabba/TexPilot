@@ -1,0 +1,155 @@
+/* Total sales: an open section. Figures lead, the trend line is --brand, --pop only marks an overdue balance. */
+.sw {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+}
+/* Right side is kept clear for the widget drag handle and minimise button (see .yf-dash-bar). */
+.sw-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-right: 64px; flex-wrap: wrap; }
+.sw-head h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+
+/* Figures: three open columns separated by hairlines, no tiles. */
+.sw-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sw-kpi {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 14px;
+  border-inline-start: 1px solid var(--line);
+}
+.sw-kpi:first-child { padding-inline-start: 0; border-inline-start: 0; }
+.sw-kpi-label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.sw-kpi-label::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: var(--brand); }
+.sw-kpi:nth-child(3) .sw-kpi-label::before { background: var(--ink-3); }
+.sw-kpi-value {
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sw-kpi-note { font-size: 12px; font-weight: 700; color: var(--bad); }
+.sw-kpi.is-alert .sw-kpi-value { color: var(--pop); }
+.sw-kpi.is-alert .sw-kpi-label::before { background: var(--pop); }
+
+/* Chart */
+.sw-chart { position: relative; }
+.sw-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.sw-base { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 3 4; }
+.sw-line {
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: sw-draw 420ms var(--ease-out) forwards;
+}
+.sw-area { opacity: 0; animation: sw-fade 240ms ease 120ms forwards; }
+.sw-guide { stroke: var(--line-strong); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.sw-point { cursor: pointer; outline: none; }
+.sw-hit { fill: transparent; }
+.sw-dot { fill: var(--sheet); stroke: var(--brand); stroke-width: 2.5; }
+.sw-point.is-active .sw-dot { fill: var(--brand); stroke: var(--sheet); stroke-width: 3; }
+.sw-point:focus-visible .sw-hit { fill: color-mix(in srgb, var(--focus) 10%, transparent); stroke: var(--focus); stroke-width: 2; }
+.sw-tip {
+  position: absolute;
+  display: grid;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.sw-tip span { font-size: 11px; color: var(--ink-2); }
+.sw-tip strong { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--brand-ink); }
+.sw-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Latest invoices: hairline rows. Invoice number on top, its order id as a muted second line. */
+.sw-table-wrap { min-width: 0; }
+.sw-table, .sw-table thead, .sw-table tbody { display: block; width: 100%; min-width: 0; }
+.sw-table tr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--r-row);
+  transition: background-color 160ms ease, transform 160ms var(--ease-out);
+}
+.sw-table thead tr { font-size: 12px; color: var(--ink-2); padding-block: 4px 6px; }
+.sw-table thead tr { border-bottom-color: var(--line-strong); }
+.sw-table td, .sw-table th {
+  min-width: 0;
+  padding: 0;
+  text-align: start;
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.sw-table td:first-child { display: grid; gap: 1px; }
+.sw-id, .sw-order { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-id { font-weight: 600; font-variant-numeric: tabular-nums; }
+.sw-order { color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.sw-col-amount { text-align: end; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sw-table thead .sw-col-amount { font-weight: 400; }
+.sw-table tbody tr { cursor: pointer; }
+.sw-table tbody tr:hover { background: var(--raised); }
+.sw-table tbody tr:active { transform: scale(0.97); }
+.sw-table tbody tr:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Loading: shaped like the content, so nothing jumps when data arrives. */
+.sw-skel {
+  border-radius: var(--r-control);
+  background: linear-gradient(90deg, var(--sunken) 0%, var(--sheen) 50%, var(--sunken) 100%);
+  background-size: 200% 100%;
+  animation: sw-shimmer 1.3s linear infinite;
+}
+.sw-skel--kpi { height: 58px; }
+.sw-skel--chart { height: 200px; border-radius: var(--r-row); }
+.sw-skel--row { height: 38px; border-radius: var(--r-control); }
+
+@keyframes sw-draw { to { stroke-dashoffset: 0; } }
+@keyframes sw-fade { to { opacity: 1; } }
+@keyframes sw-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+/* Phone: figures stack as label-left, number-right rows, so long amounts never truncate. */
+@media (max-width: 520px) {
+  .sw-kpis { grid-template-columns: minmax(0, 1fr); }
+  .sw-kpi {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    padding: 10px 0;
+    border-inline-start: 0;
+    border-top: 1px solid var(--line);
+  }
+  .sw-kpi:first-child { border-top: 0; }
+  .sw-kpi-label { grid-column: 1; }
+  .sw-kpi-value { grid-column: 2; grid-row: 1; font-size: 20px; }
+  .sw-kpi-note { grid-column: 1 / -1; }
+  .sw-table tr { grid-template-columns: minmax(0, 1fr) auto; }
+  .sw-col-date { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sw-line { animation: none; stroke-dashoffset: 0; }
+  .sw-area { animation: none; opacity: 1; }
+  .sw-skel { animation: none; }
+  .sw-table tbody tr:active { transform: none; }
+}

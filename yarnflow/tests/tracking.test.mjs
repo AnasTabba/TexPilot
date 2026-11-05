@@ -105,7 +105,7 @@ test('the B/L number attaches to the PO; only purchase managers attach and track
   assert.equal((await track(f, r.id, 'Saima')).status, 403);
   assert.equal((await f.call('/erp/shipments', undefined, 'Saima')).status, 403);
   const listed = await f.call('/erp/shipments?orderId=' + f.poId, undefined, 'Pervaiz');
-  assert.equal(listed.data.shipments.length, 1); assert.deepEqual(listed.data.tracking, { configured: true, provider: 'DataLoopLabs' });
+  assert.equal(listed.data.shipments.length, 1); assert.equal(listed.data.tracking.configured, true); assert.equal(listed.data.tracking.provider, 'DataLoopLabs');
   assert.deepEqual((await f.call('/erp/procurement', undefined, 'Pervaiz')).data.tracking.configured, true);
 });
 test('attaching is idempotent and refuses a duplicate B/L or a closed PO', async () => {
