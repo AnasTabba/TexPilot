@@ -29,6 +29,14 @@ class HeadPrediction(BaseModel):
     topk: list[tuple[str, float]] = []
 
 
+class StructureAnswer(BaseModel):
+    """The fabric answer. unknown=true: the head abstained; label is its most likely class only."""
+
+    label: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    unknown: bool
+
+
 class GarmentPrediction(BaseModel):
     label: str  # services.vision.garment vocabulary, e.g. "pants"
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)  # None: scoreless detector
@@ -63,6 +71,8 @@ class ScanResult(BaseModel):
     scan_id: str
     verdict: Outcome
     structure: HeadPrediction | None = None
+    # Additive: {label, confidence, unknown} for the fabric head; unknown=true when it abstained.
+    structure_answer: StructureAnswer | None = None
     treatment: HeadPrediction | None = None
     fibre_family: HeadPrediction | None = None
     garment: GarmentPrediction | None = None

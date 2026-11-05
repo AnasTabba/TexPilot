@@ -63,3 +63,16 @@ class StubPredictor:
 
     def predict(self, image_bytes: bytes) -> VisionOutput:  # noqa: ARG002
         return VisionOutput(structure=None, treatment=None, fibre_family=None)
+
+
+def structure_answer(out: VisionOutput) -> dict | None:
+    """The fabric answer as {label, confidence, unknown}. An abstaining head has no answer, so
+    ``unknown`` carries its most likely class and that class's calibrated probability (the head
+    already reports its top-3 in ``candidates``). None when the structure head did not run."""
+    if out.structure is not None:
+        h = out.structure
+        return {"label": h.label, "confidence": h.confidence, "unknown": False}
+    top = out.candidates.get("structure")
+    if not top:
+        return None
+    return {"label": top[0][0], "confidence": top[0][1], "unknown": True}

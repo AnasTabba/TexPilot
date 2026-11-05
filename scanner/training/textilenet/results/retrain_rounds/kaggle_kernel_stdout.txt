@@ -1,0 +1,38 @@
+found: ['/kaggle/input/datasets/yaseenazhar/texpilot-retrain-rounds-input/repo/training/textilenet/retrain_rounds.py']
+pool rows {'train': 84172, 'val': 9373, 'test': 24303} exclusions {'no_feature:test': 264, 'no_feature:train': 908, 'no_feature:val': 80, 'not_archive': 16342, 'out_of_scope:canvas': 16, 'out_of_scope:plush': 258}
+device cuda
+deployed parity: {'val': {'n': 9373, 'macro_f1': 0.7585052074590277, 'top1': 0.8234289981862798}, 'test': {'n': 24303, 'macro_f1': 0.7665905153624056, 'top1': 0.8221618730197918}, 'stored': {'val_macro_f1_no_bias': 0.7585052074590277, 'test_macro_f1_no_bias': 0.7665905153624056}, 'parity_gap_test': 0.0}
+seed 0 none     noise 0.00: val F1 0.6248 test F1 0.6260 corr 0
+seed 0 random   noise 0.00: val F1 0.6910 test F1 0.6934 corr 10000
+seed 0 random   noise 0.05: val F1 0.6660 test F1 0.6718 corr 10000
+seed 0 random   noise 0.10: val F1 0.6321 test F1 0.6445 corr 10000
+seed 0 abstain  noise 0.00: val F1 0.7424 test F1 0.7430 corr 10000
+seed 0 abstain  noise 0.05: val F1 0.7292 test F1 0.7351 corr 10000
+seed 0 abstain  noise 0.10: val F1 0.7114 test F1 0.7073 corr 10000
+seed 0 mixed    noise 0.00: val F1 0.7065 test F1 0.7093 corr 10000
+seed 0 mixed    noise 0.05: val F1 0.6982 test F1 0.6858 corr 10000
+seed 0 mixed    noise 0.10: val F1 0.6865 test F1 0.6883 corr 10000
+seed 0 ceiling test F1 0.7544
+seed 1 none     noise 0.00: val F1 0.6223 test F1 0.6255 corr 0
+seed 1 random   noise 0.00: val F1 0.6925 test F1 0.6846 corr 10000
+seed 1 random   noise 0.05: val F1 0.6579 test F1 0.6528 corr 10000
+seed 1 random   noise 0.10: val F1 0.6349 test F1 0.6316 corr 10000
+seed 1 abstain  noise 0.00: val F1 0.7250 test F1 0.7400 corr 10000
+seed 1 abstain  noise 0.05: val F1 0.7058 test F1 0.7193 corr 10000
+seed 1 abstain  noise 0.10: val F1 0.7131 test F1 0.7195 corr 10000
+seed 1 mixed    noise 0.00: val F1 0.7189 test F1 0.7226 corr 10000
+seed 1 mixed    noise 0.05: val F1 0.6896 test F1 0.6955 corr 10000
+seed 1 mixed    noise 0.10: val F1 0.6712 test F1 0.6806 corr 10000
+seed 1 ceiling test F1 0.7559
+seed 2 none     noise 0.00: val F1 0.6074 test F1 0.6155 corr 0
+seed 2 random   noise 0.00: val F1 0.6773 test F1 0.6870 corr 10000
+seed 2 random   noise 0.05: val F1 0.6496 test F1 0.6623 corr 10000
+seed 2 random   noise 0.10: val F1 0.6271 test F1 0.6288 corr 10000
+seed 2 abstain  noise 0.00: val F1 0.7393 test F1 0.7354 corr 10000
+seed 2 abstain  noise 0.05: val F1 0.7187 test F1 0.7107 corr 10000
+seed 2 abstain  noise 0.10: val F1 0.7101 test F1 0.7114 corr 10000
+seed 2 mixed    noise 0.00: val F1 0.7098 test F1 0.7021 corr 10000
+seed 2 mixed    noise 0.05: val F1 0.7043 test F1 0.7101 corr 10000
+seed 2 mixed    noise 0.10: val F1 0.6761 test F1 0.6938 corr 10000
+seed 2 ceiling test F1 0.7608
+wrote /kaggle/working/retrain_rounds

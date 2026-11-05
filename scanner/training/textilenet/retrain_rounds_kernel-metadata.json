@@ -1,0 +1,17 @@
+{
+  "id": "yaseenazhar/retrain-rounds-v1",
+  "title": "retrain-rounds-v1",
+  "code_file": "retrain_rounds_kaggle.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "yaseenazhar/texpilot-retrain-rounds-input"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

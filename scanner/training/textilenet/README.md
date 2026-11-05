@@ -96,6 +96,13 @@ python -m training.textilenet.train --partition fabric --model vit_tiny \
 Presets: `convnextv2_base`, `convnextv2_base_384`, `dinov2_vitb14`, `eva02_base`,
 `vit_tiny`; any other timm model name also works.
 
+For external training data, `external_fabric.py` inventories DeepFashion2 for
+fabric-label review and merges approved training rows into a separate split CSV.
+It preserves the frozen benchmark and checks exact content overlap. DeepFashion2
+clothing categories are not fabric labels. See
+[`docs/external-fabric-data-2026-10-31.md`](../../docs/external-fabric-data-2026-10-31.md)
+for access requirements, commands, and the controlled pilot.
+
 The default model-selection metric remains validation top-1 for historical comparisons.
 Use an explicit tag with `--selection-metric macro_f1` so macro-F1 experiments do not
 overwrite baseline runs. `--rank-by macro_f1` ranks completed runs on validation

@@ -60,3 +60,23 @@ def abstain_threshold(conf: np.ndarray, correct: np.ndarray, target: float) -> t
         return NEVER, 0.0
     k = int(good.max())
     return float(c_sorted[k]), (k + 1) / len(c_sorted)
+
+
+def confidences(logits: np.ndarray, t: float) -> tuple[dict[str, np.ndarray], np.ndarray]:
+    """Three per-sample confidence scores from the temperature-scaled softmax (higher = surer),
+    and the probabilities they come from. Compared on validation by AURC, not on test."""
+    p = softmax(logits, t)
+    top2 = np.sort(p, axis=1)[:, -2:]
+    return {
+        "maxprob": p.max(1),
+        "margin": top2[:, 1] - top2[:, 0],
+        "neg_entropy": (p * np.log(p + 1e-12)).sum(1),
+    }, p
+
+
+def aurc(conf: np.ndarray, correct: np.ndarray) -> float:
+    """Area under the risk-coverage curve: mean error rate among the kept answers, over every
+    coverage 1/n..1, answering most-confident first. Lower is better."""
+    order = np.argsort(-conf, kind="stable")
+    wrong = 1.0 - correct[order].astype(float)
+    return float((np.cumsum(wrong) / np.arange(1, wrong.size + 1)).mean())

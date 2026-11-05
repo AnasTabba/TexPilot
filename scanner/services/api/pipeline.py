@@ -19,7 +19,7 @@ from services.api.schemas import (
 )
 from services.consistency.engine import evaluate, yarn_advice
 from services.ocr.parser import parse_composition
-from services.vision.predictor import HeadOutput, Predictor
+from services.vision.predictor import HeadOutput, Predictor, structure_answer
 
 log = logging.getLogger(__name__)
 _REASONS = {
@@ -103,6 +103,7 @@ def run_scan(
         scan_id=str(uuid.uuid4()),
         verdict=Outcome(verdict.outcome),
         structure=_head(vision.structure),
+        structure_answer=structure_answer(vision),
         treatment=_head(vision.treatment),
         fibre_family=_head(vision.fibre_family),
         garment=None

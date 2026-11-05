@@ -1,0 +1,548 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{parskip}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+
+\title{TexPilot Fabric Verification Scanner\\
+\large Design, Implementation, and Rationale}
+\author{Anas Tabba --- Final Year Project, CSE 493/494, IBA SMCS}
+\date{October 2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% ------------------------------------------------------------------
+\section{One-paragraph summary}
+
+TexPilot is a \emph{fabric verification} scanner, not a fabric identifier. A phone
+photographs a whole garment and its care label; the system checks that what the
+fabric \emph{looks like} is consistent with what the label \emph{claims}, and
+flags mismatches. It never claims to know exact fibre composition from a photo,
+because fibre is a molecular property (cotton, modal, viscose and lyocell are all
+cellulose and visually identical). Exact composition is read from the label by OCR;
+the camera only judges plausibility. The product is the cross-check.
+
+The system is the MVP (milestone M1) of a two-part project; the garment
+production planning platform (MILP/CP-SAT) is designed but deliberately deferred.
+
+% ------------------------------------------------------------------
+\section{What it does \emph{not} do (load-bearing)}
+
+\begin{itemize}[leftmargin=*]
+  \item It does \textbf{not} predict fibre composition from an image. Real fibre ID
+        needs burn tests, microscopy, or FTIR/NIR. TextileNet's 33-class fibre ViT
+        caps at 53.3\% top-1; beating chance by correlation (``chunky knit $\to$ wool'')
+        collapses on silk vs.\ polyester satin, where both are satin.
+  \item It does \textbf{not} always answer. \texttt{INSUFFICIENT\_EVIDENCE} is a
+        first-class verdict, not an error path.
+  \item It does \textbf{not} use hosted AI APIs. Everything runs locally
+        (Apple M3 / 16 GB) so it works offline on a factory floor and every model
+        is explainable in the viva.
+\end{itemize}
+
+% ------------------------------------------------------------------
+\section{Three non-negotiables}
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Verification, not prediction of composition.} Predict only what is
+        visible: fabric structure (27 classes), surface treatment (4), and coarse
+        fibre family (cellulosic / protein / synthetic). Exact composition comes
+        from OCR of the label at $\sim$100\% accuracy.
+  \item \textbf{Abstention is a real verdict.} A classifier forced to always answer
+        produces confident wrong answers, and those get it switched off at a QC desk.
+        Precision on flags $>$ accuracy.
+  \item \textbf{Local models only.} Server-side inference for M1; on-device
+        (TFLite/Core ML) is an M4 target.
+\end{enumerate}
+
+% ------------------------------------------------------------------
+\section{Architecture}
+
+\subsection{Two shots, one verdict}
+
+\[
+\text{camera} \;\xrightarrow[\text{shot 1}]{\text{whole garment}}\; \text{vision}
+\qquad
+\text{camera} \;\xrightarrow[\text{shot 2}]{\text{care label}}\; \text{OCR}
+\]
+\[
+\text{vision} \;\&\; \text{OCR} \;\longrightarrow\; \text{consistency engine}
+\;\longrightarrow\; \{\text{PASS},\;\text{FLAG},\;\text{INSUFFICIENT\_EVIDENCE}\}
+\]
+
+\subsection{Pipeline (vision side)}
+
+\[
+\text{Detector} \;\to\; \text{Segmenter (SAM 2.1)} \;\to\; \text{Cropper}
+\;\to\; \text{FabricHeads} \;\to\; \text{VisionOutput}
+\]
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{GarmentDetector}: names the garment type (shirt, pants, \dots) ---
+        separate from fabric. 14 apparel classes; accessories dropped.
+  \item \textbf{Segmenter}: SAM 2.1-small, box-prompted; keep the best of 3 masks by
+        predicted IoU, largest connected component, holes filled. If mask covers
+        $<20\%$ of the box, segmentation failed $\to$ box crop without a mask.
+  \item \textbf{Cropper}: (1) masked garment crop (mask bbox, outside-mask pixels set
+        to white, padded to square --- mimics TextileNet's white-background product
+        photos); (2) optional texture patches (up to 3 non-overlapping squares,
+        side $=25\%$ of garment's short side, inside the mask eroded by $5\%$).
+        Heads average softmax over views. \texttt{crop} vs \texttt{crop+patches} is
+        decided by the bake-off.
+  \item \textbf{FabricHeads}: multi-task heads on one backbone; calibrated; abstain
+        below $\tau$.
+\end{itemize}
+
+\subsection{Pipeline (OCR side)}
+
+\[
+\text{OcrEngine} \;\to\; \text{CompositionExtractor} \;\to\; \text{parser}
+\;\to\; \text{normaliser} \;\to\; \text{stated composition}
+\]
+
+The extractor sorts lines into reading order, splits text into sections at keywords
+(main: \texttt{shell/outer/main/body/self/fabric}; other-part:
+\texttt{lining/trim/rib/filling/padding/pocketing/contrast}), parses each section
+with \texttt{parse\_composition}, chooses the main-fabric section, and retries OCR
+at $90^\circ/180^\circ/270^\circ$ if nothing parses. If sections disagree, it
+returns \emph{nothing} (unreadable) --- never a guess.
+
+% ------------------------------------------------------------------
+\section{Components in detail}
+
+\subsection{Vision service}
+
+One shared backbone, three heads (multi-task learning).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{llll}
+\toprule
+Head & Task & Classes & Label source \\
+\midrule
+A & Fabric structure & 27 & TextileNet fabric partition, direct \\
+B & Surface treatment & 4 (printed / piece-dyed / yarn-dyed / undyed) & weak labels + hand-labelled subset \\
+C & Fibre family & 3 trained (4 in API) & TextileNet fibre, collapsed \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Head C --- the fibre-family collapse.} TextileNet's 33 fibre classes map to
+families: cellulosic (cotton, linen, viscose, modal, lyocell, \dots), protein
+(wool, silk, cashmere, \dots, plus fur/leather/suede as hides), synthetic
+(polyester, nylon, acrylic, \dots), blend (multi-family, from FabricsComposition's
+\texttt{\_pct} columns). This turns an unwinnable 33-class problem into a
+winnable one, because families \emph{are} visually separable. Exact composition
+comes from the label.
+
+\textbf{Head B --- weak labels.} Several TextileNet fabric classes encode treatment
+by definition: yarn-dyed by definition (gingham, chambray, denim); piece-dyed by
+default (lace, tulle, organza, chiffon, satin); the rest hand-labelled. Head B
+ships only when $\ge 100$ hand-labelled images per class exist; until then it
+returns \texttt{None} and the treatment check stays off (honest, not a gap). If
+4-class macro-F1 on val $<0.5$, fall back to 2-class printed/not-printed.
+
+\textbf{Backbone.} M1 baseline: DINOv2 ViT-B/14 frozen features + linear probe per
+head (strong on texture, trains in minutes on M3). End-to-end fine-tune is the M2
+upgrade if evaluation justifies it. Multi-task rationale: the three tasks share
+texture representation; treatment correlates with structure (gingham $\Rightarrow$
+yarn-dyed), so joint training regularises all three.
+
+\textbf{Current default (v8):} Head A is a fine-tuned SigLIP-SO400M (ViT-SO400M/14
+@ 384, WebLI) via LoRA, exported as a \emph{probe head} (frozen encoder + linear
+head on pooled features). Linear heads still use the frozen DINOv2 backbone. Views
+$=$ \texttt{whole} (classify the whole photo, not the cut-out: scanner-v4's SigLIP
+lost $\sim$11 pts top-1 on the white-filled cut-out). Per-class logit bias tuned
+on val for macro F1.
+
+\subsection{Custom (taught) heads}
+
+The factory can teach new heads on Head A's encoder. Heads taught on an earlier
+Head A keep answering after an upgrade: that encoder runs as a second pass
+(\texttt{TEXPILOT\_CUSTOM\_ENCODER}), timed as \texttt{taught\_model}. This is
+transfer learning with encoder-version compatibility.
+
+\subsection{OCR service}
+
+\texttt{detect $\to$ recognise $\to$ parse $\to$ normalise}.
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Recogniser}: Apple Vision \texttt{VNRecognizeTextRequest} (accurate
+        mode, language correction \emph{off} --- it rewrites fibre codes like
+        \texttt{EA}, \texttt{PES} into words); PaddleOCR PP-OCRv5 (portable,
+        multilingual, runs in its own venv); Florence-2 \texttt{<OCR\_WITH\_REGION>}.
+  \item \textbf{Parser}: grammar over composition strings --- handles
+        \texttt{60\% COTTON 40\% POLYESTER}, \texttt{COTTON 60\%}, multilingual
+        labels, OCR noise. Percentages must sum to $100 \pm 2$; on failure return
+        \texttt{unreadable}, never a guess. Unknown fibre $\to$ \texttt{None}
+        (not skip), because skipping leaves a sum that looks valid.
+  \item \textbf{Normaliser}: fibre codebook per ISO 2076 / EU Reg.\ 1007/2011:
+        \texttt{PA}/\texttt{NY} $\to$ polyamide (nylon), \texttt{PAN} $\to$ acrylic,
+        \texttt{EA}/\texttt{EL}/Lycra $\to$ elastane, \texttt{PES}/\texttt{PL}
+        $\to$ polyester. Plus $\sim$30 non-English fibre names (coton, baumwolle,
+        algod\'on, \dots). Unknown words still make the parse fail.
+\end{itemize}
+
+\textbf{Priority:} typed \texttt{label\_text} overrides OCR (human correction).
+
+\subsection{Consistency engine}
+
+A hand-built plausibility KB, one row per fabric structure, mapping
+$(\text{structure}, \text{treatment}) \to$ plausible fibre families.
+
+\begin{verbatim}
+denim  -> cellulosic-dominant, yarn-dyed
+fleece -> synthetic
+tweed  -> protein
+velvet -> protein | synthetic | cellulosic
+lace   -> synthetic | cellulosic
+\end{verbatim}
+
+\textbf{Flag rule:} raise a flag only when $\text{visual\_confidence} > \tau_{\text{flag}}$
+\textbf{AND} the stated composition falls outside the plausible set. $\tau_{\text{flag}}$
+is tuned for precision, not accuracy.
+
+\textbf{Flags:}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{COMPOSITION\_IMPLAUSIBLE} (high): label states X but fabric reads as Y.
+  \item \texttt{TREATMENT\_UNEXPECTED} (medium): structure normally expects treatment T, reads as U.
+  \item \texttt{FAMILY\_MISMATCH} (medium): label states cellulosic but fabric reads synthetic.
+        Raised only when Head C confident $\ge$ \texttt{family\_min\_confidence} (KB key).
+  \item Info flags (explain abstention, never mismatches): \texttt{NO\_GARMENT\_DETECTED},
+        \texttt{NO\_LABEL\_TEXT}, \texttt{LABEL\_UNREADABLE}, \texttt{COMPONENT\_FAILED},
+        \texttt{NOT\_SAVED}.
+\end{itemize}
+
+The KB being hand-built is a design choice, not a shortcut: auditable, versioned,
+self-explaining (``flagged: tweed is a wool structure; label states 100\%
+polyester''), mirroring SRS \S 27 explainability.
+
+\subsection{Calibration and abstention}
+
+\begin{itemize}[leftmargin=*]
+  \item Temperature scaling per head, fitted on val by NLL. Report ECE (15 bins) and
+        reliability diagram per head.
+  \item Abstain threshold per head $\tau_h$: the lowest confidence at which val
+        accuracy among predictions with confidence $\ge \tau_h$ reaches the head's
+        target (A: 0.90, C: 0.90, B: 0.85). Below $\tau_h$ the head returns
+        \texttt{None}. Coverage (share of val not abstained) reported with every
+        accuracy.
+  \item Because heads are calibrated, a fixed KB threshold is meaningful across
+        models; the engine stays model-agnostic.
+\end{itemize}
+
+\subsection{Persistence}
+
+Every scan persists: both images, all head outputs with confidences, parsed
+composition, verdict, flags, capture-quality metrics, \texttt{model\_version},
+\texttt{kb\_version}, timestamp, operator identity. Serves audit trail (SRS \S 42),
+retraining corpus (self-replenishing phone-domain data by M4), and the goods-in
+receipt record. Stored in \texttt{data/scans/} (\texttt{scans.sqlite3} + photos);
+\texttt{TEXPILOT\_SCAN\_STORE} sets the folder, or \texttt{none} turns it off.
+Stub mode keeps nothing. A lost record must not cost the verdict (\texttt{NOT\_SAVED}
+info flag instead).
+
+% ------------------------------------------------------------------
+\section{API contract}
+
+\texttt{POST /api/v1/scan} (multipart): \texttt{surface\_image} (required),
+\texttt{label\_image} (optional), \texttt{label\_text} (optional, overrides OCR).
+Returns \texttt{ScanResult}.
+
+Additions (all additive/nullable): \texttt{garment} (label, confidence, normalised
+box), \texttt{stated\_composition.section}, \texttt{info} severity. A scan can
+carry two flags with the same code (e.g.\ \texttt{COMPONENT\_FAILED} from both
+vision and OCR) --- key flag rows by index, not by code.
+
+\texttt{GET /api/v1/model} reports \texttt{ready/mode/model\_version} so browser
+clients can tell a loaded model from a stub.
+
+Errors: startup (scanner mode loads every model; any failure stops the server, loud).
+Per scan: a component raising is logged, its output is \texttt{None}, a
+\texttt{COMPONENT\_FAILED} flag is added; verdict follows from what remains
+(usually \texttt{INSUFFICIENT\_EVIDENCE}). No 500s for model failures, never a
+guess. Latency target: p50 $\le 3$ s per scan on M3.
+
+% ------------------------------------------------------------------
+\section{Model bundle}
+
+Each trained model ships as \texttt{models/scanner-vN/} (gitignored):
+\begin{itemize}[leftmargin=*]
+  \item \texttt{bundle.json}: version, backbone ids, per-head class lists,
+        temperatures, $\tau_h$, views setting, split files' SHA-1s, val/test metrics.
+  \item \texttt{heads.safetensors}
+  \item \texttt{MODEL\_CARD.md}: training data, metrics, known limitations.
+\end{itemize}
+
+\texttt{ScanResult.model\_version} $=$ \texttt{scanner-vN+det=<backend>+ocr=<engine>},
+so every stored scan traces to the exact models. Bundles are immutable:
+\texttt{install\_head\_a.py} prints a new bundle beside the linear Head A without
+changing old ones.
+
+% ------------------------------------------------------------------
+\section{Training data and the honest numbers}
+
+\subsection{Sources}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+Source & Use & Licence \\
+\midrule
+TextileNet fabric (27 cls) & Head A training & MIT (code) / CC BY (data) \\
+TextileNet fibre (33 cls) & Head C training, after family collapse & as above \\
+FabricsCompositionDataset & codebook, Head B weak labels, real fabric attrs & CC BY / CC BY-NC (verify) \\
+Self-collected phone photos & evaluation only & own \\
+MIT fabric-from-video & not used; cited in limitations & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{TextileNet link rot (changes the training plan)}
+
+\texttt{prepare\_data.py} re-scrapes from 2023 URLs; $\sim$73\% point at
+\texttt{contestimg.wish.com} (gutted 2024). Measured 2026-09-20: $\sim$37--45\%
+of fabric URLs and $\sim$65\% of fibre URLs still resolve (mostly HTTP 500). UCL
+OneDrive mirrors dead (403). Google Drive seed zips are alive. $\Rightarrow$ build
+the training set on the seed zips (\texttt{fabric.tar.gz} 12.8 GB,
+\texttt{fibre.tar.gz} 14 GB, already split train/test, disjoint from manifests);
+treat scraped images as a bonus. Re-measure: \texttt{make check-data} (exits
+non-zero below 60\% recovery).
+
+TextileNet's official split \emph{leaks}: 2,388 fabric + 1,988 fibre training images
+are byte-identical to test images. \texttt{prepare\_data.py index} drops those
+copies from train and keeps test as shipped, so our comparison is the stricter one.
+
+\subsection{Splits}
+
+\begin{itemize}[leftmargin=*]
+  \item TextileNet: standard class-stratified split.
+  \item FabricsCompositionDataset: \textbf{grouped splits by fabric \texttt{id}},
+        never random over the 12,724 images. Only 44 distinct fabrics; a random
+        image-level split puts the same physical swatch in train and test and makes
+        every number fiction. Target $\sim$30/7/7 fabrics. \texttt{Sample.group\_id}
+        is required (makes a random image-level split impossible to write by accident).
+\end{itemize}
+
+\subsection{Results so far}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+\toprule
+Model & Fabric top-1 / top-5 & Published best \\
+\midrule
+Frozen DINOv2 ViT-B/14 + linear probe (3 seeds) & \textbf{72.0\% / 94.5\%} & ViT-Tiny: 67.3\% / 92.1\% \\
+v8 bundle (SigLIP Head A) & 74.4\% / 95.7\% (test) & --- \\
+Fibre family (3-class, v8) & 74.5\% (test) & none public \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Macro-F1 $\approx 0.54$: rarest classes (canvas, twill) are weak. Fibre family
+macro-F1 $\approx 0.73$. Calibration: ECE before/after temperature scaling
+$\sim$0.086 $\to$ 0.012 (structure), 0.048 $\to$ 0.009 (family).
+
+\subsection{Phone-domain evaluation adapter}
+
+Team access to physical garments is unresolved. The self-collected set is a
+\emph{swappable dataset adapter behind one interface} (\texttt{FabricDataset},
+\texttt{group\_id} $=$ garment id, domain \texttt{phone}), consumed by the same
+eval harness as catalog data. Two outcomes: (a) it materialises $\to$ catalog$\to$phone
+accuracy drop is the headline result; (b) it does not $\to$ catalog numbers
+reported with an explicit, prominent limitation. Nothing else branches on it.
+Production scans self-replenish a phone-domain corpus as a side effect (M4).
+
+Domain-gap strategy: (1) augmentation simulating phone capture (glare, motion blur,
+JPEG artifacts, white-balance drift, perspective warp, shadow); (2) capture gating
+(remove bad inputs); (3) phone-domain evaluation (measure what remains).
+
+% ------------------------------------------------------------------
+\section{Evaluation protocol}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+Claim & Metric & Baseline \\
+\midrule
+Fabric structure & top-1 / top-5, TextileNet fabric & ViT 67.3\% / 92.1\% \\
+Fibre family & top-1, 4-class (3 trained) & none public --- establish \\
+Surface treatment & macro-F1, 4-class & none public --- establish \\
+Domain gap & accuracy drop catalog $\to$ phone & headline result \\
+OCR & CER + composition exact-match & --- \\
+End-to-end & flag precision / recall at stated abstention rate & --- \\
+Calibration & ECE, reliability diagram per head & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Flag precision is reported \emph{separately} from classification accuracy. Ground-truth
+mislabelled samples are constructed deliberately (pair a garment with a knowingly
+incorrect label) --- the only way to measure flag precision, and cheap.
+
+% ------------------------------------------------------------------
+\section{Human-in-the-loop correction}
+
+\subsection{Motivation}
+
+A classifier that always answers is switched off at a QC desk the first time it is
+confidently wrong. The scanner therefore has an \texttt{Unsure} outcome: below the
+per-head threshold the head returns no class, and an operator decides. Corrections
+are captured, reviewed, and used to retrain. Two measurements motivate the design.
+On the 1{,}151-photo human survey, archive labels are noisy by class (label-right rate
+0\% for serge, 24\% for chenille, 42\% for taffeta, organza and corduroy, 92\% for
+faux\_leather), so the archive cannot be trusted blindly as ground truth. And errors
+concentrate in close pairs (tulle$\to$lace, knit$\to$lawn/chiffon, fleece$\to$flannel).
+
+\subsection{Method}
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Confidence and abstention.} Temperature scaling per head, fitted on
+        validation by NLL. Abstention threshold $\tau_h$ chosen on validation only, at the
+        lowest confidence where validation accuracy of kept predictions reaches the target.
+        Test is scored once after the threshold is fixed. Result: risk--coverage curve.
+  \item \textbf{Correction capture and review queue.} An \texttt{Unsure} photo is shown in
+        the Yarnflow UI with candidate classes. The operator picks a class or ``none fits''.
+        The correction stores the photo, model version, predicted class and confidence,
+        corrected class, operator and time. Corrections wait in a review queue; a second
+        person approves before a row can enter training.
+  \item \textbf{Simulated-correction retraining.} Real operators are not yet available in
+        volume, so corrections are simulated on Kaggle GPUs from training-side abstained
+        photos only. Each round adds corrected rows, retrains from the same initialisation,
+        selects on validation macro F1, and reports test once per round. Baselines: no
+        correction, and random additions of equal size.
+\end{enumerate}
+
+\subsection{Results}
+
+\textbf{PENDING.} Risk--coverage (macro F1 first, then accuracy, per coverage),
+reliability before and after temperature scaling, learning curve over correction
+rounds against the baselines, and per-class F1 before and after the final round.
+Figures: \texttt{docs/figures/}. Numbers are filled from saved result files only;
+any missing result is marked MISSING.
+
+\subsection{Threats to validity}
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Simulated, not real, operators.} Simulated corrections come from ground
+        truth or an assumed error model. Two human judges disagreed on the replacement
+        class for the same photo most of the time (36\% agreement where both said ``no'').
+  \item \textbf{Optimistic verified subset.} The 641-photo conservative subset keeps only
+        photos the judges confirmed or agreed on; disputed photos are excluded. Counting
+        them all as wrong gives a 0.603 floor.
+  \item \textbf{Small, biased test.} Some classes have very few verified photos (twill 3,
+        chenille 12, crepe 16); serge has none. Macro F1 moves with single photos.
+  \item \textbf{No phone-domain result yet.} The phone test set has not been collected.
+        Calibration and $\tau_h$ may not transfer to phone photos.
+  \item \textbf{Calibration drift.} Each retrained head has new logits; temperature and
+        $\tau_h$ must be refit per round.
+  \item \textbf{Single factory, single team.} Correction pools come from one team and one
+        archive. Generalisation to other operators or factories is untested.
+\end{itemize}
+
+\section{Why this and not that (design decisions)}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{4.2cm}p{4.2cm}p{5.4cm}}
+\toprule
+Choice & Alternative rejected & Rationale \\
+\midrule
+Verification (not composition prediction) & Predict fibre from photo & Fibre is molecular; ceiling 53.3\%; shortcut collapses on silk vs polyester satin \\
+Fibre family (4$\to$3 classes) & 33 fibre classes & Families are visually separable even where members are not \\
+Abstention as verdict & Always answer & Confident wrong answers get the scanner switched off at QC \\
+Server-side inference (M1) & On-device & 6 weeks too short for conversion toolchains; SRS already mandates FastAPI \\
+Whole-garment photo & 10--20 cm fabric close-up & TextileNet is shopping-site whole-garment photos; a tight crop matches training data better \\
+Local models only & Hosted AI APIs & Offline on factory floor, no per-scan cost, explainable in viva \\
+Grounding DINO / OWLv2 / RT-DETR / Florence-2 & Single detector & Bake-off on phone photos decides; comparison chapter for the report \\
+Apple Vision / PaddleOCR / Florence-2 & Single OCR & Same: phone photos decide defaults \\
+SAM 2.1 (Apache-2.0) & --- & Promptable segmentation, box-prompted, licensed for serving \\
+RT-DETR over YOLO & Ultralytics YOLO & Apache-2.0 vs AGPL-3.0 (licensing) \\
+Hand-built plausibility KB & Learned consistency & Auditable, versioned, self-explaining; mirrors SRS \S 27 \\
+Grouped splits by fabric id & Random image split & 44 fabrics only; random split leaks the same swatch \\
+Seed zips over scraping & Re-scrape TextileNet & 73\% of scrape targets dead (\texttt{contestimg.wish.com}) \\
+Temperature scaling + $\tau_h$ & Raw softmax threshold & Calibrated confidences make KB thresholds meaningful across models \\
+Immutable bundles (v1..v8) & Overwrite in place & Reproducibility: every scan traces to exact models \\
+\texttt{None} on unknown fibre & Skip unknown fibre & Skipping leaves a sum that looks valid (confident wrong composition) \\
+Asymmetric KB (jersey/knit/twill list all families) & Symmetric KB & They're constructions any fibre can take; pretending otherwise generates false flags \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ------------------------------------------------------------------
+\section{Deployment}
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Default:} \texttt{make api} (stub, :8000) / \texttt{make api-scanner} (real
+        models, M3, $\sim$2 GB, $\sim$1 min load). Phones reach \texttt{http://<mac-ip>:8000}.
+  \item \textbf{Hosted:} Modal scale-to-zero CPU container (\texttt{deployment/modal\_scanner.py})
+        with scanner-v8 + custom heads, OCR $=$ paddle, device $=$ cpu; authenticated via a
+        Cloudflare Worker (\texttt{TEXPILOT\_API\_TOKEN}/\texttt{TEXPILOT\_API\_URL}); tunnel
+        script (\texttt{scanner-tunnel.sh}) for the Mac.
+  \item \textbf{Yarnflow web} (\texttt{yarn-erp/}): React + Vite, Cloudflare Pages, D1,
+        Worker proxy; scanner client typed from \texttt{schemas.py}.
+  \item \textbf{iOS} (\texttt{ios/}): SwiftUI app, \texttt{com.texpilot.yarnflow}, stores
+        server/model URLs in UserDefaults, \texttt{--review} debug launch.
+  \item \textbf{TexPilot card}: printable A4 SVG (\texttt{scripts/make\_card.py}) --- lay on
+        fabric and photograph both; gives a scale reference for the yarn-count spec
+        endpoint (\texttt{/api/v1/spec}).
+\end{itemize}
+
+% ------------------------------------------------------------------
+\section{Status: where it started $\to$ where it is now}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+Phase & State \\
+\midrule
+Start (Sep 2026) & \texttt{StubPredictor} $\to$ every scan \texttt{INSUFFICIENT\_EVIDENCE}; honest base \\
+Week 1 & Interfaces; A1/A2 + SAM 2.1 + cropper; Apple/Paddle OCR; extractor + normaliser; Heads A \& C + calibration; \texttt{ScannerPredictor}; API \\
+Week 2 & \texttt{PhoneDataset} + eval harness; bake-off round 1; KB thresholds; \texttt{FAMILY\_MISMATCH}; Head B labelling tool \\
+Week 3 & Florence-2 backend (detector + OCR, shared model); bake-off round 2 \\
+Weeks 3--4 & RT-DETRv2 fine-tune on rented GPU + Fashionpedia \\
+Week 5 & Fine-tuned Head A (SigLIP) swapped in; defaults chosen; \texttt{scanner-v1} frozen; results written up \\
+Now (Oct 2026) & v8 default (SigLIP-SO400M LoRA); custom/taught heads; Yarnflow web + iOS; Modal hosting; PIN auth + shared D1; 100+ tests, CI green \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ------------------------------------------------------------------
+\section{Open items}
+
+\begin{itemize}[leftmargin=*]
+  \item Phone test set collection (decides bake-off defaults + headline catalog$\to$phone result).
+  \item RT-DETR backend B + fine-tuned Head A on GPU (ready to run).
+  \item Head B needs $\ge$100 hand labels/class; otherwise treatment check stays off.
+  \item FabricsComposition licence (CC BY vs BY-NC) verification before M5 paper.
+  \item Repo is public --- flagged as plagiarism/privacy risk.
+  \item Planning platform (M2--M4) not started (deferred by decision \#8).
+  \item On-device inference (M4): TFLite/Core ML.
+\end{itemize}
+
+% ------------------------------------------------------------------
+\section{One-line summary (for an expert)}
+
+TexPilot is a selective-prediction fabric verification system: frozen DINOv2
+linear probes + a LoRA-fine-tuned SigLIP Head A, calibrated via temperature
+scaling, with open-vocabulary (GDINO/OWLv2) and trained (RT-DETR) garment
+detection, SAM 2.1 segmentation, multi-backend OCR (Apple/Paddle/Florence-2)
+feeding a section-aware composition extractor, cross-checked by a hand-auditable
+plausibility KB, served by FastAPI with stub/scanner modes, persisting every scan
+as a self-replenishing phone-domain corpus.
+
+\end{document}

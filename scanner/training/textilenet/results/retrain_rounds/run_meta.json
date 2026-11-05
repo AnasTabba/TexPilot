@@ -1,0 +1,96 @@
+{
+  "classes": [
+    "chambray",
+    "chenille",
+    "chiffon",
+    "corduroy",
+    "crepe",
+    "denim",
+    "faux_fur",
+    "faux_leather",
+    "flannel",
+    "fleece",
+    "gingham",
+    "knit",
+    "lace",
+    "lawn",
+    "neoprene",
+    "organza",
+    "satin",
+    "serge",
+    "taffeta",
+    "tulle",
+    "tweed",
+    "twill",
+    "velvet",
+    "vinyl"
+  ],
+  "config": {
+    "budget": 2000,
+    "init_frac": 0.02,
+    "init_min_per_class": 5,
+    "rounds": 5,
+    "target": 0.9,
+    "wrong_frac": 0.2
+  },
+  "deployed_head": "/kaggle/input/datasets/yaseenazhar/texpilot-retrain-rounds-input/deployed/head_a",
+  "encoder_note": "frozen v8 SigLIP features; the encoder was trained on the same train rows",
+  "exclusions": {
+    "no_feature:test": 264,
+    "no_feature:train": 908,
+    "no_feature:val": 80,
+    "not_archive": 16342,
+    "out_of_scope:canvas": 16,
+    "out_of_scope:plush": 258
+  },
+  "noise": [
+    0.0,
+    0.05,
+    0.1
+  ],
+  "parity": {
+    "parity_gap_test": 0.0,
+    "stored": {
+      "test_macro_f1_no_bias": 0.7665905153624056,
+      "val_macro_f1_no_bias": 0.7585052074590277
+    },
+    "test": {
+      "macro_f1": 0.7665905153624056,
+      "n": 24303,
+      "top1": 0.8221618730197918
+    },
+    "val": {
+      "macro_f1": 0.7585052074590277,
+      "n": 9373,
+      "top1": 0.8234289981862798
+    }
+  },
+  "pool_rows": {
+    "test": 24303,
+    "train": 84172,
+    "val": 9373
+  },
+  "recipe": {
+    "batch": 256,
+    "dropout": 0.2,
+    "epochs": 30,
+    "hidden": 1024,
+    "label_smoothing": 0.1,
+    "lr": 0.003,
+    "wd": 0.0001
+  },
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "split_csv": "/kaggle/input/datasets/yaseenazhar/texpilot-retrain-rounds-input/splits/prelim_fabric.csv",
+  "split_sha256": "31b14caa9aa2ac8847aee7c653e0a4bb59a318e57b3195c18911947ef6ba81ac",
+  "strategies": [
+    "none",
+    "random",
+    "abstain",
+    "mixed"
+  ],
+  "wrong_frac_note": "confident-wrong slot uses the true label (oracle spot-check)"
+}
