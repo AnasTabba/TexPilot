@@ -6,11 +6,14 @@ stops the server with a message. Misconfiguration must be loud.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
 from services.vision.predictor import Predictor, StubPredictor
+
+log = logging.getLogger(__name__)
 
 DEFAULT_BROWSER_ORIGINS = (
     "https://yarnflow-factory-glass.thryuil.chatgpt.site",
@@ -40,6 +43,7 @@ class Settings:
     ocr: str = "none"  # none | apple | paddle | florence2
     device: str = "auto"
     store: str = "none"  # none | a folder that keeps every scan (parent spec §9)
+    fault_model: Path | None = None  # TEXPILOT_FAULT_MODEL: fault model folder; None = not served
 
     @classmethod
     def from_env(cls, env=os.environ) -> Settings:
@@ -53,6 +57,7 @@ class Settings:
             device=env.get("TEXPILOT_DEVICE", "auto"),
             # Scans are kept with the real scanner; stub scans are not worth the disk.
             store=env.get("TEXPILOT_SCAN_STORE", "data/scans" if vision == "scanner" else "none"),
+            fault_model=Path(fault) if (fault := env.get("TEXPILOT_FAULT_MODEL")) else None,
         )
 
 
@@ -64,9 +69,25 @@ def build_predictor(s: Settings) -> tuple[Predictor, str]:
     from services.vision.runtime import pick_device
     from services.vision.scanner import build_scanner
 
-    predictor = build_scanner(s.bundle, s.detector, pick_device(s.device))
+    device = pick_device(s.device)
+    try:
+        predictor = build_scanner(s.bundle, s.detector, device, fault_dir=s.fault_model)
+    except Exception as e:  # noqa: BLE001 -- the fault stage is optional; the scanner must start
+        if s.fault_model is None:
+            raise
+        log.warning(
+            "fault model not loaded from %s, serving without it: %s: %s",
+            s.fault_model,
+            type(e).__name__,
+            e,
+        )
+        predictor = build_scanner(s.bundle, s.detector, device)
     taught = "".join(f"+{h.name}={h.digest}" for h in predictor.heads.custom)
-    return predictor, f"scanner-v{predictor.heads.version}+det={s.detector}+ocr={s.ocr}{taught}"
+    fault = getattr(predictor, "fault", None)
+    named_fault = "" if fault is None else f"+fault={fault.version}"
+    return predictor, (
+        f"scanner-v{predictor.heads.version}+det={s.detector}+ocr={s.ocr}{taught}{named_fault}"
+    )
 
 
 def build_ocr(s: Settings):

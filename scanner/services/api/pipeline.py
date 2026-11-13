@@ -9,6 +9,8 @@ import uuid
 from services.api.schemas import (
     CaptureQuality,
     CompositionSource,
+    FaultModel,
+    FaultRegionModel,
     FiberComponent,
     FlagModel,
     GarmentPrediction,
@@ -19,7 +21,7 @@ from services.api.schemas import (
 )
 from services.consistency.engine import evaluate, yarn_advice
 from services.ocr.parser import parse_composition
-from services.vision.predictor import HeadOutput, Predictor, structure_answer
+from services.vision.predictor import FaultOutput, HeadOutput, Predictor, structure_answer
 
 log = logging.getLogger(__name__)
 _REASONS = {
@@ -39,6 +41,34 @@ def _head(out: HeadOutput | None) -> HeadPrediction | None:
 
 def _info(code: str, message: str) -> FlagModel:
     return FlagModel(code=code, message=message, severity="info")
+
+
+def _fault(out: FaultOutput | None) -> FaultModel | None:
+    if out is None:
+        return None
+    return FaultModel(
+        score=out.score,
+        is_fault=out.is_fault,
+        threshold=out.threshold,
+        regions=[
+            FaultRegionModel(
+                box=r.box, score=r.score, type=r.type, type_confidence=r.type_confidence
+            )
+            for r in out.regions
+        ],
+        heatmap_png_b64=out.heatmap_png_b64,
+        model_version=out.model_version,
+        skipped_reason=out.skipped_reason,
+    )
+
+
+def _fault_flags(out: FaultOutput | None) -> list[FlagModel]:
+    if out is None or not out.is_fault:
+        return []
+    top = max(out.regions, key=lambda r: r.score, default=None)
+    kind = top.type if top is not None and top.type else "unknown type"
+    message = f"Possible fabric fault: {kind} (score {out.score:.2f})"
+    return [FlagModel(code="FAULT_DETECTED", message=message, severity="medium")]
 
 
 def _read_label(ocr, label_image: bytes, flags: list[FlagModel]):
@@ -118,7 +148,9 @@ def run_scan(
         flags=[
             FlagModel(code=f.code, message=f.message, severity=f.severity) for f in verdict.flags
         ]
-        + notes,
+        + notes
+        + _fault_flags(vision.fault),
+        fault=_fault(vision.fault),
         model_version=model_version,
         kb_version=str(verdict.kb_version),
     )

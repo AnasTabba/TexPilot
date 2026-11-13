@@ -1,0 +1,13 @@
+{
+  "id": "anastabba/texpilot-bench-a2",
+  "title": "texpilot-bench-a2",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": ["anastabba/texpilot-fault-code", "ipythonx/mvtec-ad", "hodinhtrieu/the-woven-fabric-defect-detection-wfdd", "nexuswho/aitex-fabric-image-database"],
+  "competition_sources": [],
+  "kernel_sources": []
+}

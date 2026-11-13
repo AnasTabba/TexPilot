@@ -1,0 +1,104 @@
+{
+  "observed_existing_baseline": [
+    ".github/workflows/ci.yml",
+    "scanner/deployment/modal_scanner.py",
+    "scanner/deployment/requirements-serving.txt",
+    "scanner/services/api/config.py",
+    "scanner/services/api/main.py",
+    "scanner/services/api/store.py",
+    "scanner/services/ocr/extract.py",
+    "scanner/services/vision/quality.py",
+    "scanner/services/vision/scanner.py",
+    "scanner/training/textilenet/train.py",
+    "yarnflow/ios/Yarnflow/Models.swift",
+    "yarnflow/ios/Yarnflow/Workflows.swift",
+    "yarnflow/server/auth.mjs",
+    "yarnflow/server/cloudflare.mjs",
+    "yarnflow/server/d1-bucket.mjs",
+    "yarnflow/server/quality.mjs",
+    "yarnflow/server/sqlite.mjs",
+    "yarnflow/server/worker.mjs",
+    "yarnflow/src/InspectArrival.tsx",
+    "yarnflow/src/Inspections.tsx",
+    "yarnflow/src/PurchaseOrders.tsx",
+    "yarnflow/src/Scanner.tsx",
+    "yarnflow/src/SpecScan.tsx"
+  ],
+  "planned_new_representative_paths": [
+    {
+      "path": "scanner/contracts/qc-v2.schema.json",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "scanner/services/api/qc_schemas.py",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "scanner/services/consistency/qc_policy.py",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "scanner/services/vision/qc_metrology.py",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "scanner/services/vision/qc_imageio.py",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "scanner/services/api/qc_pipeline.py",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "scanner/training/qc/manifest.py",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "scanner/training/qc/release_gate.py",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "yarnflow/server/qc-store.mjs",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "yarnflow/server/qc.mjs",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "yarnflow/server/qc-monitoring.mjs",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "yarnflow/src/IncomingFabricQC.tsx",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "yarnflow/ios/Yarnflow/QCTypes.swift",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "yarnflow/ios/Yarnflow.xcodeproj/project.pbxproj",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    },
+    {
+      "path": "yarnflow/drizzle/0033_incoming_fabric_qc.sql",
+      "exists_at_document_validation": false,
+      "status": "planned new, not claimed shipped"
+    }
+  ]
+}

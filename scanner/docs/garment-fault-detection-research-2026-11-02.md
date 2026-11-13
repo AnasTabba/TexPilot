@@ -120,7 +120,7 @@ resized version as a **private Kaggle dataset** once, then attach it to every la
 | Tianchi fabric (9,576) | tianchi.aliyun.com/dataset/79336 (Aliyun account) | or Roboflow mirror `universe.roboflow.com/fufu-gg4dy/smart-diagnosis-of-cloth-flaw` |
 | Industrial Textile Dataset (5,662) | Google Drive link in github.com/SimonThomine/IndustrialTextileDataset | open (MIT) — upload once as private Kaggle dataset |
 
-Access status 2 Nov 2026: university HF account `anastabba7` has Real-IAD + Real-IAD Variety; ADNet awaiting author review.
+Access status 2 Nov 2026: university HF account `anastabba7` has Real-IAD + Real-IAD Variety; ADNet access granted by the authors on 10 Nov 2026 (licence on the HF card: CC BY-NC 4.0; zips: Agrifood 33.98, Industry 31.21, Infrastructure 11.59, Electronics 10.08, Medical 4.3 GB).
 On Kaggle (account `anastabba`, attach as `kernel_sources`): `anastabba/texpilot-get-realiad` (Real-IAD 512 px, 30 categories,
 15 GB, zips) and `anastabba/texpilot-get-variety` (7 garment-related Variety categories, 8.2 GB, zips).
 Measured sizes: Real-IAD `realiad_256` 4.3 GB, `realiad_512` 15.2 GB, `realiad_1024` 57.8 GB; Real-IAD Variety raw 281.5 GB
@@ -128,6 +128,13 @@ Measured sizes: Real-IAD `realiad_256` 4.3 GB, `realiad_512` 15.2 GB, `realiad_1
 `ingot_buckle` 1.63, `tension_snap_release_clip` 0.8, `brooch_clasp_accessory` 0.79 GB); ADNet 91.2 GB in 5 zips
 (Industry 31.2 GB holds the textile sources). Real-IAD Variety licence: CC BY-NC-SA 4.0.
 Plan: Real-IAD 512 + Variety garment subset (~8 GB) + ADNet Industry → private Kaggle datasets.
+ADNet on Kaggle (12 Nov 2026): kernel output `anastabba/texpilot-get-adnet`, 28 textile/garment categories of `Industry.zip`,
+16,375 files, 9.5 GB, one stored zip per category, MVTec layout (file counts checked against the zip index):
+Fibrous_183, Matted_069, Mesh_114, Textile_Fabric, Textile_Vertical_Lines, Woven_001, Woven_068, Woven_104, Woven_125, Woven_127,
+button, carpet, cotton, dark_zipper, darkgray_leather, fabric, grey_cloth, grid_cloth, leather, long_button, pink_flower, rope,
+round_button_cap, short_button, square_button_cap, transparent_zipper, yellow_cloth, zipper. The other four ADNet zips
+(Agrifood, Electronics, Infrastructure, Medical) hold no textile or garment category. ADNet re-splits its sources
+(9:1 on normal images, capped per category), so results on it are not comparable with the source datasets' papers.
 
 Total reachable: ≈700k images, of which ≈136k textile/sewing (ZJU-Leaper, StitchingNet, Tianchi, ITD, WFDD, TILDA, AITEX).
 

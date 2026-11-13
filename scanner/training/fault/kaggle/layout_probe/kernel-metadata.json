@@ -1,0 +1,24 @@
+{
+  "id": "anastabba/texpilot-layout-probe",
+  "title": "texpilot-layout-probe",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "bnhphan/zju-dataset",
+    "hyungjung/stitchingnet-dataset",
+    "hodinhtrieu/the-woven-fabric-defect-detection-wfdd",
+    "nexuswho/aitex-fabric-image-database",
+    "ipythonx/mvtec-ad",
+    "belkhirnacim/textiledefectdetection"
+  ],
+  "kernel_sources": [
+    "anastabba/texpilot-get-variety",
+    "anastabba/texpilot-get-adnet"
+  ],
+  "competition_sources": [],
+  "model_sources": []
+}

@@ -96,7 +96,7 @@ Anti-goals (failure even if code "works")
   (official, CC BY-NC), TILDA **64×64 patches only** `angelolmg/tilda-400-64x64-patches` (good 23,170; hole 337;
   objects 837; oil spot 636; thread error 620), Real-IAD 512 px `anastabba/texpilot-get-realiad` (kernel output,
   15 GB), Real-IAD Variety garment subset `anastabba/texpilot-get-variety` (8.2 GB: flower_velvet_fabric,
-  long_zipper, 4 buckles/clips, brooch clasp). ADNet: access pending. ITD: Google Drive (MIT) — upload once.
+  long_zipper, 4 buckles/clips, brooch clasp). ADNet textile/garment subset `anastabba/texpilot-get-adnet` (kernel output, 12 Nov 2026: 28 Industry categories, 16,375 files, 9.5 GB, one zip per category). ITD: Google Drive (MIT) — upload once.
   Shop photos for `local_fabric`: Kaggle `texpilot-shop-scrape` (+ `feats_v8.npy` pooled features only).
 - Licences: almost all benchmark data is non-commercial — fine for the FYP; recorded per dataset.
 - Commits: user is sole author — no AI attribution lines.

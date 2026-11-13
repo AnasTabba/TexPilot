@@ -33,6 +33,25 @@ class Note:
 
 
 @dataclass(frozen=True)
+class FaultRegion:
+    box: tuple[float, float, float, float]  # normalised 0-1 (x0, y0, x1, y1) of the full photo
+    score: float
+    type: str | None = None  # defect type once the naming classifier is wired in
+    type_confidence: float | None = None
+
+
+@dataclass(frozen=True)
+class FaultOutput:
+    score: float
+    is_fault: bool
+    threshold: float
+    regions: tuple[FaultRegion, ...]
+    heatmap_png_b64: str | None  # JET overlay, <= 512 px long side
+    model_version: str
+    skipped_reason: str | None = None
+
+
+@dataclass(frozen=True)
 class VisionOutput:
     structure: HeadOutput | None
     treatment: HeadOutput | None
@@ -46,6 +65,8 @@ class VisionOutput:
     custom: dict[str, HeadOutput | None] = field(default_factory=dict)
     # model -> milliseconds it took on this scan (shown with the result as evidence of the work)
     timings_ms: dict[str, float] = field(default_factory=dict)
+    # Fabric fault check on the garment crop (services/vision/fault.py). None when not run.
+    fault: FaultOutput | None = None
 
 
 @runtime_checkable

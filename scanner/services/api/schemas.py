@@ -67,6 +67,25 @@ class CaptureQuality(BaseModel):
     framing: str | None = None
 
 
+class FaultRegionModel(BaseModel):
+    box: tuple[float, float, float, float]  # normalised 0-1 (x0, y0, x1, y1) of the full photo
+    score: float
+    type: str | None = None  # defect type once the naming classifier is wired in
+    type_confidence: float | None = None
+
+
+class FaultModel(BaseModel):
+    """Fabric fault check on the garment crop. skipped_reason set: the check did not run."""
+
+    score: float
+    is_fault: bool
+    threshold: float
+    regions: list[FaultRegionModel] = []
+    heatmap_png_b64: str | None = None  # JET overlay, <= 512 px long side
+    model_version: str
+    skipped_reason: str | None = None
+
+
 class ScanResult(BaseModel):
     scan_id: str
     verdict: Outcome
@@ -92,6 +111,8 @@ class ScanResult(BaseModel):
     model_version: str
     kb_version: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # Additive: the fabric fault check; null when the fault model is not served.
+    fault: FaultModel | None = None
 
 
 class SpecDensity(BaseModel):

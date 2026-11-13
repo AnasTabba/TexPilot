@@ -28,6 +28,7 @@ class ScannerPredictor:
         heads,
         min_det_score: float | None = None,
         whole_photo: bool = False,
+        fault=None,
     ):
         self.detector, self.segmenter, self.cropper, self.heads = (
             detector,
@@ -35,6 +36,7 @@ class ScannerPredictor:
             cropper,
             heads,
         )
+        self.fault = fault  # FaultDetector-like: detect(image, box) -> FaultOutput; optional
         # Classify the whole photo, not the garment cut-out: heads trained on whole catalog
         # images (e.g. scanner-v4's SigLIP2) lose ~11 pts top-1 on the white-filled cut-out.
         self.whole_photo = whole_photo
@@ -71,6 +73,12 @@ class ScannerPredictor:
                 views = self._try(notes, "cropper", lambda: self.cropper.views(image, mask))
                 views = views or [image]
         heads = self._try(notes, "fabric heads", lambda: self.heads.predict(views))
+        fault = None
+        if self.fault is not None:
+            t = time.perf_counter()
+            box = garment.box if garment else None
+            fault = self._try(notes, "fault detector", lambda: self.fault.detect(image, box))
+            timings["fault_model"] = round(1000 * (time.perf_counter() - t), 1)
         try:
             quality = capture_quality(image, garment.box if garment else None)
         except Exception:  # noqa: BLE001 -- a quality number must never cost the scan
@@ -79,7 +87,12 @@ class ScannerPredictor:
         out = heads or VisionOutput(None, None, None)
         timings |= out.timings_ms
         return replace(
-            out, garment=garment, notes=tuple(notes), quality=quality, timings_ms=timings
+            out,
+            garment=garment,
+            notes=tuple(notes),
+            quality=quality,
+            timings_ms=timings,
+            fault=fault,
         )
 
     @staticmethod
@@ -92,11 +105,18 @@ class ScannerPredictor:
             return None
 
 
-def build_scanner(bundle_dir: Path, detector_name: str, device, patches: bool = False):
+def build_scanner(
+    bundle_dir: Path,
+    detector_name: str,
+    device,
+    patches: bool = False,
+    fault_dir: Path | None = None,
+):
     import json
 
     from services.vision.crop import FabricCropper
     from services.vision.detectors import load_detector
+    from services.vision.fault import FaultDetector
     from services.vision.heads import LinearHeads
     from services.vision.segment import Sam2Segmenter
 
@@ -107,4 +127,5 @@ def build_scanner(bundle_dir: Path, detector_name: str, device, patches: bool = 
         FabricCropper(patches),
         LinearHeads(bundle_dir, device),
         whole_photo=whole,
+        fault=None if fault_dir is None else FaultDetector(Path(fault_dir), device),
     )
