@@ -9,13 +9,13 @@ implementation review until the QA rows say so.
 | Provider / model | Task / scope | Status and result | Limit |
 |---|---|---|---|
 | Local subagent `gpt-5.6-luna` | Read-only audit of scanner QC API and pipeline | Completed; no concrete fail-open, auth, tenant-isolation, or contract-risk finding in `scanner/services/api/qc.py` and `qc_pipeline.py` | No limit reported |
-| Local subagent `gpt-5.6-terra` | Read-only audit of Worker storage and migration | Started; result pending at handoff update | No limit reported |
+| Local subagent `gpt-5.6-terra` | Read-only audit of Worker storage and migration | Completed; found cross-tenant supplier-name disclosure at `qc-store.mjs:371`, unauthenticated/stale request state mutation in expiry/failure paths (`qc-store.mjs:192-207`), and no tested rollback/restore procedure after QC writes. Supplier join fixed and verified with `node --test tests/qc-store.test.mjs` (17/17). Other two findings remain open. | No limit reported |
 | OpenCode `opencode/deepseek-v4.1-flash-free` | Availability checked; no implementation task dispatched in this follow-up | Model appeared in `opencode models`; prior handoff records free usage limit reached on earlier tasks | Current quota ceiling not exposed |
 
 Lead change: `yarnflow/server/qc.mjs` and `yarnflow/tests/qc-faults.test.mjs` unify missing and
 foreign consent identifiers to 404. Focused proof: 29/29 Worker fault tests and 822 scanner QC
 tests passed, with 2 artifact-gated skips. These agents did not independently review the integrated
-change.
+change. Storage findings are actionable and not yet fixed; see latest handoff next steps.
 
 ## Provider availability (checked 13 Nov 2026)
 

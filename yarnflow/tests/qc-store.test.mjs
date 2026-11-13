@@ -27,6 +27,14 @@ export async function fixtureDouble() {
   const created = await store.createSampleEvaluation(env.DB,ctx,input,now), result = created.body ?? created;
   const consent = (await store.registerConsent(env.DB,admin,{authority_evidence_sha256:'a'.repeat(64),operational_capture:true,operational_retention_days:1,research_use:false,training_use:false,export_destinations:[],valid_from:new Date(now-1000).toISOString(),expires_at:new Date(now+30*store.DAY).toISOString()},now)).body;
   return {...f,now,ctx,manager,supervisor,admin,context,spec,specInput,selection,input,result,consent};
+  test('purchase order listing never joins a supplier from another workspace', async t => {
+    const f=await fixtureDouble();t.after(()=>f.sql.close());
+    const foreignWorkspace=crypto.randomUUID(), supplierId=crypto.randomUUID(), orderId=crypto.randomUUID();
+    f.sql.prepare('INSERT INTO workspaces(id,name,created_at) VALUES(?,?,?)').run(foreignWorkspace,'Foreign workspace double',f.now);
+    f.sql.prepare("INSERT INTO suppliers(id,workspace_id,name,contact_name,email,phone,city,website,source_url,status,created_by,created_at,updated_at) VALUES(?,?,?,'Contact','x@x.test','','','','','approved','test',?,?)").run(supplierId,foreignWorkspace,'Foreign supplier secret',f.now,f.now);
+    f.sql.prepare('UPDATE supplier_purchase_orders SET supplier_id=? WHERE id=?').run(supplierId,f.result.selection.purchase_order_id);
+    assert.deepEqual(await store.listPurchaseOrders(f.env.DB,f.workspaceId),[]);
+  });
 }
 export async function uploadedDouble(f,{close=true,count=3}={}) {
   const {env,ctx,now}=f;

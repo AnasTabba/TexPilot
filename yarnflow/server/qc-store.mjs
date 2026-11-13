@@ -368,7 +368,7 @@ export async function listSamples(db, workspaceId, purchaseOrderId = null) {
   return rows.map(r => { const selection = JSON.parse(r.selection); return { sample_id: r.id, roll_ref: selection.roll_ref, location_ref: selection.location_ref, spec_version: r.spec_version, revision: r.revision, status: r.status ?? null, disposition: r.disposition, created_at: isoTime(r.created_at) }; });
 }
 export async function listPurchaseOrders(db, workspaceId) {
-  const rows = await all(db, `SELECT p.id,p.reference,p.status,s.name AS supplier_name,q.id AS spec_id,q.version,q.json FROM supplier_purchase_orders p JOIN suppliers s ON s.id=p.supplier_id
+  const rows = await all(db, `SELECT p.id,p.reference,p.status,s.name AS supplier_name,q.id AS spec_id,q.version,q.json FROM supplier_purchase_orders p JOIN suppliers s ON s.id=p.supplier_id AND s.workspace_id=p.workspace_id
     LEFT JOIN qc_po_specs q ON q.workspace_id=p.workspace_id AND q.purchase_order_id=p.id AND q.version=(SELECT MAX(version) FROM qc_po_specs WHERE workspace_id=p.workspace_id AND purchase_order_id=p.id)
     WHERE p.workspace_id=? ORDER BY p.created_at DESC,p.id LIMIT 200`, workspaceId);
   return rows.map(r => { const spec = r.json ? JSON.parse(r.json) : null; return { purchase_order_id: r.id, reference: r.reference, supplier_name: r.supplier_name, status: r.status, current_spec: spec ? { id: spec.id, version: spec.version, confirmed_at: spec.confirmed_at, construction: spec.construction } : null }; });

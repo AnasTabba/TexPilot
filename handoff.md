@@ -29,6 +29,13 @@ continuation. One local read-only scanner API/pipeline audit found no concrete f
 tenant or contract finding. A separate storage/migration audit is pending; this is not independent
 integrated QA. This follow-up does not change the review-only release state.
 
+Follow-up storage audit identified three issues. The cross-workspace supplier join is now fixed
+and covered by a regression test: `cd yarnflow && node --test tests/qc-store.test.mjs` passed
+(17/17). Two findings remain open: request expiry/failure state transitions do not consistently
+revalidate the initiating live session/lease, and rollback/restore after QC writes lacks an
+operational tested procedure. See the agent ledger. Consent privacy fix was pushed as `ae54356`;
+the supplier fix is being prepared as the next scoped commit.
+
 The configured Kaggle CLI on the original machine reported MVTec and WFDD jobs COMPLETE and
 AITEX preflight ERROR; no jobs were started, cancelled, overwritten or duplicated. Local model
 inventory still lacks the QC fault checkpoint; datasets/artifacts and rights evidence remain
