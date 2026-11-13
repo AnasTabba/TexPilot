@@ -9,6 +9,33 @@ Requirements: [design](scanner/docs/superpowers/specs/2026-11-12-incoming-fabric
 fix the wire shape: [contract-decisions](scanner/research/qc/contract-decisions.md). Who did
 what and which limits were hit: [agent ledger](scanner/research/qc/agent-ledger.md).
 
+## Follow-up verification (14 Nov 2026)
+
+Continuation is on the pushed feature branch. The lead reproduced the focused QC suites and
+closed one tenant privacy defect: upload now returns the same 404 for a nonexistent consent
+identifier and one belonging to another workspace. This prevents identifier existence disclosure.
+
+Verified in this continuation:
+
+| Command | Result |
+|---|---|
+| `cd yarnflow && node --test tests/qc-faults.test.mjs` | 29 passed, 0 failed |
+| `cd scanner && python3 -m pytest tests/test_qc_*.py -q` | 822 passed, 2 skipped |
+| `git diff --check` | clean |
+
+The two skips remain real-checkpoint/release artifact gates. No end-to-end Worker-to-scanner
+subprocess test was run, and the larger app, browser and iOS checks have not been rerun in this
+continuation. One local read-only scanner API/pipeline audit found no concrete fail-open, auth,
+tenant or contract finding. A separate storage/migration audit is pending; this is not independent
+integrated QA. This follow-up does not change the review-only release state.
+
+The configured Kaggle CLI on the original machine reported MVTec and WFDD jobs COMPLETE and
+AITEX preflight ERROR; no jobs were started, cancelled, overwritten or duplicated. Local model
+inventory still lacks the QC fault checkpoint; datasets/artifacts and rights evidence remain
+unavailable or insufficient for release. This differs from the earlier handoff's statement that
+Kaggle CLI/credentials were absent and should be interpreted as a later environment check, not
+proof of usable data or release readiness.
+
 ## State in one paragraph
 
 The system is built to run in **REVIEW_ONLY** mode and nothing in it can produce an automatic

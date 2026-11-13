@@ -131,10 +131,9 @@ export async function handleQC(request, env, authContext) {
     if (r.name === 'upload') {
       own(data, ['capture_id','role','expected_revision','sha256','taken_at','device_profile_id','calibration_id','consent_record_id','attestation','interventionReason']);
       recordId(data.capture_id); recordId(data.consent_record_id); integer(data.expected_revision,'Revision',0); valid('AcquisitionAttestation', data.attestation);
-      // A consent record that exists only in another workspace is 404 (indistinguishable from purge); an id with no
-      // record at all, or an unusable record in this workspace, stays the existing 403.
+      // Keep consent identifiers tenant-private: absent and foreign identifiers are both 404.
       const consent = await one(db, 'SELECT workspace_id FROM qc_consent_authorities WHERE id=?', data.consent_record_id);
-      if (consent && consent.workspace_id !== w) fail('NOT_FOUND');
+      if (!consent || consent.workspace_id !== w) fail('NOT_FOUND');
       await callStore('consentFor', db, w, data.consent_record_id, now);
       const set = await one(db, 'SELECT id FROM qc_capture_sets WHERE workspace_id=? AND id=?', w, r.id); if (!set) fail('NOT_FOUND');
       const totals = await all(db, 'SELECT json FROM qc_captures WHERE workspace_id=? AND capture_set_id=?', w, r.id);

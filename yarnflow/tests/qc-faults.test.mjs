@@ -130,7 +130,7 @@ test('upload limits, consent, hash, magic bytes and pixel bounds fail before any
     const bytes=new Uint8Array(readFileSync(new URL('../../scanner/tests/fixtures/qc-images/'+file,import.meta.url)));
     assert.equal((await f.upload(set,'overview',{bytes,type})).status,status,file);assert.equal(f.storage.size,objects);assert.deepEqual(rows(f.sql),before);
   }
-  assert.equal((await f.upload(set,'overview',{consent_record_id:uuid()})).status,403);assert.equal(f.storage.size,objects);
+  assert.equal((await f.upload(set,'overview',{consent_record_id:uuid()})).status,404);assert.equal(f.storage.size,objects);
   assert.equal((await f.upload(set,'overview',{meta:{sha256:'0'.repeat(64)}})).status,422);assert.equal(f.storage.size,objects);
   assert.equal((await f.upload(set,'overview',{bytes:new Uint8Array(12*1024*1024+1)})).status,413);assert.equal(f.storage.size,objects);
   f.sql.prepare('UPDATE qc_consent_authorities SET withdrawn_at=? WHERE id=?').run(Date.now(),f.consent.id);
