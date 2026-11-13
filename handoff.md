@@ -77,10 +77,10 @@ any physical phone, `scripts/qc_benchmark.py`.
 | Task | State | What exists | What is missing or wrong |
 |---|---|---|---|
 | T01 contract | Done, tested | `scanner/services/api/qc_schemas.py`, generated `scanner/contracts/qc-v2.schema.json`, shared fixtures `scanner/tests/fixtures/qc-v2/` (53 valid, 96 invalid, 6 hash vectors), JS mirror `yarnflow/server/qc-contract.mjs`, TS `src/qc-types.ts`, Swift `QCTypes.swift` | Swift fixture parity not proven (iOS tests failing). Fixture `layer` labels (schema vs semantic) were assigned by hand and never cross-checked |
-| T02 storage | Written, thinly tested, **not audited** | `yarnflow/drizzle/0033_incoming_fabric_qc.sql`, `server/qc-store.mjs` (762 lines), `qc-retention.mjs`, blob claims | Tests are small (17 to 127 lines per file). Not yet proven: concurrent finalisation, rollback on audit failure, each precondition lost mid-inference, interrupted/replayed migration, retention restore drill. No real D1 run |
+| T02 storage | Implemented; partial local audit/tests | `yarnflow/drizzle/0033_incoming_fabric_qc.sql`, `server/qc-store.mjs`, `qc-retention.mjs`, blob claims | SQLite tests cover concurrent finalization, audit rollback and request races. No real D1/Wrangler migration, interrupted migration replay, or retention backup/restore drill. Storage audit found and fixed supplier tenant join and stale request transition issues; full independent audit remains |
 | T03 policy | Done, tested | `scanner/services/consistency/qc_policy.py`, 90 table tests | Tests were written just after the code, not before. No field for an authority's HOLD criterion, so that gate lives only in the T11 tooling |
 | T04a quality/metrology | Written, tests pass, **not audited** | `scanner/services/vision/qc_{imageio,quality,metrology}.py`, image fixtures | T04b physical validation not done (G3). `research/qc/metrology-protocol.md` not verified |
-| T05 sample API | Partial, **not audited** | `yarnflow/server/qc.mjs` (272 lines), `qc-service-auth.mjs`, routing in `inventory.mjs` | **Known defect:** upload with a consent id that exists nowhere answers 403, one in another workspace answers 404, so the two are distinguishable; both should be 404. `tests/qc-service-integration.test.mjs` does not exist. Whether every row of the API table is implemented is unverified |
+| T05 sample API | Partial; focused fault paths tested | `yarnflow/server/qc.mjs`, `qc-service-auth.mjs`, routing in `inventory.mjs` | Missing and foreign consent identifiers now both return 404 (commit `ae54356`). `tests/qc-service-integration.test.mjs` does not exist. Whether every row of the API table is implemented is unverified |
 | T06 scanner service | Written, tests pass, **not audited** | `scanner/services/api/qc.py`, `qc_pipeline.py`, `qc_service_auth.py`, `scripts/qc_benchmark.py` | Benchmark never run. Real fault loader not implemented (`fault.py` still raises NotImplementedError; G6) |
 | T07 web | Screen written and reachable, **not proven in a browser** | `yarnflow/src/IncomingFabricQC.tsx`, `qc-client.ts`, `qc-drafts.ts`, `qc-reasons.ts`, nav section for all six roles, service-worker allowlist | e2e 1/6 passing. Reported, unverified bug: after a PO/spec change the screen may treat later actions as stale (`sessionGeneration` effect). Urdu text is unreviewed. No axe result |
 | T08 iOS | Compiles, **tests fail** | `QCTypes/QCClient/QCCapture/QCWorkflow.swift`, `Localizable.xcstrings`, `Yarnflow.xcodeproj` with three targets | Unit tests: fatal nil-unwrap at `YarnflowTests/QCContractTests.swift:117`, file-protection assertion at line 59. Both UI tests in `QCWorkflowTests.swift` fail. No signing, no device, no VoiceOver evidence |
@@ -104,18 +104,18 @@ any physical phone, `scripts/qc_benchmark.py`.
 
 ## Next steps, in order
 
-1. Fix the consent-id 403/404 leak in `yarnflow/server/qc.mjs` and the assertion near line 133
-   of `tests/qc-faults.test.mjs`.
-2. Write `yarnflow/tests/qc-service-integration.test.mjs` (real Worker against the real scanner
-   subprocess). Expect contract mismatches here: the two sides have never talked.
-3. Deepen T02 storage tests (brief ready: concurrency, rollback, lost preconditions, migration
-   replay, retention).
-4. Repair iOS tests; repair the e2e spec and the `sessionGeneration` bug; run axe.
-5. Read the unaudited code for false-ACCEPT paths, tenant boundaries and auth, in this order:
-   `qc.mjs`, `qc-store.mjs`, `qc_pipeline.py`, `qc.py`, `qc_metrology.py`, `release_gate.py`.
-6. Add the Yarnflow and integration jobs to CI. Check whether the existing scanner CI job can
-   import the QC tests (they need numpy, cv2, Pillow, which are not in the `dev` extras).
-7. Independent QA pass, then tick plan checkboxes with evidence and write the evidence report.
+1. Build `yarnflow/tests/qc-service-integration.test.mjs` using a real local Worker and scanner
+   subprocess; this is the highest-priority missing proof.
+2. Complete migration/recovery and retention backup/restore tests and document an app rollback
+   procedure that preserves QC data and blobs. No production migration.
+3. Repair and rerun iOS simulator tests; repair browser e2e and stale-session behavior; run
+   accessibility checks and review Urdu/English rendering.
+4. Finish code audits for false-ACCEPT paths, tenant boundaries and auth, especially
+   `qc_metrology.py` and `release_gate.py`; resolve every concrete finding.
+5. Add Yarnflow and integration CI jobs, then run app tests, typecheck/build and available CI.
+6. Independent QA must attack the integrated workflow; fix findings and rerun relevant proof.
+7. Update the plan checkboxes and evidence report only against actual results. External G1–G8
+   remain release blockers regardless of software test completion.
 
 Ready-to-use task briefs for steps 1 to 6 were written during the session but live outside the
 repository; they are reproduced in the ledger's task descriptions only in summary.
@@ -132,8 +132,10 @@ REVIEW_ONLY.
 
 ## Not touched
 
-- Kaggle MVTec/WFDD jobs: status could not be checked (no CLI, no credentials). Nothing was
-  started, cancelled or queried.
+- Kaggle MVTec/WFDD/AITEX status: a later read-only CLI check on the original machine reported
+  MVTec/WFDD COMPLETE and AITEX preflight ERROR. No job was started, cancelled, overwritten or
+  duplicated. This supersedes the earlier unavailable-CLI note above; local QC artifacts and
+  rights/release evidence are still missing.
 - No production migration, deploy, publish, purchase or external message.
 - Existing v1 scanner routes and existing Yarnflow stock, claims and receipt flows: intended to
   be unchanged; `npm test` (all pre-existing tests) passes, but this was not separately audited.
