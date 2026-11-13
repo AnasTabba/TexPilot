@@ -20,14 +20,24 @@ Verified in this continuation:
 | Command | Result |
 |---|---|
 | `cd yarnflow && node --test tests/qc-faults.test.mjs` | 29 passed, 0 failed |
+| `cd yarnflow && node --test tests/qc-store.test.mjs tests/qc-faults.test.mjs` | 48 passed, 0 failed (includes new tenant-join and revoked-session regressions) |
 | `cd scanner && python3 -m pytest tests/test_qc_*.py -q` | 822 passed, 2 skipped |
+| `cd yarnflow && npm test` | 881 passed, 0 failed |
+| `cd yarnflow && npm run typecheck` | passed |
+| `cd yarnflow && npm run build` | passed; Vite warns that two generated chunks exceed 500 kB |
 | `git diff --check` | clean |
 
 The two skips remain real-checkpoint/release artifact gates. No end-to-end Worker-to-scanner
 subprocess test was run, and the larger app, browser and iOS checks have not been rerun in this
 continuation. One local read-only scanner API/pipeline audit found no concrete fail-open, auth,
-tenant or contract finding. A separate storage/migration audit is pending; this is not independent
-integrated QA. This follow-up does not change the review-only release state.
+tenant or contract finding. The storage audit found three concrete issues; two were fixed and
+focused-tested, while rollback/restore procedure remains open. This is not independent integrated
+QA. This follow-up does not change the review-only release state.
+
+The isolated worktree initially had no installed Node dependencies. `npm ci` from the committed
+lockfile enabled typecheck/build; it changed no manifest/lockfile. npm reported two dependency
+advisories (one high, one critical); no dependency update was applied. Build output is ignored and
+no generated artifacts were committed.
 
 Follow-up storage audit identified three issues. The cross-workspace supplier join is now fixed
 and covered by a regression test: `cd yarnflow && node --test tests/qc-store.test.mjs` passed
