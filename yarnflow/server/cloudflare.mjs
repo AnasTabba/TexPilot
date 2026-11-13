@@ -7,6 +7,7 @@ import { forwardToScanner } from './scanner-proxy.mjs';
 import { creditAlertsScheduled } from './sales.mjs';
 import { remindersScheduled } from './notify.mjs';
 import { purchasingScheduled } from './procurement.mjs';
+import { monitoringScheduled } from './qc-monitoring.mjs';
 import { trackingScheduled } from './tracking.mjs';
 
 export default {
@@ -23,6 +24,6 @@ export default {
     }
   },
   async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(Promise.all([purchasingScheduled(env), remindersScheduled(env), creditAlertsScheduled(env), trackingScheduled(env)]));
+    ctx.waitUntil(Promise.all([purchasingScheduled(env), remindersScheduled(env), creditAlertsScheduled(env), trackingScheduled(env), monitoringScheduled(env)]));
   },
 };

@@ -14,6 +14,9 @@ import { EmptyIso } from './iso/EmptyIso';
 import { APP_SETTINGS, CHAT, COMMON, NAV, PROFILE, type Section } from './roles';
 import Chat from './Chat';
 import Inspections from './Inspections';
+import IncomingFabricQC from './IncomingFabricQC';
+import { clearQCDrafts } from './qc-client';
+import { qcDrafts } from './qc-drafts';
 import InspectArrival, { type Arrival } from './InspectArrival';
 import ToProduction, { ReverseControl, type ProductionJob } from './ToProduction';
 import AdminScreens, { ADMIN_SECTIONS } from './AdminScreens';
@@ -42,7 +45,7 @@ const aliases: Record<string, [string, View]> = { tracking: ['procurement', 'all
 const sections = [...new Set([...Object.values(NAV).flat(), CHAT, ...COMMON, PROFILE, APP_SETTINGS])];
 /** Sidebar groups by the job a person comes to do. A section no group names lands under Today. */
 const JOB_GROUPS: { en: string; ur: string; ids: string[] }[] = [
-  { en: 'Today', ur: 'آج', ids: ['dashboard', 'scanner', 'approvals', 'reviews', 'lots'] },
+  { en: 'Today', ur: 'آج', ids: ['dashboard', 'scanner', 'approvals', 'reviews', 'lots', 'incoming-qc'] },
   { en: 'Stock', ur: 'اسٹاک', ids: ['inventory', 'procurement', 'dispatches', 'new-dispatch', 'requests', 'report', 'history', 'activity', 'admin-activity', 'claims', 'reports'] },
   { en: 'Sales', ur: 'سیلز', ids: ['buyers', 'buyer-rfqs', 'invoices', 'dispatch-requests', 'analytics'] },
   { en: 'People', ur: 'لوگ', ids: ['team', 'chat', 'help'] },
@@ -271,7 +274,16 @@ export default function LiveApp() {
   const [historyBusy, setHistoryBusy] = useState(false); 
   const requestSequence = useRef(0);
   const sessionLocked = useRef(false);
+  const workspaceIdRef = useRef('');
   const logoutRequest = useRef<Promise<void> | null>(null);
+  // Draft photos live only in memory; purge them here before a sign-out request can finish, and
+  // tell the other tabs so none of them keeps showing the previous actor's status.
+  const purgeQCDrafts = useCallback(() => {
+    const workspaceId = workspaceIdRef.current;
+    return (workspaceId ? clearQCDrafts(workspaceId) : Promise.resolve())
+      .catch(() => { /* The local lock and invalidate still purge what this tab can reach. */ })
+      .then(() => { qcDrafts().invalidate('signed-out'); });
+  }, []);
   const signOut = useCallback((force = false, preserveRoute = false) => {
     if (sessionLocked.current && !force) return logoutRequest.current ?? Promise.resolve();
     // Lock before any network work: a pending refresh or a failed logout must never reopen stock.
@@ -282,16 +294,23 @@ export default function LiveApp() {
     if (!preserveRoute) location.hash = '/dashboard';
     if (logoutRequest.current) return logoutRequest.current;
     setEndingSession(true);
+    const purge = purgeQCDrafts();
     // Explicit sign-out invalidates the session shared by all tabs.
-    const request = fetch('/api/auth/logout', {
+    const request = purge.then(() => fetch('/api/auth/logout', {
       method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', keepalive: true,
       headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(20000),
-    }).then(() => {}).catch(() => { /* The local lock survives an offline or interrupted logout. */ }).finally(() => {
+    })).then(() => {}).catch(() => { /* The local lock survives an offline or interrupted logout. */ }).finally(() => {
       if (logoutRequest.current === request) { logoutRequest.current = null; setEndingSession(false); }
     });
     logoutRequest.current = request;
     return request;
-  }, []);
+  }, [purgeQCDrafts]);
+  useEffect(() => { workspaceIdRef.current = state?.workspace.id ?? ''; }, [state?.workspace.id]);
+  // Another tab signed out or the workspace changed: drop this tab's status and drafts, never send
+  // an old actor's upload. This is a local action, so an offline sign-out still hides the screen.
+  useEffect(() => qcDrafts().subscribe(cause => {
+    if ((cause === 'other-tab' || cause === 'signed-out') && !sessionLocked.current) void signOut();
+  }), [signOut]);
   const refresh = useCallback(async (quiet = false) => {
     if (sessionLocked.current) { setLoading(false); setRefreshing(false); return; }
     const sequence = ++requestSequence.current;
@@ -300,16 +319,19 @@ export default function LiveApp() {
       const result = await api<WorkspaceState>('/workspace');
       if (sequence !== requestSequence.current || sessionLocked.current) return;
       const snapshot = JSON.stringify(result);
+      // Start (or confirm) the QC draft session before its screen can render; a changed actor or
+      // workspace purges earlier drafts and bumps the generation they were captured under.
+      qcDrafts().begin({ actorId: result.member.user_id, workspaceId: result.workspace.id });
       if (snapshot !== workspaceSnapshot.current) { workspaceSnapshot.current = snapshot; setState(result); }
       setAuthNeeded(false); setSavedAt(Date.now()); setError('');
       // The inbox rides the same refresh; a failed read keeps the last count rather than blocking the workspace.
       void portal<Inbox>('/notifications').then(next => { if (sequence === requestSequence.current && !sessionLocked.current) setInbox(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next); }, () => {});
     } catch (error) {
       if (sequence !== requestSequence.current) return;
-      if (error instanceof InventoryError && error.status === 401) { sessionLocked.current = true; setState(null); setAuthNeeded(true); }
+      if (error instanceof InventoryError && error.status === 401) { sessionLocked.current = true; void purgeQCDrafts(); setState(null); setAuthNeeded(true); }
       setError(errorMessage(error));
     } finally { if (sequence === requestSequence.current) { setLoading(false); setRefreshing(false); } }
-  }, []);
+  }, [purgeQCDrafts]);
   useEffect(() => { void refresh(); const interval = setInterval(() => { if (!document.hidden) void refresh(true); }, 30000); const focus = () => { if (!document.hidden) void refresh(true); }; window.addEventListener('focus', focus); document.addEventListener('visibilitychange', focus); return () => { clearInterval(interval); requestSequence.current++; window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus); }; }, [refresh]);
   // Other people's changes raise notices: poll the inbox lightly, toast when unread rises, and refresh the workspace so the new data shows. Skipped while hidden or signed out.
   useEffect(() => {
@@ -393,6 +415,9 @@ export default function LiveApp() {
   if (!state) return <main className="live-welcome"><Cone hue="#2f6fd6" size={48} /><h1>{t("Inventory is unavailable")}</h1><p role="alert">{t(error)}</p><button className="button primary" onClick={() => void refresh()}><RefreshCw size={18} />{t("Try connection again")}</button><p>{t("The shared records are safe on the server.")}</p></main>;
   const workspace = state;
   const me = workspace.member;
+  // The draft store's generation is the session boundary the QC screen checks; refresh() begins
+  // it for the signed-in actor/workspace before this render.
+  const qcSessionGeneration = qcDrafts().generation;
   const allow = (permission: Permission) => can(me, permission);
   const shown = [...NAV[me.role], CHAT, ...COMMON];
   // Profile is reachable by route and by clicking the name, but not listed in the sidebar.
@@ -513,6 +538,7 @@ export default function LiveApp() {
       {page === 'profile' && <Profile state={workspace} backupBusy={exportBusy} onBackup={() => void backup()} />}
       {page==='team' && <Team me={me} onChanged={() => refresh(true)} />}
       {page==='lots' && <Inspections />}
+      {page === 'incoming-qc' && <IncomingFabricQC member={me} workspaceId={workspace.workspace.id} sessionGeneration={qcSessionGeneration} sampleId={routeId} />}
       {page==='reviews' && <Review />}
       {page==='procurement' && <Procurement member={me} onInventoryChanged={() => refresh(true)} />}
       {isAdmin && page !== 'dashboard' && ADMIN_SECTIONS.includes(adminSection) && <AdminScreens member={me} section={adminSection} tab={routeTab} id={routeId} navigate={go} state={workspace} onInventoryChanged={() => refresh(true)} />}

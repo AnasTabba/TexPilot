@@ -1,4 +1,5 @@
 /** Loopback-only development server: the same API and PIN sign-in as Cloudflare, on SQLite. */
+import { Readable } from 'node:stream';
 import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
@@ -52,7 +53,7 @@ const bucket = {
   async get(key) { const path = objectPath(key); return existsSync(path) ? { body: readFileSync(path) } : null; },
   async delete(key) { rmSync(objectPath(key), { force: true }); },
 };
-const env = { SUPPLIER_PORTAL_TOKEN: process.env.SUPPLIER_PORTAL_TOKEN, BUYER_PORTAL_TOKEN: process.env.BUYER_PORTAL_TOKEN, DB, BUCKET: bucket, TEXPILOT_API_URL: process.env.TEXPILOT_API_URL, INVENTREE_URL: process.env.INVENTREE_URL, INVENTREE_TOKEN: process.env.INVENTREE_TOKEN, DATALOOPLABS_API_KEY: process.env.DATALOOPLABS_API_KEY, DATALOOPLABS_CONTRACT: process.env.DATALOOPLABS_CONTRACT };
+const env = { QC_SERVICE_KEY: process.env.QC_SERVICE_KEY, QC_SERVICE_KID: process.env.QC_SERVICE_KID, QC_AUTOMATION_GATES: process.env.QC_AUTOMATION_GATES, TEXPILOT_API_TOKEN: process.env.TEXPILOT_API_TOKEN, SUPPLIER_PORTAL_TOKEN: process.env.SUPPLIER_PORTAL_TOKEN, BUYER_PORTAL_TOKEN: process.env.BUYER_PORTAL_TOKEN, DB, BUCKET: bucket, TEXPILOT_API_URL: process.env.TEXPILOT_API_URL, INVENTREE_URL: process.env.INVENTREE_URL, INVENTREE_TOKEN: process.env.INVENTREE_TOKEN, DATALOOPLABS_API_KEY: process.env.DATALOOPLABS_API_KEY, DATALOOPLABS_CONTRACT: process.env.DATALOOPLABS_CONTRACT };
 const port = Number(process.env.PORT || 8788);
 const server = createServer(async (incoming, outgoing) => {
   try {
@@ -72,6 +73,11 @@ const server = createServer(async (incoming, outgoing) => {
       const headers = new Headers();
       for (const [key, value] of Object.entries(incoming.headers)) if (value) headers.set(key, Array.isArray(value) ? value.join(',') : value);
       let body;
+      if (url.pathname === '/api/qc/v2' || url.pathname.startsWith('/api/qc/v2/')) {
+        const stream = incoming.method === 'GET' || incoming.method === 'HEAD' ? null : Readable.toWeb(incoming);
+        const response = await inventoryApi(new Request(url, { method: incoming.method, headers, ...(stream ? { body: stream, duplex: 'half' } : {}) }), env);
+        outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer())); return;
+      }
       if (incoming.method !== 'GET' && incoming.method !== 'HEAD') {
         const chunks = []; let size = 0;
         const limit = ['/api/photos', '/api/erp/qc/photos'].includes(url.pathname) ? 11 * 1024 * 1024 : 65536;

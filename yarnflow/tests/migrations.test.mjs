@@ -31,7 +31,7 @@ test('migrations preserve stable values, not only counts and balances', () => {
 test('0031 PO rebuild preserves its row and restores dependent guards and views', () => {
   const sql = legacy();
   const names = readdirSync(dir).filter(f => f.endsWith('.sql') && f >= '0004').sort();
-  migrate(sql, names.filter(name => name !== '0031_reversals.sql'));
+  migrate(sql, names.filter(name => name < '0031'));
   const original = sql.prepare('SELECT * FROM supplier_purchase_orders WHERE id=?').get('po');
   migrate(sql, ['0031_reversals.sql']);
 
@@ -45,6 +45,8 @@ test('0031 PO rebuild preserves its row and restores dependent guards and views'
   assert.throws(() => sql.prepare('UPDATE supplier_purchase_orders SET quantity_milli=1999 WHERE id=?').run('po'), /already arrived/);
   assert.throws(() => sql.prepare("UPDATE supplier_purchase_orders SET terms_snapshot='{}' WHERE id='po'").run(), /immutable/);
   assert.throws(() => sql.prepare('DELETE FROM supplier_purchase_orders WHERE id=?').run('po'), /audit trail/);
+  assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(), []);
+  migrate(sql, names.filter(name => name > '0031_reversals.sql'));
   assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(), []);
 });
 test('roles and newly created users carry required metadata', async () => {

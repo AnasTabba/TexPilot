@@ -1,0 +1,4093 @@
+{
+ "$defs": {
+  "AcquisitionAttestation": {
+   "additionalProperties": false,
+   "description": "What the capturing client could observe about how the image was taken (design §18).\n``null`` means the client could not observe it; an unobservable required field keeps the\ncapture out of any validated physical profile.",
+   "properties": {
+    "capture_mode": {
+     "enum": [
+      "NATIVE_CAMERA",
+      "WEB_CAMERA",
+      "IMPORTED",
+      "REENCODED",
+      "CANVAS"
+     ],
+     "title": "Capture Mode",
+     "type": "string"
+    },
+    "captured_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Captured At",
+     "type": "string"
+    },
+    "device_model": {
+     "anyOf": [
+      {
+       "maxLength": 120,
+       "minLength": 1,
+       "pattern": "^[^\\x00-\\x1f]+$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Device Model"
+    },
+    "exposure_mode": {
+     "anyOf": [
+      {
+       "maxLength": 120,
+       "minLength": 1,
+       "pattern": "^[^\\x00-\\x1f]+$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Exposure Mode"
+    },
+    "focus_mode": {
+     "anyOf": [
+      {
+       "maxLength": 120,
+       "minLength": 1,
+       "pattern": "^[^\\x00-\\x1f]+$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Focus Mode"
+    },
+    "image_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Image Sha256",
+     "type": "string"
+    },
+    "lens_id": {
+     "anyOf": [
+      {
+       "maxLength": 120,
+       "minLength": 1,
+       "pattern": "^[^\\x00-\\x1f]+$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Lens Id"
+    },
+    "orientation": {
+     "anyOf": [
+      {
+       "maximum": 8,
+       "minimum": 1,
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Orientation"
+    },
+    "processing": {
+     "anyOf": [
+      {
+       "maxLength": 120,
+       "minLength": 1,
+       "pattern": "^[^\\x00-\\x1f]+$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Processing"
+    },
+    "resolution": {
+     "anyOf": [
+      {
+       "maxItems": 2,
+       "minItems": 2,
+       "prefixItems": [
+        {
+         "minimum": 1,
+         "type": "integer"
+        },
+        {
+         "minimum": 1,
+         "type": "integer"
+        }
+       ],
+       "type": "array"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Resolution"
+    },
+    "zoom_factor": {
+     "anyOf": [
+      {
+       "exclusiveMinimum": 0.0,
+       "maximum": 100.0,
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Zoom Factor"
+    }
+   },
+   "required": [
+    "image_sha256",
+    "capture_mode",
+    "device_model",
+    "lens_id",
+    "zoom_factor",
+    "focus_mode",
+    "exposure_mode",
+    "resolution",
+    "orientation",
+    "processing",
+    "captured_at"
+   ],
+   "title": "AcquisitionAttestation",
+   "type": "object"
+  },
+  "Adjudication": {
+   "additionalProperties": false,
+   "description": "A human reviewer's recorded finding. Appended, never a rewrite of model evidence, and\nnever blinded research truth (design §4, §17).",
+   "properties": {
+    "actor_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Actor Id",
+     "type": "string"
+    },
+    "created_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Created At",
+     "type": "string"
+    },
+    "id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Id",
+     "type": "string"
+    },
+    "intervention_reason": {
+     "anyOf": [
+      {
+       "maxLength": 2000,
+       "minLength": 1,
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Intervention Reason"
+    },
+    "outcome": {
+     "enum": [
+      "CONFORMING",
+      "NONCONFORMING",
+      "UNDETERMINED"
+     ],
+     "title": "Outcome",
+     "type": "string"
+    },
+    "reason": {
+     "maxLength": 2000,
+     "minLength": 1,
+     "title": "Reason",
+     "type": "string"
+    },
+    "reference_ids": {
+     "items": {
+      "maxLength": 120,
+      "minLength": 1,
+      "pattern": "^[^\\x00-\\x1f]+$",
+      "type": "string"
+     },
+     "maxItems": 20,
+     "title": "Reference Ids",
+     "type": "array"
+    },
+    "revision": {
+     "minimum": 1,
+     "title": "Revision",
+     "type": "integer"
+    },
+    "sample_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Sample Id",
+     "type": "string"
+    },
+    "supersedes_id": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Supersedes Id"
+    }
+   },
+   "required": [
+    "id",
+    "sample_id",
+    "revision",
+    "outcome",
+    "reason",
+    "reference_ids",
+    "actor_id",
+    "created_at",
+    "supersedes_id",
+    "intervention_reason"
+   ],
+   "title": "Adjudication",
+   "type": "object"
+  },
+  "AnalysisBinding": {
+   "additionalProperties": false,
+   "properties": {
+    "attempt": {
+     "maximum": 3,
+     "minimum": 1,
+     "title": "Attempt",
+     "type": "integer"
+    },
+    "capture_sha256s": {
+     "items": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+     },
+     "maxItems": 4,
+     "minItems": 1,
+     "title": "Capture Sha256S",
+     "type": "array"
+    },
+    "deadline_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Deadline At",
+     "type": "string"
+    },
+    "expected_revision": {
+     "minimum": 0,
+     "title": "Expected Revision",
+     "type": "integer"
+    },
+    "policy_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Policy Sha256",
+     "type": "string"
+    },
+    "release_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Release Sha256"
+    },
+    "request_generation": {
+     "minimum": 1,
+     "title": "Request Generation",
+     "type": "integer"
+    },
+    "request_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Request Id",
+     "type": "string"
+    },
+    "spec_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Spec Sha256",
+     "type": "string"
+    }
+   },
+   "required": [
+    "spec_sha256",
+    "policy_sha256",
+    "release_sha256",
+    "capture_sha256s",
+    "attempt",
+    "expected_revision",
+    "request_id",
+    "request_generation",
+    "deadline_at"
+   ],
+   "title": "AnalysisBinding",
+   "type": "object"
+  },
+  "AnalysisCandidate": {
+   "additionalProperties": false,
+   "description": "What the private scanner returns to the Worker. Not a public result: the Worker checks\nthe binding and re-checks everything inside finalisation before anything is stored.",
+   "properties": {
+    "binding": {
+     "$ref": "#/$defs/AnalysisBinding"
+    },
+    "draft": {
+     "$ref": "#/$defs/DecisionDraft"
+    },
+    "evidence": {
+     "$ref": "#/$defs/Evidence"
+    }
+   },
+   "required": [
+    "evidence",
+    "draft",
+    "binding"
+   ],
+   "title": "AnalysisCandidate",
+   "type": "object"
+  },
+  "AnalyzeRequest": {
+   "additionalProperties": false,
+   "description": "The ``request`` part of the Worker -> scanner multipart call. Its exact UTF-8 bytes are\nwhat the service assertion's ``payload_sha256`` covers; each original travels as the file\npart ``capture_<capture.id>`` and is checked against ``verified_sha256``.",
+   "properties": {
+    "attempt": {
+     "maximum": 3,
+     "minimum": 1,
+     "title": "Attempt",
+     "type": "integer"
+    },
+    "captures": {
+     "items": {
+      "$ref": "#/$defs/ValidatedCapture"
+     },
+     "maxItems": 4,
+     "minItems": 1,
+     "title": "Captures",
+     "type": "array"
+    },
+    "context": {
+     "$ref": "#/$defs/EvaluationContext"
+    },
+    "domain": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/DomainManifest"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "expected_revision": {
+     "minimum": 0,
+     "title": "Expected Revision",
+     "type": "integer"
+    },
+    "policy": {
+     "$ref": "#/$defs/Policy"
+    },
+    "release": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Release"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "sample_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Sample Id",
+     "type": "string"
+    },
+    "schema_version": {
+     "const": "2",
+     "title": "Schema Version",
+     "type": "string"
+    },
+    "spec": {
+     "$ref": "#/$defs/PurchaseSpec"
+    },
+    "workspace_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Workspace Id",
+     "type": "string"
+    }
+   },
+   "required": [
+    "schema_version",
+    "sample_id",
+    "workspace_id",
+    "spec",
+    "policy",
+    "release",
+    "domain",
+    "attempt",
+    "expected_revision",
+    "context",
+    "captures"
+   ],
+   "title": "AnalyzeRequest",
+   "type": "object"
+  },
+  "AssertionClaims": {
+   "additionalProperties": false,
+   "description": "Claims of the short-lived Worker -> scanner service assertion (design §9, §21).\n\nWire form ``v1.<base64url(claims JSON)>.<base64url(HMAC-SHA256)>`` in ``X-QC-Assertion``.\nThe provider's own proxy credential (``Authorization``) is separate and unchanged.",
+   "properties": {
+    "actor_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Actor Id",
+     "type": "string"
+    },
+    "aud": {
+     "const": "texpilot-scanner-qc",
+     "title": "Aud",
+     "type": "string"
+    },
+    "deadline_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Deadline At",
+     "type": "string"
+    },
+    "exp": {
+     "minimum": 0,
+     "title": "Exp",
+     "type": "integer"
+    },
+    "iat": {
+     "minimum": 0,
+     "title": "Iat",
+     "type": "integer"
+    },
+    "kid": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Kid",
+     "type": "string"
+    },
+    "nonce": {
+     "pattern": "^[0-9a-f]{32}$",
+     "title": "Nonce",
+     "type": "string"
+    },
+    "payload_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Payload Sha256",
+     "type": "string"
+    },
+    "request_generation": {
+     "minimum": 1,
+     "title": "Request Generation",
+     "type": "integer"
+    },
+    "request_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Request Id",
+     "type": "string"
+    },
+    "workspace_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Workspace Id",
+     "type": "string"
+    }
+   },
+   "required": [
+    "kid",
+    "aud",
+    "iat",
+    "exp",
+    "nonce",
+    "request_id",
+    "request_generation",
+    "workspace_id",
+    "actor_id",
+    "payload_sha256",
+    "deadline_at"
+   ],
+   "title": "AssertionClaims",
+   "type": "object"
+  },
+  "AxisRegistration": {
+   "additionalProperties": false,
+   "description": "Which way the fabric runs in this capture, from a physical indicator (design §15).",
+   "properties": {
+    "capture_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Capture Id",
+     "type": "string"
+    },
+    "capture_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Capture Sha256",
+     "type": "string"
+    },
+    "direction_xy": {
+     "maxItems": 2,
+     "minItems": 2,
+     "prefixItems": [
+      {
+       "maximum": 1.0,
+       "minimum": -1.0,
+       "type": "number"
+      },
+      {
+       "maximum": 1.0,
+       "minimum": -1.0,
+       "type": "number"
+      }
+     ],
+     "title": "Direction Xy",
+     "type": "array"
+    },
+    "id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Id",
+     "type": "string"
+    },
+    "origin_xy": {
+     "maxItems": 2,
+     "minItems": 2,
+     "prefixItems": [
+      {
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "type": "number"
+      }
+     ],
+     "title": "Origin Xy",
+     "type": "array"
+    },
+    "physical_indicator": {
+     "enum": [
+      "SELVEDGE",
+      "WARP_MARK",
+      "QUALIFIED_REGISTRATION"
+     ],
+     "title": "Physical Indicator",
+     "type": "string"
+    },
+    "provenance": {
+     "$ref": "#/$defs/Provenance"
+    },
+    "transform_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Transform Sha256",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "capture_id",
+    "capture_sha256",
+    "physical_indicator",
+    "provenance",
+    "origin_xy",
+    "direction_xy",
+    "transform_sha256"
+   ],
+   "title": "AxisRegistration",
+   "type": "object"
+  },
+  "CalibrationProfile": {
+   "additionalProperties": false,
+   "properties": {
+    "device_profile_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Device Profile Id",
+     "type": "string"
+    },
+    "distance_mm": {
+     "maxItems": 2,
+     "minItems": 2,
+     "prefixItems": [
+      {
+       "exclusiveMinimum": 0.0,
+       "type": "number"
+      },
+      {
+       "exclusiveMinimum": 0.0,
+       "type": "number"
+      }
+     ],
+     "title": "Distance Mm",
+     "type": "array"
+    },
+    "distortion_model_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Distortion Model Sha256",
+     "type": "string"
+    },
+    "expires_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Expires At",
+     "type": "string"
+    },
+    "focus_mode": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Focus Mode",
+     "type": "string"
+    },
+    "id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Id",
+     "type": "string"
+    },
+    "lens_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Lens Id",
+     "type": "string"
+    },
+    "lighting_protocol_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Lighting Protocol Sha256",
+     "type": "string"
+    },
+    "processing_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Processing Sha256",
+     "type": "string"
+    },
+    "reference_ids": {
+     "items": {
+      "maxLength": 120,
+      "minLength": 1,
+      "pattern": "^[^\\x00-\\x1f]+$",
+      "type": "string"
+     },
+     "maxItems": 10,
+     "minItems": 1,
+     "title": "Reference Ids",
+     "type": "array"
+    },
+    "resolution": {
+     "maxItems": 2,
+     "minItems": 2,
+     "prefixItems": [
+      {
+       "minimum": 1,
+       "type": "integer"
+      },
+      {
+       "minimum": 1,
+       "type": "integer"
+      }
+     ],
+     "title": "Resolution",
+     "type": "array"
+    },
+    "sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Sha256",
+     "type": "string"
+    },
+    "source_resolution_limits_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Source Resolution Limits Sha256",
+     "type": "string"
+    },
+    "uncertainty_model_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Uncertainty Model Sha256",
+     "type": "string"
+    },
+    "valid_from": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Valid From",
+     "type": "string"
+    },
+    "version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Version",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "version",
+    "sha256",
+    "device_profile_id",
+    "lens_id",
+    "resolution",
+    "focus_mode",
+    "distance_mm",
+    "lighting_protocol_sha256",
+    "processing_sha256",
+    "distortion_model_sha256",
+    "source_resolution_limits_sha256",
+    "uncertainty_model_sha256",
+    "reference_ids",
+    "valid_from",
+    "expires_at"
+   ],
+   "title": "CalibrationProfile",
+   "type": "object"
+  },
+  "Capture": {
+   "additionalProperties": false,
+   "properties": {
+    "attestation_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Attestation Sha256",
+     "type": "string"
+    },
+    "byte_size": {
+     "maximum": 12582912,
+     "minimum": 1,
+     "title": "Byte Size",
+     "type": "integer"
+    },
+    "calibration_id": {
+     "anyOf": [
+      {
+       "maxLength": 120,
+       "minLength": 1,
+       "pattern": "^[^\\x00-\\x1f]+$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Calibration Id"
+    },
+    "capture_set_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Capture Set Id",
+     "type": "string"
+    },
+    "consent_record_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Consent Record Id",
+     "type": "string"
+    },
+    "device_profile_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Device Profile Id",
+     "type": "string"
+    },
+    "height": {
+     "maximum": 20000,
+     "minimum": 1,
+     "title": "Height",
+     "type": "integer"
+    },
+    "id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Id",
+     "type": "string"
+    },
+    "media_type": {
+     "enum": [
+      "image/jpeg",
+      "image/png",
+      "image/webp"
+     ],
+     "title": "Media Type",
+     "type": "string"
+    },
+    "original_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Original Sha256",
+     "type": "string"
+    },
+    "original_state": {
+     "enum": [
+      "AVAILABLE",
+      "PURGED"
+     ],
+     "title": "Original State",
+     "type": "string"
+    },
+    "preprocessing_version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Preprocessing Version",
+     "type": "string"
+    },
+    "role": {
+     "enum": [
+      "overview",
+      "structure",
+      "defect",
+      "scale"
+     ],
+     "title": "Role",
+     "type": "string"
+    },
+    "sample_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Sample Id",
+     "type": "string"
+    },
+    "taken_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Taken At",
+     "type": "string"
+    },
+    "width": {
+     "maximum": 20000,
+     "minimum": 1,
+     "title": "Width",
+     "type": "integer"
+    }
+   },
+   "required": [
+    "id",
+    "sample_id",
+    "capture_set_id",
+    "original_sha256",
+    "role",
+    "taken_at",
+    "device_profile_id",
+    "calibration_id",
+    "width",
+    "height",
+    "preprocessing_version",
+    "consent_record_id",
+    "byte_size",
+    "media_type",
+    "original_state",
+    "attestation_sha256"
+   ],
+   "title": "Capture",
+   "type": "object"
+  },
+  "CaptureSet": {
+   "additionalProperties": false,
+   "properties": {
+    "attempt": {
+     "anyOf": [
+      {
+       "maximum": 3,
+       "minimum": 1,
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Attempt"
+    },
+    "capture_ids": {
+     "items": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "type": "string"
+     },
+     "maxItems": 4,
+     "title": "Capture Ids",
+     "type": "array"
+    },
+    "id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Id",
+     "type": "string"
+    },
+    "required_roles": {
+     "items": {
+      "enum": [
+       "overview",
+       "structure",
+       "defect",
+       "scale"
+      ],
+      "type": "string"
+     },
+     "maxItems": 4,
+     "minItems": 1,
+     "title": "Required Roles",
+     "type": "array"
+    },
+    "revision": {
+     "minimum": 0,
+     "title": "Revision",
+     "type": "integer"
+    },
+    "sample_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Sample Id",
+     "type": "string"
+    },
+    "state": {
+     "enum": [
+      "OPEN",
+      "CLOSED"
+     ],
+     "title": "State",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "sample_id",
+    "state",
+    "required_roles",
+    "capture_ids",
+    "revision",
+    "attempt"
+   ],
+   "title": "CaptureSet",
+   "type": "object"
+  },
+  "ConsentAuthority": {
+   "additionalProperties": false,
+   "description": "A server-verified reference to a signed consent register entry (design §17). The record\nproves that enforcement has something to check, not that the consent is legally adequate.",
+   "properties": {
+    "authority_evidence_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Authority Evidence Sha256",
+     "type": "string"
+    },
+    "expires_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Expires At",
+     "type": "string"
+    },
+    "export_destinations": {
+     "items": {
+      "maxLength": 120,
+      "minLength": 1,
+      "pattern": "^[^\\x00-\\x1f]+$",
+      "type": "string"
+     },
+     "maxItems": 20,
+     "title": "Export Destinations",
+     "type": "array"
+    },
+    "id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Id",
+     "type": "string"
+    },
+    "operational_capture": {
+     "title": "Operational Capture",
+     "type": "boolean"
+    },
+    "operational_retention_days": {
+     "maximum": 3650,
+     "minimum": 1,
+     "title": "Operational Retention Days",
+     "type": "integer"
+    },
+    "research_use": {
+     "title": "Research Use",
+     "type": "boolean"
+    },
+    "training_use": {
+     "title": "Training Use",
+     "type": "boolean"
+    },
+    "valid_from": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Valid From",
+     "type": "string"
+    },
+    "version": {
+     "minimum": 1,
+     "title": "Version",
+     "type": "integer"
+    },
+    "withdrawn_at": {
+     "anyOf": [
+      {
+       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Withdrawn At"
+    },
+    "workspace_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Workspace Id",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "version",
+    "workspace_id",
+    "authority_evidence_sha256",
+    "operational_capture",
+    "operational_retention_days",
+    "research_use",
+    "training_use",
+    "export_destinations",
+    "valid_from",
+    "expires_at",
+    "withdrawn_at"
+   ],
+   "title": "ConsentAuthority",
+   "type": "object"
+  },
+  "Decision": {
+   "additionalProperties": false,
+   "properties": {
+    "automatic": {
+     "title": "Automatic",
+     "type": "boolean"
+    },
+    "evaluated_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Evaluated At",
+     "type": "string"
+    },
+    "evidence_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Evidence Id",
+     "type": "string"
+    },
+    "id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Id",
+     "type": "string"
+    },
+    "policy_version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Policy Version",
+     "type": "string"
+    },
+    "reasons": {
+     "items": {
+      "enum": [
+       "QUALITY_BLUR",
+       "QUALITY_GLARE",
+       "QUALITY_MOIRE",
+       "QUALITY_FOLD",
+       "QUALITY_FRAMING",
+       "SCALE_MISSING",
+       "SCALE_INVALID",
+       "CALIBRATION_EXPIRED",
+       "RESOLUTION_LOW",
+       "MEASUREMENT_UNCERTAIN",
+       "PATTERN_AMBIGUOUS",
+       "OOD",
+       "UNKNOWN_FABRIC",
+       "PO_UNCONFIRMED",
+       "PO_CONFLICT",
+       "PO_VERSION_STALE",
+       "UNIT_UNSUPPORTED",
+       "SPEC_MISSING",
+       "STAGE_UNAVAILABLE",
+       "DEFECT_SUSPECTED",
+       "CONSTRUCTION_OUTSIDE_TOLERANCE",
+       "FABRIC_MISMATCH",
+       "DOMAIN_UNVALIDATED",
+       "POLICY_UNRELEASED",
+       "RECAPTURE_LIMIT",
+       "EVIDENCE_STALE",
+       "AUDIT_UNAVAILABLE"
+      ],
+      "type": "string"
+     },
+     "maxItems": 16,
+     "title": "Reasons",
+     "type": "array"
+    },
+    "release_id": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Release Id"
+    },
+    "revision": {
+     "minimum": 1,
+     "title": "Revision",
+     "type": "integer"
+    },
+    "sample_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Sample Id",
+     "type": "string"
+    },
+    "schema_version": {
+     "const": "2",
+     "title": "Schema Version",
+     "type": "string"
+    },
+    "scope": {
+     "const": "INSPECTED_SAMPLE",
+     "title": "Scope",
+     "type": "string"
+    },
+    "spec_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Spec Id",
+     "type": "string"
+    },
+    "spec_version": {
+     "minimum": 1,
+     "title": "Spec Version",
+     "type": "integer"
+    },
+    "status": {
+     "enum": [
+      "ACCEPT",
+      "HOLD",
+      "RECAPTURE",
+      "MANUAL_REVIEW"
+     ],
+     "title": "Status",
+     "type": "string"
+    }
+   },
+   "required": [
+    "status",
+    "reasons",
+    "automatic",
+    "scope",
+    "schema_version",
+    "id",
+    "sample_id",
+    "evidence_id",
+    "spec_id",
+    "spec_version",
+    "revision",
+    "policy_version",
+    "release_id",
+    "evaluated_at"
+   ],
+   "title": "Decision",
+   "type": "object"
+  },
+  "DecisionDraft": {
+   "additionalProperties": false,
+   "properties": {
+    "automatic": {
+     "title": "Automatic",
+     "type": "boolean"
+    },
+    "reasons": {
+     "items": {
+      "enum": [
+       "QUALITY_BLUR",
+       "QUALITY_GLARE",
+       "QUALITY_MOIRE",
+       "QUALITY_FOLD",
+       "QUALITY_FRAMING",
+       "SCALE_MISSING",
+       "SCALE_INVALID",
+       "CALIBRATION_EXPIRED",
+       "RESOLUTION_LOW",
+       "MEASUREMENT_UNCERTAIN",
+       "PATTERN_AMBIGUOUS",
+       "OOD",
+       "UNKNOWN_FABRIC",
+       "PO_UNCONFIRMED",
+       "PO_CONFLICT",
+       "PO_VERSION_STALE",
+       "UNIT_UNSUPPORTED",
+       "SPEC_MISSING",
+       "STAGE_UNAVAILABLE",
+       "DEFECT_SUSPECTED",
+       "CONSTRUCTION_OUTSIDE_TOLERANCE",
+       "FABRIC_MISMATCH",
+       "DOMAIN_UNVALIDATED",
+       "POLICY_UNRELEASED",
+       "RECAPTURE_LIMIT",
+       "EVIDENCE_STALE",
+       "AUDIT_UNAVAILABLE"
+      ],
+      "type": "string"
+     },
+     "maxItems": 16,
+     "title": "Reasons",
+     "type": "array"
+    },
+    "scope": {
+     "const": "INSPECTED_SAMPLE",
+     "title": "Scope",
+     "type": "string"
+    },
+    "status": {
+     "enum": [
+      "ACCEPT",
+      "HOLD",
+      "RECAPTURE",
+      "MANUAL_REVIEW"
+     ],
+     "title": "Status",
+     "type": "string"
+    }
+   },
+   "required": [
+    "status",
+    "reasons",
+    "automatic",
+    "scope"
+   ],
+   "title": "DecisionDraft",
+   "type": "object"
+  },
+  "DefectRegion": {
+   "additionalProperties": false,
+   "properties": {
+    "box": {
+     "maxItems": 4,
+     "minItems": 4,
+     "prefixItems": [
+      {
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "type": "number"
+      }
+     ],
+     "title": "Box",
+     "type": "array"
+    },
+    "capture_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Capture Id",
+     "type": "string"
+    },
+    "label": {
+     "anyOf": [
+      {
+       "maxLength": 120,
+       "minLength": 1,
+       "pattern": "^[^\\x00-\\x1f]+$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Label"
+    },
+    "score": {
+     "maximum": 1.0,
+     "minimum": 0.0,
+     "title": "Score",
+     "type": "number"
+    },
+    "transform_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Transform Id",
+     "type": "string"
+    }
+   },
+   "required": [
+    "capture_id",
+    "transform_id",
+    "box",
+    "score",
+    "label"
+   ],
+   "title": "DefectRegion",
+   "type": "object"
+  },
+  "DefectValue": {
+   "additionalProperties": false,
+   "properties": {
+    "observed_area_cm2": {
+     "minimum": 0.0,
+     "title": "Observed Area Cm2",
+     "type": "number"
+    },
+    "regions": {
+     "items": {
+      "$ref": "#/$defs/DefectRegion"
+     },
+     "maxItems": 200,
+     "title": "Regions",
+     "type": "array"
+    },
+    "score": {
+     "maximum": 1.0,
+     "minimum": 0.0,
+     "title": "Score",
+     "type": "number"
+    },
+    "views": {
+     "items": {
+      "$ref": "#/$defs/DefectView"
+     },
+     "maxItems": 4,
+     "minItems": 1,
+     "title": "Views",
+     "type": "array"
+    }
+   },
+   "required": [
+    "score",
+    "regions",
+    "observed_area_cm2",
+    "views"
+   ],
+   "title": "DefectValue",
+   "type": "object"
+  },
+  "DefectView": {
+   "additionalProperties": false,
+   "description": "Per-view defect record (design §14): which capture, which transform, how much was seen.",
+   "properties": {
+    "capture_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Capture Id",
+     "type": "string"
+    },
+    "capture_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Capture Sha256",
+     "type": "string"
+    },
+    "observed_area_cm2": {
+     "anyOf": [
+      {
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Observed Area Cm2"
+    },
+    "score": {
+     "maximum": 1.0,
+     "minimum": 0.0,
+     "title": "Score",
+     "type": "number"
+    },
+    "transform_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Transform Id",
+     "type": "string"
+    }
+   },
+   "required": [
+    "capture_id",
+    "capture_sha256",
+    "transform_id",
+    "score",
+    "observed_area_cm2"
+   ],
+   "title": "DefectView",
+   "type": "object"
+  },
+  "DensitySpec": {
+   "additionalProperties": false,
+   "properties": {
+    "axis": {
+     "enum": [
+      "ends",
+      "picks",
+      "wales",
+      "courses"
+     ],
+     "title": "Axis",
+     "type": "string"
+    },
+    "lower": {
+     "maximum": 10000.0,
+     "minimum": 0.0,
+     "title": "Lower",
+     "type": "number"
+    },
+    "provenance": {
+     "$ref": "#/$defs/Provenance"
+    },
+    "target": {
+     "exclusiveMinimum": 0.0,
+     "maximum": 10000.0,
+     "title": "Target",
+     "type": "number"
+    },
+    "unit": {
+     "enum": [
+      "count/in",
+      "count/cm"
+     ],
+     "title": "Unit",
+     "type": "string"
+    },
+    "upper": {
+     "maximum": 10000.0,
+     "minimum": 0.0,
+     "title": "Upper",
+     "type": "number"
+    }
+   },
+   "required": [
+    "axis",
+    "unit",
+    "target",
+    "lower",
+    "upper",
+    "provenance"
+   ],
+   "title": "DensitySpec",
+   "type": "object"
+  },
+  "DomainManifest": {
+   "additionalProperties": false,
+   "properties": {
+    "construction": {
+     "enum": [
+      "woven",
+      "knit"
+     ],
+     "title": "Construction",
+     "type": "string"
+    },
+    "defect_accept_below": {
+     "maximum": 1.0,
+     "minimum": 0.0,
+     "title": "Defect Accept Below",
+     "type": "number"
+    },
+    "defect_hold_at_or_above": {
+     "maximum": 1.0,
+     "minimum": 0.0,
+     "title": "Defect Hold At Or Above",
+     "type": "number"
+    },
+    "effective_labels": {
+     "items": {
+      "maxLength": 120,
+      "minLength": 1,
+      "pattern": "^[^\\x00-\\x1f]+$",
+      "type": "string"
+     },
+     "maxItems": 64,
+     "minItems": 1,
+     "title": "Effective Labels",
+     "type": "array"
+    },
+    "id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Id",
+     "type": "string"
+    },
+    "metrology_validation_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Metrology Validation Sha256",
+     "type": "string"
+    },
+    "preprocessing_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Preprocessing Sha256",
+     "type": "string"
+    },
+    "profile_sha256s": {
+     "items": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+     },
+     "maxItems": 20,
+     "minItems": 1,
+     "title": "Profile Sha256S",
+     "type": "array"
+    },
+    "quality_thresholds_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Quality Thresholds Sha256",
+     "type": "string"
+    },
+    "required_roles": {
+     "items": {
+      "enum": [
+       "overview",
+       "structure",
+       "defect",
+       "scale"
+      ],
+      "type": "string"
+     },
+     "maxItems": 4,
+     "minItems": 1,
+     "title": "Required Roles",
+     "type": "array"
+    },
+    "score_transform_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Score Transform Sha256",
+     "type": "string"
+    },
+    "sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Sha256",
+     "type": "string"
+    },
+    "taxonomy_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Taxonomy Sha256",
+     "type": "string"
+    },
+    "unknown_assessment_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Unknown Assessment Sha256",
+     "type": "string"
+    },
+    "version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Version",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "version",
+    "sha256",
+    "construction",
+    "effective_labels",
+    "taxonomy_sha256",
+    "required_roles",
+    "profile_sha256s",
+    "preprocessing_sha256",
+    "score_transform_sha256",
+    "unknown_assessment_sha256",
+    "quality_thresholds_sha256",
+    "metrology_validation_sha256",
+    "defect_accept_below",
+    "defect_hold_at_or_above"
+   ],
+   "title": "DomainManifest",
+   "type": "object"
+  },
+  "DomainValue": {
+   "additionalProperties": false,
+   "properties": {
+    "assessment_version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Assessment Version",
+     "type": "string"
+    },
+    "in_domain": {
+     "title": "In Domain",
+     "type": "boolean"
+    },
+    "profile_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Profile Sha256",
+     "type": "string"
+    }
+   },
+   "required": [
+    "in_domain",
+    "assessment_version",
+    "profile_sha256"
+   ],
+   "title": "DomainValue",
+   "type": "object"
+  },
+  "ErrorBody": {
+   "additionalProperties": false,
+   "properties": {
+    "code": {
+     "enum": [
+      "UNAUTHENTICATED",
+      "FORBIDDEN",
+      "NOT_FOUND",
+      "MALFORMED_REQUEST",
+      "METHOD_NOT_ALLOWED",
+      "CONFLICT",
+      "PAYLOAD_TOO_LARGE",
+      "UNSUPPORTED_MEDIA",
+      "VALIDATION_FAILED",
+      "CAPACITY_LIMIT",
+      "SERVICE_UNAVAILABLE",
+      "DEADLINE_EXCEEDED",
+      "INTERNAL_ERROR"
+     ],
+     "title": "Code",
+     "type": "string"
+    },
+    "reasons": {
+     "items": {
+      "enum": [
+       "QUALITY_BLUR",
+       "QUALITY_GLARE",
+       "QUALITY_MOIRE",
+       "QUALITY_FOLD",
+       "QUALITY_FRAMING",
+       "SCALE_MISSING",
+       "SCALE_INVALID",
+       "CALIBRATION_EXPIRED",
+       "RESOLUTION_LOW",
+       "MEASUREMENT_UNCERTAIN",
+       "PATTERN_AMBIGUOUS",
+       "OOD",
+       "UNKNOWN_FABRIC",
+       "PO_UNCONFIRMED",
+       "PO_CONFLICT",
+       "PO_VERSION_STALE",
+       "UNIT_UNSUPPORTED",
+       "SPEC_MISSING",
+       "STAGE_UNAVAILABLE",
+       "DEFECT_SUSPECTED",
+       "CONSTRUCTION_OUTSIDE_TOLERANCE",
+       "FABRIC_MISMATCH",
+       "DOMAIN_UNVALIDATED",
+       "POLICY_UNRELEASED",
+       "RECAPTURE_LIMIT",
+       "EVIDENCE_STALE",
+       "AUDIT_UNAVAILABLE"
+      ],
+      "type": "string"
+     },
+     "maxItems": 12,
+     "title": "Reasons",
+     "type": "array"
+    },
+    "request_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Request Id",
+     "type": "string"
+    },
+    "retryable": {
+     "title": "Retryable",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "code",
+    "reasons",
+    "retryable",
+    "request_id"
+   ],
+   "title": "ErrorBody",
+   "type": "object"
+  },
+  "ErrorEnvelope": {
+   "additionalProperties": false,
+   "properties": {
+    "error": {
+     "$ref": "#/$defs/ErrorBody"
+    },
+    "schema_version": {
+     "const": "2",
+     "title": "Schema Version",
+     "type": "string"
+    }
+   },
+   "required": [
+    "schema_version",
+    "error"
+   ],
+   "title": "ErrorEnvelope",
+   "type": "object"
+  },
+  "EvaluationContext": {
+   "additionalProperties": false,
+   "properties": {
+    "calibration_records_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Calibration Records Sha256",
+     "type": "string"
+    },
+    "capture_binding_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Capture Binding Sha256",
+     "type": "string"
+    },
+    "clock_source": {
+     "const": "WORKER_UTC",
+     "title": "Clock Source",
+     "type": "string"
+    },
+    "deadline_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Deadline At",
+     "type": "string"
+    },
+    "evaluated_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Evaluated At",
+     "type": "string"
+    },
+    "request_generation": {
+     "minimum": 1,
+     "title": "Request Generation",
+     "type": "integer"
+    },
+    "request_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Request Id",
+     "type": "string"
+    }
+   },
+   "required": [
+    "evaluated_at",
+    "clock_source",
+    "deadline_at",
+    "calibration_records_sha256",
+    "capture_binding_sha256",
+    "request_id",
+    "request_generation"
+   ],
+   "title": "EvaluationContext",
+   "type": "object"
+  },
+  "Evidence": {
+   "additionalProperties": false,
+   "properties": {
+    "capture_ids": {
+     "items": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "type": "string"
+     },
+     "maxItems": 4,
+     "minItems": 1,
+     "title": "Capture Ids",
+     "type": "array"
+    },
+    "contradictions": {
+     "items": {
+      "enum": [
+       "QUALITY_BLUR",
+       "QUALITY_GLARE",
+       "QUALITY_MOIRE",
+       "QUALITY_FOLD",
+       "QUALITY_FRAMING",
+       "SCALE_MISSING",
+       "SCALE_INVALID",
+       "CALIBRATION_EXPIRED",
+       "RESOLUTION_LOW",
+       "MEASUREMENT_UNCERTAIN",
+       "PATTERN_AMBIGUOUS",
+       "OOD",
+       "UNKNOWN_FABRIC",
+       "PO_UNCONFIRMED",
+       "PO_CONFLICT",
+       "PO_VERSION_STALE",
+       "UNIT_UNSUPPORTED",
+       "SPEC_MISSING",
+       "STAGE_UNAVAILABLE",
+       "DEFECT_SUSPECTED",
+       "CONSTRUCTION_OUTSIDE_TOLERANCE",
+       "FABRIC_MISMATCH",
+       "DOMAIN_UNVALIDATED",
+       "POLICY_UNRELEASED",
+       "RECAPTURE_LIMIT",
+       "EVIDENCE_STALE",
+       "AUDIT_UNAVAILABLE"
+      ],
+      "type": "string"
+     },
+     "maxItems": 12,
+     "title": "Contradictions",
+     "type": "array"
+    },
+    "created_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Created At",
+     "type": "string"
+    },
+    "defects": {
+     "$ref": "#/$defs/Stage_DefectValue_"
+    },
+    "domain": {
+     "$ref": "#/$defs/Stage_DomainValue_"
+    },
+    "domain_id": {
+     "anyOf": [
+      {
+       "maxLength": 120,
+       "minLength": 1,
+       "pattern": "^[^\\x00-\\x1f]+$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Domain Id"
+    },
+    "fabric": {
+     "$ref": "#/$defs/Stage_FabricValue_"
+    },
+    "id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Id",
+     "type": "string"
+    },
+    "manifest_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Manifest Sha256",
+     "type": "string"
+    },
+    "metrology": {
+     "$ref": "#/$defs/Stage_list_Measurement__"
+    },
+    "quality": {
+     "$ref": "#/$defs/Stage_QualityValue_"
+    },
+    "sample_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Sample Id",
+     "type": "string"
+    },
+    "schema_version": {
+     "const": "2",
+     "title": "Schema Version",
+     "type": "string"
+    },
+    "spec_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Spec Sha256",
+     "type": "string"
+    }
+   },
+   "required": [
+    "schema_version",
+    "id",
+    "sample_id",
+    "capture_ids",
+    "spec_sha256",
+    "domain_id",
+    "domain",
+    "fabric",
+    "defects",
+    "metrology",
+    "quality",
+    "contradictions",
+    "manifest_sha256",
+    "created_at"
+   ],
+   "title": "Evidence",
+   "type": "object"
+  },
+  "FabricCandidate": {
+   "additionalProperties": false,
+   "properties": {
+    "label": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Label",
+     "type": "string"
+    },
+    "raw_score": {
+     "maximum": 1000000.0,
+     "minimum": -1000000.0,
+     "title": "Raw Score",
+     "type": "number"
+    }
+   },
+   "required": [
+    "label",
+    "raw_score"
+   ],
+   "title": "FabricCandidate",
+   "type": "object"
+  },
+  "FabricValue": {
+   "additionalProperties": false,
+   "description": "unknown=true: the classifier ran and has no authoritative answer (out of taxonomy or low\nconfidence); ``candidates`` are diagnostic only. A head that did not run is a FAILED or\nDISABLED stage, never unknown=true.",
+   "properties": {
+    "calibrated_probability": {
+     "anyOf": [
+      {
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Calibrated Probability"
+    },
+    "candidates": {
+     "items": {
+      "$ref": "#/$defs/FabricCandidate"
+     },
+     "maxItems": 10,
+     "title": "Candidates",
+     "type": "array"
+    },
+    "label": {
+     "anyOf": [
+      {
+       "maxLength": 120,
+       "minLength": 1,
+       "pattern": "^[^\\x00-\\x1f]+$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Label"
+    },
+    "taxonomy_version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Taxonomy Version",
+     "type": "string"
+    },
+    "unknown": {
+     "title": "Unknown",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "label",
+    "taxonomy_version",
+    "calibrated_probability",
+    "unknown",
+    "candidates"
+   ],
+   "title": "FabricValue",
+   "type": "object"
+  },
+  "Family": {
+   "additionalProperties": false,
+   "description": "The linked evaluations of one physical selection (design §20).",
+   "properties": {
+    "attempts_max": {
+     "const": 3,
+     "title": "Attempts Max",
+     "type": "integer"
+    },
+    "attempts_used": {
+     "maximum": 3,
+     "minimum": 0,
+     "title": "Attempts Used",
+     "type": "integer"
+    },
+    "current_spec_version": {
+     "minimum": 1,
+     "title": "Current Spec Version",
+     "type": "integer"
+    },
+    "predecessor_sample_id": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Predecessor Sample Id"
+    },
+    "selection_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Selection Id",
+     "type": "string"
+    },
+    "spec_is_current": {
+     "title": "Spec Is Current",
+     "type": "boolean"
+    },
+    "successor_sample_ids": {
+     "items": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "type": "string"
+     },
+     "maxItems": 20,
+     "title": "Successor Sample Ids",
+     "type": "array"
+    }
+   },
+   "required": [
+    "selection_id",
+    "predecessor_sample_id",
+    "successor_sample_ids",
+    "attempts_used",
+    "attempts_max",
+    "spec_is_current",
+    "current_spec_version"
+   ],
+   "title": "Family",
+   "type": "object"
+  },
+  "Measurement": {
+   "additionalProperties": false,
+   "properties": {
+    "axis": {
+     "enum": [
+      "ends",
+      "picks",
+      "wales",
+      "courses"
+     ],
+     "title": "Axis",
+     "type": "string"
+    },
+    "axis_registration_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Axis Registration Id",
+     "type": "string"
+    },
+    "calibration_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Calibration Sha256",
+     "type": "string"
+    },
+    "capture_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Capture Id",
+     "type": "string"
+    },
+    "capture_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Capture Sha256",
+     "type": "string"
+    },
+    "geometry_artifact_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Geometry Artifact Sha256",
+     "type": "string"
+    },
+    "interval95": {
+     "maxItems": 2,
+     "minItems": 2,
+     "prefixItems": [
+      {
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "minimum": 0.0,
+       "type": "number"
+      }
+     ],
+     "title": "Interval95",
+     "type": "array"
+    },
+    "method_version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Method Version",
+     "type": "string"
+    },
+    "reference_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Reference Id",
+     "type": "string"
+    },
+    "source_roi": {
+     "maxItems": 4,
+     "minItems": 4,
+     "prefixItems": [
+      {
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "type": "number"
+      }
+     ],
+     "title": "Source Roi",
+     "type": "array"
+    },
+    "uncertainty_report_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Uncertainty Report Sha256",
+     "type": "string"
+    },
+    "unit": {
+     "const": "count/in",
+     "title": "Unit",
+     "type": "string"
+    },
+    "value": {
+     "minimum": 0.0,
+     "title": "Value",
+     "type": "number"
+    }
+   },
+   "required": [
+    "capture_id",
+    "capture_sha256",
+    "source_roi",
+    "calibration_sha256",
+    "geometry_artifact_sha256",
+    "uncertainty_report_sha256",
+    "axis_registration_id",
+    "axis",
+    "unit",
+    "value",
+    "interval95",
+    "reference_id",
+    "method_version"
+   ],
+   "title": "Measurement",
+   "type": "object"
+  },
+  "Policy": {
+   "additionalProperties": false,
+   "properties": {
+    "max_capture_sets": {
+     "const": 3,
+     "title": "Max Capture Sets",
+     "type": "integer"
+    },
+    "mode": {
+     "enum": [
+      "REVIEW_ONLY",
+      "AUTOMATIC"
+     ],
+     "title": "Mode",
+     "type": "string"
+    },
+    "required_stages": {
+     "items": {
+      "enum": [
+       "quality",
+       "fabric",
+       "defects",
+       "metrology",
+       "domain"
+      ],
+      "type": "string"
+     },
+     "maxItems": 5,
+     "minItems": 5,
+     "title": "Required Stages",
+     "type": "array"
+    },
+    "schema_version": {
+     "const": "2",
+     "title": "Schema Version",
+     "type": "string"
+    },
+    "sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Sha256",
+     "type": "string"
+    },
+    "version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Version",
+     "type": "string"
+    }
+   },
+   "required": [
+    "schema_version",
+    "version",
+    "sha256",
+    "mode",
+    "required_stages",
+    "max_capture_sets"
+   ],
+   "title": "Policy",
+   "type": "object"
+  },
+  "Provenance": {
+   "additionalProperties": false,
+   "description": "Where one value came from. OCR is a candidate; a confirmed PO value is authoritative only\nfor what was ordered, never for what was observed (design §5, §17).",
+   "properties": {
+    "actor_id": {
+     "anyOf": [
+      {
+       "maxLength": 120,
+       "minLength": 1,
+       "pattern": "^[^\\x00-\\x1f]+$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Actor Id"
+    },
+    "candidate_id": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Candidate Id"
+    },
+    "corrects_id": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Corrects Id"
+    },
+    "document_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Document Sha256"
+    },
+    "image_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Image Sha256"
+    },
+    "observed_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Observed At",
+     "type": "string"
+    },
+    "ocr_confidence": {
+     "anyOf": [
+      {
+       "maximum": 1.0,
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Ocr Confidence"
+    },
+    "page": {
+     "anyOf": [
+      {
+       "maximum": 10000,
+       "minimum": 1,
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Page"
+    },
+    "raw_unit": {
+     "anyOf": [
+      {
+       "maxLength": 40,
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Raw Unit"
+    },
+    "raw_value": {
+     "anyOf": [
+      {
+       "maxLength": 200,
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Raw Value"
+    },
+    "source": {
+     "enum": [
+      "PO_CONFIRMED",
+      "OCR_CANDIDATE",
+      "OPERATOR",
+      "MODEL",
+      "PHYSICAL_REFERENCE"
+     ],
+     "title": "Source",
+     "type": "string"
+    },
+    "source_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Source Id",
+     "type": "string"
+    },
+    "source_version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Source Version",
+     "type": "string"
+    },
+    "span": {
+     "anyOf": [
+      {
+       "maxItems": 2,
+       "minItems": 2,
+       "prefixItems": [
+        {
+         "minimum": 0,
+         "type": "integer"
+        },
+        {
+         "minimum": 0,
+         "type": "integer"
+        }
+       ],
+       "type": "array"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Span"
+    }
+   },
+   "required": [
+    "source",
+    "source_id",
+    "source_version",
+    "actor_id",
+    "observed_at",
+    "image_sha256"
+   ],
+   "title": "Provenance",
+   "type": "object"
+  },
+  "PurchaseSpec": {
+   "additionalProperties": false,
+   "properties": {
+    "allowed_fabric_labels": {
+     "items": {
+      "maxLength": 120,
+      "minLength": 1,
+      "pattern": "^[^\\x00-\\x1f]+$",
+      "type": "string"
+     },
+     "maxItems": 40,
+     "minItems": 1,
+     "title": "Allowed Fabric Labels",
+     "type": "array"
+    },
+    "confirmed_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Confirmed At",
+     "type": "string"
+    },
+    "confirmed_by": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Confirmed By",
+     "type": "string"
+    },
+    "construction": {
+     "enum": [
+      "woven",
+      "knit"
+     ],
+     "title": "Construction",
+     "type": "string"
+    },
+    "content_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Content Sha256",
+     "type": "string"
+    },
+    "density": {
+     "items": {
+      "$ref": "#/$defs/DensitySpec"
+     },
+     "maxItems": 2,
+     "minItems": 2,
+     "title": "Density",
+     "type": "array"
+    },
+    "id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Id",
+     "type": "string"
+    },
+    "purchase_order_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Purchase Order Id",
+     "type": "string"
+    },
+    "schema_version": {
+     "const": "2",
+     "title": "Schema Version",
+     "type": "string"
+    },
+    "supersedes_version": {
+     "anyOf": [
+      {
+       "minimum": 1,
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Supersedes Version"
+    },
+    "taxonomy_version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Taxonomy Version",
+     "type": "string"
+    },
+    "version": {
+     "minimum": 1,
+     "title": "Version",
+     "type": "integer"
+    },
+    "workspace_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Workspace Id",
+     "type": "string"
+    }
+   },
+   "required": [
+    "schema_version",
+    "id",
+    "version",
+    "workspace_id",
+    "purchase_order_id",
+    "content_sha256",
+    "construction",
+    "allowed_fabric_labels",
+    "taxonomy_version",
+    "density",
+    "confirmed_by",
+    "confirmed_at",
+    "supersedes_version"
+   ],
+   "title": "PurchaseSpec",
+   "type": "object"
+  },
+  "QCResult": {
+   "additionalProperties": false,
+   "description": "The one envelope every create / upload / close / analyze / reload returns (design §14).",
+   "properties": {
+    "adjudications": {
+     "items": {
+      "$ref": "#/$defs/Adjudication"
+     },
+     "maxItems": 100,
+     "title": "Adjudications",
+     "type": "array"
+    },
+    "capture_sets": {
+     "items": {
+      "$ref": "#/$defs/CaptureSet"
+     },
+     "maxItems": 4,
+     "title": "Capture Sets",
+     "type": "array"
+    },
+    "captures": {
+     "items": {
+      "$ref": "#/$defs/Capture"
+     },
+     "maxItems": 12,
+     "title": "Captures",
+     "type": "array"
+    },
+    "current_human_disposition": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Adjudication"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "decision": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Decision"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "evidence": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Evidence"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "family": {
+     "$ref": "#/$defs/Family"
+    },
+    "history": {
+     "items": {
+      "$ref": "#/$defs/Decision"
+     },
+     "maxItems": 50,
+     "title": "History",
+     "type": "array"
+    },
+    "mode": {
+     "enum": [
+      "REVIEW_ONLY",
+      "AUTOMATIC"
+     ],
+     "title": "Mode",
+     "type": "string"
+    },
+    "recalled_decision_ids": {
+     "items": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "type": "string"
+     },
+     "maxItems": 50,
+     "title": "Recalled Decision Ids",
+     "type": "array"
+    },
+    "revision": {
+     "minimum": 0,
+     "title": "Revision",
+     "type": "integer"
+    },
+    "sample": {
+     "$ref": "#/$defs/Sample"
+    },
+    "schema_version": {
+     "const": "2",
+     "title": "Schema Version",
+     "type": "string"
+    }
+   },
+   "required": [
+    "schema_version",
+    "mode",
+    "sample",
+    "captures",
+    "capture_sets",
+    "evidence",
+    "decision",
+    "history",
+    "adjudications",
+    "current_human_disposition",
+    "recalled_decision_ids",
+    "family",
+    "revision"
+   ],
+   "title": "QCResult",
+   "type": "object"
+  },
+  "QualityChecks": {
+   "additionalProperties": false,
+   "properties": {
+    "blur": {
+     "title": "Blur",
+     "type": "boolean"
+    },
+    "fold": {
+     "title": "Fold",
+     "type": "boolean"
+    },
+    "framing": {
+     "title": "Framing",
+     "type": "boolean"
+    },
+    "glare": {
+     "title": "Glare",
+     "type": "boolean"
+    },
+    "marker_geometry": {
+     "title": "Marker Geometry",
+     "type": "boolean"
+    },
+    "moire": {
+     "title": "Moire",
+     "type": "boolean"
+    },
+    "resolution": {
+     "title": "Resolution",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "blur",
+    "glare",
+    "moire",
+    "fold",
+    "framing",
+    "resolution",
+    "marker_geometry"
+   ],
+   "title": "QualityChecks",
+   "type": "object"
+  },
+  "QualityValue": {
+   "additionalProperties": false,
+   "description": "Each key is true when that check passed. All seven are present; a check that could not\nbe evaluated makes the stage ABSTAINED rather than a missing-means-true entry.",
+   "properties": {
+    "checks": {
+     "$ref": "#/$defs/QualityChecks"
+    }
+   },
+   "required": [
+    "checks"
+   ],
+   "title": "QualityValue",
+   "type": "object"
+  },
+  "Readiness": {
+   "additionalProperties": false,
+   "description": "Which stages have usable artifacts. ``ready`` is about artifacts, never released\nauthority (design §21).",
+   "properties": {
+    "bundle_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Bundle Sha256"
+    },
+    "ready": {
+     "title": "Ready",
+     "type": "boolean"
+    },
+    "schema_version": {
+     "const": "2",
+     "title": "Schema Version",
+     "type": "string"
+    },
+    "stages": {
+     "items": {
+      "$ref": "#/$defs/ReadinessStage"
+     },
+     "maxItems": 5,
+     "minItems": 5,
+     "title": "Stages",
+     "type": "array"
+    }
+   },
+   "required": [
+    "schema_version",
+    "ready",
+    "bundle_sha256",
+    "stages"
+   ],
+   "title": "Readiness",
+   "type": "object"
+  },
+  "ReadinessStage": {
+   "additionalProperties": false,
+   "properties": {
+    "artifact_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Artifact Sha256"
+    },
+    "name": {
+     "enum": [
+      "quality",
+      "fabric",
+      "defects",
+      "metrology",
+      "domain"
+     ],
+     "title": "Name",
+     "type": "string"
+    },
+    "reasons": {
+     "items": {
+      "enum": [
+       "QUALITY_BLUR",
+       "QUALITY_GLARE",
+       "QUALITY_MOIRE",
+       "QUALITY_FOLD",
+       "QUALITY_FRAMING",
+       "SCALE_MISSING",
+       "SCALE_INVALID",
+       "CALIBRATION_EXPIRED",
+       "RESOLUTION_LOW",
+       "MEASUREMENT_UNCERTAIN",
+       "PATTERN_AMBIGUOUS",
+       "OOD",
+       "UNKNOWN_FABRIC",
+       "PO_UNCONFIRMED",
+       "PO_CONFLICT",
+       "PO_VERSION_STALE",
+       "UNIT_UNSUPPORTED",
+       "SPEC_MISSING",
+       "STAGE_UNAVAILABLE",
+       "DEFECT_SUSPECTED",
+       "CONSTRUCTION_OUTSIDE_TOLERANCE",
+       "FABRIC_MISMATCH",
+       "DOMAIN_UNVALIDATED",
+       "POLICY_UNRELEASED",
+       "RECAPTURE_LIMIT",
+       "EVIDENCE_STALE",
+       "AUDIT_UNAVAILABLE"
+      ],
+      "type": "string"
+     },
+     "maxItems": 12,
+     "title": "Reasons",
+     "type": "array"
+    },
+    "state": {
+     "enum": [
+      "OK",
+      "ABSTAINED",
+      "FAILED",
+      "DISABLED",
+      "NOT_RUN"
+     ],
+     "title": "State",
+     "type": "string"
+    }
+   },
+   "required": [
+    "name",
+    "state",
+    "artifact_sha256",
+    "reasons"
+   ],
+   "title": "ReadinessStage",
+   "type": "object"
+  },
+  "Release": {
+   "additionalProperties": false,
+   "properties": {
+    "approved_by": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Approved By",
+     "type": "string"
+    },
+    "authority_record_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Authority Record Sha256",
+     "type": "string"
+    },
+    "bundle_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Bundle Sha256",
+     "type": "string"
+    },
+    "calibration_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Calibration Sha256",
+     "type": "string"
+    },
+    "domain_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Domain Sha256",
+     "type": "string"
+    },
+    "expires_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Expires At",
+     "type": "string"
+    },
+    "id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Id",
+     "type": "string"
+    },
+    "independent_signatory": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Independent Signatory",
+     "type": "string"
+    },
+    "monitoring_protocol_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Monitoring Protocol Sha256"
+    },
+    "operations_proof_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Operations Proof Sha256"
+    },
+    "policy_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Policy Sha256",
+     "type": "string"
+    },
+    "predecessor_release_id": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Predecessor Release Id"
+    },
+    "sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Sha256",
+     "type": "string"
+    },
+    "state": {
+     "enum": [
+      "STATISTICAL_CANDIDATE",
+      "ACTIVE",
+      "SUSPENDED"
+     ],
+     "title": "State",
+     "type": "string"
+    },
+    "statistics_report_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Statistics Report Sha256",
+     "type": "string"
+    },
+    "version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Version",
+     "type": "string"
+    },
+    "workspace_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Workspace Id",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "version",
+    "sha256",
+    "workspace_id",
+    "state",
+    "domain_sha256",
+    "policy_sha256",
+    "bundle_sha256",
+    "calibration_sha256",
+    "statistics_report_sha256",
+    "operations_proof_sha256",
+    "monitoring_protocol_sha256",
+    "authority_record_sha256",
+    "approved_by",
+    "independent_signatory",
+    "expires_at",
+    "predecessor_release_id"
+   ],
+   "title": "Release",
+   "type": "object"
+  },
+  "Sample": {
+   "additionalProperties": false,
+   "properties": {
+    "capture_attempt": {
+     "maximum": 3,
+     "minimum": 0,
+     "title": "Capture Attempt",
+     "type": "integer"
+    },
+    "created_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Created At",
+     "type": "string"
+    },
+    "created_by": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Created By",
+     "type": "string"
+    },
+    "disposition": {
+     "enum": [
+      "SELECTED",
+      "SUBMITTED",
+      "MISSING",
+      "EXCLUDED"
+     ],
+     "title": "Disposition",
+     "type": "string"
+    },
+    "exclusion_reason": {
+     "anyOf": [
+      {
+       "maxLength": 2000,
+       "minLength": 1,
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Exclusion Reason"
+    },
+    "face": {
+     "enum": [
+      "face",
+      "back",
+      "unknown"
+     ],
+     "title": "Face",
+     "type": "string"
+    },
+    "id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Id",
+     "type": "string"
+    },
+    "independent_group_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Independent Group Id",
+     "type": "string"
+    },
+    "location_ref": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Location Ref",
+     "type": "string"
+    },
+    "lot_ref": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Lot Ref",
+     "type": "string"
+    },
+    "planned_area_cm2": {
+     "exclusiveMinimum": 0.0,
+     "maximum": 1000000.0,
+     "title": "Planned Area Cm2",
+     "type": "number"
+    },
+    "predecessor_sample_id": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Predecessor Sample Id"
+    },
+    "purchase_order_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Purchase Order Id",
+     "type": "string"
+    },
+    "revision": {
+     "minimum": 0,
+     "title": "Revision",
+     "type": "integer"
+    },
+    "roll_ref": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Roll Ref",
+     "type": "string"
+    },
+    "sample_plan_version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Sample Plan Version",
+     "type": "string"
+    },
+    "sampling_method": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Sampling Method",
+     "type": "string"
+    },
+    "schema_version": {
+     "const": "2",
+     "title": "Schema Version",
+     "type": "string"
+    },
+    "selection_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Selection Id",
+     "type": "string"
+    },
+    "spec_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Spec Id",
+     "type": "string"
+    },
+    "spec_version": {
+     "minimum": 1,
+     "title": "Spec Version",
+     "type": "integer"
+    },
+    "usable_area_cm2": {
+     "anyOf": [
+      {
+       "maximum": 1000000.0,
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Usable Area Cm2"
+    },
+    "workspace_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Workspace Id",
+     "type": "string"
+    }
+   },
+   "required": [
+    "schema_version",
+    "id",
+    "workspace_id",
+    "purchase_order_id",
+    "spec_id",
+    "spec_version",
+    "lot_ref",
+    "roll_ref",
+    "location_ref",
+    "sample_plan_version",
+    "capture_attempt",
+    "revision",
+    "predecessor_sample_id",
+    "selection_id",
+    "face",
+    "planned_area_cm2",
+    "usable_area_cm2",
+    "sampling_method",
+    "independent_group_id",
+    "disposition",
+    "exclusion_reason",
+    "created_by",
+    "created_at"
+   ],
+   "title": "Sample",
+   "type": "object"
+  },
+  "SamplingSelection": {
+   "additionalProperties": false,
+   "description": "One immutable physical selection. Linked re-evaluations share it (design §14, §15, §20).",
+   "properties": {
+    "cohort": {
+     "enum": [
+      "OPERATIONAL",
+      "CONFIRMATORY",
+      "CHALLENGE"
+     ],
+     "title": "Cohort",
+     "type": "string"
+    },
+    "created_at": {
+     "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$",
+     "title": "Created At",
+     "type": "string"
+    },
+    "created_by": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Created By",
+     "type": "string"
+    },
+    "draw_index": {
+     "anyOf": [
+      {
+       "minimum": 0,
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Draw Index"
+    },
+    "face": {
+     "enum": [
+      "face",
+      "back",
+      "unknown"
+     ],
+     "title": "Face",
+     "type": "string"
+    },
+    "id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Id",
+     "type": "string"
+    },
+    "independent_group_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Independent Group Id",
+     "type": "string"
+    },
+    "location_ref": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Location Ref",
+     "type": "string"
+    },
+    "lot_ref": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Lot Ref",
+     "type": "string"
+    },
+    "method": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Method",
+     "type": "string"
+    },
+    "plan_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Plan Sha256"
+    },
+    "plan_version": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Plan Version",
+     "type": "string"
+    },
+    "planned_area_cm2": {
+     "exclusiveMinimum": 0.0,
+     "maximum": 1000000.0,
+     "title": "Planned Area Cm2",
+     "type": "number"
+    },
+    "purchase_order_id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Purchase Order Id",
+     "type": "string"
+    },
+    "randomization_seed": {
+     "anyOf": [
+      {
+       "maxLength": 120,
+       "minLength": 1,
+       "pattern": "^[^\\x00-\\x1f]+$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Randomization Seed"
+    },
+    "roll_ref": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Roll Ref",
+     "type": "string"
+    },
+    "selection_probability": {
+     "anyOf": [
+      {
+       "exclusiveMinimum": 0.0,
+       "maximum": 1.0,
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Selection Probability"
+    },
+    "workspace_id": {
+     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+     "title": "Workspace Id",
+     "type": "string"
+    }
+   },
+   "required": [
+    "id",
+    "workspace_id",
+    "purchase_order_id",
+    "plan_version",
+    "plan_sha256",
+    "randomization_seed",
+    "draw_index",
+    "selection_probability",
+    "cohort",
+    "independent_group_id",
+    "lot_ref",
+    "roll_ref",
+    "location_ref",
+    "face",
+    "planned_area_cm2",
+    "method",
+    "created_by",
+    "created_at"
+   ],
+   "title": "SamplingSelection",
+   "type": "object"
+  },
+  "ScaleReference": {
+   "additionalProperties": false,
+   "properties": {
+    "dimensions_mm": {
+     "maxItems": 2,
+     "minItems": 2,
+     "prefixItems": [
+      {
+       "exclusiveMinimum": 0.0,
+       "type": "number"
+      },
+      {
+       "exclusiveMinimum": 0.0,
+       "type": "number"
+      }
+     ],
+     "title": "Dimensions Mm",
+     "type": "array"
+    },
+    "id": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Id",
+     "type": "string"
+    },
+    "print_verification_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Print Verification Sha256",
+     "type": "string"
+    },
+    "sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Sha256",
+     "type": "string"
+    },
+    "traceability_report_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Traceability Report Sha256",
+     "type": "string"
+    },
+    "uncertainty_mm": {
+     "maxItems": 2,
+     "minItems": 2,
+     "prefixItems": [
+      {
+       "minimum": 0.0,
+       "type": "number"
+      },
+      {
+       "minimum": 0.0,
+       "type": "number"
+      }
+     ],
+     "title": "Uncertainty Mm",
+     "type": "array"
+    }
+   },
+   "required": [
+    "id",
+    "sha256",
+    "dimensions_mm",
+    "uncertainty_mm",
+    "traceability_report_sha256",
+    "print_verification_sha256"
+   ],
+   "title": "ScaleReference",
+   "type": "object"
+  },
+  "Stage_DefectValue_": {
+   "additionalProperties": false,
+   "properties": {
+    "artifact_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Artifact Sha256"
+    },
+    "duration_ms": {
+     "maximum": 600000.0,
+     "minimum": 0.0,
+     "title": "Duration Ms",
+     "type": "number"
+    },
+    "reasons": {
+     "items": {
+      "enum": [
+       "QUALITY_BLUR",
+       "QUALITY_GLARE",
+       "QUALITY_MOIRE",
+       "QUALITY_FOLD",
+       "QUALITY_FRAMING",
+       "SCALE_MISSING",
+       "SCALE_INVALID",
+       "CALIBRATION_EXPIRED",
+       "RESOLUTION_LOW",
+       "MEASUREMENT_UNCERTAIN",
+       "PATTERN_AMBIGUOUS",
+       "OOD",
+       "UNKNOWN_FABRIC",
+       "PO_UNCONFIRMED",
+       "PO_CONFLICT",
+       "PO_VERSION_STALE",
+       "UNIT_UNSUPPORTED",
+       "SPEC_MISSING",
+       "STAGE_UNAVAILABLE",
+       "DEFECT_SUSPECTED",
+       "CONSTRUCTION_OUTSIDE_TOLERANCE",
+       "FABRIC_MISMATCH",
+       "DOMAIN_UNVALIDATED",
+       "POLICY_UNRELEASED",
+       "RECAPTURE_LIMIT",
+       "EVIDENCE_STALE",
+       "AUDIT_UNAVAILABLE"
+      ],
+      "type": "string"
+     },
+     "maxItems": 12,
+     "title": "Reasons",
+     "type": "array"
+    },
+    "state": {
+     "enum": [
+      "OK",
+      "ABSTAINED",
+      "FAILED",
+      "DISABLED",
+      "NOT_RUN"
+     ],
+     "title": "State",
+     "type": "string"
+    },
+    "value": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/DefectValue"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   },
+   "required": [
+    "state",
+    "value",
+    "reasons",
+    "artifact_sha256",
+    "duration_ms"
+   ],
+   "title": "Stage[DefectValue]",
+   "type": "object"
+  },
+  "Stage_DomainValue_": {
+   "additionalProperties": false,
+   "properties": {
+    "artifact_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Artifact Sha256"
+    },
+    "duration_ms": {
+     "maximum": 600000.0,
+     "minimum": 0.0,
+     "title": "Duration Ms",
+     "type": "number"
+    },
+    "reasons": {
+     "items": {
+      "enum": [
+       "QUALITY_BLUR",
+       "QUALITY_GLARE",
+       "QUALITY_MOIRE",
+       "QUALITY_FOLD",
+       "QUALITY_FRAMING",
+       "SCALE_MISSING",
+       "SCALE_INVALID",
+       "CALIBRATION_EXPIRED",
+       "RESOLUTION_LOW",
+       "MEASUREMENT_UNCERTAIN",
+       "PATTERN_AMBIGUOUS",
+       "OOD",
+       "UNKNOWN_FABRIC",
+       "PO_UNCONFIRMED",
+       "PO_CONFLICT",
+       "PO_VERSION_STALE",
+       "UNIT_UNSUPPORTED",
+       "SPEC_MISSING",
+       "STAGE_UNAVAILABLE",
+       "DEFECT_SUSPECTED",
+       "CONSTRUCTION_OUTSIDE_TOLERANCE",
+       "FABRIC_MISMATCH",
+       "DOMAIN_UNVALIDATED",
+       "POLICY_UNRELEASED",
+       "RECAPTURE_LIMIT",
+       "EVIDENCE_STALE",
+       "AUDIT_UNAVAILABLE"
+      ],
+      "type": "string"
+     },
+     "maxItems": 12,
+     "title": "Reasons",
+     "type": "array"
+    },
+    "state": {
+     "enum": [
+      "OK",
+      "ABSTAINED",
+      "FAILED",
+      "DISABLED",
+      "NOT_RUN"
+     ],
+     "title": "State",
+     "type": "string"
+    },
+    "value": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/DomainValue"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   },
+   "required": [
+    "state",
+    "value",
+    "reasons",
+    "artifact_sha256",
+    "duration_ms"
+   ],
+   "title": "Stage[DomainValue]",
+   "type": "object"
+  },
+  "Stage_FabricValue_": {
+   "additionalProperties": false,
+   "properties": {
+    "artifact_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Artifact Sha256"
+    },
+    "duration_ms": {
+     "maximum": 600000.0,
+     "minimum": 0.0,
+     "title": "Duration Ms",
+     "type": "number"
+    },
+    "reasons": {
+     "items": {
+      "enum": [
+       "QUALITY_BLUR",
+       "QUALITY_GLARE",
+       "QUALITY_MOIRE",
+       "QUALITY_FOLD",
+       "QUALITY_FRAMING",
+       "SCALE_MISSING",
+       "SCALE_INVALID",
+       "CALIBRATION_EXPIRED",
+       "RESOLUTION_LOW",
+       "MEASUREMENT_UNCERTAIN",
+       "PATTERN_AMBIGUOUS",
+       "OOD",
+       "UNKNOWN_FABRIC",
+       "PO_UNCONFIRMED",
+       "PO_CONFLICT",
+       "PO_VERSION_STALE",
+       "UNIT_UNSUPPORTED",
+       "SPEC_MISSING",
+       "STAGE_UNAVAILABLE",
+       "DEFECT_SUSPECTED",
+       "CONSTRUCTION_OUTSIDE_TOLERANCE",
+       "FABRIC_MISMATCH",
+       "DOMAIN_UNVALIDATED",
+       "POLICY_UNRELEASED",
+       "RECAPTURE_LIMIT",
+       "EVIDENCE_STALE",
+       "AUDIT_UNAVAILABLE"
+      ],
+      "type": "string"
+     },
+     "maxItems": 12,
+     "title": "Reasons",
+     "type": "array"
+    },
+    "state": {
+     "enum": [
+      "OK",
+      "ABSTAINED",
+      "FAILED",
+      "DISABLED",
+      "NOT_RUN"
+     ],
+     "title": "State",
+     "type": "string"
+    },
+    "value": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/FabricValue"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   },
+   "required": [
+    "state",
+    "value",
+    "reasons",
+    "artifact_sha256",
+    "duration_ms"
+   ],
+   "title": "Stage[FabricValue]",
+   "type": "object"
+  },
+  "Stage_QualityValue_": {
+   "additionalProperties": false,
+   "properties": {
+    "artifact_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Artifact Sha256"
+    },
+    "duration_ms": {
+     "maximum": 600000.0,
+     "minimum": 0.0,
+     "title": "Duration Ms",
+     "type": "number"
+    },
+    "reasons": {
+     "items": {
+      "enum": [
+       "QUALITY_BLUR",
+       "QUALITY_GLARE",
+       "QUALITY_MOIRE",
+       "QUALITY_FOLD",
+       "QUALITY_FRAMING",
+       "SCALE_MISSING",
+       "SCALE_INVALID",
+       "CALIBRATION_EXPIRED",
+       "RESOLUTION_LOW",
+       "MEASUREMENT_UNCERTAIN",
+       "PATTERN_AMBIGUOUS",
+       "OOD",
+       "UNKNOWN_FABRIC",
+       "PO_UNCONFIRMED",
+       "PO_CONFLICT",
+       "PO_VERSION_STALE",
+       "UNIT_UNSUPPORTED",
+       "SPEC_MISSING",
+       "STAGE_UNAVAILABLE",
+       "DEFECT_SUSPECTED",
+       "CONSTRUCTION_OUTSIDE_TOLERANCE",
+       "FABRIC_MISMATCH",
+       "DOMAIN_UNVALIDATED",
+       "POLICY_UNRELEASED",
+       "RECAPTURE_LIMIT",
+       "EVIDENCE_STALE",
+       "AUDIT_UNAVAILABLE"
+      ],
+      "type": "string"
+     },
+     "maxItems": 12,
+     "title": "Reasons",
+     "type": "array"
+    },
+    "state": {
+     "enum": [
+      "OK",
+      "ABSTAINED",
+      "FAILED",
+      "DISABLED",
+      "NOT_RUN"
+     ],
+     "title": "State",
+     "type": "string"
+    },
+    "value": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/QualityValue"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    }
+   },
+   "required": [
+    "state",
+    "value",
+    "reasons",
+    "artifact_sha256",
+    "duration_ms"
+   ],
+   "title": "Stage[QualityValue]",
+   "type": "object"
+  },
+  "Stage_list_Measurement__": {
+   "additionalProperties": false,
+   "properties": {
+    "artifact_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Artifact Sha256"
+    },
+    "duration_ms": {
+     "maximum": 600000.0,
+     "minimum": 0.0,
+     "title": "Duration Ms",
+     "type": "number"
+    },
+    "reasons": {
+     "items": {
+      "enum": [
+       "QUALITY_BLUR",
+       "QUALITY_GLARE",
+       "QUALITY_MOIRE",
+       "QUALITY_FOLD",
+       "QUALITY_FRAMING",
+       "SCALE_MISSING",
+       "SCALE_INVALID",
+       "CALIBRATION_EXPIRED",
+       "RESOLUTION_LOW",
+       "MEASUREMENT_UNCERTAIN",
+       "PATTERN_AMBIGUOUS",
+       "OOD",
+       "UNKNOWN_FABRIC",
+       "PO_UNCONFIRMED",
+       "PO_CONFLICT",
+       "PO_VERSION_STALE",
+       "UNIT_UNSUPPORTED",
+       "SPEC_MISSING",
+       "STAGE_UNAVAILABLE",
+       "DEFECT_SUSPECTED",
+       "CONSTRUCTION_OUTSIDE_TOLERANCE",
+       "FABRIC_MISMATCH",
+       "DOMAIN_UNVALIDATED",
+       "POLICY_UNRELEASED",
+       "RECAPTURE_LIMIT",
+       "EVIDENCE_STALE",
+       "AUDIT_UNAVAILABLE"
+      ],
+      "type": "string"
+     },
+     "maxItems": 12,
+     "title": "Reasons",
+     "type": "array"
+    },
+    "state": {
+     "enum": [
+      "OK",
+      "ABSTAINED",
+      "FAILED",
+      "DISABLED",
+      "NOT_RUN"
+     ],
+     "title": "State",
+     "type": "string"
+    },
+    "value": {
+     "anyOf": [
+      {
+       "items": {
+        "$ref": "#/$defs/Measurement"
+       },
+       "type": "array"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Value"
+    }
+   },
+   "required": [
+    "state",
+    "value",
+    "reasons",
+    "artifact_sha256",
+    "duration_ms"
+   ],
+   "title": "Stage[list[Measurement]]",
+   "type": "object"
+  },
+  "ValidatedCapture": {
+   "additionalProperties": false,
+   "properties": {
+    "acquisition_attestation_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Acquisition Attestation Sha256",
+     "type": "string"
+    },
+    "attestation": {
+     "$ref": "#/$defs/AcquisitionAttestation"
+    },
+    "axis_registration": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/AxisRegistration"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "calibration": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/CalibrationProfile"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "capture": {
+     "$ref": "#/$defs/Capture"
+    },
+    "geometry_artifact_sha256": {
+     "anyOf": [
+      {
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Geometry Artifact Sha256"
+    },
+    "original_storage_reference": {
+     "maxLength": 120,
+     "minLength": 1,
+     "pattern": "^[^\\x00-\\x1f]+$",
+     "title": "Original Storage Reference",
+     "type": "string"
+    },
+    "reference": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/ScaleReference"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "verified_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Verified Sha256",
+     "type": "string"
+    }
+   },
+   "required": [
+    "capture",
+    "original_storage_reference",
+    "verified_sha256",
+    "acquisition_attestation_sha256",
+    "attestation",
+    "geometry_artifact_sha256",
+    "calibration",
+    "reference",
+    "axis_registration"
+   ],
+   "title": "ValidatedCapture",
+   "type": "object"
+  }
+ },
+ "$id": "https://texpilot.local/contracts/qc-v2.schema.json",
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "TexPilot incoming-fabric QC v2",
+ "x-capture-fixable": [
+  "QUALITY_BLUR",
+  "QUALITY_FOLD",
+  "QUALITY_FRAMING",
+  "QUALITY_GLARE",
+  "QUALITY_MOIRE",
+  "RESOLUTION_LOW",
+  "SCALE_INVALID",
+  "SCALE_MISSING"
+ ],
+ "x-error-status": {
+  "CAPACITY_LIMIT": {
+   "retryable": true,
+   "status": 429
+  },
+  "CONFLICT": {
+   "retryable": false,
+   "status": 409
+  },
+  "DEADLINE_EXCEEDED": {
+   "retryable": true,
+   "status": 504
+  },
+  "FORBIDDEN": {
+   "retryable": false,
+   "status": 403
+  },
+  "INTERNAL_ERROR": {
+   "retryable": false,
+   "status": 500
+  },
+  "MALFORMED_REQUEST": {
+   "retryable": false,
+   "status": 400
+  },
+  "METHOD_NOT_ALLOWED": {
+   "retryable": false,
+   "status": 405
+  },
+  "NOT_FOUND": {
+   "retryable": false,
+   "status": 404
+  },
+  "PAYLOAD_TOO_LARGE": {
+   "retryable": false,
+   "status": 413
+  },
+  "SERVICE_UNAVAILABLE": {
+   "retryable": true,
+   "status": 503
+  },
+  "UNAUTHENTICATED": {
+   "retryable": false,
+   "status": 401
+  },
+  "UNSUPPORTED_MEDIA": {
+   "retryable": false,
+   "status": 415
+  },
+  "VALIDATION_FAILED": {
+   "retryable": false,
+   "status": 422
+  }
+ },
+ "x-limits": {
+  "assertion_ttl_s": 30,
+  "max_capture_sets": 3,
+  "max_decoded_pixels": 16000000,
+  "max_future_skew_s": 120,
+  "max_original_bytes": 12582912,
+  "max_originals_per_set": 4,
+  "max_set_bytes": 50331648,
+  "request_deadline_s": 60
+ },
+ "x-schema-version": "2",
+ "x-types": [
+  "AcquisitionAttestation",
+  "Adjudication",
+  "AnalysisCandidate",
+  "AnalyzeRequest",
+  "AssertionClaims",
+  "AxisRegistration",
+  "CalibrationProfile",
+  "Capture",
+  "CaptureSet",
+  "ConsentAuthority",
+  "Decision",
+  "DecisionDraft",
+  "DensitySpec",
+  "DomainManifest",
+  "ErrorEnvelope",
+  "EvaluationContext",
+  "Evidence",
+  "Policy",
+  "Provenance",
+  "PurchaseSpec",
+  "QCResult",
+  "Readiness",
+  "Release",
+  "Sample",
+  "SamplingSelection",
+  "ScaleReference",
+  "ValidatedCapture"
+ ]
+}

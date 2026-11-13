@@ -1,0 +1,139 @@
+[
+ {
+  "name": "empty-object",
+  "value": {},
+  "canonical": "{}",
+  "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+ },
+ {
+  "name": "key-order",
+  "value": {
+   "b": 1,
+   "a": 2,
+   "aa": 3,
+   "B": 4
+  },
+  "canonical": "{\"B\":4,\"a\":2,\"aa\":3,\"b\":1}",
+  "sha256": "b0917df19443b623d1a075d6c14d8e8de027403c4b34046f4f21e100c5a7480f"
+ },
+ {
+  "name": "numbers",
+  "value": [
+   0,
+   -0.0,
+   1.0,
+   2.54,
+   0.1,
+   1e+21,
+   1e-07,
+   1e-06,
+   123456789.125,
+   100,
+   68.5,
+   1e+20,
+   -3.25
+  ],
+  "canonical": "[0,0,1,2.54,0.1,1e+21,1e-7,0.000001,123456789.125,100,68.5,100000000000000000000,-3.25]",
+  "sha256": "ed5cad283c0b0c602016a8f2bd46573026e874b0d79737ae2612f33ce432df51"
+ },
+ {
+  "name": "text",
+  "value": {
+   "ur": "معائنہ",
+   "quote": "a\"b\\c",
+   "control": "line\nbreak\ttab",
+   "emoji": "🧵"
+  },
+  "canonical": "{\"control\":\"line\\nbreak\\ttab\",\"emoji\":\"🧵\",\"quote\":\"a\\\"b\\\\c\",\"ur\":\"معائنہ\"}",
+  "sha256": "f259375ba1964c4ee2dbc539bae5ae51fc96d325aae7e3d964104efbd9f687ce"
+ },
+ {
+  "name": "nested",
+  "value": {
+   "z": [
+    true,
+    false,
+    null,
+    {
+     "y": [],
+     "x": {}
+    }
+   ]
+  },
+  "canonical": "{\"z\":[true,false,null,{\"x\":{},\"y\":[]}]}",
+  "sha256": "a674ac6f6e4768221d9abb2d906779b401283e8825bc44756ba0141e50a5a7b6"
+ },
+ {
+  "name": "spec",
+  "value": {
+   "schema_version": "2",
+   "id": "00000000-0000-4000-8000-000000000010",
+   "version": 1,
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "purchase_order_id": "po-0001",
+   "content_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+   "construction": "woven",
+   "allowed_fabric_labels": [
+    "twill",
+    "denim"
+   ],
+   "taxonomy_version": "fabric24-head_a",
+   "density": [
+    {
+     "axis": "ends",
+     "unit": "count/in",
+     "target": 76,
+     "lower": 72,
+     "upper": 80,
+     "provenance": {
+      "source": "PO_CONFIRMED",
+      "source_id": "po-doc-1",
+      "source_version": "1",
+      "actor_id": "user-purchase",
+      "observed_at": "2026-11-13T08:00:00Z",
+      "image_sha256": null,
+      "document_sha256": "8896e24075a00ab5921b54d8a03ea238e2e3e516ad09c634773cd509e9c219ec",
+      "page": 1,
+      "span": [
+       120,
+       131
+      ],
+      "raw_value": "76",
+      "raw_unit": "ends/inch",
+      "ocr_confidence": 0.91,
+      "candidate_id": "00000000-0000-4000-8000-000000000200",
+      "corrects_id": null
+     }
+    },
+    {
+     "axis": "picks",
+     "unit": "count/in",
+     "target": 68.5,
+     "lower": 65,
+     "upper": 72,
+     "provenance": {
+      "source": "PO_CONFIRMED",
+      "source_id": "po-doc-1",
+      "source_version": "1",
+      "actor_id": "user-purchase",
+      "observed_at": "2026-11-13T08:00:00Z",
+      "image_sha256": null,
+      "document_sha256": null,
+      "page": null,
+      "span": null,
+      "raw_value": null,
+      "raw_unit": null,
+      "ocr_confidence": null,
+      "candidate_id": null,
+      "corrects_id": null
+     }
+    }
+   ],
+   "confirmed_by": "user-purchase",
+   "confirmed_at": "2026-11-13T08:00:00Z",
+   "supersedes_version": null
+  },
+  "canonical": "{\"allowed_fabric_labels\":[\"twill\",\"denim\"],\"confirmed_at\":\"2026-11-13T08:00:00Z\",\"confirmed_by\":\"user-purchase\",\"construction\":\"woven\",\"content_sha256\":\"c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31\",\"density\":[{\"axis\":\"ends\",\"lower\":72,\"provenance\":{\"actor_id\":\"user-purchase\",\"candidate_id\":\"00000000-0000-4000-8000-000000000200\",\"corrects_id\":null,\"document_sha256\":\"8896e24075a00ab5921b54d8a03ea238e2e3e516ad09c634773cd509e9c219ec\",\"image_sha256\":null,\"observed_at\":\"2026-11-13T08:00:00Z\",\"ocr_confidence\":0.91,\"page\":1,\"raw_unit\":\"ends/inch\",\"raw_value\":\"76\",\"source\":\"PO_CONFIRMED\",\"source_id\":\"po-doc-1\",\"source_version\":\"1\",\"span\":[120,131]},\"target\":76,\"unit\":\"count/in\",\"upper\":80},{\"axis\":\"picks\",\"lower\":65,\"provenance\":{\"actor_id\":\"user-purchase\",\"candidate_id\":null,\"corrects_id\":null,\"document_sha256\":null,\"image_sha256\":null,\"observed_at\":\"2026-11-13T08:00:00Z\",\"ocr_confidence\":null,\"page\":null,\"raw_unit\":null,\"raw_value\":null,\"source\":\"PO_CONFIRMED\",\"source_id\":\"po-doc-1\",\"source_version\":\"1\",\"span\":null},\"target\":68.5,\"unit\":\"count/in\",\"upper\":72}],\"id\":\"00000000-0000-4000-8000-000000000010\",\"purchase_order_id\":\"po-0001\",\"schema_version\":\"2\",\"supersedes_version\":null,\"taxonomy_version\":\"fabric24-head_a\",\"version\":1,\"workspace_id\":\"00000000-0000-4000-8000-000000000001\"}",
+  "sha256": "f811db43d74397e8b780ef61ef2a8b8280fea50ebc8e921d8725cd0cec94ea02"
+ }
+]

@@ -12,6 +12,7 @@ const stock: Section = { id: 'inventory', en: 'Stock', ur: 'اسٹاک', icon: C
 const history: Section = { id: 'activity', en: 'History', ur: 'ہسٹری', icon: History };
 const procurement: Section = { id: 'procurement', en: 'Procurement', ur: 'خریداری', icon: PackagePlus };
 const lots: Section = { id: 'lots', en: 'Inspections', ur: 'معائنے', icon: ClipboardCheck };
+const incomingQC: Section = { id: 'incoming-qc', en: 'Incoming QC', ur: 'آمد کی کوالٹی جانچ', icon: ClipboardCheck };
 const reviews: Section = { id: 'reviews', en: 'Review', ur: 'جائزہ', icon: ClipboardCheck };
 const team: Section = { id: 'team', en: 'Team', ur: 'ٹیم', icon: UsersRound };
 
@@ -31,12 +32,12 @@ const requests: Section = { id: 'requests', en: 'Requests', ur: 'درخواست�
 const report: Section = { id: 'report', en: 'Report', ur: 'رپورٹ', icon: FileText };
 
 export const NAV: Record<Role, Section[]> = {
-  admin: [dashboard, scan, approvals, claims, stock, procurement, buyers, adminActivity, reports, analytics, team],
-  purchase_manager: [dashboard, scan, procurement],
-  sales_manager: [dashboard, scan, buyers, buyerRfqs, invoices, dispatchRequests, analytics],
-  dispatch: [dashboard, scan, dispatches, newDispatch],
-  quality_inspector: [dashboard, scan, lots, stock],
-  supervisor: [dashboard, scan, reviews, stock, requests, report, history],
+  admin: [dashboard, scan, approvals, claims, stock, procurement, incomingQC, buyers, adminActivity, reports, analytics, team],
+  purchase_manager: [dashboard, scan, procurement, incomingQC],
+  sales_manager: [dashboard, scan, incomingQC, buyers, buyerRfqs, invoices, dispatchRequests, analytics],
+  dispatch: [dashboard, scan, incomingQC, dispatches, newDispatch],
+  quality_inspector: [dashboard, scan, lots, incomingQC, stock],
+  supervisor: [dashboard, scan, reviews, incomingQC, stock, requests, report, history],
 };
 export const COMMON: Section[] = [
   { id: 'notifications', en: 'Notifications', ur: 'اطلاعات', icon: Bell },

@@ -54,6 +54,7 @@ struct EmptyState:View {let title:String;let message:String;var symbol="shipping
     @State private var store=AppStore()
     var body:some Scene{WindowGroup{RootView(store:store).tint(YF.action).preferredColorScheme(store.theme=="dark" ? .dark : store.theme=="system" ? nil : .light).task{
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--qc") { store.showingQC = true }
         if ProcessInfo.processInfo.arguments.contains("--review"){store.openReview();if let i=ProcessInfo.processInfo.arguments.firstIndex(of:"--page"),ProcessInfo.processInfo.arguments.count>i+1,let page=AppPage(rawValue:ProcessInfo.processInfo.arguments[i+1]){store.page=page}}
         #endif
     }}}
@@ -68,7 +69,7 @@ struct RootView:View {
             HStack(spacing:0){if size == .regular{Sidebar(store:store,onChoose:{}) .frame(width:280)}
                 NavigationStack{WorkspaceScreen(store:store).navigationTitle(store.page.title).navigationBarTitleDisplayMode(.inline).toolbar{if size != .regular{ToolbarItem(placement:.topBarLeading){Button{withAnimation(reduceMotion ? nil : .easeOut(duration:0.2)){menu=true}}label:{Image(systemName:"line.3.horizontal").frame(width:44,height:44)}.accessibilityLabel("Open sidebar")}};ToolbarItem(placement:.topBarTrailing){Button{Task{await store.refresh()}}label:{Image(systemName:"arrow.clockwise").frame(width:44,height:44)}.disabled(store.busy||store.review).accessibilityLabel("Refresh inventory")}}}.accessibilityHidden(menu)
             }.overlay(alignment:.leading){if menu && size != .regular {ZStack(alignment:.leading){Button{menu=false}label:{Color.black.opacity(0.55).ignoresSafeArea()}.accessibilityLabel("Close sidebar");Sidebar(store:store,onChoose:{menu=false}).frame(maxWidth:330).frame(maxWidth:.infinity,alignment:.leading).padding(.trailing,48)}.transition(.move(edge:.leading)).accessibilityAddTraits(.isModal)}}
-        }}.onOpenURL{url in if let page=AppPage(rawValue:url.host ?? ""){store.page=page}}
+        }}.sheet(isPresented: $store.showingQC) { QCWorkflow(model: store.qc) }.onOpenURL{url in if let page=AppPage(rawValue:url.host ?? ""){store.page=page}}
     }
 }
 struct LoginView:View {
@@ -78,6 +79,7 @@ struct LoginView:View {
         VStack(alignment:.leading,spacing:22){SectionTitle(title:"Welcome to Yarnflow.",subtitle:"Choose how you want to open your workspace.")
             Button{Task{await store.connect()}}label:{HStack{if store.busy{ProgressView()};Text(store.busy ? "Opening workspace…" : "Open local workspace");Image(systemName:"arrow.right")}}.buttonStyle(YFButton()).disabled(store.busy)
             Label("Local development uses an emulated owner account. It is not a production sign-in.",systemImage:"lock.shield").font(.subheadline).foregroundStyle(YF.muted).fixedSize(horizontal:false,vertical:true)
+            Button(QCText.t("qc.title")) { store.showingQC = true }.buttonStyle(YFButton(primary:false))
             Button{store.openReview()}label:{Label("Explore design review",systemImage:"sparkle.magnifyingglass")}.buttonStyle(YFButton(primary:false))
             Text("Review mode uses illustrative stock and never writes to your real inventory.").font(.subheadline).foregroundStyle(YF.muted)
             if !store.error.isEmpty{Label(store.error,systemImage:"exclamationmark.triangle").font(.body).foregroundStyle(YF.error).accessibilityAddTraits(.updatesFrequently)}
@@ -120,6 +122,7 @@ struct WorkspaceScreen:View {
     func dashboard(_ w:Workspace)->some View{VStack(alignment:.leading,spacing:24){
         VStack(alignment:.leading,spacing:6){Text(w.workspace.name).font(.title2.bold()).tracking(-0.4);Text("Stock by material, batches waiting for QC, and the latest movements.").font(.body).foregroundStyle(YF.muted).fixedSize(horizontal:false,vertical:true)}
         Button{store.page = .scanner}label:{Label("Scan fabric",systemImage:"viewfinder")}.buttonStyle(YFButton())
+        Button(QCText.t("qc.title")) { store.showingQC = true }.buttonStyle(YFButton(primary:false))
         qcPanel(w)
         stockPanel(w)
         movesPanel(w)

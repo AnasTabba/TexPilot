@@ -1,0 +1,2725 @@
+[
+ {
+  "name": "provenance-confirmed",
+  "type": "Provenance",
+  "value": {
+   "source": "PO_CONFIRMED",
+   "source_id": "po-doc-1",
+   "source_version": "1",
+   "actor_id": "user-purchase",
+   "observed_at": "2026-11-13T08:00:00Z",
+   "image_sha256": null,
+   "document_sha256": null,
+   "page": null,
+   "span": null,
+   "raw_value": null,
+   "raw_unit": null,
+   "ocr_confidence": null,
+   "candidate_id": null,
+   "corrects_id": null
+  },
+  "layer": null
+ },
+ {
+  "name": "provenance-ocr-candidate",
+  "type": "Provenance",
+  "value": {
+   "source": "OCR_CANDIDATE",
+   "source_id": "po-doc-1",
+   "source_version": "1",
+   "actor_id": "user-purchase",
+   "observed_at": "2026-11-13T08:00:00Z",
+   "image_sha256": null,
+   "document_sha256": "8896e24075a00ab5921b54d8a03ea238e2e3e516ad09c634773cd509e9c219ec",
+   "page": 1,
+   "span": [
+    120,
+    131
+   ],
+   "raw_value": "76",
+   "raw_unit": "ends/inch",
+   "ocr_confidence": 0.91,
+   "candidate_id": "00000000-0000-4000-8000-000000000200",
+   "corrects_id": null
+  },
+  "layer": null
+ },
+ {
+  "name": "density-count-per-inch",
+  "type": "DensitySpec",
+  "value": {
+   "axis": "ends",
+   "unit": "count/in",
+   "target": 76,
+   "lower": 72,
+   "upper": 80,
+   "provenance": {
+    "source": "PO_CONFIRMED",
+    "source_id": "po-doc-1",
+    "source_version": "1",
+    "actor_id": "user-purchase",
+    "observed_at": "2026-11-13T08:00:00Z",
+    "image_sha256": null,
+    "document_sha256": "8896e24075a00ab5921b54d8a03ea238e2e3e516ad09c634773cd509e9c219ec",
+    "page": 1,
+    "span": [
+     120,
+     131
+    ],
+    "raw_value": "76",
+    "raw_unit": "ends/inch",
+    "ocr_confidence": 0.91,
+    "candidate_id": "00000000-0000-4000-8000-000000000200",
+    "corrects_id": null
+   }
+  },
+  "layer": null
+ },
+ {
+  "name": "density-limit-equals-target",
+  "type": "DensitySpec",
+  "value": {
+   "axis": "picks",
+   "unit": "count/cm",
+   "target": 27,
+   "lower": 27,
+   "upper": 27,
+   "provenance": {
+    "source": "PO_CONFIRMED",
+    "source_id": "po-doc-1",
+    "source_version": "1",
+    "actor_id": "user-purchase",
+    "observed_at": "2026-11-13T08:00:00Z",
+    "image_sha256": null,
+    "document_sha256": null,
+    "page": null,
+    "span": null,
+    "raw_value": null,
+    "raw_unit": null,
+    "ocr_confidence": null,
+    "candidate_id": null,
+    "corrects_id": null
+   }
+  },
+  "layer": null
+ },
+ {
+  "name": "spec-woven-v1",
+  "type": "PurchaseSpec",
+  "value": {
+   "schema_version": "2",
+   "id": "00000000-0000-4000-8000-000000000010",
+   "version": 1,
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "purchase_order_id": "po-0001",
+   "content_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+   "construction": "woven",
+   "allowed_fabric_labels": [
+    "twill",
+    "denim"
+   ],
+   "taxonomy_version": "fabric24-head_a",
+   "density": [
+    {
+     "axis": "ends",
+     "unit": "count/in",
+     "target": 76,
+     "lower": 72,
+     "upper": 80,
+     "provenance": {
+      "source": "PO_CONFIRMED",
+      "source_id": "po-doc-1",
+      "source_version": "1",
+      "actor_id": "user-purchase",
+      "observed_at": "2026-11-13T08:00:00Z",
+      "image_sha256": null,
+      "document_sha256": "8896e24075a00ab5921b54d8a03ea238e2e3e516ad09c634773cd509e9c219ec",
+      "page": 1,
+      "span": [
+       120,
+       131
+      ],
+      "raw_value": "76",
+      "raw_unit": "ends/inch",
+      "ocr_confidence": 0.91,
+      "candidate_id": "00000000-0000-4000-8000-000000000200",
+      "corrects_id": null
+     }
+    },
+    {
+     "axis": "picks",
+     "unit": "count/in",
+     "target": 68.5,
+     "lower": 65,
+     "upper": 72,
+     "provenance": {
+      "source": "PO_CONFIRMED",
+      "source_id": "po-doc-1",
+      "source_version": "1",
+      "actor_id": "user-purchase",
+      "observed_at": "2026-11-13T08:00:00Z",
+      "image_sha256": null,
+      "document_sha256": null,
+      "page": null,
+      "span": null,
+      "raw_value": null,
+      "raw_unit": null,
+      "ocr_confidence": null,
+      "candidate_id": null,
+      "corrects_id": null
+     }
+    }
+   ],
+   "confirmed_by": "user-purchase",
+   "confirmed_at": "2026-11-13T08:00:00Z",
+   "supersedes_version": null
+  },
+  "layer": null
+ },
+ {
+  "name": "spec-woven-v2-supersedes",
+  "type": "PurchaseSpec",
+  "value": {
+   "schema_version": "2",
+   "id": "00000000-0000-4000-8000-000000000010",
+   "version": 2,
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "purchase_order_id": "po-0001",
+   "content_sha256": "be9244e79c714cdfe9b8a58d6d71b7e3f56670a21ebdff4d5b61654ed2bfed38",
+   "construction": "woven",
+   "allowed_fabric_labels": [
+    "twill"
+   ],
+   "taxonomy_version": "fabric24-head_a",
+   "density": [
+    {
+     "axis": "ends",
+     "unit": "count/in",
+     "target": 76,
+     "lower": 72,
+     "upper": 80,
+     "provenance": {
+      "source": "PO_CONFIRMED",
+      "source_id": "po-doc-1",
+      "source_version": "1",
+      "actor_id": "user-purchase",
+      "observed_at": "2026-11-13T08:00:00Z",
+      "image_sha256": null,
+      "document_sha256": "8896e24075a00ab5921b54d8a03ea238e2e3e516ad09c634773cd509e9c219ec",
+      "page": 1,
+      "span": [
+       120,
+       131
+      ],
+      "raw_value": "76",
+      "raw_unit": "ends/inch",
+      "ocr_confidence": 0.91,
+      "candidate_id": "00000000-0000-4000-8000-000000000200",
+      "corrects_id": null
+     }
+    },
+    {
+     "axis": "picks",
+     "unit": "count/in",
+     "target": 68.5,
+     "lower": 65,
+     "upper": 72,
+     "provenance": {
+      "source": "PO_CONFIRMED",
+      "source_id": "po-doc-1",
+      "source_version": "1",
+      "actor_id": "user-purchase",
+      "observed_at": "2026-11-13T08:00:00Z",
+      "image_sha256": null,
+      "document_sha256": null,
+      "page": null,
+      "span": null,
+      "raw_value": null,
+      "raw_unit": null,
+      "ocr_confidence": null,
+      "candidate_id": null,
+      "corrects_id": null
+     }
+    }
+   ],
+   "confirmed_by": "user-purchase",
+   "confirmed_at": "2026-11-13T08:00:00Z",
+   "supersedes_version": 1
+  },
+  "layer": null
+ },
+ {
+  "name": "spec-knit-count-per-cm",
+  "type": "PurchaseSpec",
+  "value": {
+   "schema_version": "2",
+   "id": "00000000-0000-4000-8000-000000000010",
+   "version": 1,
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "purchase_order_id": "po-0001",
+   "content_sha256": "7e43ef9268fc74d22706e426b2a734f632f5bf0c0a69baf7d4f61d3b870dd965",
+   "construction": "knit",
+   "allowed_fabric_labels": [
+    "twill",
+    "denim"
+   ],
+   "taxonomy_version": "fabric24-head_a",
+   "density": [
+    {
+     "axis": "wales",
+     "unit": "count/cm",
+     "target": 14,
+     "lower": 13,
+     "upper": 15,
+     "provenance": {
+      "source": "PO_CONFIRMED",
+      "source_id": "po-doc-1",
+      "source_version": "1",
+      "actor_id": "user-purchase",
+      "observed_at": "2026-11-13T08:00:00Z",
+      "image_sha256": null,
+      "document_sha256": null,
+      "page": null,
+      "span": null,
+      "raw_value": null,
+      "raw_unit": null,
+      "ocr_confidence": null,
+      "candidate_id": null,
+      "corrects_id": null
+     }
+    },
+    {
+     "axis": "courses",
+     "unit": "count/cm",
+     "target": 20,
+     "lower": 18.5,
+     "upper": 21,
+     "provenance": {
+      "source": "PO_CONFIRMED",
+      "source_id": "po-doc-1",
+      "source_version": "1",
+      "actor_id": "user-purchase",
+      "observed_at": "2026-11-13T08:00:00Z",
+      "image_sha256": null,
+      "document_sha256": null,
+      "page": null,
+      "span": null,
+      "raw_value": null,
+      "raw_unit": null,
+      "ocr_confidence": null,
+      "candidate_id": null,
+      "corrects_id": null
+     }
+    }
+   ],
+   "confirmed_by": "user-purchase",
+   "confirmed_at": "2026-11-13T08:00:00Z",
+   "supersedes_version": null
+  },
+  "layer": null
+ },
+ {
+  "name": "selection-operational",
+  "type": "SamplingSelection",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000020",
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "purchase_order_id": "po-0001",
+   "plan_version": "lab-plan-1",
+   "plan_sha256": null,
+   "randomization_seed": null,
+   "draw_index": null,
+   "selection_probability": null,
+   "cohort": "OPERATIONAL",
+   "independent_group_id": "roll-R17",
+   "lot_ref": "LOT-22",
+   "roll_ref": "R17",
+   "location_ref": "3 m from start, centre",
+   "face": "face",
+   "planned_area_cm2": 100,
+   "method": "operator-chosen",
+   "created_by": "user-inspector",
+   "created_at": "2026-11-13T08:00:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "selection-confirmatory",
+  "type": "SamplingSelection",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000021",
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "purchase_order_id": "po-0001",
+   "plan_version": "lab-plan-1",
+   "plan_sha256": "5016ee2afad0fa54c71fa8cf4dbb57afb85ea238cb68911db0e4f5875b99156c",
+   "randomization_seed": "seed-20261113",
+   "draw_index": 4,
+   "selection_probability": 0.125,
+   "cohort": "CONFIRMATORY",
+   "independent_group_id": "roll-R17",
+   "lot_ref": "LOT-22",
+   "roll_ref": "R17",
+   "location_ref": "3 m from start, centre",
+   "face": "face",
+   "planned_area_cm2": 100,
+   "method": "randomised-location",
+   "created_by": "user-inspector",
+   "created_at": "2026-11-13T08:00:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "sample-created",
+  "type": "Sample",
+  "value": {
+   "schema_version": "2",
+   "id": "00000000-0000-4000-8000-000000000030",
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "purchase_order_id": "po-0001",
+   "spec_id": "00000000-0000-4000-8000-000000000010",
+   "spec_version": 1,
+   "lot_ref": "LOT-22",
+   "roll_ref": "R17",
+   "location_ref": "3 m from start, centre",
+   "sample_plan_version": "lab-plan-1",
+   "capture_attempt": 0,
+   "revision": 0,
+   "predecessor_sample_id": null,
+   "selection_id": "00000000-0000-4000-8000-000000000020",
+   "face": "face",
+   "planned_area_cm2": 100,
+   "usable_area_cm2": null,
+   "sampling_method": "operator-chosen",
+   "independent_group_id": "roll-R17",
+   "disposition": "SELECTED",
+   "exclusion_reason": null,
+   "created_by": "user-inspector",
+   "created_at": "2026-11-13T08:00:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "sample-linked-evaluation",
+  "type": "Sample",
+  "value": {
+   "schema_version": "2",
+   "id": "00000000-0000-4000-8000-000000000031",
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "purchase_order_id": "po-0001",
+   "spec_id": "00000000-0000-4000-8000-000000000010",
+   "spec_version": 2,
+   "lot_ref": "LOT-22",
+   "roll_ref": "R17",
+   "location_ref": "3 m from start, centre",
+   "sample_plan_version": "lab-plan-1",
+   "capture_attempt": 1,
+   "revision": 0,
+   "predecessor_sample_id": "00000000-0000-4000-8000-000000000030",
+   "selection_id": "00000000-0000-4000-8000-000000000020",
+   "face": "face",
+   "planned_area_cm2": 100,
+   "usable_area_cm2": null,
+   "sampling_method": "operator-chosen",
+   "independent_group_id": "roll-R17",
+   "disposition": "SELECTED",
+   "exclusion_reason": null,
+   "created_by": "user-inspector",
+   "created_at": "2026-11-13T08:00:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "sample-missing",
+  "type": "Sample",
+  "value": {
+   "schema_version": "2",
+   "id": "00000000-0000-4000-8000-000000000030",
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "purchase_order_id": "po-0001",
+   "spec_id": "00000000-0000-4000-8000-000000000010",
+   "spec_version": 1,
+   "lot_ref": "LOT-22",
+   "roll_ref": "R17",
+   "location_ref": "3 m from start, centre",
+   "sample_plan_version": "lab-plan-1",
+   "capture_attempt": 0,
+   "revision": 0,
+   "predecessor_sample_id": null,
+   "selection_id": "00000000-0000-4000-8000-000000000020",
+   "face": "face",
+   "planned_area_cm2": 100,
+   "usable_area_cm2": null,
+   "sampling_method": "operator-chosen",
+   "independent_group_id": "roll-R17",
+   "disposition": "MISSING",
+   "exclusion_reason": "Roll not found at the dock.",
+   "created_by": "user-inspector",
+   "created_at": "2026-11-13T08:00:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "attestation-web-unobserved",
+  "type": "AcquisitionAttestation",
+  "value": {
+   "image_sha256": "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+   "capture_mode": "WEB_CAMERA",
+   "device_model": null,
+   "lens_id": null,
+   "zoom_factor": null,
+   "focus_mode": null,
+   "exposure_mode": null,
+   "resolution": [
+    4032,
+    3024
+   ],
+   "orientation": 1,
+   "processing": null,
+   "captured_at": "2026-11-13T08:05:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "attestation-native-observed",
+  "type": "AcquisitionAttestation",
+  "value": {
+   "image_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+   "capture_mode": "NATIVE_CAMERA",
+   "device_model": "iPhone17,1",
+   "lens_id": "wide",
+   "zoom_factor": 1,
+   "focus_mode": "locked",
+   "exposure_mode": "locked",
+   "resolution": [
+    4032,
+    3024
+   ],
+   "orientation": 1,
+   "processing": "none",
+   "captured_at": "2026-11-13T08:05:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "capture-overview",
+  "type": "Capture",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000060",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "capture_set_id": "00000000-0000-4000-8000-000000000040",
+   "original_sha256": "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+   "role": "overview",
+   "taken_at": "2026-11-13T08:05:00Z",
+   "device_profile_id": "unprofiled",
+   "calibration_id": null,
+   "width": 4032,
+   "height": 3024,
+   "preprocessing_version": "qc-imageio-1",
+   "consent_record_id": "00000000-0000-4000-8000-000000000050",
+   "byte_size": 3481220,
+   "media_type": "image/jpeg",
+   "original_state": "AVAILABLE",
+   "attestation_sha256": "2cfb98ae6abd91a9b49906b45bd490ddbb600a0b271a3e1dd81eff1f75acf92a"
+  },
+  "layer": null
+ },
+ {
+  "name": "capture-purged-tombstone",
+  "type": "Capture",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000061",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "capture_set_id": "00000000-0000-4000-8000-000000000040",
+   "original_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+   "role": "structure",
+   "taken_at": "2026-11-13T08:05:00Z",
+   "device_profile_id": "unprofiled",
+   "calibration_id": null,
+   "width": 4032,
+   "height": 3024,
+   "preprocessing_version": "qc-imageio-1",
+   "consent_record_id": "00000000-0000-4000-8000-000000000050",
+   "byte_size": 3481220,
+   "media_type": "image/jpeg",
+   "original_state": "PURGED",
+   "attestation_sha256": "d6b1aadc62b86d5669353593d85dc6e3c209251629207d28ddcecf669c359297"
+  },
+  "layer": null
+ },
+ {
+  "name": "capture-set-open",
+  "type": "CaptureSet",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000040",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "state": "OPEN",
+   "required_roles": [
+    "overview",
+    "structure",
+    "scale"
+   ],
+   "capture_ids": [
+    "00000000-0000-4000-8000-000000000060"
+   ],
+   "revision": 2,
+   "attempt": null
+  },
+  "layer": null
+ },
+ {
+  "name": "capture-set-closed",
+  "type": "CaptureSet",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000040",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "state": "CLOSED",
+   "required_roles": [
+    "overview",
+    "structure",
+    "scale"
+   ],
+   "capture_ids": [
+    "00000000-0000-4000-8000-000000000060",
+    "00000000-0000-4000-8000-000000000061",
+    "00000000-0000-4000-8000-000000000062"
+   ],
+   "revision": 5,
+   "attempt": 1
+  },
+  "layer": null
+ },
+ {
+  "name": "consent-operational-only",
+  "type": "ConsentAuthority",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000050",
+   "version": 1,
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "authority_evidence_sha256": "cb416cda397250dcf195340e0b5005b7dea1474f1b44e754471744ae246a8097",
+   "operational_capture": true,
+   "operational_retention_days": 30,
+   "research_use": false,
+   "training_use": false,
+   "export_destinations": [],
+   "valid_from": "2026-11-13T08:00:00Z",
+   "expires_at": "2027-11-13T08:00:00Z",
+   "withdrawn_at": null
+  },
+  "layer": null
+ },
+ {
+  "name": "evidence-review-only-stages-unavailable",
+  "type": "Evidence",
+  "value": {
+   "schema_version": "2",
+   "id": "00000000-0000-4000-8000-000000000070",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "capture_ids": [
+    "00000000-0000-4000-8000-000000000060",
+    "00000000-0000-4000-8000-000000000061",
+    "00000000-0000-4000-8000-000000000062"
+   ],
+   "spec_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+   "domain_id": null,
+   "domain": {
+    "state": "DISABLED",
+    "value": null,
+    "reasons": [
+     "DOMAIN_UNVALIDATED"
+    ],
+    "artifact_sha256": null,
+    "duration_ms": 1.5
+   },
+   "fabric": {
+    "state": "DISABLED",
+    "value": null,
+    "reasons": [
+     "STAGE_UNAVAILABLE"
+    ],
+    "artifact_sha256": null,
+    "duration_ms": 1.5
+   },
+   "defects": {
+    "state": "DISABLED",
+    "value": null,
+    "reasons": [
+     "STAGE_UNAVAILABLE"
+    ],
+    "artifact_sha256": null,
+    "duration_ms": 1.5
+   },
+   "metrology": {
+    "state": "ABSTAINED",
+    "value": null,
+    "reasons": [
+     "DOMAIN_UNVALIDATED"
+    ],
+    "artifact_sha256": null,
+    "duration_ms": 1.5
+   },
+   "quality": {
+    "state": "ABSTAINED",
+    "value": null,
+    "reasons": [
+     "STAGE_UNAVAILABLE",
+     "QUALITY_BLUR"
+    ],
+    "artifact_sha256": null,
+    "duration_ms": 1.5
+   },
+   "contradictions": [],
+   "manifest_sha256": "4d39bf226e6b408f09d04e9e6657b09f27aee49e931ad329c2e7646e522921aa",
+   "created_at": "2026-11-13T08:06:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "evidence-synthetic-all-stages-ok",
+  "type": "Evidence",
+  "value": {
+   "schema_version": "2",
+   "id": "00000000-0000-4000-8000-000000000070",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "capture_ids": [
+    "00000000-0000-4000-8000-000000000060",
+    "00000000-0000-4000-8000-000000000061",
+    "00000000-0000-4000-8000-000000000062"
+   ],
+   "spec_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+   "domain_id": "lab-woven-1",
+   "domain": {
+    "state": "OK",
+    "value": {
+     "in_domain": true,
+     "assessment_version": "ood-1",
+     "profile_sha256": "4d5fd5739bc8977b9004af4061c14de70b37399e611c5515fa2d3b35a57e6364"
+    },
+    "reasons": [],
+    "artifact_sha256": "2ebc49e3d83652cb6bd9ac41f22f5c93696f54862c349d454584c9ca2c428bda",
+    "duration_ms": 1.5
+   },
+   "fabric": {
+    "state": "OK",
+    "value": {
+     "label": "twill",
+     "taxonomy_version": "fabric24-head_a",
+     "calibrated_probability": null,
+     "unknown": false,
+     "candidates": [
+      {
+       "label": "twill",
+       "raw_score": 4.2
+      },
+      {
+       "label": "denim",
+       "raw_score": 2.5
+      }
+     ]
+    },
+    "reasons": [],
+    "artifact_sha256": "516e205491fc174dafe5867a9f3bec79709de6a58af97d202699195fe514dc06",
+    "duration_ms": 1.5
+   },
+   "defects": {
+    "state": "OK",
+    "value": {
+     "score": 0.04,
+     "regions": [
+      {
+       "capture_id": "00000000-0000-4000-8000-000000000060",
+       "transform_id": "identity",
+       "box": [
+        0.1,
+        0.1,
+        0.2,
+        0.2
+       ],
+       "score": 0.02,
+       "label": null
+      },
+      {
+       "capture_id": "00000000-0000-4000-8000-000000000061",
+       "transform_id": "identity",
+       "box": [
+        0.1,
+        0.1,
+        0.2,
+        0.2
+       ],
+       "score": 0.04,
+       "label": null
+      }
+     ],
+     "observed_area_cm2": 0,
+     "views": [
+      {
+       "capture_id": "00000000-0000-4000-8000-000000000060",
+       "capture_sha256": "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+       "transform_id": "identity",
+       "score": 0.02,
+       "observed_area_cm2": null
+      },
+      {
+       "capture_id": "00000000-0000-4000-8000-000000000061",
+       "capture_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+       "transform_id": "identity",
+       "score": 0.04,
+       "observed_area_cm2": null
+      }
+     ]
+    },
+    "reasons": [],
+    "artifact_sha256": "7da40a71571e1f7ec1cb958643a28394fbd3d6fe0a2c8ba5a637113fef692a0f",
+    "duration_ms": 1.5
+   },
+   "metrology": {
+    "state": "OK",
+    "value": [
+     {
+      "capture_id": "00000000-0000-4000-8000-000000000061",
+      "capture_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+      "source_roi": [
+       0.25,
+       0.25,
+       0.75,
+       0.75
+      ],
+      "calibration_sha256": "649c4f8e962cfa3d95e1e043b3697ef048953a221c847e0fc0cccea015810b4a",
+      "geometry_artifact_sha256": "ca95c710f386e2f9bae23670cd6a45a7d8ecde895fbbb97393cb036b017ac60e",
+      "uncertainty_report_sha256": "a18e6d6ef444c52327d277ad467fbeb0ba689a6089bbc8960b404bb6b0a12558",
+      "axis_registration_id": "00000000-0000-4000-8000-000000000120",
+      "axis": "ends",
+      "unit": "count/in",
+      "value": 76.2,
+      "interval95": [
+       74.9,
+       77.5
+      ],
+      "reference_id": "card-A",
+      "method_version": "qc-metrology-1"
+     },
+     {
+      "capture_id": "00000000-0000-4000-8000-000000000061",
+      "capture_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+      "source_roi": [
+       0.25,
+       0.25,
+       0.75,
+       0.75
+      ],
+      "calibration_sha256": "649c4f8e962cfa3d95e1e043b3697ef048953a221c847e0fc0cccea015810b4a",
+      "geometry_artifact_sha256": "ca95c710f386e2f9bae23670cd6a45a7d8ecde895fbbb97393cb036b017ac60e",
+      "uncertainty_report_sha256": "a18e6d6ef444c52327d277ad467fbeb0ba689a6089bbc8960b404bb6b0a12558",
+      "axis_registration_id": "00000000-0000-4000-8000-000000000120",
+      "axis": "picks",
+      "unit": "count/in",
+      "value": 68.1,
+      "interval95": [
+       66.8,
+       69.4
+      ],
+      "reference_id": "card-A",
+      "method_version": "qc-metrology-1"
+     }
+    ],
+    "reasons": [],
+    "artifact_sha256": "9b40daf58fc1a818d9d2df7ee17713af9efbf58a73b60168e0d82e9ce0bf58ae",
+    "duration_ms": 1.5
+   },
+   "quality": {
+    "state": "OK",
+    "value": {
+     "checks": {
+      "blur": true,
+      "glare": true,
+      "moire": true,
+      "fold": true,
+      "framing": true,
+      "resolution": true,
+      "marker_geometry": true
+     }
+    },
+    "reasons": [],
+    "artifact_sha256": "84e4d4f9609da28de95a65b3a24271e5b729823157a02c64123665983667e63d",
+    "duration_ms": 1.5
+   },
+   "contradictions": [],
+   "manifest_sha256": "3626fc767bd8ebfb56e439aa9b5f61db6ea0c3fbcda7de00c665e5453e29946b",
+   "created_at": "2026-11-13T08:06:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "evidence-fabric-unknown",
+  "type": "Evidence",
+  "value": {
+   "schema_version": "2",
+   "id": "00000000-0000-4000-8000-000000000070",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "capture_ids": [
+    "00000000-0000-4000-8000-000000000060",
+    "00000000-0000-4000-8000-000000000061",
+    "00000000-0000-4000-8000-000000000062"
+   ],
+   "spec_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+   "domain_id": null,
+   "domain": {
+    "state": "DISABLED",
+    "value": null,
+    "reasons": [
+     "DOMAIN_UNVALIDATED"
+    ],
+    "artifact_sha256": null,
+    "duration_ms": 1.5
+   },
+   "fabric": {
+    "state": "OK",
+    "value": {
+     "label": null,
+     "taxonomy_version": "fabric24-head_a",
+     "calibrated_probability": null,
+     "unknown": true,
+     "candidates": [
+      {
+       "label": "twill",
+       "raw_score": 0.4
+      }
+     ]
+    },
+    "reasons": [],
+    "artifact_sha256": "516e205491fc174dafe5867a9f3bec79709de6a58af97d202699195fe514dc06",
+    "duration_ms": 1.5
+   },
+   "defects": {
+    "state": "DISABLED",
+    "value": null,
+    "reasons": [
+     "STAGE_UNAVAILABLE"
+    ],
+    "artifact_sha256": null,
+    "duration_ms": 1.5
+   },
+   "metrology": {
+    "state": "ABSTAINED",
+    "value": null,
+    "reasons": [
+     "DOMAIN_UNVALIDATED"
+    ],
+    "artifact_sha256": null,
+    "duration_ms": 1.5
+   },
+   "quality": {
+    "state": "ABSTAINED",
+    "value": null,
+    "reasons": [
+     "STAGE_UNAVAILABLE",
+     "QUALITY_BLUR"
+    ],
+    "artifact_sha256": null,
+    "duration_ms": 1.5
+   },
+   "contradictions": [],
+   "manifest_sha256": "c133a2e4410510b26b51c621feb72ac25dd6bbe3c9ebcd0443738c1531c4f3dc",
+   "created_at": "2026-11-13T08:06:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "draft-manual-review",
+  "type": "DecisionDraft",
+  "value": {
+   "status": "MANUAL_REVIEW",
+   "reasons": [
+    "POLICY_UNRELEASED",
+    "STAGE_UNAVAILABLE",
+    "DOMAIN_UNVALIDATED",
+    "QUALITY_BLUR"
+   ],
+   "automatic": false,
+   "scope": "INSPECTED_SAMPLE"
+  },
+  "layer": null
+ },
+ {
+  "name": "draft-recapture",
+  "type": "DecisionDraft",
+  "value": {
+   "status": "RECAPTURE",
+   "reasons": [
+    "QUALITY_BLUR"
+   ],
+   "automatic": false,
+   "scope": "INSPECTED_SAMPLE"
+  },
+  "layer": null
+ },
+ {
+  "name": "draft-accept",
+  "type": "DecisionDraft",
+  "value": {
+   "status": "ACCEPT",
+   "reasons": [],
+   "automatic": true,
+   "scope": "INSPECTED_SAMPLE"
+  },
+  "layer": null
+ },
+ {
+  "name": "draft-hold",
+  "type": "DecisionDraft",
+  "value": {
+   "status": "HOLD",
+   "reasons": [
+    "CONSTRUCTION_OUTSIDE_TOLERANCE"
+   ],
+   "automatic": true,
+   "scope": "INSPECTED_SAMPLE"
+  },
+  "layer": null
+ },
+ {
+  "name": "decision-manual-review",
+  "type": "Decision",
+  "value": {
+   "status": "MANUAL_REVIEW",
+   "reasons": [
+    "POLICY_UNRELEASED",
+    "STAGE_UNAVAILABLE",
+    "DOMAIN_UNVALIDATED",
+    "QUALITY_BLUR"
+   ],
+   "automatic": false,
+   "scope": "INSPECTED_SAMPLE",
+   "schema_version": "2",
+   "id": "00000000-0000-4000-8000-000000000080",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "evidence_id": "00000000-0000-4000-8000-000000000070",
+   "spec_id": "00000000-0000-4000-8000-000000000010",
+   "spec_version": 1,
+   "revision": 6,
+   "policy_version": "review-only-1",
+   "release_id": null,
+   "evaluated_at": "2026-11-13T08:06:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "decision-automatic-accept",
+  "type": "Decision",
+  "value": {
+   "status": "ACCEPT",
+   "reasons": [],
+   "automatic": true,
+   "scope": "INSPECTED_SAMPLE",
+   "schema_version": "2",
+   "id": "00000000-0000-4000-8000-000000000080",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "evidence_id": "00000000-0000-4000-8000-000000000070",
+   "spec_id": "00000000-0000-4000-8000-000000000010",
+   "spec_version": 1,
+   "revision": 6,
+   "policy_version": "automatic-1",
+   "release_id": "00000000-0000-4000-8000-000000000100",
+   "evaluated_at": "2026-11-13T08:06:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "adjudication-undetermined",
+  "type": "Adjudication",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000090",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "revision": 7,
+   "outcome": "UNDETERMINED",
+   "reason": "Pick glass count needed before a finding.",
+   "reference_ids": [],
+   "actor_id": "user-supervisor",
+   "created_at": "2026-11-13T08:06:00Z",
+   "supersedes_id": null,
+   "intervention_reason": null
+  },
+  "layer": null
+ },
+ {
+  "name": "adjudication-supersedes",
+  "type": "Adjudication",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000091",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "revision": 8,
+   "outcome": "CONFORMING",
+   "reason": "Pick glass: 76 ends, 68 picks at the registered location.",
+   "reference_ids": [
+    "pickglass-2026-11-13-01"
+   ],
+   "actor_id": "user-supervisor",
+   "created_at": "2026-11-13T08:06:00Z",
+   "supersedes_id": "00000000-0000-4000-8000-000000000090",
+   "intervention_reason": null
+  },
+  "layer": null
+ },
+ {
+  "name": "adjudication-admin-intervention",
+  "type": "Adjudication",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000090",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "revision": 7,
+   "outcome": "UNDETERMINED",
+   "reason": "Pick glass count needed before a finding.",
+   "reference_ids": [],
+   "actor_id": "user-admin",
+   "created_at": "2026-11-13T08:06:00Z",
+   "supersedes_id": null,
+   "intervention_reason": "Supervisor absent today."
+  },
+  "layer": null
+ },
+ {
+  "name": "result-created",
+  "type": "QCResult",
+  "value": {
+   "schema_version": "2",
+   "mode": "REVIEW_ONLY",
+   "sample": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000030",
+    "workspace_id": "00000000-0000-4000-8000-000000000001",
+    "purchase_order_id": "po-0001",
+    "spec_id": "00000000-0000-4000-8000-000000000010",
+    "spec_version": 1,
+    "lot_ref": "LOT-22",
+    "roll_ref": "R17",
+    "location_ref": "3 m from start, centre",
+    "sample_plan_version": "lab-plan-1",
+    "capture_attempt": 0,
+    "revision": 0,
+    "predecessor_sample_id": null,
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "face": "face",
+    "planned_area_cm2": 100,
+    "usable_area_cm2": null,
+    "sampling_method": "operator-chosen",
+    "independent_group_id": "roll-R17",
+    "disposition": "SELECTED",
+    "exclusion_reason": null,
+    "created_by": "user-inspector",
+    "created_at": "2026-11-13T08:00:00Z"
+   },
+   "captures": [],
+   "capture_sets": [],
+   "evidence": null,
+   "decision": null,
+   "history": [],
+   "adjudications": [],
+   "current_human_disposition": null,
+   "recalled_decision_ids": [],
+   "family": {
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "predecessor_sample_id": null,
+    "successor_sample_ids": [],
+    "attempts_used": 0,
+    "attempts_max": 3,
+    "spec_is_current": true,
+    "current_spec_version": 1
+   },
+   "revision": 0
+  },
+  "layer": null
+ },
+ {
+  "name": "result-upload-in-progress",
+  "type": "QCResult",
+  "value": {
+   "schema_version": "2",
+   "mode": "REVIEW_ONLY",
+   "sample": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000030",
+    "workspace_id": "00000000-0000-4000-8000-000000000001",
+    "purchase_order_id": "po-0001",
+    "spec_id": "00000000-0000-4000-8000-000000000010",
+    "spec_version": 1,
+    "lot_ref": "LOT-22",
+    "roll_ref": "R17",
+    "location_ref": "3 m from start, centre",
+    "sample_plan_version": "lab-plan-1",
+    "capture_attempt": 0,
+    "revision": 2,
+    "predecessor_sample_id": null,
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "face": "face",
+    "planned_area_cm2": 100,
+    "usable_area_cm2": null,
+    "sampling_method": "operator-chosen",
+    "independent_group_id": "roll-R17",
+    "disposition": "SELECTED",
+    "exclusion_reason": null,
+    "created_by": "user-inspector",
+    "created_at": "2026-11-13T08:00:00Z"
+   },
+   "captures": [
+    {
+     "id": "00000000-0000-4000-8000-000000000060",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "capture_set_id": "00000000-0000-4000-8000-000000000040",
+     "original_sha256": "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+     "role": "overview",
+     "taken_at": "2026-11-13T08:05:00Z",
+     "device_profile_id": "unprofiled",
+     "calibration_id": null,
+     "width": 4032,
+     "height": 3024,
+     "preprocessing_version": "qc-imageio-1",
+     "consent_record_id": "00000000-0000-4000-8000-000000000050",
+     "byte_size": 3481220,
+     "media_type": "image/jpeg",
+     "original_state": "AVAILABLE",
+     "attestation_sha256": "2cfb98ae6abd91a9b49906b45bd490ddbb600a0b271a3e1dd81eff1f75acf92a"
+    }
+   ],
+   "capture_sets": [
+    {
+     "id": "00000000-0000-4000-8000-000000000040",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "state": "OPEN",
+     "required_roles": [
+      "overview",
+      "structure",
+      "scale"
+     ],
+     "capture_ids": [
+      "00000000-0000-4000-8000-000000000060"
+     ],
+     "revision": 2,
+     "attempt": null
+    }
+   ],
+   "evidence": null,
+   "decision": null,
+   "history": [],
+   "adjudications": [],
+   "current_human_disposition": null,
+   "recalled_decision_ids": [],
+   "family": {
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "predecessor_sample_id": null,
+    "successor_sample_ids": [],
+    "attempts_used": 0,
+    "attempts_max": 3,
+    "spec_is_current": true,
+    "current_spec_version": 1
+   },
+   "revision": 2
+  },
+  "layer": null
+ },
+ {
+  "name": "result-set-closed",
+  "type": "QCResult",
+  "value": {
+   "schema_version": "2",
+   "mode": "REVIEW_ONLY",
+   "sample": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000030",
+    "workspace_id": "00000000-0000-4000-8000-000000000001",
+    "purchase_order_id": "po-0001",
+    "spec_id": "00000000-0000-4000-8000-000000000010",
+    "spec_version": 1,
+    "lot_ref": "LOT-22",
+    "roll_ref": "R17",
+    "location_ref": "3 m from start, centre",
+    "sample_plan_version": "lab-plan-1",
+    "capture_attempt": 1,
+    "revision": 5,
+    "predecessor_sample_id": null,
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "face": "face",
+    "planned_area_cm2": 100,
+    "usable_area_cm2": null,
+    "sampling_method": "operator-chosen",
+    "independent_group_id": "roll-R17",
+    "disposition": "SUBMITTED",
+    "exclusion_reason": null,
+    "created_by": "user-inspector",
+    "created_at": "2026-11-13T08:00:00Z"
+   },
+   "captures": [
+    {
+     "id": "00000000-0000-4000-8000-000000000060",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "capture_set_id": "00000000-0000-4000-8000-000000000040",
+     "original_sha256": "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+     "role": "overview",
+     "taken_at": "2026-11-13T08:05:00Z",
+     "device_profile_id": "unprofiled",
+     "calibration_id": null,
+     "width": 4032,
+     "height": 3024,
+     "preprocessing_version": "qc-imageio-1",
+     "consent_record_id": "00000000-0000-4000-8000-000000000050",
+     "byte_size": 3481220,
+     "media_type": "image/jpeg",
+     "original_state": "AVAILABLE",
+     "attestation_sha256": "2cfb98ae6abd91a9b49906b45bd490ddbb600a0b271a3e1dd81eff1f75acf92a"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000061",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "capture_set_id": "00000000-0000-4000-8000-000000000040",
+     "original_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+     "role": "structure",
+     "taken_at": "2026-11-13T08:05:00Z",
+     "device_profile_id": "unprofiled",
+     "calibration_id": null,
+     "width": 4032,
+     "height": 3024,
+     "preprocessing_version": "qc-imageio-1",
+     "consent_record_id": "00000000-0000-4000-8000-000000000050",
+     "byte_size": 3481220,
+     "media_type": "image/jpeg",
+     "original_state": "AVAILABLE",
+     "attestation_sha256": "d6b1aadc62b86d5669353593d85dc6e3c209251629207d28ddcecf669c359297"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000062",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "capture_set_id": "00000000-0000-4000-8000-000000000040",
+     "original_sha256": "92a0f0b15d0f88f0b832e43f25726f9d8a8c7237feeeb468497bb37df1a6d090",
+     "role": "scale",
+     "taken_at": "2026-11-13T08:05:00Z",
+     "device_profile_id": "unprofiled",
+     "calibration_id": null,
+     "width": 4032,
+     "height": 3024,
+     "preprocessing_version": "qc-imageio-1",
+     "consent_record_id": "00000000-0000-4000-8000-000000000050",
+     "byte_size": 3481220,
+     "media_type": "image/jpeg",
+     "original_state": "AVAILABLE",
+     "attestation_sha256": "3c015ce78d23b877a1e2e4ce5b15786186ac1fe2063c1dd2d05f957e441b6b8d"
+    }
+   ],
+   "capture_sets": [
+    {
+     "id": "00000000-0000-4000-8000-000000000040",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "state": "CLOSED",
+     "required_roles": [
+      "overview",
+      "structure",
+      "scale"
+     ],
+     "capture_ids": [
+      "00000000-0000-4000-8000-000000000060",
+      "00000000-0000-4000-8000-000000000061",
+      "00000000-0000-4000-8000-000000000062"
+     ],
+     "revision": 5,
+     "attempt": 1
+    }
+   ],
+   "evidence": null,
+   "decision": null,
+   "history": [],
+   "adjudications": [],
+   "current_human_disposition": null,
+   "recalled_decision_ids": [],
+   "family": {
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "predecessor_sample_id": null,
+    "successor_sample_ids": [],
+    "attempts_used": 1,
+    "attempts_max": 3,
+    "spec_is_current": true,
+    "current_spec_version": 1
+   },
+   "revision": 5
+  },
+  "layer": null
+ },
+ {
+  "name": "result-decided-with-adjudications",
+  "type": "QCResult",
+  "value": {
+   "schema_version": "2",
+   "mode": "REVIEW_ONLY",
+   "sample": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000030",
+    "workspace_id": "00000000-0000-4000-8000-000000000001",
+    "purchase_order_id": "po-0001",
+    "spec_id": "00000000-0000-4000-8000-000000000010",
+    "spec_version": 1,
+    "lot_ref": "LOT-22",
+    "roll_ref": "R17",
+    "location_ref": "3 m from start, centre",
+    "sample_plan_version": "lab-plan-1",
+    "capture_attempt": 1,
+    "revision": 8,
+    "predecessor_sample_id": null,
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "face": "face",
+    "planned_area_cm2": 100,
+    "usable_area_cm2": null,
+    "sampling_method": "operator-chosen",
+    "independent_group_id": "roll-R17",
+    "disposition": "SUBMITTED",
+    "exclusion_reason": null,
+    "created_by": "user-inspector",
+    "created_at": "2026-11-13T08:00:00Z"
+   },
+   "captures": [
+    {
+     "id": "00000000-0000-4000-8000-000000000060",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "capture_set_id": "00000000-0000-4000-8000-000000000040",
+     "original_sha256": "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+     "role": "overview",
+     "taken_at": "2026-11-13T08:05:00Z",
+     "device_profile_id": "unprofiled",
+     "calibration_id": null,
+     "width": 4032,
+     "height": 3024,
+     "preprocessing_version": "qc-imageio-1",
+     "consent_record_id": "00000000-0000-4000-8000-000000000050",
+     "byte_size": 3481220,
+     "media_type": "image/jpeg",
+     "original_state": "AVAILABLE",
+     "attestation_sha256": "2cfb98ae6abd91a9b49906b45bd490ddbb600a0b271a3e1dd81eff1f75acf92a"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000061",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "capture_set_id": "00000000-0000-4000-8000-000000000040",
+     "original_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+     "role": "structure",
+     "taken_at": "2026-11-13T08:05:00Z",
+     "device_profile_id": "unprofiled",
+     "calibration_id": null,
+     "width": 4032,
+     "height": 3024,
+     "preprocessing_version": "qc-imageio-1",
+     "consent_record_id": "00000000-0000-4000-8000-000000000050",
+     "byte_size": 3481220,
+     "media_type": "image/jpeg",
+     "original_state": "AVAILABLE",
+     "attestation_sha256": "d6b1aadc62b86d5669353593d85dc6e3c209251629207d28ddcecf669c359297"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000062",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "capture_set_id": "00000000-0000-4000-8000-000000000040",
+     "original_sha256": "92a0f0b15d0f88f0b832e43f25726f9d8a8c7237feeeb468497bb37df1a6d090",
+     "role": "scale",
+     "taken_at": "2026-11-13T08:05:00Z",
+     "device_profile_id": "unprofiled",
+     "calibration_id": null,
+     "width": 4032,
+     "height": 3024,
+     "preprocessing_version": "qc-imageio-1",
+     "consent_record_id": "00000000-0000-4000-8000-000000000050",
+     "byte_size": 3481220,
+     "media_type": "image/jpeg",
+     "original_state": "AVAILABLE",
+     "attestation_sha256": "3c015ce78d23b877a1e2e4ce5b15786186ac1fe2063c1dd2d05f957e441b6b8d"
+    }
+   ],
+   "capture_sets": [
+    {
+     "id": "00000000-0000-4000-8000-000000000040",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "state": "CLOSED",
+     "required_roles": [
+      "overview",
+      "structure",
+      "scale"
+     ],
+     "capture_ids": [
+      "00000000-0000-4000-8000-000000000060",
+      "00000000-0000-4000-8000-000000000061",
+      "00000000-0000-4000-8000-000000000062"
+     ],
+     "revision": 5,
+     "attempt": 1
+    }
+   ],
+   "evidence": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000070",
+    "sample_id": "00000000-0000-4000-8000-000000000030",
+    "capture_ids": [
+     "00000000-0000-4000-8000-000000000060",
+     "00000000-0000-4000-8000-000000000061",
+     "00000000-0000-4000-8000-000000000062"
+    ],
+    "spec_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+    "domain_id": null,
+    "domain": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "DOMAIN_UNVALIDATED"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "fabric": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "defects": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "metrology": {
+     "state": "ABSTAINED",
+     "value": null,
+     "reasons": [
+      "DOMAIN_UNVALIDATED"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "quality": {
+     "state": "ABSTAINED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE",
+      "QUALITY_BLUR"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "contradictions": [],
+    "manifest_sha256": "4d39bf226e6b408f09d04e9e6657b09f27aee49e931ad329c2e7646e522921aa",
+    "created_at": "2026-11-13T08:06:00Z"
+   },
+   "decision": {
+    "status": "MANUAL_REVIEW",
+    "reasons": [
+     "POLICY_UNRELEASED",
+     "STAGE_UNAVAILABLE",
+     "DOMAIN_UNVALIDATED",
+     "QUALITY_BLUR"
+    ],
+    "automatic": false,
+    "scope": "INSPECTED_SAMPLE",
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000080",
+    "sample_id": "00000000-0000-4000-8000-000000000030",
+    "evidence_id": "00000000-0000-4000-8000-000000000070",
+    "spec_id": "00000000-0000-4000-8000-000000000010",
+    "spec_version": 1,
+    "revision": 6,
+    "policy_version": "review-only-1",
+    "release_id": null,
+    "evaluated_at": "2026-11-13T08:06:00Z"
+   },
+   "history": [
+    {
+     "status": "MANUAL_REVIEW",
+     "reasons": [
+      "POLICY_UNRELEASED",
+      "STAGE_UNAVAILABLE",
+      "DOMAIN_UNVALIDATED",
+      "QUALITY_BLUR"
+     ],
+     "automatic": false,
+     "scope": "INSPECTED_SAMPLE",
+     "schema_version": "2",
+     "id": "00000000-0000-4000-8000-000000000080",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "evidence_id": "00000000-0000-4000-8000-000000000070",
+     "spec_id": "00000000-0000-4000-8000-000000000010",
+     "spec_version": 1,
+     "revision": 6,
+     "policy_version": "review-only-1",
+     "release_id": null,
+     "evaluated_at": "2026-11-13T08:06:00Z"
+    }
+   ],
+   "adjudications": [
+    {
+     "id": "00000000-0000-4000-8000-000000000090",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "revision": 7,
+     "outcome": "UNDETERMINED",
+     "reason": "Pick glass count needed before a finding.",
+     "reference_ids": [],
+     "actor_id": "user-supervisor",
+     "created_at": "2026-11-13T08:06:00Z",
+     "supersedes_id": null,
+     "intervention_reason": null
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000091",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "revision": 8,
+     "outcome": "CONFORMING",
+     "reason": "Pick glass: 76 ends, 68 picks at the registered location.",
+     "reference_ids": [
+      "pickglass-2026-11-13-01"
+     ],
+     "actor_id": "user-supervisor",
+     "created_at": "2026-11-13T08:06:00Z",
+     "supersedes_id": "00000000-0000-4000-8000-000000000090",
+     "intervention_reason": null
+    }
+   ],
+   "current_human_disposition": {
+    "id": "00000000-0000-4000-8000-000000000091",
+    "sample_id": "00000000-0000-4000-8000-000000000030",
+    "revision": 8,
+    "outcome": "CONFORMING",
+    "reason": "Pick glass: 76 ends, 68 picks at the registered location.",
+    "reference_ids": [
+     "pickglass-2026-11-13-01"
+    ],
+    "actor_id": "user-supervisor",
+    "created_at": "2026-11-13T08:06:00Z",
+    "supersedes_id": "00000000-0000-4000-8000-000000000090",
+    "intervention_reason": null
+   },
+   "recalled_decision_ids": [],
+   "family": {
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "predecessor_sample_id": null,
+    "successor_sample_ids": [],
+    "attempts_used": 1,
+    "attempts_max": 3,
+    "spec_is_current": true,
+    "current_spec_version": 1
+   },
+   "revision": 8
+  },
+  "layer": null
+ },
+ {
+  "name": "result-spec-stale",
+  "type": "QCResult",
+  "value": {
+   "schema_version": "2",
+   "mode": "REVIEW_ONLY",
+   "sample": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000030",
+    "workspace_id": "00000000-0000-4000-8000-000000000001",
+    "purchase_order_id": "po-0001",
+    "spec_id": "00000000-0000-4000-8000-000000000010",
+    "spec_version": 1,
+    "lot_ref": "LOT-22",
+    "roll_ref": "R17",
+    "location_ref": "3 m from start, centre",
+    "sample_plan_version": "lab-plan-1",
+    "capture_attempt": 1,
+    "revision": 8,
+    "predecessor_sample_id": null,
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "face": "face",
+    "planned_area_cm2": 100,
+    "usable_area_cm2": null,
+    "sampling_method": "operator-chosen",
+    "independent_group_id": "roll-R17",
+    "disposition": "SUBMITTED",
+    "exclusion_reason": null,
+    "created_by": "user-inspector",
+    "created_at": "2026-11-13T08:00:00Z"
+   },
+   "captures": [
+    {
+     "id": "00000000-0000-4000-8000-000000000060",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "capture_set_id": "00000000-0000-4000-8000-000000000040",
+     "original_sha256": "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+     "role": "overview",
+     "taken_at": "2026-11-13T08:05:00Z",
+     "device_profile_id": "unprofiled",
+     "calibration_id": null,
+     "width": 4032,
+     "height": 3024,
+     "preprocessing_version": "qc-imageio-1",
+     "consent_record_id": "00000000-0000-4000-8000-000000000050",
+     "byte_size": 3481220,
+     "media_type": "image/jpeg",
+     "original_state": "AVAILABLE",
+     "attestation_sha256": "2cfb98ae6abd91a9b49906b45bd490ddbb600a0b271a3e1dd81eff1f75acf92a"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000061",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "capture_set_id": "00000000-0000-4000-8000-000000000040",
+     "original_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+     "role": "structure",
+     "taken_at": "2026-11-13T08:05:00Z",
+     "device_profile_id": "unprofiled",
+     "calibration_id": null,
+     "width": 4032,
+     "height": 3024,
+     "preprocessing_version": "qc-imageio-1",
+     "consent_record_id": "00000000-0000-4000-8000-000000000050",
+     "byte_size": 3481220,
+     "media_type": "image/jpeg",
+     "original_state": "AVAILABLE",
+     "attestation_sha256": "d6b1aadc62b86d5669353593d85dc6e3c209251629207d28ddcecf669c359297"
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000062",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "capture_set_id": "00000000-0000-4000-8000-000000000040",
+     "original_sha256": "92a0f0b15d0f88f0b832e43f25726f9d8a8c7237feeeb468497bb37df1a6d090",
+     "role": "scale",
+     "taken_at": "2026-11-13T08:05:00Z",
+     "device_profile_id": "unprofiled",
+     "calibration_id": null,
+     "width": 4032,
+     "height": 3024,
+     "preprocessing_version": "qc-imageio-1",
+     "consent_record_id": "00000000-0000-4000-8000-000000000050",
+     "byte_size": 3481220,
+     "media_type": "image/jpeg",
+     "original_state": "AVAILABLE",
+     "attestation_sha256": "3c015ce78d23b877a1e2e4ce5b15786186ac1fe2063c1dd2d05f957e441b6b8d"
+    }
+   ],
+   "capture_sets": [
+    {
+     "id": "00000000-0000-4000-8000-000000000040",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "state": "CLOSED",
+     "required_roles": [
+      "overview",
+      "structure",
+      "scale"
+     ],
+     "capture_ids": [
+      "00000000-0000-4000-8000-000000000060",
+      "00000000-0000-4000-8000-000000000061",
+      "00000000-0000-4000-8000-000000000062"
+     ],
+     "revision": 5,
+     "attempt": 1
+    }
+   ],
+   "evidence": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000070",
+    "sample_id": "00000000-0000-4000-8000-000000000030",
+    "capture_ids": [
+     "00000000-0000-4000-8000-000000000060",
+     "00000000-0000-4000-8000-000000000061",
+     "00000000-0000-4000-8000-000000000062"
+    ],
+    "spec_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+    "domain_id": null,
+    "domain": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "DOMAIN_UNVALIDATED"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "fabric": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "defects": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "metrology": {
+     "state": "ABSTAINED",
+     "value": null,
+     "reasons": [
+      "DOMAIN_UNVALIDATED"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "quality": {
+     "state": "ABSTAINED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE",
+      "QUALITY_BLUR"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "contradictions": [],
+    "manifest_sha256": "4d39bf226e6b408f09d04e9e6657b09f27aee49e931ad329c2e7646e522921aa",
+    "created_at": "2026-11-13T08:06:00Z"
+   },
+   "decision": {
+    "status": "MANUAL_REVIEW",
+    "reasons": [
+     "POLICY_UNRELEASED",
+     "STAGE_UNAVAILABLE",
+     "DOMAIN_UNVALIDATED",
+     "QUALITY_BLUR"
+    ],
+    "automatic": false,
+    "scope": "INSPECTED_SAMPLE",
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000080",
+    "sample_id": "00000000-0000-4000-8000-000000000030",
+    "evidence_id": "00000000-0000-4000-8000-000000000070",
+    "spec_id": "00000000-0000-4000-8000-000000000010",
+    "spec_version": 1,
+    "revision": 6,
+    "policy_version": "review-only-1",
+    "release_id": null,
+    "evaluated_at": "2026-11-13T08:06:00Z"
+   },
+   "history": [
+    {
+     "status": "MANUAL_REVIEW",
+     "reasons": [
+      "POLICY_UNRELEASED",
+      "STAGE_UNAVAILABLE",
+      "DOMAIN_UNVALIDATED",
+      "QUALITY_BLUR"
+     ],
+     "automatic": false,
+     "scope": "INSPECTED_SAMPLE",
+     "schema_version": "2",
+     "id": "00000000-0000-4000-8000-000000000080",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "evidence_id": "00000000-0000-4000-8000-000000000070",
+     "spec_id": "00000000-0000-4000-8000-000000000010",
+     "spec_version": 1,
+     "revision": 6,
+     "policy_version": "review-only-1",
+     "release_id": null,
+     "evaluated_at": "2026-11-13T08:06:00Z"
+    }
+   ],
+   "adjudications": [
+    {
+     "id": "00000000-0000-4000-8000-000000000090",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "revision": 7,
+     "outcome": "UNDETERMINED",
+     "reason": "Pick glass count needed before a finding.",
+     "reference_ids": [],
+     "actor_id": "user-supervisor",
+     "created_at": "2026-11-13T08:06:00Z",
+     "supersedes_id": null,
+     "intervention_reason": null
+    },
+    {
+     "id": "00000000-0000-4000-8000-000000000091",
+     "sample_id": "00000000-0000-4000-8000-000000000030",
+     "revision": 8,
+     "outcome": "CONFORMING",
+     "reason": "Pick glass: 76 ends, 68 picks at the registered location.",
+     "reference_ids": [
+      "pickglass-2026-11-13-01"
+     ],
+     "actor_id": "user-supervisor",
+     "created_at": "2026-11-13T08:06:00Z",
+     "supersedes_id": "00000000-0000-4000-8000-000000000090",
+     "intervention_reason": null
+    }
+   ],
+   "current_human_disposition": {
+    "id": "00000000-0000-4000-8000-000000000091",
+    "sample_id": "00000000-0000-4000-8000-000000000030",
+    "revision": 8,
+    "outcome": "CONFORMING",
+    "reason": "Pick glass: 76 ends, 68 picks at the registered location.",
+    "reference_ids": [
+     "pickglass-2026-11-13-01"
+    ],
+    "actor_id": "user-supervisor",
+    "created_at": "2026-11-13T08:06:00Z",
+    "supersedes_id": "00000000-0000-4000-8000-000000000090",
+    "intervention_reason": null
+   },
+   "recalled_decision_ids": [],
+   "family": {
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "predecessor_sample_id": null,
+    "successor_sample_ids": [
+     "00000000-0000-4000-8000-000000000031"
+    ],
+    "attempts_used": 1,
+    "attempts_max": 3,
+    "spec_is_current": false,
+    "current_spec_version": 2
+   },
+   "revision": 8
+  },
+  "layer": null
+ },
+ {
+  "name": "result-linked-evaluation",
+  "type": "QCResult",
+  "value": {
+   "schema_version": "2",
+   "mode": "REVIEW_ONLY",
+   "sample": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000031",
+    "workspace_id": "00000000-0000-4000-8000-000000000001",
+    "purchase_order_id": "po-0001",
+    "spec_id": "00000000-0000-4000-8000-000000000010",
+    "spec_version": 2,
+    "lot_ref": "LOT-22",
+    "roll_ref": "R17",
+    "location_ref": "3 m from start, centre",
+    "sample_plan_version": "lab-plan-1",
+    "capture_attempt": 1,
+    "revision": 0,
+    "predecessor_sample_id": "00000000-0000-4000-8000-000000000030",
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "face": "face",
+    "planned_area_cm2": 100,
+    "usable_area_cm2": null,
+    "sampling_method": "operator-chosen",
+    "independent_group_id": "roll-R17",
+    "disposition": "SELECTED",
+    "exclusion_reason": null,
+    "created_by": "user-inspector",
+    "created_at": "2026-11-13T08:00:00Z"
+   },
+   "captures": [],
+   "capture_sets": [],
+   "evidence": null,
+   "decision": null,
+   "history": [],
+   "adjudications": [],
+   "current_human_disposition": null,
+   "recalled_decision_ids": [],
+   "family": {
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "predecessor_sample_id": "00000000-0000-4000-8000-000000000030",
+    "successor_sample_ids": [],
+    "attempts_used": 1,
+    "attempts_max": 3,
+    "spec_is_current": true,
+    "current_spec_version": 2
+   },
+   "revision": 0
+  },
+  "layer": null
+ },
+ {
+  "name": "result-missing-selection",
+  "type": "QCResult",
+  "value": {
+   "schema_version": "2",
+   "mode": "REVIEW_ONLY",
+   "sample": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000030",
+    "workspace_id": "00000000-0000-4000-8000-000000000001",
+    "purchase_order_id": "po-0001",
+    "spec_id": "00000000-0000-4000-8000-000000000010",
+    "spec_version": 1,
+    "lot_ref": "LOT-22",
+    "roll_ref": "R17",
+    "location_ref": "3 m from start, centre",
+    "sample_plan_version": "lab-plan-1",
+    "capture_attempt": 0,
+    "revision": 0,
+    "predecessor_sample_id": null,
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "face": "face",
+    "planned_area_cm2": 100,
+    "usable_area_cm2": null,
+    "sampling_method": "operator-chosen",
+    "independent_group_id": "roll-R17",
+    "disposition": "MISSING",
+    "exclusion_reason": "Roll not found at the dock.",
+    "created_by": "user-inspector",
+    "created_at": "2026-11-13T08:00:00Z"
+   },
+   "captures": [],
+   "capture_sets": [],
+   "evidence": null,
+   "decision": null,
+   "history": [],
+   "adjudications": [],
+   "current_human_disposition": null,
+   "recalled_decision_ids": [],
+   "family": {
+    "selection_id": "00000000-0000-4000-8000-000000000020",
+    "predecessor_sample_id": null,
+    "successor_sample_ids": [],
+    "attempts_used": 0,
+    "attempts_max": 3,
+    "spec_is_current": true,
+    "current_spec_version": 1
+   },
+   "revision": 0
+  },
+  "layer": null
+ },
+ {
+  "name": "policy-review-only",
+  "type": "Policy",
+  "value": {
+   "schema_version": "2",
+   "version": "review-only-1",
+   "sha256": "16d06dadeb80031c650c83773b7a8e432b0e5c41254ded9abb2b7c1fa7c026c7",
+   "mode": "REVIEW_ONLY",
+   "required_stages": [
+    "quality",
+    "fabric",
+    "defects",
+    "metrology",
+    "domain"
+   ],
+   "max_capture_sets": 3
+  },
+  "layer": null
+ },
+ {
+  "name": "policy-automatic",
+  "type": "Policy",
+  "value": {
+   "schema_version": "2",
+   "version": "automatic-1",
+   "sha256": "c02807381009a884c094f5742a998e264b4b18bb8b06f83111824ec6ac7c7147",
+   "mode": "AUTOMATIC",
+   "required_stages": [
+    "quality",
+    "fabric",
+    "defects",
+    "metrology",
+    "domain"
+   ],
+   "max_capture_sets": 3
+  },
+  "layer": null
+ },
+ {
+  "name": "domain-manifest",
+  "type": "DomainManifest",
+  "value": {
+   "id": "lab-woven-1",
+   "version": "1",
+   "sha256": "5dee7e5f9ca4eab60326070813ef2a0d50c8103f45a886bbb1de8f0509cf30e0",
+   "construction": "woven",
+   "effective_labels": [
+    "twill",
+    "denim"
+   ],
+   "taxonomy_sha256": "c1387f8c5bd99df4cf69714f1655b2ec2c1fd3cf78e35804bf6255210606305f",
+   "required_roles": [
+    "overview",
+    "structure",
+    "scale"
+   ],
+   "profile_sha256s": [
+    "4d5fd5739bc8977b9004af4061c14de70b37399e611c5515fa2d3b35a57e6364"
+   ],
+   "preprocessing_sha256": "0edb51d74a9bb372c30284983e38bd2fe510a7e79b1695435d6d46d43a742c1f",
+   "score_transform_sha256": "7ba2dabaa8c151f9b04973acf55f1398f91c36fb1eba6ca1908798bbc99adef4",
+   "unknown_assessment_sha256": "2ebc49e3d83652cb6bd9ac41f22f5c93696f54862c349d454584c9ca2c428bda",
+   "quality_thresholds_sha256": "84e4d4f9609da28de95a65b3a24271e5b729823157a02c64123665983667e63d",
+   "metrology_validation_sha256": "9b40daf58fc1a818d9d2df7ee17713af9efbf58a73b60168e0d82e9ce0bf58ae",
+   "defect_accept_below": 0.2,
+   "defect_hold_at_or_above": 0.8
+  },
+  "layer": null
+ },
+ {
+  "name": "release-statistical-candidate",
+  "type": "Release",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000100",
+   "version": "candidate-1",
+   "sha256": "39deaa84d9ff3de76649792f64930648d25ad5ef0ffbc005be58e7085e6d6417",
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "state": "STATISTICAL_CANDIDATE",
+   "domain_sha256": "5dee7e5f9ca4eab60326070813ef2a0d50c8103f45a886bbb1de8f0509cf30e0",
+   "policy_sha256": "c02807381009a884c094f5742a998e264b4b18bb8b06f83111824ec6ac7c7147",
+   "bundle_sha256": "516e205491fc174dafe5867a9f3bec79709de6a58af97d202699195fe514dc06",
+   "calibration_sha256": "649c4f8e962cfa3d95e1e043b3697ef048953a221c847e0fc0cccea015810b4a",
+   "statistics_report_sha256": "c3f37fb1eda8e81271ef7eaf45da5d91c9ad60a8c0c37450e2d92540070c94bd",
+   "operations_proof_sha256": null,
+   "monitoring_protocol_sha256": null,
+   "authority_record_sha256": "7ca02d4dbc4be4e7253c28d1a2c888294829b3bb1a6c509c5bc4534cdc54fbd7",
+   "approved_by": "user-admin",
+   "independent_signatory": "external-qc-signatory",
+   "expires_at": "2027-11-13T08:00:00Z",
+   "predecessor_release_id": null
+  },
+  "layer": null
+ },
+ {
+  "name": "release-active",
+  "type": "Release",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000100",
+   "version": "candidate-1",
+   "sha256": "0f452ce2c92e5f4bfa4e738fced8718b7dc8a15a22465eb19f8bcb186376c8b8",
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "state": "ACTIVE",
+   "domain_sha256": "5dee7e5f9ca4eab60326070813ef2a0d50c8103f45a886bbb1de8f0509cf30e0",
+   "policy_sha256": "c02807381009a884c094f5742a998e264b4b18bb8b06f83111824ec6ac7c7147",
+   "bundle_sha256": "516e205491fc174dafe5867a9f3bec79709de6a58af97d202699195fe514dc06",
+   "calibration_sha256": "649c4f8e962cfa3d95e1e043b3697ef048953a221c847e0fc0cccea015810b4a",
+   "statistics_report_sha256": "c3f37fb1eda8e81271ef7eaf45da5d91c9ad60a8c0c37450e2d92540070c94bd",
+   "operations_proof_sha256": "1f4ddaa61bbc0f80260eea089a0c454fbd996d971e50607c93b9f1d2d6639c67",
+   "monitoring_protocol_sha256": "76171ee4bafb44a73198587247418625cf9c7c29ad56bc6f768b1d2074c95cc0",
+   "authority_record_sha256": "7ca02d4dbc4be4e7253c28d1a2c888294829b3bb1a6c509c5bc4534cdc54fbd7",
+   "approved_by": "user-admin",
+   "independent_signatory": "external-qc-signatory",
+   "expires_at": "2027-11-13T08:00:00Z",
+   "predecessor_release_id": null
+  },
+  "layer": null
+ },
+ {
+  "name": "evaluation-context",
+  "type": "EvaluationContext",
+  "value": {
+   "evaluated_at": "2026-11-13T08:06:00Z",
+   "clock_source": "WORKER_UTC",
+   "deadline_at": "2026-11-13T08:07:00Z",
+   "calibration_records_sha256": "3678238149b58bbfe66e6ee5f217c5758d735ad3e49fd2ec9ec796ee4a155a09",
+   "capture_binding_sha256": "2ec7fa8d073e9156ca1362b22501ba80077f58152628bba166bf4a54cc0d73c3",
+   "request_id": "00000000-0000-4000-8000-000000000110",
+   "request_generation": 1
+  },
+  "layer": null
+ },
+ {
+  "name": "calibration-profile",
+  "type": "CalibrationProfile",
+  "value": {
+   "id": "iphone-main-1x",
+   "version": "1",
+   "sha256": "4d5fd5739bc8977b9004af4061c14de70b37399e611c5515fa2d3b35a57e6364",
+   "device_profile_id": "iphone-main-1x",
+   "lens_id": "wide",
+   "resolution": [
+    4032,
+    3024
+   ],
+   "focus_mode": "locked",
+   "distance_mm": [
+    180,
+    220
+   ],
+   "lighting_protocol_sha256": "e8bfc7037cccd338a58893f2d67a284b3a14101578468c38a3625083cf167152",
+   "processing_sha256": "58208a566d4bc1d8ffbc8cb3a53ff41e037193bcbd5d8538ffa1dff50a4b50c5",
+   "distortion_model_sha256": "e2697b358fdd4ddf73878fd52acdb1b104c9589b4ada1f7f21343f19449524db",
+   "source_resolution_limits_sha256": "72d533579005647942ccfaf966c33f62be9d4a8b4a83fe44e2f6d93376aca55e",
+   "uncertainty_model_sha256": "a18e6d6ef444c52327d277ad467fbeb0ba689a6089bbc8960b404bb6b0a12558",
+   "reference_ids": [
+    "card-A"
+   ],
+   "valid_from": "2026-11-13T08:00:00Z",
+   "expires_at": "2027-11-13T08:00:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "scale-reference",
+  "type": "ScaleReference",
+  "value": {
+   "id": "card-A",
+   "sha256": "b600a2fb496f899564b1929279174d1107b469c57e7920883a955956f9517a43",
+   "dimensions_mm": [
+    50,
+    50
+   ],
+   "uncertainty_mm": [
+    0.1,
+    0.1
+   ],
+   "traceability_report_sha256": "733788078502672179a98a114513bd447ad23bdeaf851dff7472b7b2cc87b290",
+   "print_verification_sha256": "40ffd8792aae672ebd347da3bf24b0e49fcaaa7cc7d8f273fb582d069191f3ef"
+  },
+  "layer": null
+ },
+ {
+  "name": "axis-registration",
+  "type": "AxisRegistration",
+  "value": {
+   "id": "00000000-0000-4000-8000-000000000120",
+   "capture_id": "00000000-0000-4000-8000-000000000061",
+   "capture_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+   "physical_indicator": "SELVEDGE",
+   "provenance": {
+    "source": "OPERATOR",
+    "source_id": "selvedge-mark",
+    "source_version": "1",
+    "actor_id": "user-inspector",
+    "observed_at": "2026-11-13T08:00:00Z",
+    "image_sha256": null,
+    "document_sha256": null,
+    "page": null,
+    "span": null,
+    "raw_value": null,
+    "raw_unit": null,
+    "ocr_confidence": null,
+    "candidate_id": null,
+    "corrects_id": null
+   },
+   "origin_xy": [
+    0.5,
+    0.5
+   ],
+   "direction_xy": [
+    0,
+    1
+   ],
+   "transform_sha256": "f7fa10914f4973d3a3e811542eac863f693f688f76adbbbe6b782fe380995afe"
+  },
+  "layer": null
+ },
+ {
+  "name": "validated-capture-with-axis",
+  "type": "ValidatedCapture",
+  "value": {
+   "capture": {
+    "id": "00000000-0000-4000-8000-000000000061",
+    "sample_id": "00000000-0000-4000-8000-000000000030",
+    "capture_set_id": "00000000-0000-4000-8000-000000000040",
+    "original_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+    "role": "structure",
+    "taken_at": "2026-11-13T08:05:00Z",
+    "device_profile_id": "unprofiled",
+    "calibration_id": null,
+    "width": 4032,
+    "height": 3024,
+    "preprocessing_version": "qc-imageio-1",
+    "consent_record_id": "00000000-0000-4000-8000-000000000050",
+    "byte_size": 3481220,
+    "media_type": "image/jpeg",
+    "original_state": "AVAILABLE",
+    "attestation_sha256": "d6b1aadc62b86d5669353593d85dc6e3c209251629207d28ddcecf669c359297"
+   },
+   "original_storage_reference": "qc/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000061",
+   "verified_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+   "acquisition_attestation_sha256": "d6b1aadc62b86d5669353593d85dc6e3c209251629207d28ddcecf669c359297",
+   "attestation": {
+    "image_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+    "capture_mode": "WEB_CAMERA",
+    "device_model": null,
+    "lens_id": null,
+    "zoom_factor": null,
+    "focus_mode": null,
+    "exposure_mode": null,
+    "resolution": [
+     4032,
+     3024
+    ],
+    "orientation": 1,
+    "processing": null,
+    "captured_at": "2026-11-13T08:05:00Z"
+   },
+   "geometry_artifact_sha256": null,
+   "calibration": null,
+   "reference": null,
+   "axis_registration": {
+    "id": "00000000-0000-4000-8000-000000000120",
+    "capture_id": "00000000-0000-4000-8000-000000000061",
+    "capture_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+    "physical_indicator": "SELVEDGE",
+    "provenance": {
+     "source": "OPERATOR",
+     "source_id": "selvedge-mark",
+     "source_version": "1",
+     "actor_id": "user-inspector",
+     "observed_at": "2026-11-13T08:00:00Z",
+     "image_sha256": null,
+     "document_sha256": null,
+     "page": null,
+     "span": null,
+     "raw_value": null,
+     "raw_unit": null,
+     "ocr_confidence": null,
+     "candidate_id": null,
+     "corrects_id": null
+    },
+    "origin_xy": [
+     0.5,
+     0.5
+    ],
+    "direction_xy": [
+     0,
+     1
+    ],
+    "transform_sha256": "f7fa10914f4973d3a3e811542eac863f693f688f76adbbbe6b782fe380995afe"
+   }
+  },
+  "layer": null
+ },
+ {
+  "name": "readiness-nothing-available",
+  "type": "Readiness",
+  "value": {
+   "schema_version": "2",
+   "ready": false,
+   "bundle_sha256": null,
+   "stages": [
+    {
+     "name": "quality",
+     "state": "ABSTAINED",
+     "artifact_sha256": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ]
+    },
+    {
+     "name": "fabric",
+     "state": "DISABLED",
+     "artifact_sha256": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ]
+    },
+    {
+     "name": "defects",
+     "state": "DISABLED",
+     "artifact_sha256": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ]
+    },
+    {
+     "name": "metrology",
+     "state": "ABSTAINED",
+     "artifact_sha256": null,
+     "reasons": [
+      "DOMAIN_UNVALIDATED"
+     ]
+    },
+    {
+     "name": "domain",
+     "state": "DISABLED",
+     "artifact_sha256": null,
+     "reasons": [
+      "DOMAIN_UNVALIDATED"
+     ]
+    }
+   ]
+  },
+  "layer": null
+ },
+ {
+  "name": "analysis-candidate-review",
+  "type": "AnalysisCandidate",
+  "value": {
+   "evidence": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000070",
+    "sample_id": "00000000-0000-4000-8000-000000000030",
+    "capture_ids": [
+     "00000000-0000-4000-8000-000000000060",
+     "00000000-0000-4000-8000-000000000061",
+     "00000000-0000-4000-8000-000000000062"
+    ],
+    "spec_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+    "domain_id": null,
+    "domain": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "DOMAIN_UNVALIDATED"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "fabric": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "defects": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "metrology": {
+     "state": "ABSTAINED",
+     "value": null,
+     "reasons": [
+      "DOMAIN_UNVALIDATED"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "quality": {
+     "state": "ABSTAINED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE",
+      "QUALITY_BLUR"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "contradictions": [],
+    "manifest_sha256": "4d39bf226e6b408f09d04e9e6657b09f27aee49e931ad329c2e7646e522921aa",
+    "created_at": "2026-11-13T08:06:00Z"
+   },
+   "draft": {
+    "status": "MANUAL_REVIEW",
+    "reasons": [
+     "POLICY_UNRELEASED",
+     "STAGE_UNAVAILABLE",
+     "DOMAIN_UNVALIDATED",
+     "QUALITY_BLUR"
+    ],
+    "automatic": false,
+    "scope": "INSPECTED_SAMPLE"
+   },
+   "binding": {
+    "spec_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+    "policy_sha256": "16d06dadeb80031c650c83773b7a8e432b0e5c41254ded9abb2b7c1fa7c026c7",
+    "release_sha256": null,
+    "capture_sha256s": [
+     "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+     "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+     "92a0f0b15d0f88f0b832e43f25726f9d8a8c7237feeeb468497bb37df1a6d090"
+    ],
+    "attempt": 1,
+    "expected_revision": 5,
+    "request_id": "00000000-0000-4000-8000-000000000110",
+    "request_generation": 1,
+    "deadline_at": "2026-11-13T08:07:00Z"
+   }
+  },
+  "layer": null
+ },
+ {
+  "name": "analyze-request",
+  "type": "AnalyzeRequest",
+  "value": {
+   "schema_version": "2",
+   "sample_id": "00000000-0000-4000-8000-000000000030",
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "spec": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000010",
+    "version": 1,
+    "workspace_id": "00000000-0000-4000-8000-000000000001",
+    "purchase_order_id": "po-0001",
+    "content_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+    "construction": "woven",
+    "allowed_fabric_labels": [
+     "twill",
+     "denim"
+    ],
+    "taxonomy_version": "fabric24-head_a",
+    "density": [
+     {
+      "axis": "ends",
+      "unit": "count/in",
+      "target": 76,
+      "lower": 72,
+      "upper": 80,
+      "provenance": {
+       "source": "PO_CONFIRMED",
+       "source_id": "po-doc-1",
+       "source_version": "1",
+       "actor_id": "user-purchase",
+       "observed_at": "2026-11-13T08:00:00Z",
+       "image_sha256": null,
+       "document_sha256": "8896e24075a00ab5921b54d8a03ea238e2e3e516ad09c634773cd509e9c219ec",
+       "page": 1,
+       "span": [
+        120,
+        131
+       ],
+       "raw_value": "76",
+       "raw_unit": "ends/inch",
+       "ocr_confidence": 0.91,
+       "candidate_id": "00000000-0000-4000-8000-000000000200",
+       "corrects_id": null
+      }
+     },
+     {
+      "axis": "picks",
+      "unit": "count/in",
+      "target": 68.5,
+      "lower": 65,
+      "upper": 72,
+      "provenance": {
+       "source": "PO_CONFIRMED",
+       "source_id": "po-doc-1",
+       "source_version": "1",
+       "actor_id": "user-purchase",
+       "observed_at": "2026-11-13T08:00:00Z",
+       "image_sha256": null,
+       "document_sha256": null,
+       "page": null,
+       "span": null,
+       "raw_value": null,
+       "raw_unit": null,
+       "ocr_confidence": null,
+       "candidate_id": null,
+       "corrects_id": null
+      }
+     }
+    ],
+    "confirmed_by": "user-purchase",
+    "confirmed_at": "2026-11-13T08:00:00Z",
+    "supersedes_version": null
+   },
+   "policy": {
+    "schema_version": "2",
+    "version": "review-only-1",
+    "sha256": "16d06dadeb80031c650c83773b7a8e432b0e5c41254ded9abb2b7c1fa7c026c7",
+    "mode": "REVIEW_ONLY",
+    "required_stages": [
+     "quality",
+     "fabric",
+     "defects",
+     "metrology",
+     "domain"
+    ],
+    "max_capture_sets": 3
+   },
+   "release": null,
+   "domain": null,
+   "attempt": 1,
+   "expected_revision": 5,
+   "context": {
+    "evaluated_at": "2026-11-13T08:06:00Z",
+    "clock_source": "WORKER_UTC",
+    "deadline_at": "2026-11-13T08:07:00Z",
+    "calibration_records_sha256": "3678238149b58bbfe66e6ee5f217c5758d735ad3e49fd2ec9ec796ee4a155a09",
+    "capture_binding_sha256": "2ec7fa8d073e9156ca1362b22501ba80077f58152628bba166bf4a54cc0d73c3",
+    "request_id": "00000000-0000-4000-8000-000000000110",
+    "request_generation": 1
+   },
+   "captures": [
+    {
+     "capture": {
+      "id": "00000000-0000-4000-8000-000000000060",
+      "sample_id": "00000000-0000-4000-8000-000000000030",
+      "capture_set_id": "00000000-0000-4000-8000-000000000040",
+      "original_sha256": "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+      "role": "overview",
+      "taken_at": "2026-11-13T08:05:00Z",
+      "device_profile_id": "unprofiled",
+      "calibration_id": null,
+      "width": 4032,
+      "height": 3024,
+      "preprocessing_version": "qc-imageio-1",
+      "consent_record_id": "00000000-0000-4000-8000-000000000050",
+      "byte_size": 3481220,
+      "media_type": "image/jpeg",
+      "original_state": "AVAILABLE",
+      "attestation_sha256": "2cfb98ae6abd91a9b49906b45bd490ddbb600a0b271a3e1dd81eff1f75acf92a"
+     },
+     "original_storage_reference": "qc/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000060",
+     "verified_sha256": "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+     "acquisition_attestation_sha256": "2cfb98ae6abd91a9b49906b45bd490ddbb600a0b271a3e1dd81eff1f75acf92a",
+     "attestation": {
+      "image_sha256": "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+      "capture_mode": "WEB_CAMERA",
+      "device_model": null,
+      "lens_id": null,
+      "zoom_factor": null,
+      "focus_mode": null,
+      "exposure_mode": null,
+      "resolution": [
+       4032,
+       3024
+      ],
+      "orientation": 1,
+      "processing": null,
+      "captured_at": "2026-11-13T08:05:00Z"
+     },
+     "geometry_artifact_sha256": null,
+     "calibration": null,
+     "reference": null,
+     "axis_registration": null
+    },
+    {
+     "capture": {
+      "id": "00000000-0000-4000-8000-000000000061",
+      "sample_id": "00000000-0000-4000-8000-000000000030",
+      "capture_set_id": "00000000-0000-4000-8000-000000000040",
+      "original_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+      "role": "structure",
+      "taken_at": "2026-11-13T08:05:00Z",
+      "device_profile_id": "unprofiled",
+      "calibration_id": null,
+      "width": 4032,
+      "height": 3024,
+      "preprocessing_version": "qc-imageio-1",
+      "consent_record_id": "00000000-0000-4000-8000-000000000050",
+      "byte_size": 3481220,
+      "media_type": "image/jpeg",
+      "original_state": "AVAILABLE",
+      "attestation_sha256": "d6b1aadc62b86d5669353593d85dc6e3c209251629207d28ddcecf669c359297"
+     },
+     "original_storage_reference": "qc/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000061",
+     "verified_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+     "acquisition_attestation_sha256": "d6b1aadc62b86d5669353593d85dc6e3c209251629207d28ddcecf669c359297",
+     "attestation": {
+      "image_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+      "capture_mode": "WEB_CAMERA",
+      "device_model": null,
+      "lens_id": null,
+      "zoom_factor": null,
+      "focus_mode": null,
+      "exposure_mode": null,
+      "resolution": [
+       4032,
+       3024
+      ],
+      "orientation": 1,
+      "processing": null,
+      "captured_at": "2026-11-13T08:05:00Z"
+     },
+     "geometry_artifact_sha256": null,
+     "calibration": null,
+     "reference": null,
+     "axis_registration": {
+      "id": "00000000-0000-4000-8000-000000000120",
+      "capture_id": "00000000-0000-4000-8000-000000000061",
+      "capture_sha256": "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+      "physical_indicator": "SELVEDGE",
+      "provenance": {
+       "source": "OPERATOR",
+       "source_id": "selvedge-mark",
+       "source_version": "1",
+       "actor_id": "user-inspector",
+       "observed_at": "2026-11-13T08:00:00Z",
+       "image_sha256": null,
+       "document_sha256": null,
+       "page": null,
+       "span": null,
+       "raw_value": null,
+       "raw_unit": null,
+       "ocr_confidence": null,
+       "candidate_id": null,
+       "corrects_id": null
+      },
+      "origin_xy": [
+       0.5,
+       0.5
+      ],
+      "direction_xy": [
+       0,
+       1
+      ],
+      "transform_sha256": "f7fa10914f4973d3a3e811542eac863f693f688f76adbbbe6b782fe380995afe"
+     }
+    },
+    {
+     "capture": {
+      "id": "00000000-0000-4000-8000-000000000062",
+      "sample_id": "00000000-0000-4000-8000-000000000030",
+      "capture_set_id": "00000000-0000-4000-8000-000000000040",
+      "original_sha256": "92a0f0b15d0f88f0b832e43f25726f9d8a8c7237feeeb468497bb37df1a6d090",
+      "role": "scale",
+      "taken_at": "2026-11-13T08:05:00Z",
+      "device_profile_id": "unprofiled",
+      "calibration_id": null,
+      "width": 4032,
+      "height": 3024,
+      "preprocessing_version": "qc-imageio-1",
+      "consent_record_id": "00000000-0000-4000-8000-000000000050",
+      "byte_size": 3481220,
+      "media_type": "image/jpeg",
+      "original_state": "AVAILABLE",
+      "attestation_sha256": "3c015ce78d23b877a1e2e4ce5b15786186ac1fe2063c1dd2d05f957e441b6b8d"
+     },
+     "original_storage_reference": "qc/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000062",
+     "verified_sha256": "92a0f0b15d0f88f0b832e43f25726f9d8a8c7237feeeb468497bb37df1a6d090",
+     "acquisition_attestation_sha256": "3c015ce78d23b877a1e2e4ce5b15786186ac1fe2063c1dd2d05f957e441b6b8d",
+     "attestation": {
+      "image_sha256": "92a0f0b15d0f88f0b832e43f25726f9d8a8c7237feeeb468497bb37df1a6d090",
+      "capture_mode": "WEB_CAMERA",
+      "device_model": null,
+      "lens_id": null,
+      "zoom_factor": null,
+      "focus_mode": null,
+      "exposure_mode": null,
+      "resolution": [
+       4032,
+       3024
+      ],
+      "orientation": 1,
+      "processing": null,
+      "captured_at": "2026-11-13T08:05:00Z"
+     },
+     "geometry_artifact_sha256": null,
+     "calibration": null,
+     "reference": null,
+     "axis_registration": null
+    }
+   ]
+  },
+  "layer": null
+ },
+ {
+  "name": "assertion-claims",
+  "type": "AssertionClaims",
+  "value": {
+   "kid": "qc-local-1",
+   "aud": "texpilot-scanner-qc",
+   "iat": 1794556800,
+   "exp": 1794556830,
+   "nonce": "0123456789abcdef0123456789abcdef",
+   "request_id": "00000000-0000-4000-8000-000000000110",
+   "request_generation": 1,
+   "workspace_id": "00000000-0000-4000-8000-000000000001",
+   "actor_id": "user-inspector",
+   "payload_sha256": "9a5df3729917cba86db1a823bdedea240ac08fd1cdacb93ac8d987c09b49bb08",
+   "deadline_at": "2026-11-13T08:07:00Z"
+  },
+  "layer": null
+ },
+ {
+  "name": "error-conflict",
+  "type": "ErrorEnvelope",
+  "value": {
+   "schema_version": "2",
+   "error": {
+    "code": "CONFLICT",
+    "reasons": [
+     "PO_VERSION_STALE"
+    ],
+    "retryable": false,
+    "request_id": "00000000-0000-4000-8000-000000000110"
+   }
+  },
+  "layer": null
+ }
+]

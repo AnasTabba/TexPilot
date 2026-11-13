@@ -9,3 +9,5 @@ playwright-report/
 .local/
 server/assets.generated.mjs
 .wrangler/
+
+ios/.build/

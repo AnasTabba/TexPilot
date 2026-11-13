@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from services.api.config import Settings, browser_origins, build_ocr, build_predictor, build_store
 from services.api.pipeline import run_scan
+from services.api.qc import QCErrorBoundary, qc_app
 from services.api.schemas import FlagModel, ScanResult, SpecResult
 from services.api.spec import run_spec
 from services.api.uploads import check_upload
@@ -49,6 +50,8 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+app.mount("/api/v2/qc", qc_app)
+app.add_middleware(QCErrorBoundary, prefix="/api/v2/qc")
 
 
 def get_predictor() -> Predictor:

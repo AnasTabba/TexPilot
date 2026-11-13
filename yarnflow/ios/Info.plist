@@ -41,7 +41,8 @@
 	<string>1.0</string>
 	<key>CFBundleSupportedPlatforms</key>
 	<array>
-		<string>iPhoneSimulator</string>
+		<string>iPhoneOS</string>
+        <string>iPhoneSimulator</string>
 	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
@@ -63,6 +64,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>YFQCAppOrigin</key>
+	<string>http://127.0.0.1:8788</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Import selected original fabric photos for review-only sample QC.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Photograph fabric and care labels when you choose to inspect a material.</string>
 	<key>UIDeviceFamily</key>

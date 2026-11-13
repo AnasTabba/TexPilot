@@ -1,0 +1,2904 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "qc.adjudication": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supervisor adjudication"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سپروائزر کا جائزہ"
+          }
+        }
+      }
+    },
+    "qc.analyze": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyse / resolve previous request"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تجزیہ / پچھلی درخواست کا نتیجہ"
+          }
+        }
+      }
+    },
+    "qc.area": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Planned area (cm²)"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "مقررہ رقبہ (cm²)"
+          }
+        }
+      }
+    },
+    "qc.attempt": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture attempts used, maximum 3"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "استعمال شدہ کوششیں، زیادہ سے زیادہ 3"
+          }
+        }
+      }
+    },
+    "qc.axis.courses": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Courses (knit rows)"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کورسز (نِٹ قطاریں)"
+          }
+        }
+      }
+    },
+    "qc.axis.ends": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ends (warp threads)"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تانے کے دھاگے"
+          }
+        }
+      }
+    },
+    "qc.axis.picks": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Picks (weft threads)"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "بانے کے دھاگے"
+          }
+        }
+      }
+    },
+    "qc.axis.wales": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wales (knit columns)"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ویلز (نِٹ کالم)"
+          }
+        }
+      }
+    },
+    "qc.begin_set": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start a new capture set"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نیا تصویری سیٹ شروع کریں"
+          }
+        }
+      }
+    },
+    "qc.camera": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open camera"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کیمرہ کھولیں"
+          }
+        }
+      }
+    },
+    "qc.camera_denied": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera access denied. Enable Camera in Settings for Yarnflow."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کیمرے کی اجازت نہیں۔ ترتیبات میں یارن فلو کا کیمرہ فعال کریں۔"
+          }
+        }
+      }
+    },
+    "qc.camera_preview": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live camera preview of the fabric"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کپڑے کا براہ راست کیمرہ منظر"
+          }
+        }
+      }
+    },
+    "qc.camera_unavailable": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No camera is available. Import an original JPEG or PNG for review."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کیمرہ دستیاب نہیں۔ جائزے کے لیے اصل JPEG یا PNG درآمد کریں۔"
+          }
+        }
+      }
+    },
+    "qc.capture": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guided capture"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصویر لینے کی رہنمائی"
+          }
+        }
+      }
+    },
+    "qc.capture.expired": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Draft expired after 24 hours. Capture again."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "مسودہ 24 گھنٹے بعد ختم ہوگیا۔ دوبارہ تصویر لیں۔"
+          }
+        }
+      }
+    },
+    "qc.capture.guide": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lay the fabric flat and relaxed, use diffuse even light, keep the scale coplanar, and hold the camera steady and square. Take overview, structure and scale views. Do not use digital zoom."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کپڑا ہموار اور ڈھیلا بچھائیں، یکساں نرم روشنی دیں، پیمانہ اسی سطح پر رکھیں اور کیمرہ ساکن اور سیدھا رکھیں۔ مجموعی، بُنائی اور پیمانے کی تصاویر لیں۔ ڈیجیٹل زوم استعمال نہ کریں۔"
+          }
+        }
+      }
+    },
+    "qc.capture.heic": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEIC is unsupported. Choose Settings → Camera → Formats → Most Compatible and recapture. A converted copy is not an original camera capture."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "HEIC قابل قبول نہیں۔ Settings → Camera → Formats → Most Compatible منتخب کر کے دوبارہ تصویر لیں۔ تبدیل شدہ نقل اصل کیمرہ تصویر نہیں۔"
+          }
+        }
+      }
+    },
+    "qc.capture.tooLarge": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limit: 4 originals, 12 MiB each, 48 MiB per set and 16 megapixels per photo."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "حد: 4 اصل تصاویر، ہر ایک 12 MiB، سیٹ 48 MiB اور ہر تصویر 16 میگا پکسل۔"
+          }
+        }
+      }
+    },
+    "qc.capture.unavailable": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The photo could not be captured or read. Try again."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصویر نہیں لی یا پڑھی جا سکی۔ دوبارہ کوشش کریں۔"
+          }
+        }
+      }
+    },
+    "qc.capture.unsupported": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use a single-frame original JPEG, PNG or WebP."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ایک فریم کی اصل JPEG، PNG یا WebP استعمال کریں۔"
+          }
+        }
+      }
+    },
+    "qc.choose_consent": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a currently valid authority"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "موجودہ معتبر اجازت منتخب کریں"
+          }
+        }
+      }
+    },
+    "qc.close_set": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close capture set"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصویری سیٹ بند کریں"
+          }
+        }
+      }
+    },
+    "qc.consent": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operational consent authority"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "عملی رضامندی کا حوالہ"
+          }
+        }
+      }
+    },
+    "qc.construction.knit": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Knit"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نِٹ"
+          }
+        }
+      }
+    },
+    "qc.construction.woven": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Woven"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "بُنا ہوا"
+          }
+        }
+      }
+    },
+    "qc.create_sample": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record selection and create sample"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "انتخاب درج اور نمونہ بنائیں"
+          }
+        }
+      }
+    },
+    "qc.density": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Density and uncertainty"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کثافت اور غیر یقینی حد"
+          }
+        }
+      }
+    },
+    "qc.device_profile": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actual device profile reference (unvalidated if absent)"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اصل ڈیوائس پروفائل حوالہ (غیر موجود تو غیر توثیق شدہ)"
+          }
+        }
+      }
+    },
+    "qc.done": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "مکمل"
+          }
+        }
+      }
+    },
+    "qc.draft_expiry": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Protected drafts expire after 24 hours and are purged on sign-out. Offline is draft-only."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "محفوظ مسودے 24 گھنٹے بعد ختم اور سائن آؤٹ پر حذف ہوتے ہیں۔ آف لائن صرف مسودہ ہے۔"
+          }
+        }
+      }
+    },
+    "qc.error.ABORTED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelled."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "منسوخ۔"
+          }
+        }
+      }
+    },
+    "qc.error.BAD_RESPONSE": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server answered in a form this app does not understand, so nothing is shown as decided. Refresh the app."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سرور کا جواب ایپ کی سمجھ سے باہر ہے، اس لیے کچھ بھی طے شدہ نہیں دکھایا گیا۔ ایپ ریفریش کریں۔"
+          }
+        }
+      }
+    },
+    "qc.error.CAPACITY_LIMIT": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The scanner is busy with another sample. Try again shortly."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اسکینر کسی اور نمونے میں مصروف ہے۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔"
+          }
+        }
+      }
+    },
+    "qc.error.CONFLICT": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Something changed while you were working. Reload the sample to see the current state."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "آپ کے کام کے دوران کچھ بدل گیا۔ موجودہ حالت دیکھنے کے لیے نمونہ دوبارہ لوڈ کریں۔"
+          }
+        }
+      }
+    },
+    "qc.error.DEADLINE_EXCEEDED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The analysis took too long and was stopped. Nothing was decided."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تجزیہ بہت دیر لگنے پر روک دیا گیا۔ کوئی فیصلہ نہیں ہوا۔"
+          }
+        }
+      }
+    },
+    "qc.error.FORBIDDEN": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your role cannot do this."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "آپ کا کردار یہ کام نہیں کر سکتا۔"
+          }
+        }
+      }
+    },
+    "qc.error.INTERNAL_ERROR": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server could not complete this. Nothing was confirmed."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سرور یہ مکمل نہیں کر سکا۔ کسی چیز کی تصدیق نہیں ہوئی۔"
+          }
+        }
+      }
+    },
+    "qc.error.MALFORMED_REQUEST": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The request could not be read. Refresh and try again."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "درخواست پڑھی نہیں جا سکی۔ ریفریش کر کے دوبارہ کوشش کریں۔"
+          }
+        }
+      }
+    },
+    "qc.error.METHOD_NOT_ALLOWED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This action is not available."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "یہ عمل دستیاب نہیں۔"
+          }
+        }
+      }
+    },
+    "qc.error.NOT_FOUND": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This record was not found in your workspace."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "یہ ریکارڈ آپ کے ورک اسپیس میں نہیں ملا۔"
+          }
+        }
+      }
+    },
+    "qc.error.PAYLOAD_TOO_LARGE": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The photo is too large. Each photo may be at most 12 MB and 16 megapixels."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصویر بہت بڑی ہے۔ ہر تصویر زیادہ سے زیادہ 12 MB اور 16 میگا پکسل ہو سکتی ہے۔"
+          }
+        }
+      }
+    },
+    "qc.error.SERVICE_UNAVAILABLE": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The scanner or the record store is not available. Nothing was decided. Inspect by hand or try again later."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اسکینر یا ریکارڈ اسٹور دستیاب نہیں۔ کوئی فیصلہ نہیں ہوا۔ ہاتھ سے معائنہ کریں یا بعد میں کوشش کریں۔"
+          }
+        }
+      }
+    },
+    "qc.error.STALE_SESSION": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The signed-in person changed. Earlier work on this device was cleared."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سائن اِن فرد بدل گیا۔ اس ڈیوائس پر پہلے کا کام صاف کر دیا گیا۔"
+          }
+        }
+      }
+    },
+    "qc.error.TRANSPORT": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No connection to the server. Your photos are still here; nothing was decided."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سرور سے رابطہ نہیں۔ آپ کی تصاویر یہیں موجود ہیں؛ کوئی فیصلہ نہیں ہوا۔"
+          }
+        }
+      }
+    },
+    "qc.error.UNAUTHENTICATED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your session ended. Sign in again; nothing was decided."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "آپ کا سیشن ختم ہو گیا۔ دوبارہ سائن اِن کریں؛ کوئی فیصلہ نہیں ہوا۔"
+          }
+        }
+      }
+    },
+    "qc.error.UNKNOWN_OUTCOME": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The connection dropped before the server answered. It is not known whether this was saved. Check again; repeating is safe."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سرور کے جواب سے پہلے رابطہ ٹوٹ گیا۔ معلوم نہیں کہ یہ محفوظ ہوا یا نہیں۔ دوبارہ جانچیں؛ دہرانا محفوظ ہے۔"
+          }
+        }
+      }
+    },
+    "qc.error.UNSUPPORTED_MEDIA": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This file type is not supported. Use a JPEG, PNG or WebP photo."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "یہ فائل کی قسم قابل قبول نہیں۔ JPEG، PNG یا WebP تصویر استعمال کریں۔"
+          }
+        }
+      }
+    },
+    "qc.error.VALIDATION_FAILED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some values were not accepted. Check them and try again."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کچھ قدریں قبول نہیں ہوئیں۔ انہیں جانچ کر دوبارہ کوشش کریں۔"
+          }
+        }
+      }
+    },
+    "qc.error.contract": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid QC record. Reload; no decision can be displayed."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "جانچ کا ریکارڈ درست نہیں۔ دوبارہ لوڈ کریں؛ فیصلہ نہیں دکھایا جا سکتا۔"
+          }
+        }
+      }
+    },
+    "qc.error.not_configured": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QC origin or protected draft storage is unavailable in this build."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اس بلڈ میں مقررہ پتہ یا محفوظ مسودہ ذخیرہ دستیاب نہیں۔"
+          }
+        }
+      }
+    },
+    "qc.error.stale": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This response is stale. Reload the current sample."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "یہ جواب پرانا ہے۔ موجودہ نمونہ دوبارہ لوڈ کریں۔"
+          }
+        }
+      }
+    },
+    "qc.error.transport": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection failed. Retry the same request to resolve its outcome."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "رابطہ ناکام ہوا۔ نتیجہ معلوم کرنے کے لیے وہی درخواست دہرائیں۔"
+          }
+        }
+      }
+    },
+    "qc.error.unauthenticated": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session ended. Sign in again. Prior drafts and status were cleared."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سیشن ختم ہوا۔ دوبارہ سائن اِن کریں۔ سابقہ مسودے اور حالت صاف کر دیے گئے۔"
+          }
+        }
+      }
+    },
+    "qc.error.unexpected": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server response did not match the contract. No decision is shown."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سرور کا جواب معاہدے سے مختلف ہے۔ کوئی فیصلہ نہیں دکھایا جاتا۔"
+          }
+        }
+      }
+    },
+    "qc.error.unknown_outcome": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outcome unknown. Retry with the same request key before making changes."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نتیجہ نامعلوم ہے۔ تبدیلی سے پہلے وہی درخواست دہرائیں۔"
+          }
+        }
+      }
+    },
+    "qc.face": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fabric face"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کپڑے کی سمت"
+          }
+        }
+      }
+    },
+    "qc.face.back": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "پیچھے"
+          }
+        }
+      }
+    },
+    "qc.face.face": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Face"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سامنے"
+          }
+        }
+      }
+    },
+    "qc.face.unknown": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نامعلوم"
+          }
+        }
+      }
+    },
+    "qc.fixed_origin": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in to the fixed Yarnflow app origin. The legacy model URL does not control QC."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "مقررہ یارن فلو پتے پر سائن اِن کریں۔ پرانے ماڈل کا پتہ اس جانچ کو نہیں بدلتا۔"
+          }
+        }
+      }
+    },
+    "qc.group": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Independent group reference"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "آزاد گروپ حوالہ"
+          }
+        }
+      }
+    },
+    "qc.history": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Immutable history and linked evaluations"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "مستقل تاریخ اور منسلک جائزے"
+          }
+        }
+      }
+    },
+    "qc.import": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import original photo"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اصل تصویر درآمد کریں"
+          }
+        }
+      }
+    },
+    "qc.import_review": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported photos are review-only evidence. No physical calibration is inferred."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "درآمد شدہ تصاویر صرف جائزے کے لیے ہیں۔ جسمانی کیلیبریشن فرض نہیں ہوتی۔"
+          }
+        }
+      }
+    },
+    "qc.interval": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "95% interval"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "95% وقفہ"
+          }
+        }
+      }
+    },
+    "qc.intervention": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admin intervention reason"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ایڈمن مداخلت کی وجہ"
+          }
+        }
+      }
+    },
+    "qc.linked": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start linked evaluation under current PO"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "موجودہ آرڈر کے تحت منسلک جائزہ شروع کریں"
+          }
+        }
+      }
+    },
+    "qc.location": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Location on roll"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "رول پر جگہ"
+          }
+        }
+      }
+    },
+    "qc.login": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in for sample QC"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نمونے کی جانچ کے لیے سائن اِن"
+          }
+        }
+      }
+    },
+    "qc.logout": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign out and clear drafts"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سائن آؤٹ اور مسودے صاف کریں"
+          }
+        }
+      }
+    },
+    "qc.lot": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lot reference"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "لاٹ حوالہ"
+          }
+        }
+      }
+    },
+    "qc.method": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sampling method"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نمونہ بندی کا طریقہ"
+          }
+        }
+      }
+    },
+    "qc.name": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account name"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اکاؤنٹ نام"
+          }
+        }
+      }
+    },
+    "qc.no_regions": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No regions reported. An unavailable stage is not a clean inspection."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کوئی علاقہ درج نہیں۔ غیر دستیاب جانچ صاف معائنہ نہیں ہے۔"
+          }
+        }
+      }
+    },
+    "qc.original_ready": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original bytes retained on this device"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اصل بائٹس ڈیوائس پر محفوظ ہیں"
+          }
+        }
+      }
+    },
+    "qc.outcome": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Human finding"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "انسانی نتیجہ"
+          }
+        }
+      }
+    },
+    "qc.outcome.CONFORMING": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reviewer found it conforming"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "جائزہ کار کے مطابق درست"
+          }
+        }
+      }
+    },
+    "qc.outcome.NONCONFORMING": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reviewer found it nonconforming"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "جائزہ کار کے مطابق غیر مطابق"
+          }
+        }
+      }
+    },
+    "qc.outcome.UNDETERMINED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reviewer could not determine"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "جائزہ کار تعین نہیں کر سکا"
+          }
+        }
+      }
+    },
+    "qc.photos_denied": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo access denied. Allow selected photos in Settings and retry."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصاویر کی اجازت نہیں۔ ترتیبات میں منتخب تصاویر کی اجازت دیں۔"
+          }
+        }
+      }
+    },
+    "qc.pin": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Four-digit PIN"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "چار ہندسوں کا پن"
+          }
+        }
+      }
+    },
+    "qc.plan": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sampling plan version"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نمونہ بندی منصوبے کا ورژن"
+          }
+        }
+      }
+    },
+    "qc.po_limits": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirmed PO limits"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "آرڈر کی تصدیق شدہ حدود"
+          }
+        }
+      }
+    },
+    "qc.purchase_orders": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Purchase orders"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "خریداری آرڈرز"
+          }
+        }
+      }
+    },
+    "qc.reason": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorded reason"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "درج شدہ وجہ"
+          }
+        }
+      }
+    },
+    "qc.reason.AUDIT_UNAVAILABLE": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The result could not be recorded, so no decision exists."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نتیجہ درج نہیں ہو سکا، اس لیے کوئی فیصلہ موجود نہیں۔"
+          }
+        }
+      }
+    },
+    "qc.reason.CALIBRATION_EXPIRED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The camera calibration for this setup has expired."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اس سیٹ اپ کی کیمرہ کیلیبریشن کی میعاد ختم ہو چکی ہے۔"
+          }
+        }
+      }
+    },
+    "qc.reason.CONSTRUCTION_OUTSIDE_TOLERANCE": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The measured thread count is outside the purchase-order limits."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ناپی گئی دھاگوں کی گنتی خریداری آرڈر کی حدود سے باہر ہے۔"
+          }
+        }
+      }
+    },
+    "qc.reason.DEFECT_SUSPECTED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A possible fabric defect was found."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کپڑے میں ممکنہ نقص ملا۔"
+          }
+        }
+      }
+    },
+    "qc.reason.DOMAIN_UNVALIDATED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This kind of fabric and camera setup has not been validated for automatic decisions."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اس قسم کے کپڑے اور کیمرہ سیٹ اپ کی خودکار فیصلوں کے لیے توثیق نہیں ہوئی۔"
+          }
+        }
+      }
+    },
+    "qc.reason.EVIDENCE_STALE": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The evidence no longer matches the current requirements or release."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "شواہد اب موجودہ شرائط یا ریلیز سے مطابقت نہیں رکھتے۔"
+          }
+        }
+      }
+    },
+    "qc.reason.FABRIC_MISMATCH": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The fabric type does not match the purchase order."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کپڑے کی قسم خریداری آرڈر سے مطابقت نہیں رکھتی۔"
+          }
+        }
+      }
+    },
+    "qc.reason.MEASUREMENT_UNCERTAIN": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The thread count could not be measured with enough certainty."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "دھاگوں کی گنتی کافی یقین کے ساتھ نہیں ناپی جا سکی۔"
+          }
+        }
+      }
+    },
+    "qc.reason.OOD": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This fabric looks unlike anything the system was validated on."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "یہ کپڑا ان کپڑوں سے مختلف لگتا ہے جن پر نظام کی جانچ ہوئی تھی۔"
+          }
+        }
+      }
+    },
+    "qc.reason.PATTERN_AMBIGUOUS": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A printed or woven pattern makes the thread count ambiguous."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "چھپے یا بُنے ہوئے نمونے کی وجہ سے دھاگوں کی گنتی مبہم ہے۔"
+          }
+        }
+      }
+    },
+    "qc.reason.POLICY_UNRELEASED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic decisions are not released. Every sample is reviewed by a person."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "خودکار فیصلے جاری نہیں کیے گئے۔ ہر نمونے کا جائزہ ایک فرد لیتا ہے۔"
+          }
+        }
+      }
+    },
+    "qc.reason.PO_CONFLICT": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The purchase-order values contradict each other."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "خریداری آرڈر کی قدریں ایک دوسرے سے متصادم ہیں۔"
+          }
+        }
+      }
+    },
+    "qc.reason.PO_UNCONFIRMED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The purchase-order requirements are not confirmed."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "خریداری آرڈر کی شرائط کی تصدیق نہیں ہوئی۔"
+          }
+        }
+      }
+    },
+    "qc.reason.PO_VERSION_STALE": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The purchase-order requirements changed after this sample was started."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "یہ نمونہ شروع ہونے کے بعد خریداری آرڈر کی شرائط بدل گئیں۔"
+          }
+        }
+      }
+    },
+    "qc.reason.QUALITY_BLUR": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A photo is blurred."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصویر دھندلی ہے۔"
+          }
+        }
+      }
+    },
+    "qc.reason.QUALITY_FOLD": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The fabric is folded or wrinkled in a photo."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصویر میں کپڑا تہہ شدہ یا شکن دار ہے۔"
+          }
+        }
+      }
+    },
+    "qc.reason.QUALITY_FRAMING": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The fabric does not fill the photo as required."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کپڑا تصویر میں مطلوبہ حد تک نہیں آیا۔"
+          }
+        }
+      }
+    },
+    "qc.reason.QUALITY_GLARE": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A photo has glare or blown-out highlights."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصویر میں چمک یا بہت تیز روشنی ہے۔"
+          }
+        }
+      }
+    },
+    "qc.reason.QUALITY_MOIRE": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A photo shows a moiré (wavy interference) pattern."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصویر میں موآرے (لہردار) نمونہ ہے۔"
+          }
+        }
+      }
+    },
+    "qc.reason.RECAPTURE_LIMIT": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The photos were retaken three times without success."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصاویر تین بار لینے کے باوجود قابل استعمال نہیں ہوئیں۔"
+          }
+        }
+      }
+    },
+    "qc.reason.RESOLUTION_LOW": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The close-up does not show the threads clearly enough to count."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "قریبی تصویر میں دھاگے گننے کے لیے کافی واضح نہیں۔"
+          }
+        }
+      }
+    },
+    "qc.reason.SCALE_INVALID": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The scale card could not be read reliably."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "پیمانہ کارڈ قابل اعتماد طور پر نہیں پڑھا جا سکا۔"
+          }
+        }
+      }
+    },
+    "qc.reason.SCALE_MISSING": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The printed scale card was not found."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "چھپا ہوا پیمانہ کارڈ نہیں ملا۔"
+          }
+        }
+      }
+    },
+    "qc.reason.SPEC_MISSING": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No confirmed requirements exist for this purchase order."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اس خریداری آرڈر کی کوئی تصدیق شدہ شرائط موجود نہیں۔"
+          }
+        }
+      }
+    },
+    "qc.reason.STAGE_UNAVAILABLE": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A required check could not run."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ایک ضروری جانچ نہیں چل سکی۔"
+          }
+        }
+      }
+    },
+    "qc.reason.UNIT_UNSUPPORTED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The purchase order uses a unit this check does not support."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "خریداری آرڈر میں ایسی اکائی ہے جو اس جانچ میں شامل نہیں۔"
+          }
+        }
+      }
+    },
+    "qc.reason.UNKNOWN_FABRIC": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The fabric type could not be identified."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کپڑے کی قسم شناخت نہیں ہو سکی۔"
+          }
+        }
+      }
+    },
+    "qc.recalled": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recalled — this historical decision is no longer valid"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "واپس لیا گیا — یہ پرانا فیصلہ اب معتبر نہیں"
+          }
+        }
+      }
+    },
+    "qc.recapture_current": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The old evaluation remains readable. New photos are required; the family shares three attempts."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "پرانا جائزہ برقرار ہے۔ نئی تصاویر درکار ہیں؛ خاندان میں کل تین کوششیں ہیں۔"
+          }
+        }
+      }
+    },
+    "qc.record_review": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Append human review"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "انسانی جائزہ شامل کریں"
+          }
+        }
+      }
+    },
+    "qc.reference": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Physical reference"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "جسمانی حوالہ"
+          }
+        }
+      }
+    },
+    "qc.references": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference IDs, separated by commas"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "حوالہ شناختیں، کوما سے الگ"
+          }
+        }
+      }
+    },
+    "qc.region": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Region / capture / normalized box / score"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "علاقہ / تصویر / معیاری خانہ / اسکور"
+          }
+        }
+      }
+    },
+    "qc.regions": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Defect region list"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نقص کے علاقوں کی فہرست"
+          }
+        }
+      }
+    },
+    "qc.result": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server decision"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سرور کا فیصلہ"
+          }
+        }
+      }
+    },
+    "qc.retry_same_key": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If the outcome is unknown, this button replays the same request key. Reload before changing evidence."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نتیجہ نامعلوم ہو تو یہ بٹن وہی درخواست دہراتا ہے۔ شواہد بدلنے سے پہلے دوبارہ لوڈ کریں۔"
+          }
+        }
+      }
+    },
+    "qc.review_only": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "REVIEW ONLY — automatic authority is not released"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "صرف جائزہ — خودکار فیصلے جاری نہیں"
+          }
+        }
+      }
+    },
+    "qc.role": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo purpose"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصویر کا مقصد"
+          }
+        }
+      }
+    },
+    "qc.role.defect": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suspected defect"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "مشتبہ نقص"
+          }
+        }
+      }
+    },
+    "qc.role.overview": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overview"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "مجموعی"
+          }
+        }
+      }
+    },
+    "qc.role.scale": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scale reference"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "پیمانے کا حوالہ"
+          }
+        }
+      }
+    },
+    "qc.role.structure": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Structure close-up"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "بُنائی کی قریبی تصویر"
+          }
+        }
+      }
+    },
+    "qc.roll": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Roll reference"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "رول حوالہ"
+          }
+        }
+      }
+    },
+    "qc.sample": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inspected sample"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "معائنہ شدہ نمونہ"
+          }
+        }
+      }
+    },
+    "qc.samples": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing sample evaluations"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "موجودہ نمونوں کے جائزے"
+          }
+        }
+      }
+    },
+    "qc.scope": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inspected sample only. This result does not accept a roll, receive stock, pay or dispatch."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "صرف معائنہ شدہ نمونہ۔ یہ نتیجہ رول قبول، اسٹاک وصول، ادائیگی یا روانگی نہیں کرتا۔"
+          }
+        }
+      }
+    },
+    "qc.selection": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Physical sampling selection"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "جسمانی نمونے کا انتخاب"
+          }
+        }
+      }
+    },
+    "qc.server_automatic": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server reports AUTOMATIC mode. Inspect the named release and scope."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سرور خودکار موڈ بتاتا ہے۔ متعلقہ ریلیز اور دائرہ دیکھیں۔"
+          }
+        }
+      }
+    },
+    "qc.set.CLOSED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Closed"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "بند"
+          }
+        }
+      }
+    },
+    "qc.set.OPEN": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کھلا"
+          }
+        }
+      }
+    },
+    "qc.shutter": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture original photo"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اصل تصویر لیں"
+          }
+        }
+      }
+    },
+    "qc.specification": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirmed PO requirements"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "آرڈر کی تصدیق شدہ شرائط"
+          }
+        }
+      }
+    },
+    "qc.stage.defects": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Defect check"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نقص کی جانچ"
+          }
+        }
+      }
+    },
+    "qc.stage.domain": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Validated conditions"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "توثیق شدہ حالات"
+          }
+        }
+      }
+    },
+    "qc.stage.fabric": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fabric type"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "کپڑے کی قسم"
+          }
+        }
+      }
+    },
+    "qc.stage.metrology": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thread count"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "دھاگوں کی گنتی"
+          }
+        }
+      }
+    },
+    "qc.stage.quality": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo quality"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصویر کا معیار"
+          }
+        }
+      }
+    },
+    "qc.stage_state.ABSTAINED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not tell"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نتیجہ نہیں نکل سکا"
+          }
+        }
+      }
+    },
+    "qc.stage_state.DISABLED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not available"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "دستیاب نہیں"
+          }
+        }
+      }
+    },
+    "qc.stage_state.FAILED": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to run"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "چل نہیں سکی"
+          }
+        }
+      }
+    },
+    "qc.stage_state.NOT_RUN": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not run"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نہیں چلائی گئی"
+          }
+        }
+      }
+    },
+    "qc.stage_state.OK": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "مکمل"
+          }
+        }
+      }
+    },
+    "qc.stages": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Evidence stages"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "شواہد کی جانچیں"
+          }
+        }
+      }
+    },
+    "qc.state.analyzing": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analysing — awaiting server"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تجزیہ — سرور کا انتظار"
+          }
+        }
+      }
+    },
+    "qc.state.complete": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server result loaded"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سرور کا نتیجہ لوڈ ہوگیا"
+          }
+        }
+      }
+    },
+    "qc.state.draft": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Draft — no current decision"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "مسودہ — کوئی موجودہ فیصلہ نہیں"
+          }
+        }
+      }
+    },
+    "qc.state.failed": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request failed — no new decision confirmed"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "درخواست ناکام — نیا فیصلہ تصدیق نہیں ہوا"
+          }
+        }
+      }
+    },
+    "qc.state.unknown": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown outcome — resolve before continuing"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نامعلوم نتیجہ — آگے بڑھنے سے پہلے حل کریں"
+          }
+        }
+      }
+    },
+    "qc.state.uploading": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uploading original"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اصل تصویر اپ لوڈ ہو رہی ہے"
+          }
+        }
+      }
+    },
+    "qc.status.ACCEPT": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sample accepted"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نمونہ قبول"
+          }
+        }
+      }
+    },
+    "qc.status.HOLD": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sample on hold"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "نمونہ روک لیا گیا"
+          }
+        }
+      }
+    },
+    "qc.status.MANUAL_REVIEW": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs manual review"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "دستی جائزہ درکار ہے"
+          }
+        }
+      }
+    },
+    "qc.status.RECAPTURE": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take the photos again"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "تصاویر دوبارہ لیں"
+          }
+        }
+      }
+    },
+    "qc.title": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incoming fabric QC"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "آنے والے کپڑے کی جانچ"
+          }
+        }
+      }
+    },
+    "qc.upload": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upload original"
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اصل تصویر اپ لوڈ کریں"
+          }
+        }
+      }
+    },
+    "qc.urdu_review": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Urdu wording needs fluent textile-QC review."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "اردو عبارت کو ماہر قاری کے جائزے کی ضرورت ہے۔"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

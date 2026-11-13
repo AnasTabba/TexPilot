@@ -104,3 +104,18 @@ def build_store(s: Settings):
     from services.api.store import ScanStore
 
     return ScanStore(Path(s.store))
+
+
+def _load_qc_heads(s: Settings):
+    from services.api.qc_pipeline import load_flat_swatch_predictor
+
+    return load_flat_swatch_predictor(s)
+
+
+def build_qc_predictor(s: Settings):
+    """Independent v2 flat-swatch factory: never constructs the v1 garment detector."""
+    if s.vision == "stub":
+        return StubPredictor()
+    if s.vision != "scanner":
+        raise ValueError("unsupported QC vision configuration")
+    return _load_qc_heads(s)

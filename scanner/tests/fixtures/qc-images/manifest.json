@@ -1,0 +1,47 @@
+{
+ "animated.webp": {
+  "bytes": 2102,
+  "note": "negative: two-frame WebP",
+  "sha256": "8a25fc0b97922d1e15d6640d2d6fa0007fb24bab20f9fb8dcee9d3b97d425519"
+ },
+ "fake.heic": {
+  "bytes": 40,
+  "note": "negative: HEIC container signature",
+  "sha256": "70d5c0591fea32f50686500fe06b2d076d1fdd68d582df5d7a8b0da186843086"
+ },
+ "over-pixel-limit.png": {
+  "bytes": 22313,
+  "note": "negative: 5000x3400 = 17 MP, small on disk",
+  "sha256": "910ae425f72ccb2223e4a731d57f57640f449205c97693711039ca9ce56798cc"
+ },
+ "phone-4032x3024.jpg": {
+  "bytes": 191140,
+  "note": "synthetic valid phone-resolution JPEG 4032x3024; never shrink measurement source",
+  "sha256": "30d6f125b8a5402e8046984e6eb29c31a40477e3fd94f7d90d9059995f59ec62"
+ },
+ "swatch-exif6.jpg": {
+  "bytes": 104519,
+  "note": "valid JPEG stored 640x480 with EXIF orientation 6 and a GPS tag; upright is 480x640",
+  "sha256": "546f2c74b124c799908eda30bebf67e261e0ea359922f24bcbfc4320e2d08418"
+ },
+ "swatch.jpg": {
+  "bytes": 104369,
+  "note": "valid JPEG 640x480",
+  "sha256": "aac2cc9e4fe095fe5c8a84af69f5dea402bc419848b2dc1aebbfcf703397aa55"
+ },
+ "swatch.png": {
+  "bytes": 584251,
+  "note": "valid PNG 640x480",
+  "sha256": "0c45c3b1484d731af8a15c83cc759e2346a47959ebd1a19dbe0b1fc13ac4bba9"
+ },
+ "swatch.webp": {
+  "bytes": 89708,
+  "note": "valid WebP 640x480",
+  "sha256": "f2bf73340bd003e9cfaea5bbd169cfcacc1219c526dbc7feccfbd0eb8f1f2b22"
+ },
+ "truncated-14.jpg": {
+  "bytes": 14,
+  "note": "negative: JPEG signature, 14 bytes, not decodable",
+  "sha256": "aeee9356ffdd7745f591ca7b3a1ddd1724ed4b8e2d426b50d4cfd1bace3943f4"
+ }
+}

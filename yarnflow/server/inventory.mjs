@@ -1,3 +1,4 @@
+import { handleQC, isQCPath, qcErrorBoundary } from './qc.mjs';
 import { integrationApi } from './integration.mjs';
 /** Shared inventory API: PIN sessions (server/auth.mjs) give identity, D1 supplies durable SQL. */
 import { LOCK_AFTER, LOCK_MS, ROLE_PERMISSIONS, SESSION_MS, nameKey, pinHash, randomHex, sessionCookie, sessionToken, sha256, validPin } from './auth.mjs';
@@ -285,6 +286,16 @@ export async function signedIn(request, env) {
 }
 
 export async function inventoryApi(request, env) {
+  // QC owns its boundary before DB, session lookup and any generic parser.
+  if (isQCPath(new URL(request.url).pathname)) return qcErrorBoundary(request, async () => {
+    if (!env.DB) throw Object.assign(new Error('QC unavailable'), { code: 'SERVICE_UNAVAILABLE' });
+    const token = sessionToken(request), sessionHash = token ? await sha256(token) : null;
+    const now = typeof env.QC_NOW === 'function' ? env.QC_NOW() : Date.now();
+    const row = sessionHash ? await first(env.DB, "SELECT u.*,s.expires_at AS session_expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.status='active' AND u.deactivated_at IS NULL AND u.portal_role IS NOT NULL", sessionHash, now) : null;
+    const auth = row ? { user_id: row.id, workspace_id: row.workspace_id, name: row.name, role: row.portal_role, session_hash: sessionHash, session_expires_at: row.session_expires_at, auth_epoch: row.pin_hash } : null;
+    const qcEnv = !env.BUCKET ? { ...env, BUCKET: d1Bucket(env.DB) } : env;
+    return handleQC(request, qcEnv, auth);
+  });
   // Without an R2 binding, photos live in D1 (server/d1-bucket.mjs).
   if (!env.BUCKET && env.DB) env = { ...env, BUCKET: d1Bucket(env.DB) };
   try { return await route(request, env); } catch (error) {

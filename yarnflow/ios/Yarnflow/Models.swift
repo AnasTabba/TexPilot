@@ -47,6 +47,8 @@ struct Draft {
 }
 enum ServiceError: LocalizedError { case message(String); var errorDescription: String? { switch self {case .message(let text):text} } }
 @MainActor @Observable final class AppStore {
+    let qc = QCWorkflowModel()
+    var showingQC = false
     var workspace: Workspace?; var review = false; var busy = false; var error = ""; var notice = ""; var page = AppPage.overview
     var server = UserDefaults.standard.string(forKey:"yf-server") ?? "http://127.0.0.1:8788"
     var modelServer = UserDefaults.standard.string(forKey:"yf-model") ?? "http://127.0.0.1:8000"
@@ -64,7 +66,7 @@ enum ServiceError: LocalizedError { case message(String); var errorDescription: 
     func connect() async { busy=true;error="";defer{busy=false}; do { let data=try await request("/workspace"); let decoder=JSONDecoder(); decoder.keyDecodingStrategy = .convertFromSnakeCase; workspace=try decoder.decode(Workspace.self,from:data); review=false;UserDefaults.standard.set(server,forKey:"yf-server") } catch { self.error="Could not open this workspace. \(error.localizedDescription)" } }
     func openReview() { workspace = .sample; review=true; error="";page = .overview }
     func refresh() async { guard !review else{return}; await connect() }
-    func signOut() { workspace=nil;error="";notice="";review=false;page = .overview;HTTPCookieStorage.shared.removeCookies(since:.distantPast) }
+    func signOut() { qc.logout(); workspace=nil;error="";notice="";review=false;page = .overview;HTTPCookieStorage.shared.removeCookies(since:.distantPast) }
     func save(_ action: StockAction, draft: Draft) async throws {
         guard var w=workspace else{return}
         var data:[String:Any]=[:]; var endpoint=""
