@@ -31,10 +31,13 @@ integrated QA. This follow-up does not change the review-only release state.
 
 Follow-up storage audit identified three issues. The cross-workspace supplier join is now fixed
 and covered by a regression test: `cd yarnflow && node --test tests/qc-store.test.mjs` passed
-(17/17). Two findings remain open: request expiry/failure state transitions do not consistently
-revalidate the initiating live session/lease, and rollback/restore after QC writes lacks an
-operational tested procedure. See the agent ledger. Consent privacy fix was pushed as `ae54356`;
-the supplier fix is being prepared as the next scoped commit.
+(18/18 at the time of that run). Request expiry/failure transitions were then hardened to require
+the initiating live session and current generation/lease (deadline expiration remains fenced by
+generation); new revoked-session regression and deadline race pass. The combined focused command
+`cd yarnflow && node --test tests/qc-store.test.mjs tests/qc-faults.test.mjs` passed 48/48.
+Rollback/restore after QC writes still lacks an operational tested procedure. Consent privacy fix
+was pushed as `ae54356`, supplier-join fix as `fb6e918`; request-state fix is prepared as the next
+scoped commit.
 
 The configured Kaggle CLI on the original machine reported MVTec and WFDD jobs COMPLETE and
 AITEX preflight ERROR; no jobs were started, cancelled, overwritten or duplicated. Local model

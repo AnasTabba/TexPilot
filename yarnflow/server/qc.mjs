@@ -165,7 +165,7 @@ export async function handleQC(request, env, authContext) {
         await callStore('finalizeQC',db,ctx,{prepared,candidate,started},data.expected_revision,nowOf(env));
         // Replay returns the exact response stored in the finalising batch.
         return reply(await callStore('replayOf',db,ctx,idem));
-      } catch (error) { await callStore('failRequest',db,started,error,nowOf(env)); throw error; }
+      } catch (error) { await callStore('failRequest',db,ctx,started,error,nowOf(env)); throw error; }
     }
     if (r.name === 'adjudicate') {
       own(data,['expected_revision','outcome','reason','reference_ids','supersedes_id','interventionReason']); integer(data.expected_revision,'Revision',0); reason(data.reason); optionalId(data.supersedes_id);
@@ -183,7 +183,7 @@ export async function handleQC(request, env, authContext) {
       try {
         const body = await callStore('issueProof',db,ctx,data.payload_sha256,now,randomHex(32));
         return reply(await callStore('completeRequest',db,ctx,begun.started,200,body,nowOf(env)));
-      } catch (error) { await callStore('failRequest',db,begun.started,error,nowOf(env)); throw error; }
+      } catch (error) { await callStore('failRequest',db,ctx,begun.started,error,nowOf(env)); throw error; }
     }
     if (r.name === 'release') {
       own(data,['version','domain','policy','bundle_sha256','calibration_sha256','statistics_report_sha256','operations_proof_sha256','monitoring_protocol_sha256','authority_record_sha256','independent_signatory','expires_at','predecessor_release_id','proof']);

@@ -55,7 +55,7 @@
  * DEADLINE_EXCEEDED for elapsed deadline. Expired leases increment the fencing generation.
  * completeRequest(db,ctx,started,status,body,now)->Mutation<typeof body>; guarded durable response,
  * CONFLICT for stale generation/actor/lease; DEADLINE_EXCEEDED after deadline.
- * failRequest(db,started,error:{code,reasons?},now)->void; only this generation becomes FAILED/EXPIRED.
+ * failRequest(db,ctx,started,error:{code,reasons?},now)->void; only the live actor and current lease may change state.
  * getRequest(db,ctx,requestId,now)->{schema_version:'2',request_id,
  * state:IN_PROGRESS|COMPLETED|EXPIRED|FAILED,result:QCResult|null,error:ErrorBody|null};
  * requestState is its compatibility alias. NOT_FOUND for a different actor/workspace.
@@ -190,21 +190,25 @@ export async function beginRequest(db, ctx, idem, now) {
   if (row.body_sha256 !== idem.bodySha) qcFail('CONFLICT', [], 'This Idempotency-Key was used for a different request.');
   if (row.state === 'COMPLETED') return { replay: await stored(db, ctx, row) };
   if (row.state === 'EXPIRED' || now >= row.deadline_at) {
-    if (row.state !== 'EXPIRED') await query(db, "UPDATE qc_idempotency SET state='EXPIRED',updated_at=? WHERE request_id=? AND state IN ('IN_PROGRESS','FAILED')", now, row.request_id).run();
     qcFail('DEADLINE_EXCEEDED', [], 'This request passed its deadline without a decision. Start a new request.');
   }
   if (row.state === 'IN_PROGRESS' && row.lease_expires_at > now) return { pending: { request_id: row.request_id } };
   // A failed attempt or an expired lease: the next generation takes over, and the old one can no longer finalise.
-  const claimed = await query(db, "UPDATE qc_idempotency SET state='IN_PROGRESS',generation=generation+1,lease_expires_at=?,response_status=NULL,response_json=NULL,updated_at=? WHERE request_id=? AND generation=? AND state IN ('IN_PROGRESS','FAILED')",
-    now + LEASE_MS, now, row.request_id, row.generation).run();
+  let claimed;
+  try { [, claimed] = await db.batch([authGuard(db, ctx, now), query(db, "UPDATE qc_idempotency SET state='IN_PROGRESS',generation=generation+1,lease_expires_at=?,response_status=NULL,response_json=NULL,updated_at=? WHERE request_id=? AND workspace_id=? AND actor_id=? AND generation=? AND state IN ('IN_PROGRESS','FAILED') AND deadline_at>?",
+    now + LEASE_MS, now, row.request_id, ctx.workspace_id, ctx.user_id, row.generation, now)]); }
+  catch (error) { throw batchProblem(error); }
   if (claimed.meta.changes !== 1) return { pending: { request_id: row.request_id } };
   return { started: { request_id: row.request_id, generation: row.generation + 1, deadline_at: row.deadline_at } };
 }
 /** Records why this generation stopped. The same key may retry before the deadline; after it the request is EXPIRED. */
-export async function failRequest(db, started, error, now) {
+export async function failRequest(db, ctx, started, error, now) {
   const expired = error.code === 'DEADLINE_EXCEEDED' || now >= started.deadline_at;
-  await query(db, `UPDATE qc_idempotency SET state=?,response_status=NULL,response_json=?,updated_at=? WHERE request_id=? AND generation=? AND state='IN_PROGRESS'`,
-    expired ? 'EXPIRED' : 'FAILED', JSON.stringify({ code: error.code, reasons: error.reasons ?? [] }), now, started.request_id, started.generation).run().catch(() => {});
+  const leaseGuard = expired ? 'deadline_at<=?' : 'lease_expires_at>? AND deadline_at>?';
+  const guardTime = expired ? [now] : [now, now];
+  try { await db.batch([authGuard(db, ctx, now), query(db, `UPDATE qc_idempotency SET state=?,response_status=NULL,response_json=?,updated_at=? WHERE request_id=? AND workspace_id=? AND actor_id=? AND generation=? AND state='IN_PROGRESS' AND ${leaseGuard}`,
+    expired ? 'EXPIRED' : 'FAILED', JSON.stringify({ code: error.code, reasons: error.reasons ?? [] }), now, started.request_id, ctx.workspace_id, ctx.user_id, started.generation, ...guardTime)]); }
+  catch (failure) { throw batchProblem(failure); }
 }
 export async function requestState(db, ctx, requestId, now) {
   const row = await one(db, 'SELECT * FROM qc_idempotency WHERE request_id=? AND workspace_id=? AND actor_id=?', requestId, ctx.workspace_id, ctx.user_id);
