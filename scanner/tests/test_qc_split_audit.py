@@ -349,3 +349,10 @@ def test_confirmatory_area_missingness_and_factory_sampling_binding_are_explicit
     report = audit_splits(manifest_double(confirmatory_double(**changes)))
     assert not report.promotable
     assert not report.confirmatory_release_eligible
+
+
+@pytest.mark.parametrize("link", ["roll_id", "lot_id", "parent_id", "selection_id"])
+def test_identifier_case_and_padding_cannot_split_one_physical_group(link):
+    a = item_double("a", **{link: "Roll-7"})
+    b = item_double("b", split="release_test", **{link: " roll-7 "})
+    assert "GROUP_SPANS_SPLITS" in audit_splits(manifest_double(a, b)).codes()

@@ -220,6 +220,23 @@ test.describe('real incoming QC workflow', () => {
   await expect(preview).toHaveCount(0); expect(await recoverable(currentURL!)).toBe(false);
   await expect(page.getByRole('button', { name: 'Upload originals', exact: true })).toBeDisabled(); await expect(page.getByTestId('qc-result')).toHaveCount(0); await reviewOnly(page);
  });
+ test('offline sign-out keeps the sign-in screen after reload and never restores the previous workspace', async ({ page, context }) => {
+  const { result } = await prepareSample(page);
+  await context.setOffline(true);
+  await signOut(page, 'Qasim');
+  await expect(page.getByRole('heading', { name: 'Who’s signing in?', exact: true })).toBeVisible();
+  // The sign-out never reached the server, so the durable marker must survive for the next start.
+  const markerBeforeReload = await page.evaluate(() => localStorage.getItem('yarnflow.pendingSignOut'));
+  await context.setOffline(false);
+  await page.reload();
+  // The reload must finish the sign-out instead of asking the server who is still signed in.
+  await expect(page.getByRole('heading', { name: 'Who’s signing in?', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toHaveCount(0);
+  await expect(page.getByText(result.sample.id, { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('qc-result')).toHaveCount(0);
+  expect(markerBeforeReload).toBe('1');
+  expect(await page.evaluate(() => localStorage.getItem('yarnflow.pendingSignOut'))).toBeNull();
+ });
  test('two tabs offline sign-out purges original previews and sends no old uploads on a new login', async ({ page, context }) => {
   const { result } = await prepareSample(page);
   await page.getByLabel('Choose original: Overview photo', { exact: true }).setInputFiles(jpegFile);

@@ -65,6 +65,18 @@ function saveFile(name: string, value: unknown) {
   const a = document.createElement('a'); a.href = url; a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+// A sign-out that could not reach the server is remembered here. The next start asks the server to
+// drop that session before any workspace request can restore the previous person's data.
+const PENDING_SIGN_OUT_KEY = 'yarnflow.pendingSignOut';
+const pendingSignOut = () => { try { return localStorage.getItem(PENDING_SIGN_OUT_KEY) === '1'; } catch { return false; } };
+const markPendingSignOut = () => { try { localStorage.setItem(PENDING_SIGN_OUT_KEY, '1'); } catch { /* Without storage this tab still locks; the server session stays until it expires. */ } };
+const clearPendingSignOut = () => { try { localStorage.removeItem(PENDING_SIGN_OUT_KEY); } catch { /* Nothing more this tab can do. */ } };
+function postLogout() {
+  return fetch('/api/auth/logout', {
+    method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', keepalive: true,
+    headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(20000),
+  });
+}
 function InventoryForm({ action, state, result, onSaved, onCancel }: { action: Action; state: WorkspaceState; result: ScanResult | null; onSaved: (message: string, lotId?: string) => Promise<void>; onCancel: () => void }) {
   const { t } = useLanguage();
   const key = `yf-live-draft:${state.workspace.id}:${state.member.user_id}:${action.type}:${action.lotId || action.productId || ''}`;
@@ -292,14 +304,16 @@ export default function LiveApp() {
     setError(''); setNotice(''); setAction(null); setHistory([]); setMoreHistory(true);
     setLastResult(null); setMatches([]); setQuery(''); setPaletteOpen(false); setIntegration(''); setInbox({ notifications: [], unread: 0 }); inboxSeen.current = null; workspaceSnapshot.current = ''; setToast(null);
     if (!preserveRoute) location.hash = '/dashboard';
+    // Remember the sign-out until the server confirms it: an offline request leaves the session
+    // valid, and the next start must finish the sign-out instead of restoring the workspace.
+    markPendingSignOut();
     if (logoutRequest.current) return logoutRequest.current;
     setEndingSession(true);
     const purge = purgeQCDrafts();
     // Explicit sign-out invalidates the session shared by all tabs.
-    const request = purge.then(() => fetch('/api/auth/logout', {
-      method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', keepalive: true,
-      headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(20000),
-    })).then(() => {}).catch(() => { /* The local lock survives an offline or interrupted logout. */ }).finally(() => {
+    const request = purge.then(postLogout).then(response => {
+      if (response.ok) clearPendingSignOut();
+    }).catch(() => { /* The marker and the local lock survive an offline or interrupted logout. */ }).finally(() => {
       if (logoutRequest.current === request) { logoutRequest.current = null; setEndingSession(false); }
     });
     logoutRequest.current = request;
@@ -315,6 +329,13 @@ export default function LiveApp() {
     if (sessionLocked.current) { setLoading(false); setRefreshing(false); return; }
     const sequence = ++requestSequence.current;
     if (!quiet) setRefreshing(true);
+    if (pendingSignOut()) {
+      // The last sign-out never reached the server, so its session may still be valid. Ask the
+      // server to drop it before any /workspace request can restore the previous person's data.
+      try { if ((await postLogout()).ok) clearPendingSignOut(); } catch { /* Offline: keep the marker and stay on the sign-in screen. */ }
+      if (sequence === requestSequence.current) { setLoading(false); setRefreshing(false); }
+      return;
+    }
     try {
       const result = await api<WorkspaceState>('/workspace');
       if (sequence !== requestSequence.current || sessionLocked.current) return;
@@ -410,6 +431,8 @@ export default function LiveApp() {
   if (!state && authNeeded) return <SignIn onSignedIn={async () => {
     await logoutRequest.current;
     if (document.hidden) { await signOut(true); return; }
+    // The login just issued a fresh server session, so the pending sign-out no longer applies.
+    clearPendingSignOut();
     sessionLocked.current = false; await refresh();
   }} />;
   if (!state) return <main className="live-welcome"><Cone hue="#2f6fd6" size={48} /><h1>{t("Inventory is unavailable")}</h1><p role="alert">{t(error)}</p><button className="button primary" onClick={() => void refresh()}><RefreshCw size={18} />{t("Try connection again")}</button><p>{t("The shared records are safe on the server.")}</p></main>;

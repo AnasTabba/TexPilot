@@ -137,22 +137,27 @@ def _area_valid(item: ManifestItem) -> bool:
     )
 
 
+def _ident(value: str) -> str:
+    return value.strip().casefold()
+
+
 def _components(items: tuple[ManifestItem, ...], near_bits: int) -> _Union:
     union = _Union()
     for item in items:
         union.find(item.id)
     by_key: dict[tuple[str, str], list[str]] = defaultdict(list)
     for item in items:
+        # Identifiers are compared as written by people: case and padding do not make a new roll.
         if item.parent_id:
-            by_key[("parent", item.parent_id)].append(item.id)
+            by_key[("parent", _ident(item.parent_id))].append(item.id)
         # An item that is itself a parent joins its children.
-        by_key[("parent", item.id)].append(item.id)
+        by_key[("parent", _ident(item.id))].append(item.id)
         if item.roll_id:
-            by_key[("roll", item.roll_id)].append(item.id)
+            by_key[("roll", _ident(item.roll_id))].append(item.id)
         if item.lot_id:
-            by_key[("lot", item.lot_id)].append(item.id)
+            by_key[("lot", _ident(item.lot_id))].append(item.id)
         if item.selection_id:
-            by_key[("selection", item.selection_id)].append(item.id)
+            by_key[("selection", _ident(item.selection_id))].append(item.id)
         if not item.roll_id and not item.lot_id:
             by_key[("unknown-group-source", item.source)].append(item.id)
         by_key[("image", item.image_sha256)].append(item.id)
