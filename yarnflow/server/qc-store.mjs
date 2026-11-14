@@ -23,7 +23,8 @@
  * current_spec:{id,version,confirmed_at,construction}|null}>.
  * currentSpecRow(db,workspaceId,purchaseOrderId)->SQL spec row|null.
  * createSelection(db,ctx,input,now)->Mutation<SamplingSelection>; input is SamplingSelection
- * minus id/workspace_id/created_by/created_at, plus intervention?/idem?.
+ * minus id/workspace_id/created_by/created_at, plus intervention?/idem?; a plan_sha256 or
+ * CONFIRMATORY/CHALLENGE selection needs a matching qc_sampling_plans row listing its roll and face.
  * registerConsent(db,ctx,input,now)->Mutation<ConsentAuthority>; input={authority_evidence_sha256,
  * operational_capture,operational_retention_days,research_use,training_use,export_destinations?,
  * valid_from,expires_at,idem?}. listConsent(db,workspaceId,now)->ConsentAuthority[].
@@ -115,6 +116,8 @@ const uuid = () => crypto.randomUUID();
 /** Fails the whole batch unless the row exists: SQLite and D1 both abort on the malformed JSON. */
 const guard = (db, sql, ...args) => query(db, `SELECT json('!') WHERE NOT EXISTS(${sql})`, ...args);
 const valid = (type, value, code = 'VALIDATION_FAILED') => { const failed = violation(type, value); if (failed) qcFail(code, [], `${failed.path} ${failed.message}`); return value; };
+/** An identity, not a rendering: compatibility forms, format/space characters and case carry no distinction. */
+export const canonicalIdentity = value => String(value ?? '').normalize('NFKC').replace(/[\s\p{Cf}\p{Cc}\p{Z}]/gu, '').toLowerCase();
 
 /** The default policy: review only. Its hash is fixed by its content. */
 let reviewOnly;
@@ -331,6 +334,12 @@ export async function createSelection(db, ctx, input, now) {
   if (!await one(db, 'SELECT id FROM supplier_purchase_orders WHERE workspace_id=? AND id=?', w, input.purchase_order_id)) qcFail('NOT_FOUND');
   const { idem, intervention, ...fields } = input;
   const selection = valid('SamplingSelection', { id: uuid(), workspace_id: w, ...fields, created_by: ctx.user_id, created_at: isoTime(now) });
+  // A plan-bound or confirmatory/challenge selection needs a registered plan listing this roll and face for this workspace.
+  // ponytail: plans are inserted by an operator migration/SQL for now; the supervised registration route arrives with the G1 sampling gate.
+  if (selection.plan_sha256 !== null || ['CONFIRMATORY', 'CHALLENGE'].includes(selection.cohort)) {
+    const plan = await one(db, 'SELECT roll_refs,faces FROM qc_sampling_plans WHERE workspace_id=? AND plan_version=? AND plan_sha256=?', w, selection.plan_version, selection.plan_sha256);
+    if (!plan || !JSON.parse(plan.roll_refs).includes(selection.roll_ref) || !JSON.parse(plan.faces).includes(selection.face)) qcFail('VALIDATION_FAILED', [], 'This roll and face are not listed by a plan registered in this workspace.');
+  }
   return commit(db, ctx, idem, now, [
     query(db, 'INSERT INTO qc_selections(workspace_id,id,purchase_order_id,cohort,json,created_by,created_at) VALUES(?,?,?,?,?,?,?)', w, selection.id, selection.purchase_order_id, selection.cohort, JSON.stringify(selection), ctx.user_id, now),
     event(db, ctx, 'selection.created', selection.id, { detail: { cohort: selection.cohort, roll_ref: selection.roll_ref, location_ref: selection.location_ref }, intervention: intervention ?? null }, now),
@@ -664,7 +673,8 @@ export async function registerRelease(db, ctx, input, now) {
   valid('DomainManifest', domain); valid('Policy', policy);
   if (domain.sha256 !== await contentSha256(domain, HASH_EXCLUDES.DomainManifest) || policy.sha256 !== await contentSha256(policy, HASH_EXCLUDES.Policy)) qcFail('VALIDATION_FAILED', [], 'The domain or policy hash does not match its content.');
   if (policy.mode !== 'AUTOMATIC') qcFail('VALIDATION_FAILED', [], 'A release carries an AUTOMATIC policy; review-only needs no release.');
-  if (input.independent_signatory.trim().toLowerCase() === ctx.name.trim().toLowerCase()) qcFail('VALIDATION_FAILED', [], 'The independent signatory must be a different person.');
+  const signatory = canonicalIdentity(input.independent_signatory), approver = canonicalIdentity(ctx.name);
+  if (!signatory || !approver || signatory === approver) qcFail('VALIDATION_FAILED', [], 'The independent signatory must be a different person.');
   if (input.predecessor_release_id && !await one(db, 'SELECT 1 AS x FROM qc_releases WHERE workspace_id=? AND id=?', w, input.predecessor_release_id)) qcFail('NOT_FOUND');
   const body = { id: uuid(), version: input.version, workspace_id: w, domain_sha256: domain.sha256, policy_sha256: policy.sha256, bundle_sha256: input.bundle_sha256, calibration_sha256: input.calibration_sha256,
     statistics_report_sha256: input.statistics_report_sha256, operations_proof_sha256: input.operations_proof_sha256 ?? null, monitoring_protocol_sha256: input.monitoring_protocol_sha256 ?? null, authority_record_sha256: input.authority_record_sha256,

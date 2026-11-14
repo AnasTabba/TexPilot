@@ -5,7 +5,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { migrate, legacyMigrations, liveShapedRows, dir } from './portal-fixture.mjs';
 import { fixtureDouble, uploadedDouble, analysisDouble, proofDouble, activeReleaseDouble, idemDouble } from './qc-store.test.mjs';
 import * as store from '../server/qc-store.mjs';
-const name='0033_incoming_fabric_qc.sql', ddl=readFileSync(new URL(name,dir),'utf8');
+const name='0033_incoming_fabric_qc.sql', ddl=readFileSync(new URL(name,dir),'utf8'), qcNames=[name,'0034_qc_sampling_plans.sql'];
 const prior=readdirSync(dir).filter(n=>n.endsWith('.sql')&&n<name).sort();
 const snapshot=sql=>Object.fromEntries(sql.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'qc_%'").all().map(({name})=>[name,sql.prepare(`SELECT * FROM "${name}" ORDER BY rowid`).all()]));
 test('idempotency actor is a composite tenant parent, including direct SQL callers',async t=>{
@@ -23,14 +23,14 @@ for(const populated of [false,true])test(`migration empty/populated=${populated}
  migrate(sql,prior.filter(n=>!legacyMigrations.includes(n)));const before=snapshot(sql);
  // Simulate an interrupted atomic migration; the original app must remain usable.
  sql.exec('BEGIN');sql.exec(ddl.slice(0,ddl.indexOf('CREATE TABLE IF NOT EXISTS qc_samples')));sql.exec('ROLLBACK');assert.deepEqual(snapshot(sql),before);
- migrate(sql,[name]);migrate(sql,[name]);assert.deepEqual(snapshot(sql),before);assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
+ migrate(sql,[...qcNames]);migrate(sql,[...qcNames]);assert.deepEqual(snapshot(sql),before);assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
  if(populated){assert.equal(sql.prepare("SELECT grams FROM stock_deltas WHERE id='receive1raw'").get().grams,10000);assert.equal(sql.prepare("SELECT quantity_milli FROM goods_receipts WHERE id='receipt'").get().quantity_milli,2000);
   for(const action of ["UPDATE erp_audit_events SET action='tamper' WHERE id='audit'","DELETE FROM erp_audit_events WHERE id='audit'"])assert.throws(()=>sql.exec(action),/immutable|append|audit/i);
  }
 });
 test('partially applied migration resumes idempotently without rewriting existing tables',t=>{
  const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());sql.exec('PRAGMA foreign_keys=ON');migrate(sql,prior);
- sql.exec(ddl.slice(0,ddl.indexOf('CREATE TABLE IF NOT EXISTS qc_samples')));migrate(sql,[name]);migrate(sql,[name]);assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
+ sql.exec(ddl.slice(0,ddl.indexOf('CREATE TABLE IF NOT EXISTS qc_samples')));migrate(sql,[...qcNames]);migrate(sql,[...qcNames]);assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);
 });
 test('tenant composite FKs reject foreign PO, selection, consent, sample and release parents',async t=>{
  const f=await fixtureDouble();t.after(()=>f.sql.close());const w=crypto.randomUUID();f.sql.prepare('INSERT INTO workspaces(id,name,created_at) VALUES(?,?,?)').run(w,'Other tenant double',f.now);
@@ -111,9 +111,9 @@ for(const mode of ['empty','populated','interrupted','dev replay'])test(`D06 mig
   // Split only at a complete CREATE statement, nearest the middle of the file.
   const offsets=[...ddl.matchAll(/^CREATE /gm)].map(m=>m.index),cut=offsets.find(n=>n>=ddl.length/2);sql.exec('BEGIN IMMEDIATE');sql.exec(ddl.slice(0,cut));sql.exec('ROLLBACK');assert.deepEqual(allExistingDouble(sql),before);
  }
- if(mode==='dev replay'){assert.equal(devRunnerDouble(sql,[...prior,name]),1);assert.equal(devRunnerDouble(sql,[...prior,name]),0);}else migrate(sql,[name]);
+ if(mode==='dev replay'){assert.equal(devRunnerDouble(sql,[...prior,...qcNames]),2);assert.equal(devRunnerDouble(sql,[...prior,...qcNames]),0);}else migrate(sql,[...qcNames]);
  for(const [table,rows] of Object.entries(before))assert.deepEqual(stableRowsDouble(sql.prepare(`SELECT * FROM "${table}"`).all()),rows,table);
- if(mode==='dev replay')assert.deepEqual(sql.prepare('SELECT name FROM local_migrations ORDER BY name').all().map(r=>r.name),[...prior,name].map(file=>file.slice(0,-4)));
+ if(mode==='dev replay')assert.deepEqual(sql.prepare('SELECT name FROM local_migrations ORDER BY name').all().map(r=>r.name),[...prior,...qcNames].map(file=>file.slice(0,-4)));
  for(const [table,rows] of Object.entries(qcBefore))assert.deepEqual(sql.prepare(`SELECT * FROM ${table}`).all(),rows,table);
  assert.deepEqual(oldReaderDouble(sql),readers);assert.deepEqual(sql.prepare('PRAGMA foreign_key_check').all(),[]);assert.equal(sql.prepare('PRAGMA integrity_check').get().integrity_check,'ok');
  assert.deepEqual(Object.fromEntries(['qc_evidence','qc_decisions','qc_decision_events'].map(table=>[table,sql.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n])),{qc_evidence:0,qc_decisions:0,qc_decision_events:0});assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM qc_samples WHERE current_decision_id IS NOT NULL').get().n,0);

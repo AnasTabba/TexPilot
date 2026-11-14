@@ -63,10 +63,33 @@ export async function activeReleaseDouble(f,ttl=30000) {
   f.sql.prepare("INSERT INTO qc_releases(workspace_id,id,state,sha256,json,domain_json,policy_json,expires_at,created_by,created_at,updated_at) VALUES(?,?,'STATISTICAL_CANDIDATE',?,?,?,?,?,?,?,?)").run(f.workspaceId,release.id,release.sha256,JSON.stringify(frozen),JSON.stringify(doubleRecord('domain-manifest')),JSON.stringify(doubleRecord('policy-automatic')),f.now+ttl,f.admin.user_id,f.now,f.now);
   f.sql.prepare("UPDATE qc_releases SET state='ACTIVE',activated_by=? WHERE workspace_id=? AND id=?").run(f.admin.user_id,f.workspaceId,release.id);return release;
 }
+export const samplingPlanDouble=(f,{workspace_id=f.workspaceId,plan_version='plan-test-double',plan_sha256='a'.repeat(64),roll_refs=['R17'],faces=['face']}={})=>f.sql.prepare('INSERT INTO qc_sampling_plans(workspace_id,plan_version,plan_sha256,roll_refs,faces,registered_by,created_at) VALUES(?,?,?,?,?,?,?)').run(workspace_id,plan_version,plan_sha256,JSON.stringify(roll_refs),JSON.stringify(faces),f.admin.user_id,f.now);
 if(process.argv[1]===fileURLToPath(import.meta.url)) {
- test('registered sampling-plan/roll/face authority rejects an unknown binding',{todo:'needs scanner/services/api/qc_schemas.py and server/qc.mjs: define and supply registered plan/roll/face authority; current frozen contract supplies only caller references'},async t=>{
+ test('registered sampling-plan/roll/face authority rejects an unknown binding',async t=>{
   const f=await fixtureDouble();t.after(()=>f.sql.close());const {id,workspace_id,created_by,created_at,...fields}=f.selection,before=proofDouble(f);
   await assert.rejects(store.createSelection(f.env.DB,f.ctx,{...fields,plan_version:'unregistered-plan-test-double',plan_sha256:'0'.repeat(64),roll_ref:'unregistered-roll-test-double'},f.now),isCode('VALIDATION_FAILED'));assert.deepEqual(proofDouble(f),before);
+ });
+ test('registered sampling-plan/roll/face authority accepts a listed roll and face',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());samplingPlanDouble(f);const {id,workspace_id,created_by,created_at,...fields}=f.selection,plan_sha256='a'.repeat(64);
+  const selection=(await store.createSelection(f.env.DB,f.ctx,{...fields,plan_version:'plan-test-double',plan_sha256,cohort:'CONFIRMATORY',roll_ref:'R17',face:'face'},f.now)).body;
+  assert.equal(selection.plan_sha256,plan_sha256);assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM qc_selections WHERE workspace_id=? AND id=?').get(f.workspaceId,selection.id).n,1);
+ });
+ test('registered sampling-plan authority rejects an unlisted roll or face',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());samplingPlanDouble(f);const {id,workspace_id,created_by,created_at,...fields}=f.selection,before=proofDouble(f),selections=f.sql.prepare('SELECT COUNT(*) AS n FROM qc_selections').get().n,
+   base={...fields,plan_version:'plan-test-double',plan_sha256:'a'.repeat(64),roll_ref:'R17',face:'face'};
+  for(const change of [{roll_ref:'R18'},{face:'back'}])await assert.rejects(store.createSelection(f.env.DB,f.ctx,{...base,...change},f.now),isCode('VALIDATION_FAILED'));
+  assert.deepEqual(proofDouble(f),before);assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM qc_selections').get().n,selections);
+ });
+ test('registered sampling plan in one workspace grants no authority in another',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const foreign=crypto.randomUUID(),{id,workspace_id,created_by,created_at,...fields}=f.selection,selections=f.sql.prepare('SELECT COUNT(*) AS n FROM qc_selections').get().n;
+  f.sql.prepare('INSERT INTO workspaces(id,name,created_at) VALUES(?,?,?)').run(foreign,'Foreign sampling-plan workspace double',f.now);samplingPlanDouble(f,{workspace_id:foreign});
+  await assert.rejects(store.createSelection(f.env.DB,f.ctx,{...fields,plan_version:'plan-test-double',plan_sha256:'a'.repeat(64),cohort:'CONFIRMATORY',roll_ref:'R17',face:'face'},f.now),isCode('VALIDATION_FAILED'));
+  assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM qc_selections').get().n,selections);
+ });
+ test('confirmatory and challenge cohorts are refused without a registered plan hash',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const {id,workspace_id,created_by,created_at,...fields}=f.selection,before=proofDouble(f);
+  for(const cohort of ['CONFIRMATORY','CHALLENGE'])await assert.rejects(store.createSelection(f.env.DB,f.ctx,{...fields,cohort,plan_version:'plan-test-double',plan_sha256:null},f.now),isCode('VALIDATION_FAILED'));
+  assert.deepEqual(proofDouble(f),before);
  });
  test('missing and excluded physical selections remain in denominators without captures or model evidence',async t=>{
   const f=await fixtureDouble();t.after(()=>f.sql.close());const before=proofDouble(f),{id,workspace_id,created_by,created_at,...fields}=f.selection;
@@ -274,6 +297,13 @@ if(process.argv[1]===fileURLToPath(import.meta.url)) {
   for(const ctx of [f.ctx,{...f.admin,session_hash:'wrong-double'},{...f.admin,workspace_id:crypto.randomUUID()}])await assert.rejects(store.consumeProof(f.env.DB,ctx,token,sha,'key',f.now));
   await assert.rejects(store.consumeProof(f.env.DB,f.admin,token,'d'.repeat(64),'key',f.now));await assert.rejects(store.consumeProof(f.env.DB,f.admin,token,sha,'key',f.now+store.PROOF_MS));
   await store.consumeProof(f.env.DB,f.admin,token,sha,'key',f.now);await assert.rejects(store.consumeProof(f.env.DB,f.admin,token,sha,'key',f.now));
+ });
+ test('independent signatory aliases are refused by normalised identity and a different person is accepted',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const base=doubleRecord('release-active'),
+   input={version:'signatory-test-double',domain:doubleRecord('domain-manifest'),policy:doubleRecord('policy-automatic'),bundle_sha256:base.bundle_sha256,calibration_sha256:base.calibration_sha256,statistics_report_sha256:base.statistics_report_sha256,authority_record_sha256:base.authority_record_sha256,expires_at:new Date(f.now+30000).toISOString(),predecessor_release_id:null};
+  const attempt=async independent_signatory=>{const payloadSha=await sha256Hex(canonicalJson({version:input.version,independent_signatory})),proof=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');await store.issueProof(f.env.DB,f.admin,payloadSha,f.now,proof);return store.registerRelease(f.env.DB,f.admin,{...input,independent_signatory,proof,payloadSha},f.now);};
+  for(const alias of ['Anas','A n a s','Anas\u200B',' ANAS ','Ａｎａｓ'])await assert.rejects(attempt(alias),isCode('VALIDATION_FAILED'),JSON.stringify(alias));
+  assert.equal((await attempt('Bilal')).body.independent_signatory,'Bilal');
  });
  test('purchase order listing never joins a supplier from another workspace', async t => {
   const f=await fixtureDouble();t.after(()=>f.sql.close());
