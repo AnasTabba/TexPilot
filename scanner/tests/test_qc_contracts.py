@@ -222,6 +222,33 @@ def test_a_release_keeps_its_hash_when_only_its_state_changes():
     assert suspended.sha256 == suspended.expected_sha256() == candidate["sha256"]
 
 
+@pytest.mark.parametrize(
+    "alias",
+    ["A n a s", "Anas\u200b", " ANAS ", "\uff21\uff4e\uff41\uff53"],
+    ids=["spaced", "zero-width-space", "surrounding-space", "fullwidth"],
+)
+def test_a_release_rejects_aliases_of_the_approver_as_independent(alias):
+    base = BY_NAME["release-statistical-candidate"]
+    with pytest.raises(ValidationError):
+        qc.Release.model_validate({**base, "approved_by": "Anas", "independent_signatory": alias})
+
+
+def test_a_release_rejects_an_independent_signatory_with_no_name_left():
+    base = BY_NAME["release-statistical-candidate"]
+    with pytest.raises(ValidationError):
+        qc.Release.model_validate(
+            {**base, "approved_by": "Anas", "independent_signatory": "\u200b \u200b"}
+        )
+
+
+def test_a_release_accepts_a_genuinely_different_signatory():
+    base = BY_NAME["release-statistical-candidate"]
+    release = qc.Release.model_validate(
+        {**base, "approved_by": "Anas", "independent_signatory": "Bilal"}
+    )
+    assert (release.approved_by, release.independent_signatory) == ("Anas", "Bilal")
+
+
 def test_parse_qc_spec_checks_the_content_hash():
     spec = BY_NAME["spec-woven-v1"]
     assert parse_qc_spec(spec).version == 1

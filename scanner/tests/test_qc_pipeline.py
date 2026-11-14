@@ -19,13 +19,15 @@ FIXTURES = {
 IMAGES = Path(__file__).parent / "fixtures/qc-images"
 
 
-def request_double(data=None, filename="swatch.png"):
+def request_double(data=None, filename="swatch.png", capture_ids=None):
     """Bind real decodable bytes to synthetic request metadata; never a model artifact."""
     data = (IMAGES / filename).read_bytes() if data is None else data
     body = copy.deepcopy(FIXTURES["analyze-request"])
     body["captures"] = body["captures"][:2]
-    for view in body["captures"]:
+    for index, view in enumerate(body["captures"]):
         view["axis_registration"] = None
+        if capture_ids is not None:
+            view["capture"]["id"] = capture_ids[index]
         capture = view["capture"]
         capture.update(original_sha256=sha256_hex(data), byte_size=len(data))
         try:
@@ -135,6 +137,28 @@ def test_prior_clean_fabric_result_is_never_reused_when_head_later_fails():
     assert second.evidence.fabric.state == "FAILED" and second.evidence.fabric.value is None
     assert second.evidence.id != first.evidence.id
     assert second.draft.status == "MANUAL_REVIEW" and not second.draft.automatic
+
+
+def test_fabric_artifact_identifies_the_released_model_not_the_capture_batch():
+    predictor = FlatSwatchPredictorDouble()
+    first_req, first_data = request_double(filename="swatch.png")
+    second_req, second_data = request_double(
+        filename="swatch.jpg",
+        capture_ids=[
+            "00000000-0000-4000-8000-000000000320",
+            "00000000-0000-4000-8000-000000000321",
+        ],
+    )
+    first = run_double(predictor, first_req, first_data).evidence.fabric
+    second = run_double(predictor, second_req, second_data).evidence.fabric
+    released = qc_pipeline.fabric_artifact_sha256(
+        predictor.qc_artifact_sha256, predictor.qc_taxonomy_version
+    )
+    assert first.artifact_sha256 == second.artifact_sha256 == released
+    assert released != qc_pipeline.fabric_artifact_sha256("b" * 64, predictor.qc_taxonomy_version)
+    assert released != qc_pipeline.fabric_artifact_sha256(
+        predictor.qc_artifact_sha256, "fabric-other"
+    )
 
 
 def test_manifest_hash_and_all_binding_fields_match_request():

@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import unicodedata
 from typing import Annotated, Any, Generic, Literal, TypeVar
 
 from pydantic import (
@@ -216,6 +217,32 @@ def content_sha256(value: Any, *, exclude: tuple[str, ...] = ()) -> str:
     """SHA-256 of the canonical JSON of ``value`` without the named top-level fields."""
     data = value.model_dump(mode="json") if isinstance(value, BaseModel) else dict(value)
     return sha256_hex(canonical_json({k: v for k, v in data.items() if k not in exclude}))
+
+
+def _identity(name: str) -> str:
+    """A person's name as an identity: compatibility forms, spaces, format/control characters
+    and case carry no distinction (same rule as ``canonicalIdentity`` in the Worker)."""
+    text = unicodedata.normalize("NFKC", name)
+    return "".join(
+        c for c in text if not c.isspace() and unicodedata.category(c)[0] not in "ZC"
+    ).lower()
+
+
+def fabric_artifact_sha256(model_sha256: str, taxonomy: str) -> str:
+    """Identity of the released flat-fabric classifier, independent of any capture batch.
+
+    Release tooling puts this value in ``DomainManifest.fabric_artifact_sha256``; the scanner
+    puts the same value on an OK fabric stage. Per-capture ids and transforms are evidence, not
+    artifact identity, so they are deliberately absent.
+    """
+    return content_sha256(
+        {
+            "model_sha256": model_sha256,
+            "taxonomy": taxonomy,
+            "derivative": "qc-flat-structure",
+            "aggregation": "head-probs-mean-v1",
+        }
+    )
 
 
 # ---------------------------------------------------------------------------- PO specification
@@ -831,7 +858,8 @@ class Release(Strict):
 
     @model_validator(mode="after")
     def _authority(self) -> Release:
-        if self.approved_by.strip().lower() == self.independent_signatory.strip().lower():
+        approver, signatory = _identity(self.approved_by), _identity(self.independent_signatory)
+        if not approver or not signatory or approver == signatory:
             raise ValueError("the independent signatory must be a different person")
         if self.state == "ACTIVE" and (
             self.operations_proof_sha256 is None or self.monitoring_protocol_sha256 is None

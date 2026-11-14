@@ -32,6 +32,7 @@ from services.api.qc_schemas import (
     Stage,
     ValidatedCapture,
     content_sha256,
+    fabric_artifact_sha256,
     sha256_hex,
 )
 from services.consistency import qc_policy
@@ -84,17 +85,14 @@ def _fabric(batch: CaptureBatch, predictor) -> Stage:
     taxonomy = getattr(predictor, "qc_taxonomy_version", None)
     if heads is None or artifact is None or taxonomy is None:
         return unavailable()
-    views, transforms = [], []
+    views = []
     for view in batch.captures:
         if view.capture.role != "structure":
             continue
         original = batch.originals[view.capture.id]
         # No legacy decode_image(1600), garment detector, cropper or six-tile reduction.
-        rgb, resize = derivative(original.rgb, max(original.upright_size), "qc-flat-structure")
+        rgb, _ = derivative(original.rgb, max(original.upright_size), "qc-flat-structure")
         views.append(rgb)
-        transforms.append(
-            {"capture_id": view.capture.id, "original": original.transform, "derivative": resize}
-        )
     if not views:
         return unavailable("ABSTAINED")
     out = heads.predict(views)
@@ -102,16 +100,10 @@ def _fabric(batch: CaptureBatch, predictor) -> Stage:
     candidates = answer.topk if answer is not None else out.candidates.get("structure", [])
     if answer is None and not candidates:
         return unavailable("FAILED")
-    # Transform/role/aggregation changes alter the artifact binding. Historical scanner-v8
-    # probability calibration does not match the served logits (removed class bias).
-    binding = content_sha256(
-        {
-            "model_sha256": artifact,
-            "taxonomy": taxonomy,
-            "views": transforms,
-            "aggregation": "head-probs-mean-v1",
-        }
-    )
+    # The artifact is the released model plus its fixed derivation/aggregation contract. A
+    # request's captures are not part of it: release tooling computes the same value for the
+    # DomainManifest, and per-capture changes must not break that binding.
+    binding = fabric_artifact_sha256(artifact, taxonomy)
     return Stage[FabricValue](
         state="OK",
         value=FabricValue(

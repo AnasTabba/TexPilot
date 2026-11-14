@@ -1284,6 +1284,160 @@
   "layer": "semantic"
  },
  {
+  "name": "attestation-unknown-capture-mode",
+  "type": "AcquisitionAttestation",
+  "value": {
+   "image_sha256": "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+   "capture_mode": "SCREENSHOT",
+   "device_model": null,
+   "lens_id": null,
+   "zoom_factor": null,
+   "focus_mode": null,
+   "exposure_mode": null,
+   "resolution": [
+    4032,
+    3024
+   ],
+   "orientation": 1,
+   "processing": null,
+   "captured_at": "2026-11-13T08:05:00Z"
+  },
+  "layer": "schema"
+ },
+ {
+  "name": "attestation-orientation-out-of-range",
+  "type": "AcquisitionAttestation",
+  "value": {
+   "image_sha256": "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+   "capture_mode": "WEB_CAMERA",
+   "device_model": null,
+   "lens_id": null,
+   "zoom_factor": null,
+   "focus_mode": null,
+   "exposure_mode": null,
+   "resolution": [
+    4032,
+    3024
+   ],
+   "orientation": 9,
+   "processing": null,
+   "captured_at": "2026-11-13T08:05:00Z"
+  },
+  "layer": "schema"
+ },
+ {
+  "name": "density-reversed-interval",
+  "type": "DensitySpec",
+  "value": {
+   "axis": "ends",
+   "unit": "count/in",
+   "target": 76,
+   "lower": 80,
+   "upper": 72,
+   "provenance": {
+    "source": "PO_CONFIRMED",
+    "source_id": "po-doc-1",
+    "source_version": "1",
+    "actor_id": "user-purchase",
+    "observed_at": "2026-11-13T08:00:00Z",
+    "image_sha256": null,
+    "document_sha256": null,
+    "page": null,
+    "span": null,
+    "raw_value": null,
+    "raw_unit": null,
+    "ocr_confidence": null,
+    "candidate_id": null,
+    "corrects_id": null
+   }
+  },
+  "layer": "semantic"
+ },
+ {
+  "name": "density-target-outside-limits",
+  "type": "DensitySpec",
+  "value": {
+   "axis": "ends",
+   "unit": "count/in",
+   "target": 90,
+   "lower": 72,
+   "upper": 80,
+   "provenance": {
+    "source": "PO_CONFIRMED",
+    "source_id": "po-doc-1",
+    "source_version": "1",
+    "actor_id": "user-purchase",
+    "observed_at": "2026-11-13T08:00:00Z",
+    "image_sha256": null,
+    "document_sha256": null,
+    "page": null,
+    "span": null,
+    "raw_value": null,
+    "raw_unit": null,
+    "ocr_confidence": null,
+    "candidate_id": null,
+    "corrects_id": null
+   }
+  },
+  "layer": "semantic"
+ },
+ {
+  "name": "density-unconfirmed-provenance",
+  "type": "DensitySpec",
+  "value": {
+   "axis": "ends",
+   "unit": "count/in",
+   "target": 76,
+   "lower": 72,
+   "upper": 80,
+   "provenance": {
+    "source": "OCR_CANDIDATE",
+    "source_id": "po-doc-1",
+    "source_version": "1",
+    "actor_id": "user-purchase",
+    "observed_at": "2026-11-13T08:00:00Z",
+    "image_sha256": null,
+    "document_sha256": null,
+    "page": null,
+    "span": null,
+    "raw_value": null,
+    "raw_unit": null,
+    "ocr_confidence": null,
+    "candidate_id": null,
+    "corrects_id": null
+   }
+  },
+  "layer": "semantic"
+ },
+ {
+  "name": "density-zero-target",
+  "type": "DensitySpec",
+  "value": {
+   "axis": "ends",
+   "unit": "count/in",
+   "target": 0,
+   "lower": 0,
+   "upper": 0,
+   "provenance": {
+    "source": "PO_CONFIRMED",
+    "source_id": "po-doc-1",
+    "source_version": "1",
+    "actor_id": "user-purchase",
+    "observed_at": "2026-11-13T08:00:00Z",
+    "image_sha256": null,
+    "document_sha256": null,
+    "page": null,
+    "span": null,
+    "raw_value": null,
+    "raw_unit": null,
+    "ocr_confidence": null,
+    "candidate_id": null,
+    "corrects_id": null
+   }
+  },
+  "layer": "schema"
+ },
+ {
   "name": "sample-attempt-over-limit",
   "type": "Sample",
   "value": {
@@ -6354,6 +6508,43 @@
   "layer": "semantic"
  },
  {
+  "name": "scale-reference-zero-dimension",
+  "type": "ScaleReference",
+  "value": {
+   "id": "card-A",
+   "sha256": "b600a2fb496f899564b1929279174d1107b469c57e7920883a955956f9517a43",
+   "dimensions_mm": [
+    0,
+    50
+   ],
+   "uncertainty_mm": [
+    0.1,
+    0.1
+   ],
+   "traceability_report_sha256": "733788078502672179a98a114513bd447ad23bdeaf851dff7472b7b2cc87b290",
+   "print_verification_sha256": "40ffd8792aae672ebd347da3bf24b0e49fcaaa7cc7d8f273fb582d069191f3ef"
+  },
+  "layer": "schema"
+ },
+ {
+  "name": "scale-reference-missing-print-verification",
+  "type": "ScaleReference",
+  "value": {
+   "id": "card-A",
+   "sha256": "b600a2fb496f899564b1929279174d1107b469c57e7920883a955956f9517a43",
+   "dimensions_mm": [
+    50,
+    50
+   ],
+   "uncertainty_mm": [
+    0.1,
+    0.1
+   ],
+   "traceability_report_sha256": "733788078502672179a98a114513bd447ad23bdeaf851dff7472b7b2cc87b290"
+  },
+  "layer": "schema"
+ },
+ {
   "name": "axis-direction-not-unit",
   "type": "AxisRegistration",
   "value": {
@@ -7458,6 +7649,180 @@
      "axis_registration": null
     }
    ]
+  },
+  "layer": "schema"
+ },
+ {
+  "name": "analysis-candidate-missing-binding",
+  "type": "AnalysisCandidate",
+  "value": {
+   "evidence": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000070",
+    "sample_id": "00000000-0000-4000-8000-000000000030",
+    "capture_ids": [
+     "00000000-0000-4000-8000-000000000060",
+     "00000000-0000-4000-8000-000000000061",
+     "00000000-0000-4000-8000-000000000062"
+    ],
+    "spec_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+    "domain_id": null,
+    "domain": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "DOMAIN_UNVALIDATED"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "fabric": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "defects": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "metrology": {
+     "state": "ABSTAINED",
+     "value": null,
+     "reasons": [
+      "DOMAIN_UNVALIDATED"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "quality": {
+     "state": "ABSTAINED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE",
+      "QUALITY_BLUR"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "contradictions": [],
+    "manifest_sha256": "4d39bf226e6b408f09d04e9e6657b09f27aee49e931ad329c2e7646e522921aa",
+    "created_at": "2026-11-13T08:06:00Z"
+   },
+   "draft": {
+    "status": "MANUAL_REVIEW",
+    "reasons": [
+     "POLICY_UNRELEASED",
+     "STAGE_UNAVAILABLE",
+     "DOMAIN_UNVALIDATED",
+     "QUALITY_BLUR"
+    ],
+    "automatic": false,
+    "scope": "INSPECTED_SAMPLE"
+   }
+  },
+  "layer": "schema"
+ },
+ {
+  "name": "analysis-candidate-extra-field",
+  "type": "AnalysisCandidate",
+  "value": {
+   "evidence": {
+    "schema_version": "2",
+    "id": "00000000-0000-4000-8000-000000000070",
+    "sample_id": "00000000-0000-4000-8000-000000000030",
+    "capture_ids": [
+     "00000000-0000-4000-8000-000000000060",
+     "00000000-0000-4000-8000-000000000061",
+     "00000000-0000-4000-8000-000000000062"
+    ],
+    "spec_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+    "domain_id": null,
+    "domain": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "DOMAIN_UNVALIDATED"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "fabric": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "defects": {
+     "state": "DISABLED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "metrology": {
+     "state": "ABSTAINED",
+     "value": null,
+     "reasons": [
+      "DOMAIN_UNVALIDATED"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "quality": {
+     "state": "ABSTAINED",
+     "value": null,
+     "reasons": [
+      "STAGE_UNAVAILABLE",
+      "QUALITY_BLUR"
+     ],
+     "artifact_sha256": null,
+     "duration_ms": 1.5
+    },
+    "contradictions": [],
+    "manifest_sha256": "4d39bf226e6b408f09d04e9e6657b09f27aee49e931ad329c2e7646e522921aa",
+    "created_at": "2026-11-13T08:06:00Z"
+   },
+   "draft": {
+    "status": "MANUAL_REVIEW",
+    "reasons": [
+     "POLICY_UNRELEASED",
+     "STAGE_UNAVAILABLE",
+     "DOMAIN_UNVALIDATED",
+     "QUALITY_BLUR"
+    ],
+    "automatic": false,
+    "scope": "INSPECTED_SAMPLE"
+   },
+   "binding": {
+    "spec_sha256": "c0c07e82ef1dbd5040ea5dfdcbebb9473e856cd6241ffdcf317208a56ab10c31",
+    "policy_sha256": "16d06dadeb80031c650c83773b7a8e432b0e5c41254ded9abb2b7c1fa7c026c7",
+    "release_sha256": null,
+    "capture_sha256s": [
+     "bc44e075ffaaaef8403f5c1e95eac41413188c684c8590c1ef2a76ee5df37287",
+     "bd5f294548136c8a69e93af4972d25417f844de236e57fd8a4e14aefb9bca08a",
+     "92a0f0b15d0f88f0b832e43f25726f9d8a8c7237feeeb468497bb37df1a6d090"
+    ],
+    "attempt": 1,
+    "expected_revision": 5,
+    "request_id": "00000000-0000-4000-8000-000000000110",
+    "request_generation": 1,
+    "deadline_at": "2026-11-13T08:07:00Z"
+   },
+   "stored": true
   },
   "layer": "schema"
  },
