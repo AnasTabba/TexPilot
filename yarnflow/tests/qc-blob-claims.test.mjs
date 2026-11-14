@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, unlink, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fixtureDouble, uploadedDouble, isCode } from './qc-store.test.mjs';
+import { fixtureDouble, uploadedDouble, isCode, proofDouble } from './qc-store.test.mjs';
 import { d1Bucket } from '../server/d1-bucket.mjs';
 import { addCapture, collectQCBlobs, loadResult, objectKey, DAY } from '../server/qc-store.mjs';
 import { sha256Hex } from '../server/qc-contract.mjs';
@@ -64,4 +64,23 @@ test('failed put/readback or final audit leaves only recoverable pending claim',
   await assert.rejects(addCapture(f.env.DB,bucket,f.ctx,input,f.now));assert.equal((await loadResult(f.env.DB,f.workspaceId,f.result.sample.id,f.now)).revision,u.result.revision);
  }
  const report=await collectQCBlobs(f.env.DB,f.env.BUCKET,f.now+DAY,0);assert.equal(report.deleted,3);assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM qc_captures').get().n,1);
+});
+for(const kind of ['Map','D1'])for(const order of ['reference first','GC first','delete fails'])test(`D06 ${kind} ${order}: exact transaction footprint and retryable claims`,async t=>{
+ const f=await fixtureDouble();t.after(()=>f.sql.close());const bucket=await bucketDouble(kind,f,t);f.env.BUCKET=bucket;const u=await uploadedDouble(f,{close:false,count:1}),before=proofDouble(f);
+ const input={...u.uploads[0],meta:{...u.uploads[0].meta,capture_id:crypto.randomUUID(),role:'structure',expected_revision:u.result.revision}},key=objectKey(f.workspaceId,input.meta.capture_id,input.meta.sha256);
+ if(order==='reference first'){
+  const r=(await addCapture(f.env.DB,bucket,f.ctx,input,f.now)).body,committed=proofDouble(f);assert.deepEqual(committed,{...before,qc_decision_events:before.qc_decision_events+1,samples:[{...before.samples[0],revision:before.samples[0].revision+1}]});
+  let deletes=0;const spyDouble={...bucket,async delete(k){deletes++;return bucket.delete(k);}};assert.deepEqual(await collectQCBlobs(f.env.DB,spyDouble,f.now+2*DAY,0),{claimed:0,deleted:0,failed:0,lost:0});assert.equal(deletes,0);
+  assert.equal(f.sql.prepare('SELECT state FROM qc_blob_claims WHERE object_key=?').get(key).state,'REFERENCED');assert.deepEqual(new Uint8Array((await bucket.get(key)).body),input.bytes);assert.deepEqual(proofDouble(f),committed);assert.equal(r.revision,u.result.revision+1);
+ }else if(order==='GC first'){
+  let report;input.beforeReference=async()=>{report=await collectQCBlobs(f.env.DB,bucket,f.now+DAY,0);};
+  await assert.rejects(addCapture(f.env.DB,bucket,f.ctx,input,f.now),isCode('CONFLICT'));assert.equal(report.deleted,1);assert.equal(f.sql.prepare('SELECT state FROM qc_blob_claims WHERE object_key=?').get(key).state,'DELETED');
+  assert.equal(await bucket.get(key),null);assert.equal(f.sql.prepare('SELECT COUNT(*) AS n FROM qc_captures WHERE id=?').get(input.meta.capture_id).n,0);assert.deepEqual(proofDouble(f),before);
+ }else{
+  f.sql.prepare("INSERT INTO qc_blob_claims(object_key,workspace_id,sha256,size,state,created_at,updated_at) VALUES(?,?,?,?,'PENDING',?,?)").run(key,f.workspaceId,input.meta.sha256,input.bytes.length,f.now,f.now);await bucket.put(key,input.bytes);
+  const brokenDouble={...bucket,async delete(){throw new Error('Deletion failure test double');}};const failed=await collectQCBlobs(f.env.DB,brokenDouble,f.now+DAY,0);assert.equal(failed.failed,1);
+  assert.deepEqual({...f.sql.prepare('SELECT state,attempts,purpose FROM qc_blob_claims WHERE object_key=?').get(key)},{state:'GC_CLAIMED',attempts:1,purpose:'ORPHAN'});assert.ok(await bucket.get(key));assert.deepEqual(proofDouble(f),before);
+  assert.equal((await collectQCBlobs(f.env.DB,bucket,f.now+DAY+1,0)).deleted,1);assert.equal(await bucket.get(key),null);assert.deepEqual(proofDouble(f),before);
+ }
+ assert.deepEqual(f.sql.prepare('PRAGMA foreign_key_check').all(),[]);
 });

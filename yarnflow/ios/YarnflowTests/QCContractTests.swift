@@ -2,27 +2,70 @@ import XCTest
 @testable import Yarnflow
 
 final class QCContractTests: XCTestCase {
-    static var repository: URL { URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent() }
     static func fixtures(_ name: String) throws -> [[String: Any]] {
-        let url = repository.appendingPathComponent("scanner/tests/fixtures/qc-v2/\(name).json")
-        return try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]])
+        let bundle = Bundle(for: QCContractTests.self)
+        let path = (bundle.resourceURL ?? bundle.bundleURL).appendingPathComponent("\(name).json").path
+        guard let url = bundle.url(forResource: name, withExtension: "json"), FileManager.default.fileExists(atPath: url.path) else {
+            XCTFail("Missing shared QC fixture file: \(path)")
+            throw QCContractError.contractUnavailable
+        }
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]], url.path)
     }
-    func testEverySharedValidFixtureRoundTrips() throws {
-        let fixtures = try Self.fixtures("valid")
-        XCTAssertFalse(fixtures.isEmpty)
-        for fixture in fixtures {
-            let type = try XCTUnwrap(fixture["type"] as? String)
-            let value = try JSONValue(any: XCTUnwrap(fixture["value"]))
-            XCTAssertEqual(try QCContract.roundTrip(type: type, value: value), value, fixture["name"] as? String ?? type)
+    func testSharedFixturesAreBundled() throws {
+        let bundle = Bundle(for: QCContractTests.self)
+        for name in ["valid", "invalid"] {
+            let path = bundle.bundleURL.appendingPathComponent("\(name).json").path
+            _ = try XCTUnwrap(bundle.url(forResource: name, withExtension: "json"), "Missing shared QC fixture file: \(path)")
         }
     }
-    func testEverySharedInvalidFixtureFails() throws {
-        let fixtures = try Self.fixtures("invalid")
-        XCTAssertFalse(fixtures.isEmpty)
+    private func exerciseSharedFixtures(_ name: String, valid: Bool) throws {
+        let fixtures = try Self.fixtures(name)
+        let modeled = Set(QCContract.roundTrippers.keys)
+        XCTAssertEqual(modeled, Set(QCContract.decoders.keys))
+        var expected: [String: Int] = [:], exercised: [String: Int] = [:]
         for fixture in fixtures {
             let type = try XCTUnwrap(fixture["type"] as? String)
+            guard modeled.contains(type) else { XCTFail("No Swift mirror for shared fixture type \(type)"); continue }
+            expected[type, default: 0] += 1
             let value = try JSONValue(any: XCTUnwrap(fixture["value"]))
-            XCTAssertThrowsError(try QCContract.roundTrip(type: type, value: value), fixture["name"] as? String ?? type)
+            let label = fixture["name"] as? String ?? type
+            exercised[type, default: 0] += 1
+            if valid {
+                do {
+                    let encoded = try QCContract.roundTrip(type: type, value: value)
+                    XCTAssertEqual(encoded, value, label)
+                }
+                catch { XCTFail("\(label): \(error)") }
+            } else {
+                XCTAssertThrowsError(try QCContract.roundTrip(type: type, value: value), label)
+            }
+        }
+        XCTAssertFalse(expected.isEmpty)
+        if valid { XCTAssertEqual(Set(expected.keys), modeled, "Every modeled type needs a valid shared fixture") }
+        for type in expected.keys.sorted() {
+            print("QC shared \(name) \(type): \(exercised[type, default: 0])/\(expected[type, default: 0]) exercised")
+            XCTAssertGreaterThan(exercised[type, default: 0], 0, type)
+            XCTAssertEqual(exercised[type], expected[type], type)
+        }
+        XCTAssertEqual(exercised.values.reduce(0, +), fixtures.count)
+    }
+    func testEverySharedValidFixtureRoundTrips() throws { try exerciseSharedFixtures("valid", valid: true) }
+    func testEverySharedInvalidFixtureFails() throws { try exerciseSharedFixtures("invalid", valid: false) }
+    func testEveryModeledTypeRejectsUnknownFields() throws {
+        // Four modeled types have no invalid.json row. Exercise strict decoding for all 27
+        // using an explicitly derived invalid value, separately from shared fixture counts.
+        var exercised: [String: Int] = [:]
+        for fixture in try Self.fixtures("valid") {
+            let type = try XCTUnwrap(fixture["type"] as? String)
+            var object = try XCTUnwrap(fixture["value"] as? [String: Any])
+            object["unknown_field_double"] = true
+            XCTAssertThrowsError(try QCContract.roundTrip(type: type, value: JSONValue(any: object)), type)
+            exercised[type, default: 0] += 1
+        }
+        XCTAssertEqual(Set(exercised.keys), Set(QCContract.roundTrippers.keys))
+        for type in exercised.keys.sorted() {
+            print("QC derived invalid \(type): \(exercised[type, default: 0]) exercised")
+            XCTAssertGreaterThan(exercised[type, default: 0], 0, type)
         }
     }
     func testMissingUnknownLensAndChangedAcquisitionAreNotInvented() throws {
@@ -46,7 +89,11 @@ final class QCContractTests: XCTestCase {
     func testOriginalPreservationProtectedExpiryAndPurge() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let store = try QCDraftStore(root: root)
+        var requestedOptions: [Data.WritingOptions] = []
+        let store = try QCDraftStore(root: root, writeOriginal: { data, url, options in
+            requestedOptions.append(options)
+            try data.write(to: url, options: options)
+        })
         let bytes = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF1cAAAAASUVORK5CYII="))
         let original = try QCOriginal(data: bytes, mode: .IMPORTED)
         XCTAssertEqual(original.data, bytes)
@@ -55,12 +102,27 @@ final class QCContractTests: XCTestCase {
         let id = UUID()
         try store.save(original, id: id, now: now)
         XCTAssertEqual(try store.load(id: id, now: now).data, bytes)
-        let attrs = try FileManager.default.attributesOfItem(atPath: root.appendingPathComponent(id.uuidString).path)
-        XCTAssertEqual(attrs[.protectionKey] as? FileProtectionType, .complete)
+        XCTAssertEqual(requestedOptions.count, 1)
+        XCTAssertTrue(try XCTUnwrap(requestedOptions.first).contains(.completeFileProtection))
+        XCTAssertTrue(try XCTUnwrap(requestedOptions.first).contains(.atomic))
         XCTAssertThrowsError(try store.load(id: id, now: now.addingTimeInterval(86400)))
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent(id.uuidString).path))
         try store.purge()
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), [])
+    }
+    func testPhysicalDeviceDraftProtectionAttribute() throws {
+        #if targetEnvironment(simulator)
+        throw XCTSkip("physical device required (G8): Simulator does not report NSFileProtectionKey")
+        #else
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try QCDraftStore(root: root)
+        let bytes = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF1cAAAAASUVORK5CYII="))
+        let id = UUID()
+        try store.save(QCOriginal(data: bytes, mode: .IMPORTED), id: id)
+        let attrs = try FileManager.default.attributesOfItem(atPath: root.appendingPathComponent(id.uuidString).path)
+        XCTAssertEqual(attrs[.protectionKey] as? FileProtectionType, .complete)
+        #endif
     }
     func testStaleResultRejected() throws {
         let row = try XCTUnwrap(try Self.fixtures("valid").first { $0["name"] as? String == "result-created" })
@@ -85,10 +147,25 @@ final class QCProtocolDouble: URLProtocol, @unchecked Sendable {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         do {
-            let (code, data, headers) = try Self.handler!(request)
-            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: code, httpVersion: "HTTP/1.1", headerFields: headers)!, cacheStoragePolicy: .notAllowed)
+            let handler = try XCTUnwrap(Self.handler, "URLProtocol double has no handler")
+            let (code, data, headers) = try handler(request)
+            let url = try XCTUnwrap(request.url)
+            let response = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: code, httpVersion: "HTTP/1.1", headerFields: headers))
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data); client?.urlProtocolDidFinishLoading(self)
         } catch { client?.urlProtocol(self, didFailWithError: error) }
+    }
+    static func body(_ request: URLRequest) throws -> Data {
+        if let body = request.httpBody { return body }
+        let stream = try XCTUnwrap(request.httpBodyStream, "Request must carry a JSON body")
+        stream.open(); defer { stream.close() }
+        var body = Data(), buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 { throw stream.streamError ?? URLError(.cannotDecodeRawData) }
+            if count == 0 { return body }
+            body.append(contentsOf: buffer.prefix(count))
+        }
     }
     override func stopLoading() {}
 }
@@ -102,7 +179,7 @@ extension QCContractTests {
         try QCClient(config: QCConfig(origin: "https://qc.example.invalid"), credentials: credentials, protocolClasses: [QCProtocolDouble.self], sleeper: { delays.record($0) })
     }
     private var sessionHeaderDouble: [String: String] { ["Set-Cookie": "yf_session=\(String(repeating: "a", count: 64)); Path=/; HttpOnly; Secure; SameSite=Strict"] }
-    func testRealWorkerLoginPathAndIsolatedCookieNoBearer() async throws {
+    func testWorkerLoginPathUsingProtocolDoubleAndIsolatedCookieNoBearer() async throws {
         let credentials = QCCredentialsDouble()
         let client = try clientDouble(credentials)
         let cookieHeader = sessionHeaderDouble
@@ -114,7 +191,7 @@ extension QCContractTests {
                 XCTAssertEqual(request.url?.path, "/api/auth/login")
                 XCTAssertEqual(request.value(forHTTPHeaderField: "Origin"), "https://qc.example.invalid")
                 XCTAssertNil(request.value(forHTTPHeaderField: "Cookie"))
-                let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: String]
+                let body = try XCTUnwrap(JSONSerialization.jsonObject(with: QCProtocolDouble.body(request)) as? [String: String])
                 XCTAssertEqual(body, ["name": "Inspector double", "pin": "1234"])
                 return (200, Data("{}".utf8), cookieHeader)
             }

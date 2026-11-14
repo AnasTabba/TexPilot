@@ -11,7 +11,7 @@ $(VENV):
 
 setup: $(VENV) ## Install core + dev deps (fast, no torch)
 	$(PIP) install -q --upgrade pip
-	$(PIP) install -q -e ".[dev]"
+	$(PIP) install -q -e ".[dev,qc]"
 	@echo "Ready. Run 'make test' then 'make api'."
 
 setup-ml: setup ## Additionally install the ML stack (large download)

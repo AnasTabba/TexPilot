@@ -175,7 +175,7 @@ def run_qc_analysis(
     attempt: int,
     context: EvaluationContext,
 ) -> AnalysisCandidate:
-    artifacts = ArtifactStore(os.environ.get("TEXPILOT_QC_ARTIFACT_DIR"))
+    artifacts = ArtifactStore(os.environ.get("TEXPILOT_QC_ARTIFACTS"))
     quality = _independent(
         lambda: assess_capture_set(
             [

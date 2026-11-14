@@ -52,3 +52,17 @@ test('202 uses the authorised request resource and returns the validated final e
  const d = setupDouble([async () => responseDouble({ schema_version: '2', request_id: key, state: 'IN_PROGRESS', status_url: `/api/qc/v2/requests/${key}` }, 202), async () => responseDouble({ schema_version: '2', request_id: key, state: 'COMPLETED', result: resultDouble, error: null })]);
  assert.deepEqual(await d.client.analyzeSample(resultDouble.sample.id, 'set-double', 0, key), resultDouble); assert.equal(d.calls[1].url, `/api/qc/v2/requests/${key}`);
 });
+test('clearing a PO invalidates an old response while a new operation uses the current store generation', async () => {
+ let finishDouble!: (r: Response) => void;
+ const d = setupDouble([() => new Promise(resolve => { finishDouble = resolve; }), async () => responseDouble(resultDouble)]);
+ const previous = d.client.getSample(resultDouble.sample.id);
+ d.store.clear(resultDouble.sample.workspace_id);
+ assert.deepEqual(await d.client.getSample(resultDouble.sample.id), resultDouble);
+ finishDouble(responseDouble(resultDouble));
+ await assert.rejects(previous, (e: QCError) => e.code === 'STALE_SESSION'); assert.equal(d.calls.length, 2);
+});
+test('a workspace switch during retry backoff sends no upload under the previous identity', async () => {
+ const store = sessionDouble(); let callsDouble = 0;
+ const client = createQCClient({ store, fetch: async () => { callsDouble++; return responseDouble({}, 503); }, sleep: async () => { store.begin({ actorId: 'replacement-actor-double', workspaceId: 'replacement-workspace-double' }); } });
+ await assert.rejects(client.analyzeSample(resultDouble.sample.id, 'set-double', 0, key), (e: QCError) => e.code === 'STALE_SESSION'); assert.equal(callsDouble, 1);
+});

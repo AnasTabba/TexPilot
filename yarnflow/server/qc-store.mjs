@@ -139,6 +139,12 @@ const authorize = (ctx, role, input = {}) => {
 
 // ---------------------------------------------------------------------------- idempotency
 const idemRow = (db, ctx, idem) => one(db, 'SELECT * FROM qc_idempotency WHERE workspace_id=? AND actor_id=? AND route=? AND client_key=?', ctx.workspace_id, ctx.user_id, idem.route, idem.key);
+// Expiry is terminal in storage too: a stale executor must not revive a request using an
+// earlier clock after another executor or a poll has already observed its deadline.
+async function expireRequest(db, ctx, requestId, now) {
+  try { await query(db, "UPDATE qc_idempotency SET state='EXPIRED',response_status=NULL,updated_at=? WHERE workspace_id=? AND actor_id=? AND request_id=? AND deadline_at<=? AND state IN ('IN_PROGRESS','FAILED')", now, ctx.workspace_id, ctx.user_id, requestId, now).run(); }
+  catch (error) { throw batchProblem(error); }
+}
 async function stored(db, ctx, row) {
   return { status: row.response_status, body: JSON.parse(row.response_json), replayed: true };
 }
@@ -207,6 +213,7 @@ export async function failRequest(db, started, error, now) {
     expired ? 'EXPIRED' : 'FAILED', JSON.stringify({ code: error.code, reasons: error.reasons ?? [] }), now, started.request_id, started.generation).run().catch(() => {});
 }
 export async function requestState(db, ctx, requestId, now) {
+  await expireRequest(db, ctx, requestId, now);
   const row = await one(db, 'SELECT * FROM qc_idempotency WHERE request_id=? AND workspace_id=? AND actor_id=?', requestId, ctx.workspace_id, ctx.user_id);
   if (!row) qcFail('NOT_FOUND');
   const state = row.state !== 'COMPLETED' && row.state !== 'EXPIRED' && now >= row.deadline_at ? 'EXPIRED' : row.state;
@@ -558,7 +565,7 @@ export async function checkCandidate(candidate, prepared) {
  */
 export async function finalizeQC(db, authContext, result, expectedRevision, now) {
   const ctx = authContext, w = ctx.workspace_id, { prepared, candidate, started } = result, { sample, set, release, policy } = prepared;
-  if (now >= started.deadline_at) qcFail('DEADLINE_EXCEEDED', [], 'The analysis finished after its deadline. No decision was recorded.');
+  if (now >= started.deadline_at) { await expireRequest(db, ctx, started.request_id, now); qcFail('DEADLINE_EXCEEDED', [], 'The analysis finished after its deadline. No decision was recorded.'); }
   authorize(ctx, 'quality_inspector');
   await checkCandidate(candidate, prepared);
   if (prepared.request.sample_id !== sample.id || prepared.request.workspace_id !== w || prepared.request.expected_revision !== expectedRevision || prepared.request.context.request_id !== started.request_id || prepared.request.context.request_generation !== started.generation || Date.parse(prepared.request.context.deadline_at) !== started.deadline_at) qcFail('CONFLICT', ['EVIDENCE_STALE']);
@@ -723,7 +730,7 @@ export async function consumeProof(db, ctx, proof, payloadSha, key, now) {
   catch (error) { throw proofProblem(error); }
 }
 export async function completeRequest(db, ctx, started, status, body, now) {
-  if (now >= started.deadline_at) qcFail('DEADLINE_EXCEEDED');
+  if (now >= started.deadline_at) { await expireRequest(db, ctx, started.request_id, now); qcFail('DEADLINE_EXCEEDED'); }
   try { await db.batch([authGuard(db, ctx, now),
     guard(db, "SELECT 1 FROM qc_idempotency WHERE workspace_id=? AND actor_id=? AND request_id=? AND generation=? AND state='IN_PROGRESS' AND deadline_at=? AND deadline_at>? AND lease_expires_at>?", ctx.workspace_id, ctx.user_id, started.request_id, started.generation, started.deadline_at, now, now),
     query(db, "UPDATE qc_idempotency SET state='COMPLETED',response_status=?,response_json=?,updated_at=? WHERE request_id=?", status, JSON.stringify(body), now, started.request_id)]); }

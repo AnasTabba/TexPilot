@@ -205,6 +205,9 @@ struct QCWorkflow: View {
                 Section {
                     Label(QCText.t("qc.review_only"), systemImage: "eye.trianglebadge.exclamationmark").font(.headline).accessibilityIdentifier("qc-review-only")
                     Text(QCText.t("qc.scope"))
+                    if model.status == nil {
+                        Text(QCText.t(model.signedIn ? "qc.connection.not_connected" : "qc.connection.sign_in")).accessibilityIdentifier("qc-connection-state")
+                    }
                     if Locale.current.language.languageCode?.identifier == "ur" { Text(QCText.t("qc.urdu_review")) }
                     if model.status?.mode == .AUTOMATIC { Text(QCText.t("qc.server_automatic")) }
                 }

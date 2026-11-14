@@ -1,6 +1,42 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "qc.connection.sign_in": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server not connected. Sign in to load sample QC. No result is loaded."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سرور سے رابطہ نہیں ہے۔ نمونے کی جانچ لوڈ کرنے کے لیے سائن اِن کریں۔ کوئی نتیجہ لوڈ نہیں ہوا۔"
+          }
+        }
+      }
+    },
+    "qc.connection.not_connected": {
+      "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server not connected. Sample QC has not been loaded."
+          }
+        },
+        "ur": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "سرور سے رابطہ نہیں ہے۔ نمونے کی جانچ لوڈ نہیں ہوئی۔"
+          }
+        }
+      }
+    },
     "qc.adjudication": {
       "comment": "Urdu draft — fluent textile-QC review not yet collected / external gate G8.",
       "extractionState": "manual",

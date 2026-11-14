@@ -56,7 +56,10 @@ struct QCOriginal: Codable {
 final class QCDraftStore: @unchecked Sendable {
     let root: URL
     private let lock = NSRecursiveLock()
-    init(root: URL? = nil) throws {
+    // Keep the requested write protection observable without relying on Simulator attributes.
+    private let writeOriginal: (Data, URL, Data.WritingOptions) throws -> Void
+    init(root: URL? = nil, writeOriginal: @escaping (Data, URL, Data.WritingOptions) throws -> Void = { data, url, options in try data.write(to: url, options: options) }) throws {
+        self.writeOriginal = writeOriginal
         self.root = try root ?? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("QCOriginalDrafts", isDirectory: true)
         try FileManager.default.createDirectory(at: self.root, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
         var location = self.root
@@ -72,7 +75,7 @@ final class QCDraftStore: @unchecked Sendable {
         guard files.count < QCLimits.maxOriginalsPerSet,
               try files.reduce(0, { try $0 + ($1.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) }) + original.data.count <= QCLimits.maxSetBytes * 4 / 3 + 8192 else { throw QCCaptureError.tooLarge }
         let bytes = try JSONEncoder().encode(Envelope(createdAt: now, original: original))
-        try bytes.write(to: root.appendingPathComponent(id.uuidString), options: [.atomic, .completeFileProtection])
+        try writeOriginal(bytes, root.appendingPathComponent(id.uuidString), [.atomic, .completeFileProtection])
     }
     func load(id: UUID, now: Date = Date()) throws -> QCOriginal {
         lock.lock(); defer { lock.unlock() }

@@ -11,6 +11,33 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-      - run: pip install -e ".[dev]"
+      - run: pip install -e ".[dev,qc]"
       - run: ruff check .
       - run: pytest
+
+  yarnflow:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: yarnflow
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: "3.10"
+      - run: pip install -e ".[dev,qc]"
+        working-directory: scanner
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: yarnflow/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+        env:
+          QC_PYTHON: ${{ steps.python.outputs.python-path }}
+      - run: npm run build
+
+  # iOS CI is deliberately absent until a macOS runner proves the scheme.

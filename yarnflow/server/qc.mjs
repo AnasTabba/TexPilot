@@ -131,10 +131,8 @@ export async function handleQC(request, env, authContext) {
     if (r.name === 'upload') {
       own(data, ['capture_id','role','expected_revision','sha256','taken_at','device_profile_id','calibration_id','consent_record_id','attestation','interventionReason']);
       recordId(data.capture_id); recordId(data.consent_record_id); integer(data.expected_revision,'Revision',0); valid('AcquisitionAttestation', data.attestation);
-      // A consent record that exists only in another workspace is 404 (indistinguishable from purge); an id with no
-      // record at all, or an unusable record in this workspace, stays the existing 403.
-      const consent = await one(db, 'SELECT workspace_id FROM qc_consent_authorities WHERE id=?', data.consent_record_id);
-      if (consent && consent.workspace_id !== w) fail('NOT_FOUND');
+      // Missing and foreign IDs are indistinguishable; unusable local authority stays 403.
+      if (!await one(db, 'SELECT id FROM qc_consent_authorities WHERE workspace_id=? AND id=?', w, data.consent_record_id)) fail('NOT_FOUND');
       await callStore('consentFor', db, w, data.consent_record_id, now);
       const set = await one(db, 'SELECT id FROM qc_capture_sets WHERE workspace_id=? AND id=?', w, r.id); if (!set) fail('NOT_FOUND');
       const totals = await all(db, 'SELECT json FROM qc_captures WHERE workspace_id=? AND capture_set_id=?', w, r.id);
@@ -154,6 +152,13 @@ export async function handleQC(request, env, authContext) {
       const started = begun.started;
       try {
         const prepared = await callStore('prepareAnalysis', db, env.BUCKET, ctx, { ...data, sample_id:r.id }, started, now);
+        // Public capture metadata describes the encoded original. The private decoder requires
+        // EXIF-upright raster dimensions; derive those from the same verified bytes before signing.
+        for (const file of prepared.files) {
+          const capture = prepared.request.captures.find(view => view.capture.id === file.id).capture;
+          const {width,height} = imageDimensions(file.bytes,file.type,true);
+          Object.assign(capture,{width,height});
+        }
         const payload = canonicalJson(prepared.request), assertion = await issueQCAssertion(ctx, await sha256Hex(encoder.encode(payload)), started.request_id, nowOf(env), { key:env.QC_SERVICE_KEY,kid:env.QC_SERVICE_KID,deadline_at:prepared.request.context.deadline_at,request_generation:started.generation });
         const form = new FormData(); form.set('request',payload); for (const file of prepared.files) form.set(`capture_${file.id}`,new Blob([file.bytes],{type:file.type}),file.id);
         let answer;
@@ -251,7 +256,7 @@ async function readUpload(request) {
   } catch(error) { await reader.cancel().catch(()=>{}); if(error instanceof TypeError) fail('MALFORMED_REQUEST'); throw error; }
 }
 /** Header geometry bounds allocation; the private scanner still fully decodes the protected original. */
-function imageDimensions(bytes, type) {
+function imageDimensions(bytes, type, upright = false) {
   const view = new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength), ascii=(at,n)=>new TextDecoder().decode(bytes.slice(at,at+n));
   let width,height,mediaType;
   if(bytes.length>=33&&ascii(1,3)==='PNG'&&bytes[0]===137&&bytes[4]===13&&bytes[5]===10&&bytes[6]===26&&bytes[7]===10) {
@@ -260,8 +265,10 @@ function imageDimensions(bytes, type) {
     while(at+12<=bytes.length) { const size=view.getUint32(at),tag=ascii(at+4,4); if(size>bytes.length-at-12) fail('VALIDATION_FAILED'); if(tag==='acTL') fail('UNSUPPORTED_MEDIA'); if(tag==='IDAT') hasData=true; at+=size+12; if(tag==='IEND') {ended=at===bytes.length;break;} }
     if(!ended||!hasData) fail('VALIDATION_FAILED');
   } else if(bytes.length>=4&&bytes[0]===255&&bytes[1]===216) {
-    mediaType='image/jpeg'; if(bytes.at(-2)!==255||bytes.at(-1)!==217) fail('VALIDATION_FAILED'); let at=2;
-    while(at+4<=bytes.length) { if(bytes[at++]!==255) fail('VALIDATION_FAILED'); while(bytes[at]===255)at++; const tag=bytes[at++]; if(tag===218||tag===217)break; if(tag===1||(tag>=208&&tag<=215))continue; const size=view.getUint16(at); if(size<2||at+size>bytes.length)fail('VALIDATION_FAILED'); if([192,193,194,195,197,198,199,201,202,203,205,206,207].includes(tag)) { if(size<8)fail('VALIDATION_FAILED');height=view.getUint16(at+3);width=view.getUint16(at+5); } at+=size; }
+    mediaType='image/jpeg'; if(bytes.at(-2)!==255||bytes.at(-1)!==217) fail('VALIDATION_FAILED'); let at=2,orientation=1;
+    while(at+4<=bytes.length) { if(bytes[at++]!==255) fail('VALIDATION_FAILED'); while(bytes[at]===255)at++; const tag=bytes[at++]; if(tag===218||tag===217)break; if(tag===1||(tag>=208&&tag<=215))continue; const size=view.getUint16(at); if(size<2||at+size>bytes.length)fail('VALIDATION_FAILED'); if(upright&&tag===225&&size>=8&&ascii(at+2,6)==='Exif\0\0')orientation=exifOrientation(view,at+8,at+size); if([192,193,194,195,197,198,199,201,202,203,205,206,207].includes(tag)) { if(size<8)fail('VALIDATION_FAILED');height=view.getUint16(at+3);width=view.getUint16(at+5); } at+=size; }
+    // Scanner decodes EXIF-upright pixels; metadata must describe that raster, retaining raw bytes.
+    if(orientation>=5&&orientation<=8)[width,height]=[height,width];
   } else if(bytes.length>=20&&ascii(0,4)==='RIFF'&&ascii(8,4)==='WEBP') {
     mediaType='image/webp'; if(view.getUint32(4,true)+8!==bytes.length)fail('VALIDATION_FAILED'); let at=12,frames=0;
     while(at+8<=bytes.length) { const tag=ascii(at,4),size=view.getUint32(at+4,true),p=at+8; if(size>bytes.length-p)fail('VALIDATION_FAILED');
@@ -276,4 +283,23 @@ function imageDimensions(bytes, type) {
   if(mediaType!==type)fail('UNSUPPORTED_MEDIA');
   if(!(width>0&&height>0))fail('VALIDATION_FAILED'); if(width*height>LIMITS.max_decoded_pixels)fail('PAYLOAD_TOO_LARGE');
   return {width,height,mediaType};
+}
+/** Read only TIFF IFD0's orientation inside the bounded JPEG APP1 segment. */
+function exifOrientation(view,start,end) {
+  const fits=(at,size)=>at>=start&&at+size<=end;
+  if(!fits(start,8))fail('VALIDATION_FAILED');
+  const order=view.getUint16(start),little=order===0x4949;
+  if((!little&&order!==0x4d4d)||view.getUint16(start+2,little)!==42)fail('VALIDATION_FAILED');
+  const directory=start+view.getUint32(start+4,little);
+  if(!fits(directory,2))fail('VALIDATION_FAILED');
+  const count=view.getUint16(directory,little);
+  if(!fits(directory+2,count*12))fail('VALIDATION_FAILED');
+  for(let i=0;i<count;i++) {
+    const entry=directory+2+i*12;
+    if(view.getUint16(entry,little)!==0x0112)continue;
+    if(view.getUint16(entry+2,little)!==3||view.getUint32(entry+4,little)!==1)fail('VALIDATION_FAILED');
+    const value=view.getUint16(entry+8,little);
+    return value>=1&&value<=8?value:1;
+  }
+  return 1;
 }

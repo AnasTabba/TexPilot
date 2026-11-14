@@ -196,8 +196,14 @@ CREATE TABLE IF NOT EXISTS qc_idempotency (
  body_sha256 TEXT NOT NULL CHECK(length(body_sha256)=64), state TEXT NOT NULL CHECK(state IN ('IN_PROGRESS','COMPLETED','EXPIRED','FAILED')),
  deadline_at INTEGER NOT NULL, lease_expires_at INTEGER NOT NULL, generation INTEGER NOT NULL DEFAULT 1 CHECK(generation>=1),
  response_status INTEGER, response_json TEXT CHECK(response_json IS NULL OR json_valid(response_json)), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
- PRIMARY KEY(workspace_id,actor_id,route,client_key), CHECK((state='COMPLETED')=(response_status IS NOT NULL AND response_json IS NOT NULL AND state='COMPLETED'))
+ PRIMARY KEY(workspace_id,actor_id,route,client_key), CHECK((state='COMPLETED')=(response_status IS NOT NULL AND response_json IS NOT NULL AND state='COMPLETED')),
+ FOREIGN KEY(workspace_id,actor_id) REFERENCES users(workspace_id,id)
 );
+-- Also protects a partially applied earlier copy of this expand-only migration whose table
+-- already exists without the actor FK; no table rebuild or legacy row rewrite is needed.
+CREATE TRIGGER IF NOT EXISTS qc_idempotency_actor_insert BEFORE INSERT ON qc_idempotency BEGIN
+ SELECT RAISE(ABORT,'FOREIGN KEY constraint failed: qc request actor') WHERE NOT EXISTS(SELECT 1 FROM users WHERE workspace_id=NEW.workspace_id AND id=NEW.actor_id);
+END;
 CREATE TRIGGER IF NOT EXISTS qc_idempotency_transition BEFORE UPDATE ON qc_idempotency BEGIN
  SELECT RAISE(ABORT,'qc: a request keeps its identity') WHERE NEW.workspace_id!=OLD.workspace_id OR NEW.actor_id!=OLD.actor_id OR NEW.route!=OLD.route OR NEW.client_key!=OLD.client_key OR NEW.request_id!=OLD.request_id OR NEW.body_sha256!=OLD.body_sha256 OR NEW.deadline_at!=OLD.deadline_at;
  SELECT RAISE(ABORT,'qc: a finished request is final') WHERE OLD.state IN ('COMPLETED','EXPIRED');

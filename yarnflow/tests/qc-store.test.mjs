@@ -2,6 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { sqliteBinding } from '../server/sqlite.mjs';
+import { applyQCRetention } from '../server/qc-retention.mjs';
 import { portalFixture } from './portal-fixture.mjs';
 import * as store from '../server/qc-store.mjs';
 import { canonicalJson, sha256Hex, contentSha256, HASH_EXCLUDES, violation } from '../server/qc-contract.mjs';
@@ -49,7 +55,146 @@ export async function analysisDouble(f,u,at=f.now) {
   return {prepared,started,idem,candidate:{evidence,draft:doubleRecord('draft-manual-review'),binding:{spec_sha256:prepared.spec.content_sha256,policy_sha256:prepared.policy.sha256,release_sha256:prepared.release?.sha256??null,capture_sha256s:prepared.request.captures.map(c=>c.verified_sha256),attempt:prepared.set.attempt,expected_revision:prepared.sample.revision,request_id:started.request_id,request_generation:started.generation,deadline_at:prepared.request.context.deadline_at}}};
 }
 export const countsDouble=f=>Object.fromEntries(['qc_evidence','qc_decisions','qc_decision_events'].map(t=>[t,f.sql.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n]));
+export const proofDouble=f=>({...countsDouble(f),samples:f.sql.prepare('SELECT id,revision,current_decision_id FROM qc_samples ORDER BY id').all().map(r=>({...r}))});
+export async function activeReleaseDouble(f,ttl=30000) {
+  const release={...doubleRecord('release-active'),id:crypto.randomUUID(),workspace_id:f.workspaceId,version:'release-test-double',approved_by:f.admin.user_id,independent_signatory:'independent-test-double',expires_at:new Date(f.now+ttl).toISOString()};
+  release.sha256=await contentSha256(release,HASH_EXCLUDES.Release);
+  const {state,...frozen}=release;
+  f.sql.prepare("INSERT INTO qc_releases(workspace_id,id,state,sha256,json,domain_json,policy_json,expires_at,created_by,created_at,updated_at) VALUES(?,?,'STATISTICAL_CANDIDATE',?,?,?,?,?,?,?,?)").run(f.workspaceId,release.id,release.sha256,JSON.stringify(frozen),JSON.stringify(doubleRecord('domain-manifest')),JSON.stringify(doubleRecord('policy-automatic')),f.now+ttl,f.admin.user_id,f.now,f.now);
+  f.sql.prepare("UPDATE qc_releases SET state='ACTIVE',activated_by=? WHERE workspace_id=? AND id=?").run(f.admin.user_id,f.workspaceId,release.id);return release;
+}
 if(process.argv[1]===fileURLToPath(import.meta.url)) {
+ test('registered sampling-plan/roll/face authority rejects an unknown binding',{todo:'needs scanner/services/api/qc_schemas.py and server/qc.mjs: define and supply registered plan/roll/face authority; current frozen contract supplies only caller references'},async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const {id,workspace_id,created_by,created_at,...fields}=f.selection,before=proofDouble(f);
+  await assert.rejects(store.createSelection(f.env.DB,f.ctx,{...fields,plan_version:'unregistered-plan-test-double',plan_sha256:'0'.repeat(64),roll_ref:'unregistered-roll-test-double'},f.now),isCode('VALIDATION_FAILED'));assert.deepEqual(proofDouble(f),before);
+ });
+ test('missing and excluded physical selections remain in denominators without captures or model evidence',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const before=proofDouble(f),{id,workspace_id,created_by,created_at,...fields}=f.selection;
+  for(const disposition of ['MISSING','EXCLUDED']){
+   const selection=(await store.createSelection(f.env.DB,f.ctx,{...fields,independent_group_id:`group-${disposition}-test-double`},f.now)).body;
+   const r=await store.createSampleEvaluation(f.env.DB,f.ctx,{...f.input,selection_id:selection.id,disposition,exclusion_reason:'Not yet collected test double'},f.now);assert.equal(violation('QCResult',r),null);assert.equal(r.sample.disposition,disposition);assert.equal(r.evidence,null);assert.equal(r.decision,null);assert.equal(r.sample.usable_area_cm2,null);assert.equal(r.revision,0);
+   const proof=proofDouble(f);await assert.rejects(store.createCaptureSet(f.env.DB,f.ctx,{sample_id:r.sample.id,expected_revision:0},f.now),isCode('CONFLICT'));assert.deepEqual(proofDouble(f),proof);
+   assert.deepEqual((await store.loadResult(f.env.DB,f.workspaceId,r.sample.id,f.now)).sample,r.sample);
+  }
+  const listed=await store.listSamples(f.env.DB,f.workspaceId);assert.equal(listed.length,3);assert.deepEqual(listed.map(s=>s.disposition).sort(),['EXCLUDED','MISSING','SELECTED']);const after=proofDouble(f);assert.equal(after.qc_evidence,before.qc_evidence);assert.equal(after.qc_decisions,before.qc_decisions);assert.equal(after.qc_decision_events,before.qc_decision_events+4);assert.ok(after.samples.every(s=>s.current_decision_id===null&&s.revision===0));
+ });
+ test('corrected PO candidates retain document provenance, raw units and separate confirmation/intervention reasons',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const candidateDouble={document_sha256:'e'.repeat(64),page:3,span:[10,24],raw_value:'27.5',raw_unit:'count/cm',ocr_confidence:0.6,candidate_id:crypto.randomUUID(),corrects_id:crypto.randomUUID()},before=proofDouble(f),confirmation='Corrected OCR target after document check test double',intervention='Purchase manager unavailable test double';
+  const spec=(await store.confirmSpec(f.env.DB,f.admin,{...f.specInput,expected_spec_version:1,density:f.specInput.density.map(d=>({...d,candidate:candidateDouble})),confirmation_reason:confirmation,intervention},f.now)).body;
+  for(const density of (await store.getSpec(f.env.DB,f.workspaceId,spec.id,2)).spec.density)for(const [key,value] of Object.entries(candidateDouble))assert.deepEqual(density.provenance[key],value,key);
+  const saved=f.sql.prepare('SELECT reason,intervention_reason,candidates_json FROM qc_po_specs WHERE id=? AND version=2').get(spec.id);assert.equal(saved.reason,confirmation);assert.equal(saved.intervention_reason,intervention);assert.deepEqual(JSON.parse(saved.candidates_json),['ends','picks'].map(axis=>({axis,...candidateDouble})));
+  assert.deepEqual((await store.getSpec(f.env.DB,f.workspaceId,spec.id,1)).spec,f.spec);assert.deepEqual(proofDouble(f),{...before,qc_decision_events:before.qc_decision_events+1});
+ });
+ test('full v2 sample lifecycle leaves populated stock, receipts, claims and legacy QC byte-identical',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const legacy=await f.submitted({acceptedMilli:1000,rejectedMilli:1});
+  for(const [side,decision] of [['reports','accept'],['rejections','confirm']]){const r=await f.call(`/erp/qc/${side}/decide`,{inspectionId:legacy.inspectionId,decision},'Saima');assert.equal(r.status,200,r.text);}
+  // A genuine legacy-shaped goods receipt, separate from the modern QC stock path.
+  const po=await f.insertPO({supplierId:legacy.supplierId}),id=crypto.randomUUID(),product=legacy.productId;
+  f.sql.prepare("INSERT INTO lots(id,workspace_id,product_id,batch,supplier,quality,created_at) VALUES(?,?,?,?,'Legacy mill double','uninspected',?)").run(id,f.workspaceId,product,'Receipt double '+id,f.now);
+  f.sql.prepare("INSERT INTO movements(id,workspace_id,lot_id,action,to_stage,grams,cartons,cones,note,actor,actor_name,request_hash,created_at) VALUES(?,?,?,'receive','raw',1000,0,0,'Receipt double',?,?,?,?)").run(id,f.workspaceId,id,f.admin.user_id,f.admin.name,id,f.now);
+  f.sql.prepare("INSERT INTO stock_deltas(id,movement_id,lot_id,stage,grams,cartons,cones) VALUES(?,?,?,'raw',1000,0,0)").run(id,id,id);
+  f.sql.prepare("INSERT INTO goods_receipts(id,workspace_id,purchase_order_id,product_id,lot_id,movement_id,quantity_milli,grams,supplier_lot,request_hash,actor_id,created_at) VALUES(?,?,?,?,?,?,1000,1000,'Legacy supplier lot double',?,?,?)").run(id,f.workspaceId,po.orderId,product,id,id,id,f.admin.user_id,f.now);
+  const tables=['balances','movements','stock_deltas','goods_receipts','claims','qc_inspections','qc_lots'],bytesDouble=()=>Object.fromEntries(tables.map(table=>[table,canonicalJson(f.sql.prepare(`SELECT * FROM ${table}`).all().map(r=>({...r})).sort((a,b)=>canonicalJson(a).localeCompare(canonicalJson(b))))]));
+  const before=bytesDouble();for(const table of tables)assert.ok(f.sql.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n>0,`${table} is populated`);
+  const {id:selectionId,workspace_id,created_by,created_at,...fields}=f.selection,selection=(await store.createSelection(f.env.DB,f.ctx,fields,f.now)).body;
+  f.result=await store.createSampleEvaluation(f.env.DB,f.ctx,{...f.input,selection_id:selection.id},f.now);assert.equal(f.result.revision,0);assert.deepEqual(bytesDouble(),before);
+  const u=await uploadedDouble(f),a=await analysisDouble(f,u),proof=proofDouble(f),d=await store.finalizeQC(f.env.DB,f.ctx,a,u.result.revision,f.now);
+  assert.equal(countsDouble(f).qc_evidence,proof.qc_evidence+1);assert.equal(countsDouble(f).qc_decisions,proof.qc_decisions+1);assert.equal(countsDouble(f).qc_decision_events,proof.qc_decision_events+1);assert.equal(f.sql.prepare('SELECT current_decision_id FROM qc_samples WHERE id=?').get(f.result.sample.id).current_decision_id,d.id);assert.deepEqual(bytesDouble(),before);
+  await store.appendAdjudication(f.env.DB,f.supervisor,{sample_id:f.result.sample.id,expected_revision:u.result.revision+1,outcome:'UNDETERMINED',reason:'Physical reference not yet collected test double',reference_ids:[],supersedes_id:null},f.now);
+  const entries=new Map(),ledgerDouble={async append(e){entries.set(e.id,structuredClone(e));},async read(){return [...entries.values()];}},afterReview=proofDouble(f);assert.equal((await applyQCRetention(f.env.DB,f.env.BUCKET,f.now+store.DAY,{ledger:ledgerDouble})).purged,3);assert.deepEqual(proofDouble(f),afterReview);
+  assert.deepEqual(bytesDouble(),before);const audit=f.sql.prepare('SELECT * FROM erp_audit_events ORDER BY rowid').all();assert.ok(audit.length>0);
+  for(const op of ["UPDATE erp_audit_events SET action='tamper-double'",'DELETE FROM erp_audit_events']){assert.throws(()=>f.sql.exec(op),/immutable|audit/);assert.deepEqual(f.sql.prepare('SELECT * FROM erp_audit_events ORDER BY rowid').all(),audit);assert.deepEqual(proofDouble(f),afterReview);}
+ });
+ test('two finalizers have one winner, one conflict, and exactly one complete atomic footprint',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const u=await uploadedDouble(f),requests=await Promise.all([analysisDouble(f,u),analysisDouble(f,u)]),before=proofDouble(f);
+  // Both reach their final transaction before either is allowed to write.
+  let arrivals=0,release;const barrier=new Promise(resolve=>{release=resolve;});
+  const db={...f.env.DB,async batch(statements){if(++arrivals===2)release();await barrier;return f.env.DB.batch(statements);}};
+  const out=await Promise.allSettled(requests.map(a=>store.finalizeQC(db,f.ctx,a,u.result.revision,f.now)));
+  const winner=out.findIndex(x=>x.status==='fulfilled'),loser=1-winner;assert.ok(winner>=0);assert.equal(out[loser].status,'rejected');assert.equal(out[loser].reason.code,'CONFLICT');
+  assert.deepEqual(proofDouble(f),{qc_evidence:before.qc_evidence+1,qc_decisions:before.qc_decisions+1,qc_decision_events:before.qc_decision_events+1,samples:[{...before.samples[0],revision:u.result.revision+1,current_decision_id:out[winner].value.id}]});
+  const saved=await store.requestState(f.env.DB,f.ctx,requests[winner].started.request_id,f.now);assert.equal(saved.state,'COMPLETED');assert.equal(saved.result.decision.id,out[winner].value.id);
+  assert.equal((await store.requestState(f.env.DB,f.ctx,requests[loser].started.request_id,f.now)).state,'IN_PROGRESS');
+  const footprint=proofDouble(f);await store.createCaptureSet(f.env.DB,f.ctx,{sample_id:f.result.sample.id,expected_revision:u.result.revision+1},f.now);
+  const replay=await store.beginRequest(f.env.DB,f.ctx,requests[winner].idem,f.now+1);assert.deepEqual(replay.replay.body,saved.result);assert.equal(replay.replay.body.revision,u.result.revision+1);
+  await assert.rejects(store.beginRequest(f.env.DB,f.ctx,{...requests[winner].idem,bodySha:'f'.repeat(64)},f.now+1),isCode('CONFLICT'));
+  assert.equal(countsDouble(f).qc_decisions,footprint.qc_decisions);
+ });
+ test('failed event insert rolls back evidence, decision, pointer and durable success; retry can commit',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const u=await uploadedDouble(f),a=await analysisDouble(f,u),before=proofDouble(f),request=f.sql.prepare('SELECT * FROM qc_idempotency WHERE request_id=?').get(a.started.request_id);
+  f.sql.exec("CREATE TEMP TRIGGER decision_abort_double BEFORE INSERT ON qc_decision_events BEGIN SELECT RAISE(ABORT,'audit unavailable double'); END");
+  await assert.rejects(store.finalizeQC(f.env.DB,f.ctx,a,u.result.revision,f.now),isCode('SERVICE_UNAVAILABLE'));assert.deepEqual(proofDouble(f),before);
+  assert.deepEqual(f.sql.prepare('SELECT * FROM qc_idempotency WHERE request_id=?').get(a.started.request_id),request);
+  f.sql.exec('DROP TRIGGER decision_abort_double');const d=await store.finalizeQC(f.env.DB,f.ctx,a,u.result.revision,f.now);
+  assert.deepEqual(proofDouble(f),{qc_evidence:before.qc_evidence+1,qc_decisions:before.qc_decisions+1,qc_decision_events:before.qc_decision_events+1,samples:[{...before.samples[0],revision:u.result.revision+1,current_decision_id:d.id}]});
+ });
+ for(const change of ['spec','release suspended','release expired','session deleted','user deactivated','role changed','revision advanced'])test(`D06 finalize loses ${change}: no transaction writes`,async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const release=await activeReleaseDouble(f),u=await uploadedDouble(f),a=await analysisDouble(f,u);let expected;
+  const at=change==='release expired'?f.now+30000:f.now;
+  const db={...f.env.DB,async batch(statements){
+   if(change==='spec')await store.confirmSpec(f.env.DB,f.manager,{...f.specInput,expected_spec_version:1},at);
+   if(change==='release suspended')f.sql.prepare("UPDATE qc_releases SET state='SUSPENDED',suspended_by=?,suspend_reason='Suspension test double' WHERE id=?").run(f.admin.user_id,release.id);
+   if(change==='session deleted')f.sql.prepare('DELETE FROM sessions WHERE token_hash=?').run(f.ctx.session_hash);
+   if(change==='user deactivated')f.sql.prepare('UPDATE users SET deactivated_at=? WHERE id=?').run(at,f.ctx.user_id);
+   if(change==='role changed')f.sql.prepare("UPDATE users SET portal_role='dispatch' WHERE id=?").run(f.ctx.user_id);
+   if(change==='revision advanced')f.sql.prepare('UPDATE qc_samples SET revision=revision+1 WHERE id=?').run(f.result.sample.id);
+   expected=proofDouble(f);return f.env.DB.batch(statements);
+  }};
+  await assert.rejects(store.finalizeQC(db,f.ctx,a,u.result.revision,at),isCode('CONFLICT'));assert.deepEqual(proofDouble(f),expected);
+  const row=f.sql.prepare('SELECT state,response_status,response_json FROM qc_idempotency WHERE request_id=?').get(a.started.request_id);assert.deepEqual({...row},{state:'IN_PROGRESS',response_status:null,response_json:null});
+ });
+ test('generation reclaim fences old completeRequest and preserves the new stored response',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const u=await uploadedDouble(f),a=await analysisDouble(f,u),before=proofDouble(f),at=f.now+store.LEASE_MS;
+  assert.deepEqual((await store.beginRequest(f.env.DB,f.ctx,a.idem,f.now+1)).pending,{request_id:a.started.request_id});
+  const {started}=await store.beginRequest(f.env.DB,f.ctx,a.idem,at);assert.equal(started.request_id,a.started.request_id);assert.equal(started.generation,a.started.generation+1);
+  await assert.rejects(store.completeRequest(f.env.DB,f.ctx,a.started,200,{oldDouble:true},at),isCode('CONFLICT'));assert.deepEqual(proofDouble(f),before);
+  await store.completeRequest(f.env.DB,f.ctx,started,200,u.result,at);const replay=await store.beginRequest(f.env.DB,f.ctx,a.idem,at+1);assert.deepEqual(replay.replay.body,u.result);assert.deepEqual(proofDouble(f),before);
+ });
+ test('restart between uploads recovers exact capture ids, roles and hashes from disk',async t=>{
+  const f=await fixtureDouble(),u=await uploadedDouble(f,{close:false,count:1}),dir=mkdtempSync(join(tmpdir(),'qc-restart-double-')),path=join(dir,'qc.sqlite');
+  t.after(()=>rmSync(dir,{recursive:true,force:true}));f.sql.prepare('VACUUM INTO ?').run(path);const before=proofDouble(f);f.sql.close();
+  const sql=new DatabaseSync(path);t.after(()=>sql.close());sql.exec('PRAGMA foreign_keys=ON;PRAGMA journal_mode=WAL');const db=sqliteBinding(sql),restarted={...f,sql,env:{...f.env,DB:db}};
+  const reloaded=await store.loadResult(db,f.workspaceId,u.result.sample.id,f.now);assert.deepEqual(reloaded,u.result);assert.deepEqual(proofDouble(restarted),before);
+  await assert.rejects(store.closeCaptureSet(db,f.ctx,{capture_set_id:u.set.id,expected_revision:reloaded.revision},f.now),isCode('VALIDATION_FAILED'));
+  await assert.rejects(analysisDouble(restarted,{...u,result:reloaded}),isCode('CONFLICT'));assert.deepEqual(proofDouble(restarted),before);
+  const input={...u.uploads[0],meta:{...u.uploads[0].meta,capture_id:crypto.randomUUID(),role:'structure',expected_revision:reloaded.revision}};
+  const added=(await store.addCapture(db,f.env.BUCKET,f.ctx,input,f.now)).body;assert.deepEqual(added.captures.find(c=>c.id===reloaded.captures[0].id),reloaded.captures[0]);
+  assert.equal(added.captures.find(c=>c.role==='structure').original_sha256,input.meta.sha256);assert.equal(added.revision,reloaded.revision+1);
+  const committed=proofDouble(restarted);await store.addCapture(db,f.env.BUCKET,f.ctx,input,f.now);assert.deepEqual(proofDouble(restarted),committed);
+ });
+ test('distinct concurrent close requests allocate exactly one attempt and one event',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const u=await uploadedDouble(f,{close:false}),before=proofDouble(f);
+  const keys=await Promise.all([idemDouble('/close'),idemDouble('/close')]);let arrivals=0,release;const barrier=new Promise(resolve=>{release=resolve;});
+  const db={...f.env.DB,async batch(statements){if(++arrivals===2)release();await barrier;return f.env.DB.batch(statements);}};
+  const out=await Promise.allSettled(keys.map(idem=>store.closeCaptureSet(db,f.ctx,{capture_set_id:u.set.id,expected_revision:u.result.revision,idem},f.now)));
+  assert.equal(out.filter(x=>x.status==='fulfilled').length,1);assert.equal(out.find(x=>x.status==='rejected').reason.code,'CONFLICT');
+  const closed=await store.loadResult(f.env.DB,f.workspaceId,f.result.sample.id,f.now);assert.equal(closed.family.attempts_used,1);assert.equal(closed.capture_sets[0].attempt,1);
+  assert.deepEqual(proofDouble(f),{...before,qc_decision_events:before.qc_decision_events+1,samples:[{...before.samples[0],revision:u.result.revision+1}]});
+  const after=proofDouble(f);await store.closeCaptureSet(f.env.DB,f.ctx,{capture_set_id:u.set.id,expected_revision:u.result.revision},f.now);assert.deepEqual(proofDouble(f),after);
+ });
+ test('committed v1 remains byte-identical after v2 confirmation, refused old analysis and linked evaluation',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const u=await uploadedDouble(f),a=await analysisDouble(f,u);await store.finalizeQC(f.env.DB,f.ctx,a,u.result.revision,f.now);
+  f.result=await store.loadResult(f.env.DB,f.workspaceId,f.result.sample.id,f.now);const next=await uploadedDouble(f),tables=['qc_samples','qc_evidence','qc_decisions','qc_captures','qc_capture_sets','qc_po_specs','qc_decision_events'];
+  const rows=Object.fromEntries(tables.map(table=>[table,f.sql.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all()]));
+  await store.confirmSpec(f.env.DB,f.manager,{...f.specInput,expected_spec_version:1},f.now);const before=proofDouble(f);
+  await assert.rejects(analysisDouble(f,next),e=>e.code==='CONFLICT'&&e.reasons.includes('PO_VERSION_STALE'));assert.deepEqual(proofDouble(f),before);
+  const linked=await store.createSampleEvaluation(f.env.DB,f.ctx,{...f.input,spec_version:2,predecessor_sample_id:f.result.sample.id,expected_predecessor_revision:next.result.revision,reason:'Revised specification test double'},f.now);
+  assert.equal(linked.sample.spec_version,2);assert.equal(linked.family.selection_id,f.selection.id);assert.equal(linked.family.attempts_used,2);
+  for(const table of tables)for(const row of rows[table]){const where=table==='qc_po_specs'?'id=? AND version=?':'id=?';assert.deepEqual(f.sql.prepare(`SELECT * FROM ${table} WHERE ${where}`).get(...(table==='qc_po_specs'?[row.id,row.version]:[row.id])),row,table);}
+  const old=await store.loadResult(f.env.DB,f.workspaceId,f.result.sample.id,f.now);assert.deepEqual(old.decision,f.result.decision);assert.deepEqual(old.evidence,f.result.evidence);assert.equal(old.family.spec_is_current,false);
+  f.result=linked;const third=await uploadedDouble(f);assert.equal(third.result.family.attempts_used,3);const last=proofDouble(f);
+  await assert.rejects(store.createCaptureSet(f.env.DB,f.ctx,{sample_id:linked.sample.id,expected_revision:third.result.revision},f.now),e=>e.reasons.includes('RECAPTURE_LIMIT'));assert.deepEqual(proofDouble(f),last);
+ });
+ for(const operation of ['complete','finalize','poll'])test(`deadline ${operation} persists EXPIRED and fences every later completion`,async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const u=await uploadedDouble(f),a=await analysisDouble(f,u),before=proofDouble(f),late=a.started.deadline_at;
+  if(operation==='complete')await assert.rejects(store.completeRequest(f.env.DB,f.ctx,a.started,200,{double:true},late),isCode('DEADLINE_EXCEEDED'));
+  if(operation==='finalize')await assert.rejects(store.finalizeQC(f.env.DB,f.ctx,a,u.result.revision,late),isCode('DEADLINE_EXCEEDED'));
+  if(operation==='poll')assert.equal((await store.requestState(f.env.DB,f.ctx,a.started.request_id,late)).state,'EXPIRED');
+  assert.equal(f.sql.prepare('SELECT state FROM qc_idempotency WHERE request_id=?').get(a.started.request_id).state,'EXPIRED');
+  // Even a stale process supplying its earlier clock cannot resurrect the terminal row.
+  await assert.rejects(store.completeRequest(f.env.DB,f.ctx,a.started,200,{double:true},f.now),isCode('CONFLICT'));
+  await assert.rejects(store.beginRequest(f.env.DB,f.ctx,a.idem,late+1),isCode('DEADLINE_EXCEEDED'));assert.deepEqual(proofDouble(f),before);
+ });
  test('C04 required public helpers exist',()=>{for(const n of ['getSpec','stageCapture','completeRequest','getRequest','buildAnalyzeInputs','registerCandidate','activate','suspend','consumeProof'])assert.equal(typeof store[n],'function',n);});
  test('sample create returns QCResult and exact durable replay after later mutations',async t=>{
   const f=await fixtureDouble();t.after(()=>f.sql.close());const {id,workspace_id,created_by,created_at,...fields}=f.selection;
