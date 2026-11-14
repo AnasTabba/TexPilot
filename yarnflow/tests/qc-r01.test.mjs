@@ -110,5 +110,7 @@ test('R01 a new capture set clears the current decision and keeps it in history'
   assert.equal((await store.listSamples(f.env.DB, f.workspaceId)).find(s => s.sample_id === u.result.sample.id).status, null);
   const replay = await store.beginRequest(f.env.DB, f.ctx, idem, f.now + 1);
   assert.equal(replay.replay.body.decision, null); assert.equal(replay.replay.body.evidence, null); assert.equal(replay.replay.body.history.length, 1);
-  await assert.rejects(store.appendAdjudication(f.env.DB, f.supervisor, { sample_id: result.sample.id, expected_revision: result.revision, outcome: 'UNDETERMINED', reason: 'No current decision test double', reference_ids: [], supersedes_id: null }, f.now), isCode('CONFLICT'));
+  // A human review needs no machine decision: a supervisor may adjudicate a sample that has none (scanner unavailable, recapture started).
+  const reviewed = await store.appendAdjudication(f.env.DB, f.supervisor, { sample_id: result.sample.id, expected_revision: result.revision, outcome: 'UNDETERMINED', reason: 'No current decision test double', reference_ids: [], supersedes_id: null }, f.now);
+  assert.equal(reviewed.body.decision, null); assert.equal(reviewed.body.adjudications.length, 1);
 });

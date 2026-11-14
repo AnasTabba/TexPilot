@@ -637,7 +637,6 @@ export async function appendAdjudication(db, ctx, input, now) {
   const replay = await replayOf(db, ctx, input.idem); if (replay) return replay;
   const w = ctx.workspace_id, sample = await sampleRow(db, w, input.sample_id);
   expectRevision(sample, input.expected_revision);
-  if (!sample.current_decision_id) qcFail('CONFLICT', ['EVIDENCE_STALE'], 'There is no current decision to review. Record one before adjudicating.');
   const latest = await one(db, 'SELECT id FROM qc_adjudications WHERE workspace_id=? AND sample_id=? ORDER BY revision DESC LIMIT 1', w, sample.id);
   if ((input.supersedes_id ?? null) !== (latest?.id ?? null)) qcFail('CONFLICT', ['EVIDENCE_STALE'], 'Another review was recorded first. Reload this sample.');
   const record = valid('Adjudication', { id: uuid(), sample_id: sample.id, revision: sample.revision + 1, outcome: input.outcome, reason: input.reason, reference_ids: input.reference_ids ?? [], actor_id: ctx.user_id, created_at: isoTime(now),
