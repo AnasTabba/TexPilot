@@ -1497,6 +1497,11 @@
      "title": "Defect Accept Below",
      "type": "number"
     },
+    "defect_artifact_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Defect Artifact Sha256",
+     "type": "string"
+    },
     "defect_hold_at_or_above": {
      "maximum": 1.0,
      "minimum": 0.0,
@@ -1514,6 +1519,11 @@
      "minItems": 1,
      "title": "Effective Labels",
      "type": "array"
+    },
+    "fabric_artifact_sha256": {
+     "pattern": "^[0-9a-f]{64}$",
+     "title": "Fabric Artifact Sha256",
+     "type": "string"
     },
     "id": {
      "maxLength": 120,
@@ -1604,6 +1614,8 @@
     "unknown_assessment_sha256",
     "quality_thresholds_sha256",
     "metrology_validation_sha256",
+    "fabric_artifact_sha256",
+    "defect_artifact_sha256",
     "defect_accept_below",
     "defect_hold_at_or_above"
    ],

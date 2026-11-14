@@ -287,6 +287,22 @@ def test_an_uncalibrated_fabric_probability_cannot_be_automated():
     assert (draft.status, draft.reasons) == ("MANUAL_REVIEW", ["DOMAIN_UNVALIDATED"])
 
 
+def test_a_fabric_artifact_the_released_domain_does_not_name_is_not_automated():
+    # An unreleased classifier still produces an OK stage with a hash of its own.
+    draft = released(evidence(fabric__artifact_sha256="0" * 64))
+    assert (draft.status, draft.reasons, draft.automatic) == (
+        "MANUAL_REVIEW",
+        ["DOMAIN_UNVALIDATED"],
+        False,
+    )
+
+
+def test_the_released_fabric_artifact_is_accepted():
+    ev = evidence()
+    assert ev.fabric.artifact_sha256 == DOMAIN.fabric_artifact_sha256
+    assert released(ev).status == "ACCEPT"
+
+
 def test_a_confirmed_fabric_mismatch_is_held():
     spec = _respec(allowed_fabric_labels=["denim"])
     draft = released(evidence(spec_sha256=spec.content_sha256), spec=spec)
@@ -372,6 +388,22 @@ def test_a_defect_aggregate_score_equal_to_its_largest_view_is_accepted():
 def test_an_ok_defect_stage_without_views_is_not_trusted():
     draft = released(_without_defect_views(evidence()))
     assert (draft.status, draft.reasons) == ("MANUAL_REVIEW", ["STAGE_UNAVAILABLE"])
+
+
+def test_a_defect_artifact_the_released_domain_does_not_name_is_not_automated():
+    # An unreleased defect model still produces an OK stage with a hash of its own.
+    draft = released(evidence(defects__artifact_sha256="0" * 64))
+    assert (draft.status, draft.reasons, draft.automatic) == (
+        "MANUAL_REVIEW",
+        ["DOMAIN_UNVALIDATED"],
+        False,
+    )
+
+
+def test_the_released_defect_artifact_is_accepted():
+    ev = evidence()
+    assert ev.defects.artifact_sha256 == DOMAIN.defect_artifact_sha256
+    assert released(ev).status == "ACCEPT"
 
 
 # ------------------------------------------------------------------ construction tolerance

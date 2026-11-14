@@ -154,6 +154,8 @@ def _check_stages(
 
     fabric = evidence.fabric
     if fabric.state == "OK":
+        if domain is not None and fabric.artifact_sha256 != domain.fabric_artifact_sha256:
+            f.need_review("DOMAIN_UNVALIDATED")  # an OK stage from an unreleased classifier
         value = fabric.value
         if value.unknown:
             f.need_review("UNKNOWN_FABRIC")
@@ -170,6 +172,8 @@ def _check_stages(
 
     defects = evidence.defects
     if defects.state == "OK":
+        if domain is not None and defects.artifact_sha256 != domain.defect_artifact_sha256:
+            f.need_review("DOMAIN_UNVALIDATED")  # an OK stage from an unreleased defect model
         score = defects.value.score
         views = defects.value.views
         if domain is None:

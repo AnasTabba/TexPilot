@@ -503,7 +503,8 @@ struct QCPolicy: Codable, Equatable, QCChecked {
 struct QCDomainManifest: Codable, Equatable, QCChecked {
     var id: String; var version: String; var sha256: String; var construction: QCConstruction; var effective_labels: [String]; var taxonomy_sha256: String
     var required_roles: [QCCaptureRole]; var profile_sha256s: [String]; var preprocessing_sha256: String; var score_transform_sha256: String
-    var unknown_assessment_sha256: String; var quality_thresholds_sha256: String; var metrology_validation_sha256: String; var defect_accept_below: Double; var defect_hold_at_or_above: Double
+    var unknown_assessment_sha256: String; var quality_thresholds_sha256: String; var metrology_validation_sha256: String; var fabric_artifact_sha256: String; var defect_artifact_sha256: String
+    var defect_accept_below: Double; var defect_hold_at_or_above: Double
     func check() throws {
         try rule(defect_accept_below < defect_hold_at_or_above, "defect_accept_below must be below defect_hold_at_or_above")
         try rule(Set(required_roles).count == required_roles.count, "required_roles must be unique")
@@ -1203,7 +1204,7 @@ extension QCPolicy {
 }
 
 extension QCDomainManifest {
-    enum CodingKeys: String, CodingKey { case id, version, sha256, construction, effective_labels, taxonomy_sha256, required_roles, profile_sha256s, preprocessing_sha256, score_transform_sha256, unknown_assessment_sha256, quality_thresholds_sha256, metrology_validation_sha256, defect_accept_below, defect_hold_at_or_above }
+    enum CodingKeys: String, CodingKey { case id, version, sha256, construction, effective_labels, taxonomy_sha256, required_roles, profile_sha256s, preprocessing_sha256, score_transform_sha256, unknown_assessment_sha256, quality_thresholds_sha256, metrology_validation_sha256, fabric_artifact_sha256, defect_artifact_sha256, defect_accept_below, defect_hold_at_or_above }
     init(from decoder: Decoder) throws {
         try validateDecoder(decoder, type: "DomainManifest")
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -1220,6 +1221,8 @@ extension QCDomainManifest {
         unknown_assessment_sha256 = try c.decode(String.self, forKey: .unknown_assessment_sha256)
         quality_thresholds_sha256 = try c.decode(String.self, forKey: .quality_thresholds_sha256)
         metrology_validation_sha256 = try c.decode(String.self, forKey: .metrology_validation_sha256)
+        fabric_artifact_sha256 = try c.decode(String.self, forKey: .fabric_artifact_sha256)
+        defect_artifact_sha256 = try c.decode(String.self, forKey: .defect_artifact_sha256)
         defect_accept_below = try c.decode(Double.self, forKey: .defect_accept_below)
         defect_hold_at_or_above = try c.decode(Double.self, forKey: .defect_hold_at_or_above)
         try check()
@@ -1239,6 +1242,8 @@ extension QCDomainManifest {
         try c.encode(unknown_assessment_sha256, forKey: .unknown_assessment_sha256)
         try c.encode(quality_thresholds_sha256, forKey: .quality_thresholds_sha256)
         try c.encode(metrology_validation_sha256, forKey: .metrology_validation_sha256)
+        try c.encode(fabric_artifact_sha256, forKey: .fabric_artifact_sha256)
+        try c.encode(defect_artifact_sha256, forKey: .defect_artifact_sha256)
         try c.encode(defect_accept_below, forKey: .defect_accept_below)
         try c.encode(defect_hold_at_or_above, forKey: .defect_hold_at_or_above)
     }

@@ -2025,7 +2025,7 @@
   "value": {
    "id": "lab-woven-1",
    "version": "1",
-   "sha256": "5dee7e5f9ca4eab60326070813ef2a0d50c8103f45a886bbb1de8f0509cf30e0",
+   "sha256": "ce791e71a01afc450480db66a9b1f2f00c446f4edf59b14b42a8f0a53f73dee5",
    "construction": "woven",
    "effective_labels": [
     "twill",
@@ -2045,6 +2045,8 @@
    "unknown_assessment_sha256": "2ebc49e3d83652cb6bd9ac41f22f5c93696f54862c349d454584c9ca2c428bda",
    "quality_thresholds_sha256": "84e4d4f9609da28de95a65b3a24271e5b729823157a02c64123665983667e63d",
    "metrology_validation_sha256": "9b40daf58fc1a818d9d2df7ee17713af9efbf58a73b60168e0d82e9ce0bf58ae",
+   "fabric_artifact_sha256": "516e205491fc174dafe5867a9f3bec79709de6a58af97d202699195fe514dc06",
+   "defect_artifact_sha256": "7da40a71571e1f7ec1cb958643a28394fbd3d6fe0a2c8ba5a637113fef692a0f",
    "defect_accept_below": 0.2,
    "defect_hold_at_or_above": 0.8
   },
@@ -2056,10 +2058,10 @@
   "value": {
    "id": "00000000-0000-4000-8000-000000000100",
    "version": "candidate-1",
-   "sha256": "39deaa84d9ff3de76649792f64930648d25ad5ef0ffbc005be58e7085e6d6417",
+   "sha256": "de68bcb0bed1bc0aaec384b60c11e63724af9cafc8f70f7104ff04162d8671b7",
    "workspace_id": "00000000-0000-4000-8000-000000000001",
    "state": "STATISTICAL_CANDIDATE",
-   "domain_sha256": "5dee7e5f9ca4eab60326070813ef2a0d50c8103f45a886bbb1de8f0509cf30e0",
+   "domain_sha256": "ce791e71a01afc450480db66a9b1f2f00c446f4edf59b14b42a8f0a53f73dee5",
    "policy_sha256": "c02807381009a884c094f5742a998e264b4b18bb8b06f83111824ec6ac7c7147",
    "bundle_sha256": "516e205491fc174dafe5867a9f3bec79709de6a58af97d202699195fe514dc06",
    "calibration_sha256": "649c4f8e962cfa3d95e1e043b3697ef048953a221c847e0fc0cccea015810b4a",
@@ -2080,10 +2082,10 @@
   "value": {
    "id": "00000000-0000-4000-8000-000000000100",
    "version": "candidate-1",
-   "sha256": "0f452ce2c92e5f4bfa4e738fced8718b7dc8a15a22465eb19f8bcb186376c8b8",
+   "sha256": "f9b6d65df8a7a30b8d278242cc153212a817f351af519dd364a489e07389ad1d",
    "workspace_id": "00000000-0000-4000-8000-000000000001",
    "state": "ACTIVE",
-   "domain_sha256": "5dee7e5f9ca4eab60326070813ef2a0d50c8103f45a886bbb1de8f0509cf30e0",
+   "domain_sha256": "ce791e71a01afc450480db66a9b1f2f00c446f4edf59b14b42a8f0a53f73dee5",
    "policy_sha256": "c02807381009a884c094f5742a998e264b4b18bb8b06f83111824ec6ac7c7147",
    "bundle_sha256": "516e205491fc174dafe5867a9f3bec79709de6a58af97d202699195fe514dc06",
    "calibration_sha256": "649c4f8e962cfa3d95e1e043b3697ef048953a221c847e0fc0cccea015810b4a",

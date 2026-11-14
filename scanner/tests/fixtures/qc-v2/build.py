@@ -571,6 +571,8 @@ DOMAIN = hashed(
         "unknown_assessment_sha256": h("ood-artifact"),
         "quality_thresholds_sha256": h("quality-thresholds"),
         "metrology_validation_sha256": h("metrology"),
+        "fabric_artifact_sha256": h("bundle"),
+        "defect_artifact_sha256": h("fault"),
         "defect_accept_below": 0.2,
         "defect_hold_at_or_above": 0.8,
     },
@@ -1107,6 +1109,12 @@ INVALID: list[tuple[str, str, dict, str]] = [
         X,
     ),
     ("domain-threshold-over-one", "DomainManifest", {**DOMAIN, "defect_hold_at_or_above": 1.5}, S),
+    (
+        "domain-missing-fabric-artifact",
+        "DomainManifest",
+        mut(DOMAIN, "fabric_artifact_sha256", None, delete=True),
+        S,
+    ),
     ("release-self-signed", "Release", {**RELEASE, "independent_signatory": "User-Admin"}, X),
     (
         "release-active-without-operations-proof",

@@ -793,6 +793,8 @@ class DomainManifest(Strict):
     unknown_assessment_sha256: Sha256
     quality_thresholds_sha256: Sha256
     metrology_validation_sha256: Sha256
+    fabric_artifact_sha256: Sha256
+    defect_artifact_sha256: Sha256
     defect_accept_below: Unit01
     defect_hold_at_or_above: Unit01
 

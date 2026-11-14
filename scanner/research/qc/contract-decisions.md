@@ -117,3 +117,15 @@ this repository or on this machine (verified 13 Nov 2026). Therefore:
 G1 factory access, G2 tolerances/risk authority, G3 physical calibration, G4 rights/consent,
 G5 AITEX empty-mask policy, G6 fault artifacts + hardware proof, G7 independent statistics,
 G8 security/deployment/signing sign-off. No gate is approved by code.
+
+## 14 Nov 2026: fabric and defect artifact binding (R01 finding 6)
+
+`DomainManifest` gains two required `Sha256` fields next to the three sibling hashes:
+`fabric_artifact_sha256` and `defect_artifact_sha256`. Both are covered by the manifest's own
+`sha256` like every other field. The policy now refuses to automate an OK `fabric` or `defects`
+stage whose `artifact_sha256` is not the one the release's domain names: a mismatch is
+`MANUAL_REVIEW` + `DOMAIN_UNVALIDATED`, exactly as for `quality`, `domain` and `metrology`
+artifacts. Before this, evidence from an unreleased classifier or defect model was accepted
+because only the other three stages were checked. Context: R01 review finding 6.
+`scanner/tests/fixtures/qc-v2/build.py` was updated and the fixtures regenerated (valid,
+invalid, canonical); `domain-missing-fabric-artifact` is the new schema-layer invalid case.
