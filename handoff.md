@@ -9,6 +9,23 @@ Requirements: [design](scanner/docs/superpowers/specs/2026-11-12-incoming-fabric
 [contract-decisions](scanner/research/qc/contract-decisions.md). Every agent, what it owned and
 which limit it hit: [agent ledger](scanner/research/qc/agent-ledger.md).
 
+## Parallel work merged from the remote branch (Anas Tabba, 14 Nov ~02:00 PKT)
+
+While this session was paused, five commits were pushed to the same branch and are merged here:
+`ae54356` (missing and foreign consent ids both 404; the same fix was made independently in
+this session, and the merge keeps the workspace-scoped query), `fb6e918` (supplier lookup scoped
+to the workspace), `f34676b` (request expiry/failure transitions require the initiating live
+session and current generation/lease), plus two handoff updates. Facts recorded in that
+handoff that this session could not check:
+
+- The Kaggle CLI on the original machine reported the MVTec and WFDD jobs COMPLETE and the
+  AITEX preflight in ERROR; nothing was started, cancelled, overwritten or duplicated. The QC
+  fault checkpoint is still absent locally.
+- `npm ci` reported two dependency advisories (one high, one critical); no update was applied.
+- Rollback/restore after QC writes still has no tested operational procedure.
+
+Test results below were rerun after the merge.
+
 ## State in one paragraph
 
 The review-only path works end to end in software: an operator can pick a PO specification,
@@ -28,7 +45,7 @@ have not been ticked.
 | `cd scanner && ../.venv/bin/python -m pytest tests/test_qc_*.py` | 822 passed, 2 skipped, 0 failed. Skips need a real fault checkpoint / bundle (G6, G8) |
 | `cd scanner && ../.venv/bin/ruff check services training/qc scripts/qc_*.py tests/test_qc_*.py` | clean |
 | `cd scanner && ../.venv/bin/python -m pytest --continue-on-collection-errors` (13 Nov) | 42 failed + 7 collection errors, all **pre-existing** (torch/scipy/joblib not installed); `ruff check .` has 8 pre-existing errors. The scanner CI job on `main` is red for these reasons, independent of this work |
-| `cd yarnflow && npm test` | 930 passed, 0 failed, 1 todo (baseline before this work: 476). The todo is the sampling-plan gap below |
+| `cd yarnflow && npm test` (after merge) | 932 passed, 0 failed, 1 todo (baseline before this work: 476). The todo is the sampling-plan gap below |
 | `cd yarnflow && npm run typecheck` / `npm run build` | clean / succeeds |
 | `cd yarnflow && node --test tests/qc-service-integration.test.mjs` | 8/8, real scanner subprocess |
 | `xcodebuild test … -destination 'platform=iOS Simulator,name=iPhone 17'` | TEST SUCCEEDED: 14 unit (1 skipped: needs a physical device), 2 UI. iPhone 16 named in the plan is not installed |
@@ -133,6 +150,6 @@ deployment budget, recovery, signing and device access.
 
 ## Not touched
 
-Kaggle MVTec/WFDD jobs (no CLI or credentials; nothing started, cancelled or queried). No
+Kaggle MVTec/WFDD jobs (no CLI or credentials on this machine; nothing started, cancelled or queried from here; see the merged note above for their status as seen on the original machine). No
 production migration, deploy, publish, purchase or external message. Untracked `app/`,
 `site-publish/`, `yarn-erp/` and `project details.md` are deliberately not in this branch.

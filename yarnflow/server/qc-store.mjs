@@ -55,7 +55,7 @@
  * DEADLINE_EXCEEDED for elapsed deadline. Expired leases increment the fencing generation.
  * completeRequest(db,ctx,started,status,body,now)->Mutation<typeof body>; guarded durable response,
  * CONFLICT for stale generation/actor/lease; DEADLINE_EXCEEDED after deadline.
- * failRequest(db,started,error:{code,reasons?},now)->void; only this generation becomes FAILED/EXPIRED.
+ * failRequest(db,ctx,started,error:{code,reasons?},now)->void; only the live actor and current lease may change state.
  * getRequest(db,ctx,requestId,now)->{schema_version:'2',request_id,
  * state:IN_PROGRESS|COMPLETED|EXPIRED|FAILED,result:QCResult|null,error:ErrorBody|null};
  * requestState is its compatibility alias. NOT_FOUND for a different actor/workspace.
@@ -196,21 +196,25 @@ export async function beginRequest(db, ctx, idem, now) {
   if (row.body_sha256 !== idem.bodySha) qcFail('CONFLICT', [], 'This Idempotency-Key was used for a different request.');
   if (row.state === 'COMPLETED') return { replay: await stored(db, ctx, row) };
   if (row.state === 'EXPIRED' || now >= row.deadline_at) {
-    if (row.state !== 'EXPIRED') await query(db, "UPDATE qc_idempotency SET state='EXPIRED',updated_at=? WHERE request_id=? AND state IN ('IN_PROGRESS','FAILED')", now, row.request_id).run();
     qcFail('DEADLINE_EXCEEDED', [], 'This request passed its deadline without a decision. Start a new request.');
   }
   if (row.state === 'IN_PROGRESS' && row.lease_expires_at > now) return { pending: { request_id: row.request_id } };
   // A failed attempt or an expired lease: the next generation takes over, and the old one can no longer finalise.
-  const claimed = await query(db, "UPDATE qc_idempotency SET state='IN_PROGRESS',generation=generation+1,lease_expires_at=?,response_status=NULL,response_json=NULL,updated_at=? WHERE request_id=? AND generation=? AND state IN ('IN_PROGRESS','FAILED')",
-    now + LEASE_MS, now, row.request_id, row.generation).run();
+  let claimed;
+  try { [, claimed] = await db.batch([authGuard(db, ctx, now), query(db, "UPDATE qc_idempotency SET state='IN_PROGRESS',generation=generation+1,lease_expires_at=?,response_status=NULL,response_json=NULL,updated_at=? WHERE request_id=? AND workspace_id=? AND actor_id=? AND generation=? AND state IN ('IN_PROGRESS','FAILED') AND deadline_at>?",
+    now + LEASE_MS, now, row.request_id, ctx.workspace_id, ctx.user_id, row.generation, now)]); }
+  catch (error) { throw batchProblem(error); }
   if (claimed.meta.changes !== 1) return { pending: { request_id: row.request_id } };
   return { started: { request_id: row.request_id, generation: row.generation + 1, deadline_at: row.deadline_at } };
 }
 /** Records why this generation stopped. The same key may retry before the deadline; after it the request is EXPIRED. */
-export async function failRequest(db, started, error, now) {
+export async function failRequest(db, ctx, started, error, now) {
   const expired = error.code === 'DEADLINE_EXCEEDED' || now >= started.deadline_at;
-  await query(db, `UPDATE qc_idempotency SET state=?,response_status=NULL,response_json=?,updated_at=? WHERE request_id=? AND generation=? AND state='IN_PROGRESS'`,
-    expired ? 'EXPIRED' : 'FAILED', JSON.stringify({ code: error.code, reasons: error.reasons ?? [] }), now, started.request_id, started.generation).run().catch(() => {});
+  const leaseGuard = expired ? 'deadline_at<=?' : 'lease_expires_at>? AND deadline_at>?';
+  const guardTime = expired ? [now] : [now, now];
+  try { await db.batch([authGuard(db, ctx, now), query(db, `UPDATE qc_idempotency SET state=?,response_status=NULL,response_json=?,updated_at=? WHERE request_id=? AND workspace_id=? AND actor_id=? AND generation=? AND state='IN_PROGRESS' AND ${leaseGuard}`,
+    expired ? 'EXPIRED' : 'FAILED', JSON.stringify({ code: error.code, reasons: error.reasons ?? [] }), now, started.request_id, ctx.workspace_id, ctx.user_id, started.generation, ...guardTime)]); }
+  catch (failure) { throw batchProblem(failure); }
 }
 export async function requestState(db, ctx, requestId, now) {
   await expireRequest(db, ctx, requestId, now);
@@ -375,7 +379,7 @@ export async function listSamples(db, workspaceId, purchaseOrderId = null) {
   return rows.map(r => { const selection = JSON.parse(r.selection); return { sample_id: r.id, roll_ref: selection.roll_ref, location_ref: selection.location_ref, spec_version: r.spec_version, revision: r.revision, status: r.status ?? null, disposition: r.disposition, created_at: isoTime(r.created_at) }; });
 }
 export async function listPurchaseOrders(db, workspaceId) {
-  const rows = await all(db, `SELECT p.id,p.reference,p.status,s.name AS supplier_name,q.id AS spec_id,q.version,q.json FROM supplier_purchase_orders p JOIN suppliers s ON s.id=p.supplier_id
+  const rows = await all(db, `SELECT p.id,p.reference,p.status,s.name AS supplier_name,q.id AS spec_id,q.version,q.json FROM supplier_purchase_orders p JOIN suppliers s ON s.id=p.supplier_id AND s.workspace_id=p.workspace_id
     LEFT JOIN qc_po_specs q ON q.workspace_id=p.workspace_id AND q.purchase_order_id=p.id AND q.version=(SELECT MAX(version) FROM qc_po_specs WHERE workspace_id=p.workspace_id AND purchase_order_id=p.id)
     WHERE p.workspace_id=? ORDER BY p.created_at DESC,p.id LIMIT 200`, workspaceId);
   return rows.map(r => { const spec = r.json ? JSON.parse(r.json) : null; return { purchase_order_id: r.id, reference: r.reference, supplier_name: r.supplier_name, status: r.status, current_spec: spec ? { id: spec.id, version: spec.version, confirmed_at: spec.confirmed_at, construction: spec.construction } : null }; });

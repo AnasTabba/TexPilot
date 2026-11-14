@@ -236,9 +236,15 @@ if(process.argv[1]===fileURLToPath(import.meta.url)) {
  test('expired lease next generation fences old finalization and failure',async t=>{
   const f=await fixtureDouble();t.after(()=>f.sql.close());const u=await uploadedDouble(f),a=await analysisDouble(f,u),at=f.now+store.LEASE_MS;
   const next=await store.beginRequest(f.env.DB,f.ctx,a.idem,at);assert.equal(next.started.generation,2);
-  await assert.rejects(store.finalizeQC(f.env.DB,f.ctx,a,u.result.revision,at),isCode('CONFLICT'));await store.failRequest(f.env.DB,a.started,{code:'SERVICE_UNAVAILABLE'},at);
+  await assert.rejects(store.finalizeQC(f.env.DB,f.ctx,a,u.result.revision,at),isCode('CONFLICT'));await store.failRequest(f.env.DB,f.ctx,a.started,{code:'SERVICE_UNAVAILABLE'},at);
   assert.equal((await store.requestState(f.env.DB,f.ctx,a.started.request_id,at)).state,'IN_PROGRESS');
   a.started=next.started;a.prepared=await store.prepareAnalysis(f.env.DB,f.env.BUCKET,f.ctx,{sample_id:f.result.sample.id,capture_set_id:u.set.id,expected_revision:u.result.revision},a.started,at);a.candidate.binding.request_generation=2;await store.finalizeQC(f.env.DB,f.ctx,a,u.result.revision,at);
+ });
+ test('stale request failures cannot mutate state after session revocation or lease expiry',async t=>{
+  const f=await fixtureDouble();t.after(()=>f.sql.close());const u=await uploadedDouble(f),a=await analysisDouble(f,u);
+  f.sql.prepare('DELETE FROM sessions WHERE token_hash=?').run(f.ctx.session_hash);
+  await assert.rejects(store.failRequest(f.env.DB,f.ctx,a.started,{code:'SERVICE_UNAVAILABLE'},f.now));
+  assert.equal(f.sql.prepare('SELECT state FROM qc_idempotency WHERE request_id=?').get(a.started.request_id).state,'IN_PROGRESS');
  });
  test('close/upload retries keep revisions; incomplete sets cannot analyze',async t=>{
   const f=await fixtureDouble();t.after(()=>f.sql.close());const u=await uploadedDouble(f,{close:false});
@@ -268,5 +274,15 @@ if(process.argv[1]===fileURLToPath(import.meta.url)) {
   for(const ctx of [f.ctx,{...f.admin,session_hash:'wrong-double'},{...f.admin,workspace_id:crypto.randomUUID()}])await assert.rejects(store.consumeProof(f.env.DB,ctx,token,sha,'key',f.now));
   await assert.rejects(store.consumeProof(f.env.DB,f.admin,token,'d'.repeat(64),'key',f.now));await assert.rejects(store.consumeProof(f.env.DB,f.admin,token,sha,'key',f.now+store.PROOF_MS));
   await store.consumeProof(f.env.DB,f.admin,token,sha,'key',f.now);await assert.rejects(store.consumeProof(f.env.DB,f.admin,token,sha,'key',f.now));
+ });
+ test('purchase order listing never joins a supplier from another workspace', async t => {
+  const f=await fixtureDouble();t.after(()=>f.sql.close());
+  const foreignWorkspace=crypto.randomUUID(), supplierId=crypto.randomUUID();
+  f.sql.prepare('INSERT INTO workspaces(id,name,created_at) VALUES(?,?,?)').run(foreignWorkspace,'Foreign workspace double',f.now);
+  f.sql.prepare("INSERT INTO suppliers(id,workspace_id,name,contact_name,email,phone,city,website,source_url,status,created_by,created_at,updated_at) VALUES(?,?,?,'Contact','x@x.test','','','','','approved','test',?,?)").run(supplierId,foreignWorkspace,'Foreign supplier secret',f.now,f.now);
+  const orderId=f.sql.prepare('SELECT id FROM supplier_purchase_orders WHERE workspace_id=?').get(f.workspaceId).id;
+  f.sql.exec('DROP TRIGGER purchase_terms_immutable');
+  f.sql.prepare('UPDATE supplier_purchase_orders SET supplier_id=? WHERE id=?').run(supplierId,orderId);
+  assert.deepEqual(await store.listPurchaseOrders(f.env.DB,f.workspaceId),[]);
  });
 }
