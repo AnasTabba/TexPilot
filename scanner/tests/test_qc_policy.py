@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from services.api.qc_schemas import (
+    DefectValue,
     DomainManifest,
     EvaluationContext,
     Evidence,
@@ -138,6 +139,19 @@ def test_a_missing_stage_blocks_hold_as_well_as_accept():
     draft = released(ev)
     assert draft.status == "MANUAL_REVIEW"
     assert set(draft.reasons) == {"STAGE_UNAVAILABLE", "CONSTRUCTION_OUTSIDE_TOLERANCE"}
+
+
+@pytest.mark.parametrize("stage", ["quality", "fabric", "defects", "metrology", "domain"])
+def test_a_reason_on_an_ok_stage_still_blocks_both_automatic_statuses(stage):
+    # A stage that ran and still names a blocking reason is not a clean stage.
+    draft = released(evidence(**{f"{stage}__reasons": ["OOD"]}))
+    assert draft.status == "MANUAL_REVIEW"
+    assert "OOD" in draft.reasons
+
+
+def test_a_capture_fixable_reason_on_an_ok_quality_stage_is_a_recapture():
+    draft = released(evidence(quality__reasons=["QUALITY_BLUR"]), 1)
+    assert (draft.status, draft.reasons, draft.automatic) == ("RECAPTURE", ["QUALITY_BLUR"], False)
 
 
 def test_the_stages_unavailable_today_give_manual_review_with_every_reason():
@@ -308,13 +322,56 @@ def _respec(**changes) -> PurchaseSpec:
     ],
 )
 def test_defect_thresholds_and_their_equalities(score, status, reasons):
-    draft = released(evidence(defects__value__score=score))
+    # The aggregate is the largest view, so the record stays self-consistent as the score moves.
+    draft = released(
+        evidence(
+            defects__value__score=score,
+            defects__value__views__0__score=score,
+            defects__value__views__1__score=score,
+        )
+    )
     assert (draft.status, draft.reasons) == (status, reasons)
 
 
 def test_a_defect_score_without_its_released_transform_means_nothing():
     draft = released(evidence(defects__value__score=0.0), domain=None)
     assert draft.status == "MANUAL_REVIEW"
+
+
+def _without_defect_views(ev: Evidence) -> Evidence:
+    """The same evidence with an OK defect stage that holds no view at all.
+
+    The schema demands at least one view, so this record is assembled around validation: the
+    policy still has to refuse it, and the manifest is recomputed so staleness is not the reason.
+    """
+    value = DefectValue.model_construct(score=0.0, regions=[], observed_area_cm2=0.0, views=[])
+    stage = ev.defects.model_copy(update={"value": value})
+    rewritten = ev.model_copy(update={"defects": stage})
+    return rewritten.model_copy(update={"manifest_sha256": rewritten.expected_manifest_sha256()})
+
+
+def test_a_defect_aggregate_score_below_its_largest_view_is_not_trusted():
+    # 0.0 aggregated over a view that saw 1.0 would read as a clean sample.
+    draft = released(evidence(defects__value__score=0.0, defects__value__views__1__score=1.0))
+    assert draft.status == "MANUAL_REVIEW"
+    assert "STAGE_UNAVAILABLE" in draft.reasons
+
+
+def test_a_defect_aggregate_score_equal_to_its_largest_view_is_accepted():
+    # The aggregate is the largest single view; equal to it, and below the accept threshold.
+    draft = released(
+        evidence(
+            defects__value__score=0.1,
+            defects__value__views__0__score=0.05,
+            defects__value__views__1__score=0.1,
+        )
+    )
+    assert (draft.status, draft.reasons, draft.automatic) == ("ACCEPT", [], True)
+
+
+def test_an_ok_defect_stage_without_views_is_not_trusted():
+    draft = released(_without_defect_views(evidence()))
+    assert (draft.status, draft.reasons) == ("MANUAL_REVIEW", ["STAGE_UNAVAILABLE"])
 
 
 # ------------------------------------------------------------------ construction tolerance

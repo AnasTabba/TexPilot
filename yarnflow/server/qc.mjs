@@ -168,7 +168,7 @@ export async function handleQC(request, env, authContext) {
         if (!answer.ok) fail(({429:'CAPACITY_LIMIT',503:'SERVICE_UNAVAILABLE',504:'DEADLINE_EXCEEDED',413:'PAYLOAD_TOO_LARGE',415:'UNSUPPORTED_MEDIA',422:'VALIDATION_FAILED'})[answer.status] ?? 'SERVICE_UNAVAILABLE');
         let candidate; try { candidate = await answer.json(); } catch { fail('SERVICE_UNAVAILABLE'); }
         await callStore('checkCandidate',candidate,prepared);
-        await callStore('finalizeQC',db,ctx,{prepared,candidate,started},data.expected_revision,nowOf(env));
+        await callStore('finalizeQC',db,ctx,{prepared,candidate,started},data.expected_revision,() => nowOf(env));
         // Replay returns the exact response stored in the finalising batch.
         return reply(await callStore('replayOf',db,ctx,idem));
       } catch (error) { await callStore('failRequest',db,ctx,started,error,nowOf(env)); throw error; }

@@ -118,9 +118,9 @@ for(const status of [429,503,504,'transport'])test(`upstream ${status} returns i
   const result=await f.call(`/samples/${f.sample.sample.id}/analyze`,{expected_revision:f.current.revision,capture_set_id:set.id});assert.equal(result.status,status==='transport'?503:status);assert.deepEqual(rows(f.sql),before);assert.deepEqual(counts(f.sql),erp);assert.ok(!JSON.stringify(result.data).includes('private'));
 });
 
-test('automatic ACCEPT test double persists only with a Worker-selected ACTIVE release',async()=>{
+test('automatic ACCEPT test double is refused unless every evidence stage is OK under a Worker-selected ACTIVE release',async()=>{
   for(const active of [false,true]){const f=await setupQC(),set=await f.closedSet(),before=rows(f.sql),erp=counts(f.sql);if(active)await insertedReleaseDouble(f);upstreamDouble(f.env,undefined,true);
-    const result=await f.call(`/samples/${f.sample.sample.id}/analyze`,{expected_revision:f.current.revision,capture_set_id:set.id});assert.equal(result.status,active?200:503,JSON.stringify(result.data));if(active){assert.equal(result.data.decision.automatic,true);assert.equal(result.data.decision.status,'ACCEPT');}else assert.deepEqual(rows(f.sql),before);assert.deepEqual(counts(f.sql),erp);
+    const result=await f.call(`/samples/${f.sample.sample.id}/analyze`,{expected_revision:f.current.revision,capture_set_id:set.id});assert.equal(result.status,503,JSON.stringify(result.data));assert.ok(result.data.error.reasons.includes('STAGE_UNAVAILABLE'));assert.deepEqual(rows(f.sql),before);assert.deepEqual(counts(f.sql),erp);
   }
 });
 

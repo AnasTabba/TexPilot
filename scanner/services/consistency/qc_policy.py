@@ -12,6 +12,7 @@ results.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 
 from services.api.qc_schemas import (
@@ -123,11 +124,13 @@ def _check_stages(
 ) -> None:
     for name in STAGE_NAMES:
         stage = getattr(evidence, name)
-        if stage.state == "OK":
-            continue
         fixable = [r for r in stage.reasons if r in CAPTURE_FIXABLE]
         other = [r for r in stage.reasons if r not in CAPTURE_FIXABLE]
         f.need_recapture(*fixable)
+        if stage.state == "OK":
+            # A stage that ran can still name a blocking reason; it counts like any other.
+            f.need_review(*other)
+            continue
         retakeable = name in _RECAPTURABLE_STAGES and stage.state == "ABSTAINED"
         if other or not retakeable:
             f.need_review(*(other or ["STAGE_UNAVAILABLE"]))
@@ -167,11 +170,17 @@ def _check_stages(
 
     defects = evidence.defects
     if defects.state == "OK":
+        score = defects.value.score
+        views = defects.value.views
         if domain is None:
             f.need_review("DOMAIN_UNVALIDATED")  # a score means nothing without its transform
-        elif defects.value.score >= domain.defect_hold_at_or_above:
+        elif not views or not math.isclose(score, max(v.score for v in views), abs_tol=1e-9):
+            # The aggregate is the largest single view (DefectValue): a score that is not that
+            # maximum, or that stands for no view at all, is not the record it claims to be.
+            f.need_review("STAGE_UNAVAILABLE")
+        elif score >= domain.defect_hold_at_or_above:
             f.nonconforming("DEFECT_SUSPECTED")
-        elif defects.value.score >= domain.defect_accept_below:
+        elif score >= domain.defect_accept_below:
             f.need_review("DEFECT_SUSPECTED")  # grey zone, lower bound included
 
     metrology = evidence.metrology

@@ -181,7 +181,7 @@ if(process.argv[1]===fileURLToPath(import.meta.url)) {
   const linked=await store.createSampleEvaluation(f.env.DB,f.ctx,{...f.input,spec_version:2,predecessor_sample_id:f.result.sample.id,expected_predecessor_revision:next.result.revision,reason:'Revised specification test double'},f.now);
   assert.equal(linked.sample.spec_version,2);assert.equal(linked.family.selection_id,f.selection.id);assert.equal(linked.family.attempts_used,2);
   for(const table of tables)for(const row of rows[table]){const where=table==='qc_po_specs'?'id=? AND version=?':'id=?';assert.deepEqual(f.sql.prepare(`SELECT * FROM ${table} WHERE ${where}`).get(...(table==='qc_po_specs'?[row.id,row.version]:[row.id])),row,table);}
-  const old=await store.loadResult(f.env.DB,f.workspaceId,f.result.sample.id,f.now);assert.deepEqual(old.decision,f.result.decision);assert.deepEqual(old.evidence,f.result.evidence);assert.equal(old.family.spec_is_current,false);
+  const old=await store.loadResult(f.env.DB,f.workspaceId,f.result.sample.id,f.now);assert.equal(old.decision,null);assert.equal(old.evidence,null);assert.deepEqual(old.history,[f.result.decision]);assert.equal(old.family.spec_is_current,false);
   f.result=linked;const third=await uploadedDouble(f);assert.equal(third.result.family.attempts_used,3);const last=proofDouble(f);
   await assert.rejects(store.createCaptureSet(f.env.DB,f.ctx,{sample_id:linked.sample.id,expected_revision:third.result.revision},f.now),e=>e.reasons.includes('RECAPTURE_LIMIT'));assert.deepEqual(proofDouble(f),last);
  });

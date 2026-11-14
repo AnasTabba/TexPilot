@@ -402,7 +402,8 @@ export async function createCaptureSet(db, ctx, input, now) {
   const id = uuid();
   return commit(db, ctx, input.idem, now, [revisionGuard(db, w, sample.id, sample.revision),
     query(db, "INSERT INTO qc_capture_sets(workspace_id,id,sample_id,state,required_roles,revision,created_by,created_at) VALUES(?,?,?,'OPEN',?,0,?,?)", w, id, sample.id, JSON.stringify((await activeRelease(db, w, now))?.domain.required_roles ?? DEFAULT_REQUIRED_ROLES), ctx.user_id, now),
-    bump(db, w, sample.id), event(db, ctx, 'capture_set.created', id, { sampleId: sample.id }, now),
+    // New captures make the prior decision historical, not current.
+    bump(db, w, sample.id, ',current_decision_id=NULL'), event(db, ctx, 'capture_set.created', id, { sampleId: sample.id }, now),
   ], 201, null, sample.id);
 }
 
@@ -556,9 +557,18 @@ export async function checkCandidate(candidate, prepared) {
   if (canonicalJson(binding) !== canonicalJson(expected)) bad('The scanner answer is bound to a different request.');
   if (evidence.sample_id !== request.sample_id || evidence.spec_sha256 !== request.spec.content_sha256 || canonicalJson([...evidence.capture_ids].sort()) !== canonicalJson([...ids].sort())) bad('The scanner evidence describes a different sample.');
   if (evidence.manifest_sha256 !== await contentSha256(evidence, HASH_EXCLUDES.Evidence)) bad('The scanner evidence does not match its manifest hash.');
-  // Fail-closed clamp, not a policy: an automatic status is refused unless this Worker itself selected an active release
-  // and an AUTOMATIC policy for this very request. The policy evaluator stays the scanner's Python evaluate_qc.
-  if (draft.automatic && !(release && release.state === 'ACTIVE' && policy.mode === 'AUTOMATIC' && prepared.domain && evidence.domain_id === prepared.domain.id)) bad('The scanner proposed an automatic status without a released domain. Nothing was recorded.');
+  // Every nested original citation must be one the Worker signed: a hash alone, and the id/hash pair together.
+  const signed = new Map(request.captures.map(c => [c.capture.id, c.verified_sha256])), signedShas = new Set(shas);
+  const citations = [...(Array.isArray(evidence.metrology.value) ? evidence.metrology.value : []), ...(Array.isArray(evidence.defects.value?.views) ? evidence.defects.value.views : []),
+    ...(Array.isArray(evidence.defects.value?.regions) ? evidence.defects.value.regions : [])];
+  if (citations.some(cite => !signed.has(cite.capture_id) || ('capture_sha256' in cite && (!signedShas.has(cite.capture_sha256) || signed.get(cite.capture_id) !== cite.capture_sha256)))) bad('The scanner evidence cites an original that was not signed.');
+  // Fail-closed clamp, not a policy: an automatic status is refused unless this Worker itself selected an active release,
+  // an AUTOMATIC policy for this very request, and all five evidence stages ran OK without a single reason. The policy
+  // evaluator stays the scanner's Python evaluate_qc.
+  if (draft.automatic) {
+    if (!(release && release.state === 'ACTIVE' && policy.mode === 'AUTOMATIC' && prepared.domain && evidence.domain_id === prepared.domain.id)) bad('The scanner proposed an automatic status without a released domain. Nothing was recorded.');
+    if (STAGES.some(name => evidence[name]?.state !== 'OK' || evidence[name].reasons.length !== 0)) bad('The scanner proposed an automatic status while a required evidence stage is not OK. Nothing was recorded.');
+  }
   return candidate;
 }
 /**
@@ -569,38 +579,43 @@ export async function checkCandidate(candidate, prepared) {
  */
 export async function finalizeQC(db, authContext, result, expectedRevision, now) {
   const ctx = authContext, w = ctx.workspace_id, { prepared, candidate, started } = result, { sample, set, release, policy } = prepared;
-  if (now >= started.deadline_at) { await expireRequest(db, ctx, started.request_id, now); qcFail('DEADLINE_EXCEEDED', [], 'The analysis finished after its deadline. No decision was recorded.'); }
+  const clock = typeof now === 'function' ? now : () => now, at = clock();
+  if (at >= started.deadline_at) { await expireRequest(db, ctx, started.request_id, at); qcFail('DEADLINE_EXCEEDED', [], 'The analysis finished after its deadline. No decision was recorded.'); }
   authorize(ctx, 'quality_inspector');
   await checkCandidate(candidate, prepared);
   if (prepared.request.sample_id !== sample.id || prepared.request.workspace_id !== w || prepared.request.expected_revision !== expectedRevision || prepared.request.context.request_id !== started.request_id || prepared.request.context.request_generation !== started.generation || Date.parse(prepared.request.context.deadline_at) !== started.deadline_at) qcFail('CONFLICT', ['EVIDENCE_STALE']);
-  const before = await loadResult(db, w, sample.id, now);
+  const before = await loadResult(db, w, sample.id, at);
+  // Every await above is done. One fresh synchronous reading fences the commit-time comparisons and timestamps below.
+  // Residual: the batch's own duration cannot be fenced without a database clock.
+  const fresh = clock();
+  if (fresh >= started.deadline_at) { await expireRequest(db, ctx, started.request_id, fresh); qcFail('DEADLINE_EXCEEDED', [], 'The analysis finished after its deadline. No decision was recorded.'); }
   const evidence = { ...candidate.evidence, id: uuid() }, revision = expectedRevision + 1;
   const decision = { ...candidate.draft, schema_version: '2', id: uuid(), sample_id: sample.id, evidence_id: evidence.id, spec_id: sample.spec_id, spec_version: sample.spec_version, revision, policy_version: policy.version,
-    release_id: candidate.draft.automatic ? release.id : null, evaluated_at: isoTime(now) };
+    release_id: candidate.draft.automatic ? release.id : null, evaluated_at: isoTime(fresh) };
   const body = { ...before, sample: { ...before.sample, revision }, revision, evidence, decision, history: [...before.history, decision] };
   const failed = violation('QCResult', body);
   if (failed) qcFail('INTERNAL_ERROR', [], `${failed.path} ${failed.message}`);
-  const batch = [authGuard(db, ctx, now),
-    guard(db, "SELECT 1 FROM qc_idempotency WHERE workspace_id=? AND actor_id=? AND request_id=? AND state='IN_PROGRESS' AND generation=? AND deadline_at=? AND deadline_at>? AND lease_expires_at>?", w, ctx.user_id, started.request_id, started.generation, started.deadline_at, now, now),
+  const batch = [authGuard(db, ctx, fresh),
+    guard(db, "SELECT 1 FROM qc_idempotency WHERE workspace_id=? AND actor_id=? AND request_id=? AND state='IN_PROGRESS' AND generation=? AND deadline_at=? AND deadline_at>? AND lease_expires_at>?", w, ctx.user_id, started.request_id, started.generation, started.deadline_at, fresh, fresh),
     guard(db, 'SELECT 1 FROM qc_samples s WHERE s.workspace_id=? AND s.id=? AND s.revision=? AND s.spec_version=(SELECT MAX(version) FROM qc_po_specs WHERE workspace_id=s.workspace_id AND id=s.spec_id)', w, sample.id, expectedRevision),
     guard(db, "SELECT 1 FROM qc_capture_sets WHERE workspace_id=? AND id=? AND sample_id=? AND state='CLOSED' AND attempt=?", w, set.id, sample.id, set.attempt),
     guard(db, "SELECT 1 WHERE (SELECT COUNT(*) FROM qc_captures c JOIN qc_blob_claims b ON b.object_key=c.object_key WHERE c.workspace_id=? AND c.capture_set_id=? AND c.original_state='AVAILABLE' AND b.state='REFERENCED')=?", w, set.id, prepared.request.captures.length),
     ...prepared.request.captures.map(c => guard(db, "SELECT 1 FROM qc_captures c JOIN qc_blob_claims b ON b.object_key=c.object_key WHERE c.workspace_id=? AND c.id=? AND c.sample_id=? AND c.capture_set_id=? AND c.original_sha256=? AND c.original_state='AVAILABLE' AND b.state='REFERENCED'", w, c.capture.id, sample.id, set.id, c.verified_sha256)),
     release
-      ? guard(db, "SELECT 1 FROM qc_releases WHERE workspace_id=? AND id=? AND state='ACTIVE' AND expires_at>? AND sha256=?", w, release.id, now, release.sha256)
-      : guard(db, "SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM qc_releases WHERE workspace_id=? AND state='ACTIVE' AND expires_at>?)", w, now),
-    query(db, 'INSERT INTO qc_evidence(workspace_id,id,sample_id,capture_set_id,spec_id,spec_version,manifest_sha256,json,created_at) VALUES(?,?,?,?,?,?,?,?,?)', w, evidence.id, sample.id, set.id, sample.spec_id, sample.spec_version, evidence.manifest_sha256, JSON.stringify(evidence), now),
+      ? guard(db, "SELECT 1 FROM qc_releases WHERE workspace_id=? AND id=? AND state='ACTIVE' AND expires_at>? AND sha256=?", w, release.id, fresh, release.sha256)
+      : guard(db, "SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM qc_releases WHERE workspace_id=? AND state='ACTIVE' AND expires_at>?)", w, fresh),
+    query(db, 'INSERT INTO qc_evidence(workspace_id,id,sample_id,capture_set_id,spec_id,spec_version,manifest_sha256,json,created_at) VALUES(?,?,?,?,?,?,?,?,?)', w, evidence.id, sample.id, set.id, sample.spec_id, sample.spec_version, evidence.manifest_sha256, JSON.stringify(evidence), fresh),
     query(db, 'INSERT INTO qc_decisions(workspace_id,id,sample_id,evidence_id,spec_id,spec_version,revision,status,automatic,release_id,domain_id,policy_version,request_id,json,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      w, decision.id, sample.id, evidence.id, sample.spec_id, sample.spec_version, revision, decision.status, decision.automatic ? 1 : 0, decision.release_id, evidence.domain_id, policy.version, started.request_id, JSON.stringify(decision), ctx.user_id, now),
+      w, decision.id, sample.id, evidence.id, sample.spec_id, sample.spec_version, revision, decision.status, decision.automatic ? 1 : 0, decision.release_id, evidence.domain_id, policy.version, started.request_id, JSON.stringify(decision), ctx.user_id, fresh),
     event(db, ctx, 'decision.committed', decision.id, { sampleId: sample.id, requestId: started.request_id, detail: { status: decision.status, reasons: decision.reasons, automatic: decision.automatic, evidence_id: evidence.id, manifest_sha256: evidence.manifest_sha256,
-      spec_sha256: prepared.spec.content_sha256, policy_sha256: policy.sha256, release_id: decision.release_id, attempt: set.attempt, generation: started.generation } }, now),
+      spec_sha256: prepared.spec.content_sha256, policy_sha256: policy.sha256, release_id: decision.release_id, attempt: set.attempt, generation: started.generation } }, fresh),
     query(db, 'UPDATE qc_samples SET revision=revision+1,current_decision_id=? WHERE workspace_id=? AND id=?', decision.id, w, sample.id),
-    query(db, "UPDATE qc_idempotency SET state='COMPLETED',response_status=200,response_json=?,updated_at=? WHERE request_id=?", JSON.stringify(body), now, started.request_id),
+    query(db, "UPDATE qc_idempotency SET state='COMPLETED',response_status=200,response_json=?,updated_at=? WHERE request_id=?", JSON.stringify(body), fresh, started.request_id),
   ];
   try { await db.batch(batch); } catch (error) {
     const problem = batchProblem(error);
     // Which precondition was lost decides the answer: a passed deadline is a 504, everything else a 409.
-    if (problem.code === 'CONFLICT' && now >= started.deadline_at) qcFail('DEADLINE_EXCEEDED');
+    if (problem.code === 'CONFLICT' && fresh >= started.deadline_at) qcFail('DEADLINE_EXCEEDED');
     throw problem;
   }
   return decision;
@@ -613,6 +628,7 @@ export async function appendAdjudication(db, ctx, input, now) {
   const replay = await replayOf(db, ctx, input.idem); if (replay) return replay;
   const w = ctx.workspace_id, sample = await sampleRow(db, w, input.sample_id);
   expectRevision(sample, input.expected_revision);
+  if (!sample.current_decision_id) qcFail('CONFLICT', ['EVIDENCE_STALE'], 'There is no current decision to review. Record one before adjudicating.');
   const latest = await one(db, 'SELECT id FROM qc_adjudications WHERE workspace_id=? AND sample_id=? ORDER BY revision DESC LIMIT 1', w, sample.id);
   if ((input.supersedes_id ?? null) !== (latest?.id ?? null)) qcFail('CONFLICT', ['EVIDENCE_STALE'], 'Another review was recorded first. Reload this sample.');
   const record = valid('Adjudication', { id: uuid(), sample_id: sample.id, revision: sample.revision + 1, outcome: input.outcome, reason: input.reason, reference_ids: input.reference_ids ?? [], actor_id: ctx.user_id, created_at: isoTime(now),
