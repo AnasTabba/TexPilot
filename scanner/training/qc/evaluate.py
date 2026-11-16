@@ -8,6 +8,7 @@ disk and a predictor that loads it; on a machine without the bundle it raises
 from __future__ import annotations
 
 import hashlib
+import math
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -69,7 +70,10 @@ def _macro(truth: Sequence[str], predicted: Sequence[str | None], labels: Sequen
         fn = sum(t == label and p != label for t, p in zip(truth, predicted, strict=True))
         precision, recall, f1 = _f1(tp, fp, fn)
         per[label] = {"precision": precision, "recall": recall, "f1": f1}
-    return (sum(v["f1"] for v in per.values()) / len(per) if per else None), per
+    # No labelled truth is undefined, not zero: an empty cohort is not a perfect miss.
+    if not truth:
+        return None, per
+    return sum(v["f1"] for v in per.values()) / len(per), per
 
 
 def fabric_metrics(
@@ -189,8 +193,6 @@ def fault_metrics(
     References and valid/ignore bits must come from hash-verified annotations, not the model.
     Geometry validation happens before flattening; this arithmetic never resizes truth.
     """
-    import math
-
     items = [i for i in manifest.items if i.split == split]
     by_id = {p.item_id: p for p in predictions}
     if len(by_id) != len(predictions) or set(by_id) != {i.id for i in items}:
@@ -421,6 +423,11 @@ def compare_parity(
     cand = {c.case_id: c for c in candidate}
     if not ref or set(ref) != set(cand):
         raise ValueError("reference and candidate must cover the same non-empty case set")
+    for case in (*reference, *candidate):
+        if not math.isfinite(case.defect_score) or not all(
+            math.isfinite(value) for value in case.densities
+        ):
+            raise ValueError(f"{case.case_id}: non-finite defect score or density")
     score_error = density_error = 0.0
     same_label = region_pairs = region_hits = 0
     changed: list[str] = []

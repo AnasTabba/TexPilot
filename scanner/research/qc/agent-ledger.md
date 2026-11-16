@@ -76,3 +76,13 @@ change. Storage findings are actionable and not yet fixed; see latest handoff ne
 | D08 | OpenCode `deepseek-v4.1-flash-free`, finished by Claude lead | Fabric artifact hash, Python signatory rule, invalid fixtures | `qc_pipeline.py`, `qc_schemas.py`, `build.py` | **Completed** 14 Nov | free limit mid-task | Lead wrote the validator and regenerated fixtures | — |
 | D09 | OpenCode `longcat-2.5-free` | Offline sign-out reload | `LiveApp.tsx`, e2e | **Completed** 14 Nov | free limit after final run | Playwright 7/7 rerun by lead | — |
 | R03 | OpenCode `nemotron-3.5-lightning-free`, read-only | Audit metrology, quality, training tooling | report only | **Completed, weak** 14 Nov | none | One real defect of ten claims (split-audit identifiers), fixed by lead | Rigorous audit still owed |
+
+## 16 Nov 2026 (OpenCode deepseek free, then Claude Sonnet after its limit; lead audits)
+
+| # | Provider / model | Task | Owned files | Status | Limit / failure | Result | Integration disposition |
+|---|---|---|---|---|---|---|---|
+| W3 | OpenCode `deepseek-v4.1-flash-free` | Fix R04 bypasses (findings 1, 2, 5, 6) | `qc-store.mjs`, `qc.mjs`, `qc_policy.py`, tests | **Completed** | none | Lead rerun: `npm test` 997/997; finding 3 left as documented residual | Kept |
+| W4 | OpenCode deepseek free | Fix R07 iOS P0/P1 | `yarnflow/ios/**` | **Completed** | none | Lead rerun: generic-device `xcodebuild build` succeeded. New XCTests NOT run (no simulator runtime installed) | Kept; release origin `YFQCAppOrigin` still to confirm against live deploy (G8) |
+| W1 | OpenCode deepseek free, then Claude Sonnet | Fix R06 training/release findings | `scanner/training/qc/*`, related tests | **Completed** | deepseek: free limit, then ECONNRESET twice | Most R06 fixes were already in the tree; Sonnet fixed P2-1 failing-first and added ~20 regression tests (not failing-first). Consent model (P1-1) and P2-6 tautology tests left open | Kept |
+| W2 | OpenCode deepseek free, then Claude Sonnet | Fix R05 metrology/quality findings | `qc_metrology.py`, `qc_quality.py`, tests | **Completed** | deepseek: free limit mid-edit, ECONNRESET | Lead rerun: 921 scanner QC tests, 0 failed, 2 skipped; ruff clean; `QUALITY_VERSION` now `qc-quality-2` | Kept |
+| R08 | Claude Sonnet, read-only, fresh | Break the integrated flow | `R08-final-qa.md` | **Completed** | none | 0 P0, 4 P1 (latent), 2 P2; no weakened test or threshold found | Findings open, see handoff |

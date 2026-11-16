@@ -192,3 +192,12 @@ def test_schema_wire_roundtrip_preserves_both_raw_observers():
     payload["observations"][0]["raw_counts"]["ends"] = [1.5]
     with pytest.raises(ValueError):
         parse_reference(payload)
+
+
+def test_consensus_cannot_hide_disagreement_by_declaring_large_uncertainty():
+    from dataclasses import replace
+
+    a = raw_double()
+    b = raw_double("observer-b-double", raw_counts={"ends": (99, 99), "picks": (20, 20)})
+    c = replace(consensus_double(a, b), uncertainty={"ends": 1000.0, "picks": 0.5})
+    assert not validate_reference(c, selection_double()).release_eligible

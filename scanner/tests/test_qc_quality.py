@@ -51,7 +51,7 @@ def put(tmp_path, value: dict) -> str:
 THRESHOLD_DOUBLE = {
     "kind": "qc-quality-thresholds",
     "version": "test-double-1",
-    "method_version": "qc-quality-1",
+    "method_version": "qc-quality-2",
     "valid_from": "2000-01-01T00:00:00Z",
     "expires_at": "2099-01-01T00:00:00Z",
     "validated_checks": list(QUALITY_CHECKS),
@@ -61,7 +61,7 @@ THRESHOLD_DOUBLE = {
     "min_short_side_px": 1200,
     "marker_max_stretch": 1.35,
     "framing_min_texture_fill": 0.9,
-    "moire_max_ratio": 5.0,
+    "moire_max_ratio": 0.1,
     "fold_max_shading": 0.25,
 }
 
@@ -211,3 +211,52 @@ def test_quality_can_discover_artifact_directory_from_environment(tmp_path, monk
     sha = put(tmp_path, THRESHOLD_DOUBLE)
     monkeypatch.setenv("TEXPILOT_QC_ARTIFACTS", str(tmp_path))
     assert assess_capture_set(good_views(), sha).state == "OK"
+
+
+def noise_field(sigma, size=1600, seed=0) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    gray = np.clip(128 + rng.normal(0, sigma, (size, size)), 0, 255).astype(np.uint8)
+    return np.stack([gray, gray, gray], -1)
+
+
+def test_grain_cannot_make_a_defocused_swatch_look_sharp(tmp_path):
+    # Report R05 P1-3: grain inflates raw Laplacian variance over the 60 threshold.
+    sha = put(tmp_path, THRESHOLD_DOUBLE)
+    defocused = cv2.GaussianBlur(fabric(), (0, 0), 12)
+    rng = np.random.default_rng(0)
+    grainy = np.clip(
+        defocused.astype(np.float64) + rng.normal(0, 12, defocused.shape), 0, 255
+    ).astype(np.uint8)
+    s = assess_capture_set(
+        [QualityView(CID, "structure", grainy), good_views()[1]], sha, ArtifactStore(tmp_path)
+    )
+    assert s.state == "OK"
+    assert s.value.checks.blur is False and "QUALITY_BLUR" in s.reasons
+    assert s.value.checks.framing is False and "QUALITY_FRAMING" in s.reasons
+
+
+@pytest.mark.parametrize("sigma", [12, 30, 60])
+def test_a_noise_field_is_neither_sharp_nor_textured(tmp_path, sigma):
+    # Report R05 P1-3: any 8x8 cell with std > 2 counted as texture, so noise framed "well".
+    sha = put(tmp_path, THRESHOLD_DOUBLE)
+    s = assess_capture_set(
+        [QualityView(CID, "structure", noise_field(sigma)), good_views()[1]],
+        sha,
+        ArtifactStore(tmp_path),
+    )
+    assert s.state == "OK"
+    assert s.value.checks.blur is False and "QUALITY_BLUR" in s.reasons
+    assert s.value.checks.framing is False and "QUALITY_FRAMING" in s.reasons
+
+
+@pytest.mark.parametrize("size,angle", [(2400, 15.0), (1600, 5.0), (1600, 45.0)])
+def test_tilted_fabric_is_not_reported_as_moire(tmp_path, size, angle):
+    # Report R05 P1-4: the row/column-mean beat of an off-axis weave was read as moire.
+    sha = put(tmp_path, THRESHOLD_DOUBLE)
+    gray = render("plain", 60, 50, 400, size=size, angle=angle)
+    tilted = np.stack([gray, gray, gray], -1)
+    s = assess_capture_set(
+        [QualityView(CID, "structure", tilted), good_views()[1]], sha, ArtifactStore(tmp_path)
+    )
+    assert s.state == "OK"
+    assert s.value.checks.moire is True and "QUALITY_MOIRE" not in s.reasons

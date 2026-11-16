@@ -18,8 +18,18 @@ final class QCContractTests: XCTestCase {
             _ = try XCTUnwrap(bundle.url(forResource: name, withExtension: "json"), "Missing shared QC fixture file: \(path)")
         }
     }
+    /// A rejected row must fail validation. `contractUnavailable` means nothing was checked, so it is a failure here.
+    private func assertValidationFailure(_ error: Error, _ label: String) {
+        switch error as? QCContractError {
+        case .malformed?, .schema?, .semantic?: break
+        case .contractUnavailable?: XCTFail("\(label): contract not loaded, so the row was never validated")
+        case nil: XCTFail("\(label): not a contract error: \(error)")
+        }
+    }
     private func exerciseSharedFixtures(_ name: String, valid: Bool) throws {
+        guard QCSchema.bundled != nil else { XCTFail("qc-v2.schema.json is not bundled, so no shared fixture can be validated"); throw QCContractError.contractUnavailable }
         let fixtures = try Self.fixtures(name)
+        XCTAssertGreaterThan(fixtures.count, 0, "\(name).json has no rows")
         let modeled = Set(QCContract.roundTrippers.keys)
         XCTAssertEqual(modeled, Set(QCContract.decoders.keys))
         var expected: [String: Int] = [:], exercised: [String: Int] = [:]
@@ -29,15 +39,17 @@ final class QCContractTests: XCTestCase {
             expected[type, default: 0] += 1
             let value = try JSONValue(any: XCTUnwrap(fixture["value"]))
             let label = fixture["name"] as? String ?? type
-            exercised[type, default: 0] += 1
+            // Counted only after the row's own assertion has passed.
             if valid {
                 do {
                     let encoded = try QCContract.roundTrip(type: type, value: value)
                     XCTAssertEqual(encoded, value, label)
+                    exercised[type, default: 0] += 1
                 }
                 catch { XCTFail("\(label): \(error)") }
             } else {
-                XCTAssertThrowsError(try QCContract.roundTrip(type: type, value: value), label)
+                do { _ = try QCContract.roundTrip(type: type, value: value); XCTFail("\(label): an invalid row was accepted") }
+                catch { assertValidationFailure(error, label); exercised[type, default: 0] += 1 }
             }
         }
         XCTAssertFalse(expected.isEmpty)
@@ -59,7 +71,8 @@ final class QCContractTests: XCTestCase {
             let type = try XCTUnwrap(fixture["type"] as? String)
             var object = try XCTUnwrap(fixture["value"] as? [String: Any])
             object["unknown_field_double"] = true
-            XCTAssertThrowsError(try QCContract.roundTrip(type: type, value: JSONValue(any: object)), type)
+            do { _ = try QCContract.roundTrip(type: type, value: JSONValue(any: object)); XCTFail("\(type): unknown field accepted") }
+            catch { assertValidationFailure(error, type) }
             exercised[type, default: 0] += 1
         }
         XCTAssertEqual(Set(exercised.keys), Set(QCContract.roundTrippers.keys))
@@ -130,6 +143,22 @@ final class QCContractTests: XCTestCase {
         XCTAssertThrowsError(try QCResultGuard.accept(result, QCExpectation(sampleID: UUID().uuidString)))
         XCTAssertThrowsError(try QCResultGuard.accept(result, QCExpectation(sampleID: result.sample.id, specVersion: result.sample.spec_version + 1)))
         XCTAssertThrowsError(try QCResultGuard.accept(result, QCExpectation(sampleID: result.sample.id, minimumRevision: result.revision + 1)))
+    }
+    /// P1-4: a release build must never accept cleartext HTTP, and the bundled release origin is HTTPS.
+    /// The loopback allowance exists only for development builds and only for a loopback host.
+    func testReleaseOriginIsHTTPSOnly() throws {
+        for text in ["http://127.0.0.1:8788", "http://localhost:8788", "http://qc.example.invalid"] {
+            XCTAssertThrowsError(try QCConfig(origin: text, policy: .release), text)
+        }
+        XCTAssertNoThrow(try QCConfig(origin: "https://yarnflow.yarnflow-workspace.workers.dev", policy: .release))
+        XCTAssertNoThrow(try QCConfig(origin: "http://127.0.0.1:8788", policy: .development))
+        XCTAssertNoThrow(try QCConfig(origin: "http://localhost:8788", policy: .development))
+        XCTAssertThrowsError(try QCConfig(origin: "http://192.168.1.2:8788", policy: .development), "only loopback may use http")
+        let release = try XCTUnwrap(Bundle.main.object(forInfoDictionaryKey: "YFQCAppOrigin") as? String)
+        XCTAssertEqual(URL(string: release)?.scheme, "https", release)
+        XCTAssertNoThrow(try QCConfig(origin: release, policy: .release))
+        let development = try XCTUnwrap(Bundle.main.object(forInfoDictionaryKey: "YFQCAppOriginDebug") as? String)
+        XCTAssertNoThrow(try QCConfig(origin: development, policy: .development))
     }
 }
 

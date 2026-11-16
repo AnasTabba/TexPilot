@@ -14,6 +14,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from typing import Literal
 
+from training.qc.manifest import normalise_identifier
+
 Truth = Literal["CONFORMING", "NONCONFORMING", "UNDETERMINED"]
 
 
@@ -189,8 +191,17 @@ def unique_outcomes(outcomes: Iterable[UnitOutcome]) -> list[UnitOutcome]:
             raise ValueError("hold reference without a HOLD")
         if not row.completed and not row.missing_reason:
             raise ValueError("unfinished selection missing reason")
+        if row.final_status == "ACCEPT" and not row.accepted:
+            raise ValueError("final ACCEPT without an ACCEPT decision")
+        if row.final_status == "HOLD" and not row.held:
+            raise ValueError("final HOLD without a HOLD decision")
         by_selection[row.selection_id] = row
     return sorted(by_selection.values(), key=lambda r: (r.independent_group_id, r.selection_id))
+
+
+def group_key(independent_group_id: str) -> str:
+    """The same physical roll written differently is one independent group, never two."""
+    return normalise_identifier(independent_group_id)
 
 
 @dataclass(frozen=True)
@@ -221,7 +232,7 @@ def aggregate(outcomes: Iterable[UnitOutcome]) -> CohortCounts:
     rows = unique_outcomes(outcomes)
     grouped: dict[str, list[UnitOutcome]] = defaultdict(list)
     for row in rows:
-        grouped[row.independent_group_id].append(row)
+        grouped[group_key(row.independent_group_id)].append(row)
     totals = defaultdict(int)
     for members in grouped.values():
         accepted = any(m.accepted for m in members)
@@ -343,7 +354,7 @@ def grouped_uncertainty(
     points = descriptive_metrics(rows)
     groups: dict[str, list[UnitOutcome]] = defaultdict(list)
     for row in rows:
-        groups[row.independent_group_id].append(row)
+        groups[group_key(row.independent_group_id)].append(row)
     keys = sorted(groups)
     draws: dict[str, list[float]] = {key: [] for key in points}
     rng = random.Random(seed)

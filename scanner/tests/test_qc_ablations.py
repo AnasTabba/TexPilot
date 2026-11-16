@@ -12,7 +12,7 @@ from training.qc.manifest import DatasetManifest, ManifestItem, SourceRecord
 @pytest.fixture
 def synthetic_arms():
     source = SourceRecord(
-        "synthetic", "1", "synthetic://generated", "synthetic-test-only", ("research",)
+        "synthetic", "1", "synthetic://generated", "CC-BY-4.0", ("research",)
     )
     calibration = DatasetManifest(
         "synthetic-calibration",

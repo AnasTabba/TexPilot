@@ -39,6 +39,10 @@ METHOD_VERSION = "qc-metrology-1"
 #: Cells of the coarse validity grid, in millimetres.
 _CELL_MM = 2.0
 _MAX_RECT_PIXELS = 40_000_000
+#: Analysis window of the 1-D estimator, in samples.
+_TILE = 512
+#: Power of f/2 or f/3 relative to the chosen peak above which the peak is a harmonic.
+_SUBHARMONIC_MAX_RATIO = 0.005
 
 VALIDATION_KEYS = (
     "constructions",
@@ -69,6 +73,8 @@ UNCERTAINTY_COMPONENTS = (
     "reference_count_rel",
 )
 _AXES = {"woven": ("ends", "picks"), "knit": ("wales", "courses")}
+#: The status value a traceability or print-verification record must carry to be accepted.
+_PASSING_STATUS = "PASSED"
 
 
 class _Abstain(Exception):
@@ -142,6 +148,7 @@ def _check_binding(profile, reference, capture, attestation, image, validation, 
     if (
         attestation.lens_id != profile.lens_id
         or attestation.focus_mode != profile.focus_mode
+        or not math.isfinite(attestation.zoom_factor)
         or abs(attestation.zoom_factor - _number(validation, "zoom_factor")) > 1e-6
     ):
         raise _Abstain("DOMAIN_UNVALIDATED")
@@ -189,7 +196,7 @@ def _estimate(profile: np.ndarray, ppi: float, v: dict) -> tuple[float, float]:
     n = len(profile)
     if fmax > 0.4 or n * fmin < _number(v, "min_repeats"):
         raise _Abstain("RESOLUTION_LOW" if fmax > 0.4 else "MEASUREMENT_UNCERTAIN")
-    tile = min(512, n)
+    tile = min(_TILE, n)
     tiles = [profile[i : i + tile] for i in range(0, n - tile + 1, max(tile // 2, 1))]
     if len(tiles) < _number(v, "min_tiles"):
         raise _Abstain("MEASUREMENT_UNCERTAIN")
@@ -212,6 +219,10 @@ def _estimate(profile: np.ndarray, ppi: float, v: dict) -> tuple[float, float]:
 
     family = [f1 / 2, f1 * 2]
     if any(near(f) >= ratio * p1 for f in family if 0 < f < 0.5):
+        raise _Abstain("PATTERN_AMBIGUOUS")
+    # A weak fundamental under a dominant harmonic sits at f/2 or f/3 of the chosen peak. Clean
+    # gratings leave about 1e-4 of the peak there; the weakest such case in R05 is about 0.01.
+    if any(near(f) >= _SUBHARMONIC_MAX_RATIO * p1 for f in (f1 / 2, f1 / 3) if 0 < f < 0.5):
         raise _Abstain("PATTERN_AMBIGUOUS")
     other = (freqs >= fmin) & (freqs <= fmax)
     for f in (f1, *family, f1 * 3, f1 / 3):
@@ -378,6 +389,9 @@ def _measure(
         a is None
         for a in (validation, model, limits, distortion, processing, lighting, trace, print_check)
     ):
+        raise _Abstain("DOMAIN_UNVALIDATED")
+    # The reference's own verdicts must say they passed; loading a record proves only its hash.
+    if trace.get("status") != _PASSING_STATUS or print_check.get("status") != _PASSING_STATUS:
         raise _Abstain("DOMAIN_UNVALIDATED")
     # Immutable records themselves are content-addressed; a changed dimension cannot keep its hash.
     for record in (profile, reference):
@@ -575,7 +589,9 @@ def _measure(
         tpi, spread = _estimate(profile_1d, ppi, validation)
         if support[direction] * 25.4 / tpi < min_px:
             raise _Abstain("RESOLUTION_LOW")
-        values[name] = (tpi, spread)
+        # Half a bin of the analysis window, as a relative half-width: the floor of the interval.
+        resolution = 0.5 * ppi / (min(_TILE, len(profile_1d)) * tpi)
+        values[name] = (tpi, spread, resolution)
 
     ref_rel = max(
         u / d for u, d in zip(reference.uncertainty_mm, reference.dimensions_mm, strict=True)
@@ -641,11 +657,19 @@ def _measure(
     }
     geometry_sha = sha256_hex(canonical_json(geometry))
     measurements, budget = [], {}
-    for name, (_tpi, spread) in values.items():
+    for name, (_tpi, spread, resolution) in values.items():
         parts = {"reference_length_rel": ref_rel, "tile_spread_rel": spread}
         parts |= {c_: _number(components, c_) for c_ in UNCERTAINTY_COMPONENTS}
         combined = k * math.sqrt(sum(v_ * v_ for v_ in parts.values()))
-        budget[name] = {"components": parts, "coverage_factor": k, "expanded_rel": combined}
+        expanded = max(combined, resolution)  # zero model uncertainty never gives zero width
+        if not math.isfinite(expanded) or expanded <= 0:
+            raise _Abstain("MEASUREMENT_UNCERTAIN")
+        budget[name] = {
+            "components": parts,
+            "coverage_factor": k,
+            "resolution_floor_rel": resolution,
+            "expanded_rel": expanded,
+        }
     uncertainty = {
         "method_version": METHOD_VERSION,
         "model_sha256": profile.uncertainty_model_sha256,
@@ -653,7 +677,7 @@ def _measure(
         "budget": budget,
     }
     uncertainty_sha = sha256_hex(canonical_json(uncertainty))
-    for name, (tpi, _) in values.items():
+    for name, (tpi, _spread, _resolution) in values.items():
         u = budget[name]["expanded_rel"]
         measurements.append(
             Measurement(

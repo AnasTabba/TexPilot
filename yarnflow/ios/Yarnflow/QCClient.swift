@@ -8,19 +8,43 @@ import Security
 // MARK: - Configuration
 
 struct QCConfig: Equatable {
+    /// What the build is allowed to reach. Release builds compile the cleartext loopback path out entirely;
+    /// the development case exists only so the simulator can talk to the local Worker over `#if DEBUG`.
+    enum Policy: Equatable {
+        case release, development
+        static var current: Policy {
+            #if DEBUG
+            .development
+            #else
+            .release
+            #endif
+        }
+        var infoPlistKey: String { self == .development ? "YFQCAppOriginDebug" : "YFQCAppOrigin" }
+    }
     /// Scheme + host (+ port) of the Yarnflow web app. Sent as `Origin` on every mutation.
     let origin: URL
     var originHeader: String { "\(origin.scheme ?? "https")://\(origin.host ?? "")\(origin.port.map { ":\($0)" } ?? "")" }
 
-    init(origin text: String) throws {
+    init(origin text: String, policy: Policy = .current) throws {
         guard let url = URL(string: text.trimmingCharacters(in: .whitespaces)), let scheme = url.scheme, let host = url.host, url.path.isEmpty || url.path == "/",
-              url.query == nil, url.fragment == nil, url.user == nil, url.password == nil, scheme == "https" || (scheme == "http" && ["127.0.0.1", "localhost"].contains(host)) else { throw QCError.notConfigured }
+              url.query == nil, url.fragment == nil, url.user == nil, url.password == nil, Self.permits(scheme: scheme, host: host, policy: policy) else { throw QCError.notConfigured }
         origin = url
     }
-    /// The origin is fixed at build time (Info.plist `YFQCAppOrigin`); operators cannot point the app elsewhere.
-    static func bundled(_ bundle: Bundle = .main) throws -> QCConfig {
-        guard let text = bundle.object(forInfoDictionaryKey: "YFQCAppOrigin") as? String else { throw QCError.notConfigured }
-        return try QCConfig(origin: text)
+    /// HTTPS everywhere. Cleartext HTTP is allowed only for a loopback host in a development build;
+    /// the release branch has no code path that returns true for HTTP.
+    static func permits(scheme: String, host: String, policy: Policy) -> Bool {
+        if scheme == "https" { return true }
+        #if DEBUG
+        return policy == .development && scheme == "http" && ["127.0.0.1", "localhost"].contains(host)
+        #else
+        return false
+        #endif
+    }
+    /// The origin is fixed at build time. Release reads `YFQCAppOrigin` (HTTPS Worker only);
+    /// development reads `YFQCAppOriginDebug` (the local loopback Worker). Operators cannot point the app elsewhere.
+    static func bundled(_ bundle: Bundle = .main, policy: Policy = .current) throws -> QCConfig {
+        guard let text = bundle.object(forInfoDictionaryKey: policy.infoPlistKey) as? String else { throw QCError.notConfigured }
+        return try QCConfig(origin: text, policy: policy)
     }
     func url(_ path: String, query: [URLQueryItem] = []) -> URL {
         var parts = URLComponents(); parts.scheme = origin.scheme; parts.host = origin.host; parts.port = origin.port; parts.path = path

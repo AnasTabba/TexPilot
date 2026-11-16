@@ -1,6 +1,6 @@
 # Incoming-fabric QC build: handoff
 
-Updated 14 Nov 2026, ~18:30 PKT. Everything is on `main` (the `feat/incoming-fabric-qc` branch was
+Updated 16 Nov 2026. 14 Nov state below plus a 16 Nov audit-fix pass (see 'Update 16 Nov' at the end). Everything is on `main` (the `feat/incoming-fabric-qc` branch was
 merged and deleted on 14 Nov). **Review-only system; not approved for automatic decisions.**
 
 Requirements: [design](scanner/docs/superpowers/specs/2026-11-12-incoming-fabric-qc-design.md),
@@ -125,3 +125,21 @@ deployment budget, recovery, signing and device access.
 
 Kaggle jobs (nothing started, cancelled or queried). No production migration, deploy, publish,
 purchase or external message.
+
+
+## Update 16 Nov 2026: audit-fix pass
+
+Fixed (reports `W1`-`W4` in `scanner/research/qc/`): R04 bypasses of R01 findings 1, 2, 5, 6; R05 metrology/quality defects (sub-harmonic abstain, interval floor, report-content checks, structure prominence, 2-D moire; `qc-quality-2`); R06 training/release defects; R07 iOS P0/P1 (busy tap, stable idempotency keys, late result after sign-out, `processing` no longer faked, HTTPS release origin).
+
+Lead reruns 16 Nov: scanner `tests/test_qc_*.py` 921 tests, 0 failed, 0 errors, 2 skipped (G6/G8); ruff clean; `npm test` 997/997; typecheck and build clean; iOS generic-device `xcodebuild build` (Xcode 27.2 via `DEVELOPER_DIR`) succeeded. **Not run:** iOS XCTest/XCUITest (no simulator runtime installed: `xcodebuild -downloadPlatform iOS`), real D1, device, benchmark. Fresh QA `R08-final-qa.md`: 0 P0.
+
+Open after R08 (all latent; no automatic draft can exist today):
+- P1 no minimum fabric probability in `DomainManifest`; ACCEPT at probability 0.0001 passes policy and Worker.
+- P1 defect regions ignored when a view score is low.
+- P1 metrology sub-harmonic check covers only f/2, f/3 (a hidden f/4, f/5 fundamental can read OK).
+- P1 release gate does not bind `AuditReport` to the released selections.
+- P2 Worker clamp lacks Python parity (unconfirmed density, construction mismatch, label sets, future date, role mismatch, top-candidate).
+- P2 degenerate quality-threshold artifact counts as validated; identifier folding misses `_`/`-`, en dash, homoglyphs.
+- Consent model (R06 P1-1), R02-01, R01 finding 3 residual, GitHub billing, Urdu review, real D1, device.
+
+Plan checkboxes are intentionally not ticked: this file and `agent-ledger.md` are the status of record. External gates G1-G8 unchanged; system stays REVIEW_ONLY.

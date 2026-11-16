@@ -69,7 +69,7 @@ def synthetic_inputs(tmp_path):
         "research",
         (
             SourceRecord(
-                "synthetic", "1", "synthetic://generated", "synthetic-test-only", ("research",)
+                "synthetic", "1", "synthetic://generated", "CC-BY-4.0", ("research",)
             ),
         ),
         tuple(items),
@@ -610,3 +610,20 @@ def test_synthetic_ddp_cli_requires_actual_bundle_weights(tmp_path, monkeypatch)
     monkeypatch.setattr(proof, "verify_ddp_proof", lambda *_: called.append("synthetic-double"))
     assert proof.main(["--manifest", str(manifest)]) == 1
     assert not called
+
+
+def test_parity_nan_scores_or_densities_are_refused():
+    from training.qc.evaluate import ParityCase, compare_parity
+
+    ref = [ParityCase("c1", 0.9, (1.0,), "woven", (), "ACCEPT")]
+    for score, dens in ((float("nan"), (1.0,)), (0.9, (float("nan"),))):
+        cand = [ParityCase("c1", score, dens, "woven", (), "ACCEPT")]
+        with pytest.raises(ValueError):
+            compare_parity(ref, cand, thresholds=(0.5,), adjacency=0.05)
+
+
+def test_empty_fabric_cohort_macro_f1_is_undefined():
+    from training.qc.evaluate import fabric_metrics
+
+    m = fabric_metrics([None, None], ["a", "b"], [None, None], ("a", "b"))
+    assert m.unconditional_macro_f1 is None

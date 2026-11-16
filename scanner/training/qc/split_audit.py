@@ -9,19 +9,32 @@ promotion when a finding is blocking.
 from __future__ import annotations
 
 import math
+import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 from training.qc.manifest import (
     MASK_CATEGORIES,
     PIXEL_ELIGIBLE,
+    SEALED_SPLITS,
     SPLITS,
     DatasetManifest,
     ManifestItem,
+    consent_issues,
     known_identifier,
     known_license,
+    normalise_identifier,
     valid_sha256,
 )
+
+#: Perceptual hashes are a 64-bit value written as sixteen lowercase hex characters.
+PHASH_PATTERN = re.compile(r"[0-9a-f]{16}")
+#: Cohort labels accepted by the manifest (``manifest.Cohort``); nothing else is clean.
+COHORTS: dict[str, str] = {
+    "development": "DEVELOPMENT",
+    "confirmatory": "CONFIRMATORY",
+    "challenge": "CHALLENGE",
+}
 
 #: Benchmark sources whose overlap must be audited against each other (design §8).
 OVERLAP_SOURCES: frozenset[str] = frozenset({"adnet", "mvtec", "wfdd", "aitex"})
@@ -50,6 +63,11 @@ BLOCKING: frozenset[str] = frozenset(
         "SOURCE_AMBIGUOUS",
         "IMAGE_LABEL_UNKNOWN",
         "AITEX_RELEASE_GATE_OPEN",
+        "CORRELATED_CONFIRMATORY_SELECTIONS",
+        "COHORT_INVALID",
+        "PHASH_INVALID",
+        "DERIVATION_UNREGISTERED",
+        "CONSENT_INVALID",
     }
 )
 
@@ -137,8 +155,19 @@ def _area_valid(item: ManifestItem) -> bool:
     )
 
 
-def _ident(value: str) -> str:
-    return value.strip().casefold()
+def _ident(value: str | None) -> str:
+    """Case, padding and Unicode spelling never make a new roll, lot, source or person."""
+    return normalise_identifier(value)
+
+
+def _group_ident(value: str | None) -> str | None:
+    """A usable grouping identifier, or None for a missing/placeholder one."""
+    return _ident(value) if known_identifier(value) else None
+
+
+def _cohort(value: str | None) -> str | None:
+    """Canonical cohort label, or None when the label is not in the enumeration."""
+    return COHORTS.get(_ident(value))
 
 
 def _components(items: tuple[ManifestItem, ...], near_bits: int) -> _Union:
@@ -148,18 +177,19 @@ def _components(items: tuple[ManifestItem, ...], near_bits: int) -> _Union:
     by_key: dict[tuple[str, str], list[str]] = defaultdict(list)
     for item in items:
         # Identifiers are compared as written by people: case and padding do not make a new roll.
-        if item.parent_id:
-            by_key[("parent", _ident(item.parent_id))].append(item.id)
+        if (parent := _group_ident(item.parent_id)) is not None:
+            by_key[("parent", parent)].append(item.id)
         # An item that is itself a parent joins its children.
         by_key[("parent", _ident(item.id))].append(item.id)
-        if item.roll_id:
-            by_key[("roll", _ident(item.roll_id))].append(item.id)
-        if item.lot_id:
-            by_key[("lot", _ident(item.lot_id))].append(item.id)
-        if item.selection_id:
-            by_key[("selection", _ident(item.selection_id))].append(item.id)
-        if not item.roll_id and not item.lot_id:
-            by_key[("unknown-group-source", item.source)].append(item.id)
+        for kind, value in (
+            ("roll", item.roll_id),
+            ("lot", item.lot_id),
+            ("selection", item.selection_id),
+        ):
+            if (key := _group_ident(value)) is not None:
+                by_key[(kind, key)].append(item.id)
+        # An item without any declared roll/lot identity is linked only by image hash,
+        # parent id or perceptual hash: a shared source is not evidence of one physical unit.
         by_key[("image", item.image_sha256)].append(item.id)
     for ids in by_key.values():
         for other in ids[1:]:
@@ -174,7 +204,10 @@ def _components(items: tuple[ManifestItem, ...], near_bits: int) -> _Union:
 
 
 def audit_splits(
-    manifest: DatasetManifest, *, near_duplicate_bits: int = NEAR_DUPLICATE_BITS
+    manifest: DatasetManifest,
+    *,
+    near_duplicate_bits: int = NEAR_DUPLICATE_BITS,
+    as_of: str | None = None,
 ) -> AuditReport:
     if (
         isinstance(near_duplicate_bits, bool)
@@ -187,7 +220,7 @@ def audit_splits(
     limitations: list[str] = []
     if not items:
         findings.append(Finding("EMPTY_MANIFEST", "No dataset items have been inventoried"))
-    if len({s.name for s in manifest.sources}) != len(manifest.sources):
+    if len({_ident(s.name) for s in manifest.sources}) != len(manifest.sources):
         findings.append(Finding("SOURCE_AMBIGUOUS", "Source register contains duplicate names"))
 
     counts = Counter(i.id for i in items)
@@ -199,11 +232,30 @@ def audit_splits(
             findings.append(
                 Finding("IMAGE_LABEL_UNKNOWN", f"{item.id}: image truth unknown", (item.id,))
             )
-        if item.source.casefold() == "aitex" and item.split == "release_test":
+        if _cohort(item.cohort) is None:
+            findings.append(
+                Finding(
+                    "COHORT_INVALID",
+                    f"{item.id}: cohort {item.cohort!r} is not DEVELOPMENT/CONFIRMATORY/CHALLENGE",
+                    (item.id,),
+                )
+            )
+        if _ident(item.source) == "aitex" and item.split == "release_test":
             findings.append(
                 Finding(
                     "AITEX_RELEASE_GATE_OPEN",
                     f"{item.id}: AITEX policy gate G5 open; no confirmatory release",
+                    (item.id,),
+                )
+            )
+        if item.perceptual_hash is not None and PHASH_PATTERN.fullmatch(
+            item.perceptual_hash
+        ) is None:
+            findings.append(
+                Finding(
+                    "PHASH_INVALID",
+                    f"{item.id}: perceptual hash is not 16 lowercase hex characters; "
+                    "near-duplicate linking cannot be trusted",
                     (item.id,),
                 )
             )
@@ -221,9 +273,15 @@ def audit_splits(
             )
 
     # Rights: an unknown licence or an unpermitted purpose blocks promotion (G4).
-    for name in sorted({i.source for i in items}):
-        ids = tuple(i.id for i in items if i.source == name)
-        source = manifest.source(name)
+    by_source: dict[str, list[str]] = defaultdict(list)
+    for item in items:
+        by_source[item.source].append(item.id)
+    for name in sorted(by_source):
+        ids = tuple(by_source[name])
+        matches = [
+            s for s in manifest.sources if _ident(s.name) == _ident(name)
+        ]
+        source = matches[0] if len(matches) == 1 else None
         if source is None:
             findings.append(Finding("SOURCE_UNREGISTERED", f"source {name!r} has no record", ids))
             continue
@@ -236,6 +294,14 @@ def audit_splits(
                 Finding(
                     "PURPOSE_NOT_PERMITTED",
                     f"source {name!r} is not cleared for purpose {manifest.purpose!r} (G4)",
+                    ids,
+                )
+            )
+        for issue in consent_issues(source, manifest.purpose, as_of):
+            findings.append(
+                Finding(
+                    "CONSENT_INVALID",
+                    f"source {name!r}: {issue}; no training or confirmatory use (G4)",
                     ids,
                 )
             )
@@ -264,9 +330,25 @@ def audit_splits(
             findings.append(
                 Finding("GROUP_SPANS_SPLITS", f"linked items span splits {splits}", ids)
             )
-        overlap = [s for s in sources if s.lower() in OVERLAP_SOURCES]
+        # One physical unit carries one selection. A component that links several selections
+        # (tile, repeat capture, shared roll/lot/parent) never adds independent units.
+        member_selections = {
+            _ident(i.selection_id) for i in members if known_identifier(i.selection_id)
+        }
+        if len(member_selections) > 1 and any(
+            i.split in SEALED_SPLITS or _cohort(i.cohort) == "CONFIRMATORY" for i in members
+        ):
+            findings.append(
+                Finding(
+                    "CORRELATED_CONFIRMATORY_SELECTIONS",
+                    f"{len(member_selections)} selections share one physical group; correlated "
+                    "observations never increase independent n",
+                    ids,
+                )
+            )
+        overlap = [s for s in sources if _ident(s) in OVERLAP_SOURCES]
         if len(sources) > 1 and overlap:
-            sealed = any(i.split in ("calibration", "release_test") for i in members)
+            sealed = any(i.split in SEALED_SPLITS for i in members)
             findings.append(
                 Finding(
                     "CROSS_SOURCE_OVERLAP_IN_TEST" if sealed else "CROSS_SOURCE_OVERLAP",
@@ -277,14 +359,37 @@ def audit_splits(
             )
     # Declared compilations: a source built from another cannot share an evaluation with it
     # without an overlap audit, even when no hash matched.
-    present = {i.source for i in items}
+    present: dict[str, set[str]] = defaultdict(set)
+    for item in items:
+        present[_ident(item.source)].add(item.source)
     for source in manifest.sources:
-        shared = sorted(set(source.derived_from + source.pretraining_exposure) & present)
-        if source.name in present and shared:
-            affected = tuple(i.id for i in items if i.source in (source.name, *shared))
-            sealed = any(
-                i.split in ("calibration", "release_test") and i.id in affected for i in items
-            )
+        if _ident(source.name) not in present:
+            continue
+        declared = tuple(source.derived_from)
+        for name in declared:
+            if _ident(name) not in present:
+                findings.append(
+                    Finding(
+                        "DERIVATION_UNREGISTERED",
+                        f"source {source.name!r} declares {name!r} but no such registered "
+                        "source is inventoried: the overlap cannot be audited",
+                        tuple(
+                            sorted(i.id for i in items if _ident(i.source) == _ident(source.name))
+                        ),
+                    )
+                )
+        shared = sorted(
+            {
+                raw
+                for name in (*declared, *source.pretraining_exposure)
+                for raw in present.get(_ident(name), set())
+                if _ident(raw) != _ident(source.name)
+            }
+        )
+        if shared:
+            affected_names = {_ident(source.name)} | {_ident(s) for s in shared}
+            affected = tuple(sorted(i.id for i in items if _ident(i.source) in affected_names))
+            sealed = any(i.split in SEALED_SPLITS and i.id in affected for i in items)
             findings.append(
                 Finding(
                     "CROSS_SOURCE_OVERLAP_IN_TEST" if sealed else "CROSS_SOURCE_OVERLAP",
@@ -296,8 +401,8 @@ def audit_splits(
 
     if any(i.roll_id is None and i.lot_id is None for i in items):
         limitations.append(
-            "Some items have no roll or lot identity: source grouping and de-duplication are a "
-            "limitation, not evidence of roll independence."
+            "Some items have no roll or lot identity: de-duplication is a limitation, not "
+            "evidence of roll independence."
         )
 
     image_excluded: Counter[str] = Counter()
@@ -308,22 +413,22 @@ def audit_splits(
     confirmatory: list[str] = []
     selections: dict[str, list[ManifestItem]] = defaultdict(list)
     for item in items:
-        if item.selection_id:
-            selections[item.selection_id].append(item)
+        if (key := _group_ident(item.selection_id)) is not None:
+            selections[key].append(item)
     for members in selections.values():
         bindings = {
             (
                 i.plan_sha256,
-                i.roll_id,
-                i.lot_id,
+                _ident(i.roll_id),
+                _ident(i.lot_id),
                 i.face,
-                i.location_ref,
+                _ident(i.location_ref),
                 i.selection_probability,
-                i.factory_id,
-                i.cohort,
-                i.supplier_id,
+                _ident(i.factory_id),
+                _cohort(i.cohort),
+                _ident(i.supplier_id),
                 i.planned_area_cm2,
-                i.sampling_method,
+                _ident(i.sampling_method),
             )
             for i in members
         }
@@ -335,7 +440,7 @@ def audit_splits(
                     tuple(i.id for i in members),
                 )
             )
-        if any(i.cohort == "CHALLENGE" for i in members) and any(
+        if any(_cohort(i.cohort) == "CHALLENGE" for i in members) and any(
             i.split == "release_test" for i in members
         ):
             findings.append(
@@ -347,6 +452,7 @@ def audit_splits(
             )
     for item in items:
         category = item.mask_category
+        cohort = _cohort(item.cohort)
         lineage_ok = True
         if category != "absent" and not valid_sha256(item.mask_sha256):
             lineage_ok = False
@@ -442,7 +548,7 @@ def audit_splits(
                 and math.isfinite(probability)
                 and 0 < probability <= 1
             )
-            if item.cohort == "CONFIRMATORY" and not selection_ok:
+            if cohort == "CONFIRMATORY" and not selection_ok:
                 findings.append(
                     Finding(
                         "SELECTION_INVALID",
@@ -450,7 +556,7 @@ def audit_splits(
                         (item.id,),
                     )
                 )
-            if item.cohort == "CHALLENGE":
+            if cohort == "CHALLENGE":
                 findings.append(
                     Finding(
                         "CHALLENGE_IN_CONFIRMATORY",
@@ -459,7 +565,7 @@ def audit_splits(
                     )
                 )
             elif (
-                item.cohort == "CONFIRMATORY"
+                cohort == "CONFIRMATORY"
                 and item.id in pixel_ok
                 and item.image_label is not None
                 and selection_ok
@@ -492,11 +598,18 @@ def audit_splits(
             for i in items
         ),
         open_gates=("G5",)
-        if unresolved or any(i.source.casefold() == "aitex" for i in items)
+        if unresolved or any(_ident(i.source) == "aitex" for i in items)
         else (),
         benchmark_status="CONTAMINATED_EXPLORATORY"
         if any(f.code.startswith("CROSS_SOURCE_OVERLAP") for f in findings)
         else "NO_DETECTED_OVERLAP",
-        submitted_selection_units=len({i.selection_id or union.find(i.id) for i in items}),
-        confirmatory_selection_units=len({i.selection_id for i in items if i.id in confirmatory}),
+        submitted_selection_units=len(
+            {
+                _ident(i.selection_id) if known_identifier(i.selection_id) else union.find(i.id)
+                for i in items
+            }
+        ),
+        confirmatory_selection_units=len(
+            {_ident(i.selection_id) for i in items if i.id in confirmatory}
+        ),
     )

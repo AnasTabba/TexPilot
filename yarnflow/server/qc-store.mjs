@@ -72,9 +72,10 @@
  * Prepared={request:AnalyzeRequest,files:[{id,bytes:Uint8Array,type}],sample,set,spec,policy,release,domain};
  * performs readback/hash validation; CONFLICT for stale spec/incomplete or already analysed set.
  * checkCandidate(candidate:AnalysisCandidate,prepared:Prepared)->AnalysisCandidate;
- * SERVICE_UNAVAILABLE if schema/hash/binding or Worker-selected automation authority fails.
+ * SERVICE_UNAVAILABLE if schema/hash/binding, Worker-selected automation authority, an unsigned measurement
+ * artifact, a release that does not name this domain/policy, or a draft its own signed evidence contradicts fails.
  * finalizeQC(db,authContext,{prepared,candidate,started},expectedRevision,now)->Decision;
- * one aborting batch rechecks revision, latest spec, release id/state/hash/expiry, active session,
+ * one aborting batch rechecks revision, latest spec, release id/state/hash/domain/policy/expiry, active session,
  * active user/same role/credential epoch, request actor/generation/lease/deadline and captures.
  * Losing any precondition writes NOTHING (including evidence/events/pointer/idempotent success).
  * DEADLINE_EXCEEDED or CONFLICT; invalid scanner candidate SERVICE_UNAVAILABLE.
@@ -101,7 +102,7 @@
  * LEASE_MS,PROOF_MS,MAX_ATTEMPTS,DEFAULT_REQUIRED_ROLES,GATES. No stock/receipts/claims/v1 writes.
  */
 import { all, one, query } from './erp-utils.mjs';
-import { ERROR_STATUS, HASH_EXCLUDES, LIMITS, canonicalJson, contentSha256, isoTime, sha256Hex, violation, withDefaults } from './qc-contract.mjs';
+import { ERROR_STATUS, HASH_EXCLUDES, LIMITS, canonicalJson, contentSha256, isoTime, normalizeDensity, sha256Hex, violation, withDefaults } from './qc-contract.mjs';
 
 export class QCProblem extends Error {
   constructor(code, reasons = [], detail = '') { super(detail || code); this.code = code; this.reasons = reasons; this.status = ERROR_STATUS[code]?.status ?? 500; }
@@ -555,6 +556,59 @@ export async function prepareAnalysis(db, bucket, ctx, input, started, now) {
   valid('AnalyzeRequest', request, 'INTERNAL_ERROR');
   return { request, files, sample, set, spec, policy, release: selected?.release ?? null, domain: selected?.domain ?? null };
 }
+const AXES = { woven: ['ends', 'picks'], knit: ['wales', 'courses'] };
+/**
+ * What the signed evidence itself supports, re-derived by the Worker. This is a refusal table, not a
+ * second decision rule: `blockers` are conditions that make any automatic status unearned, `holds`
+ * are the nonconformances a HOLD may name. The Python evaluate_qc stays the decision authority; this
+ * refuses an automatic claim its own Worker-signed evidence contradicts (R04 B1/F1, B2/F5, B4/F6).
+ */
+function automaticEvidence(evidence, prepared) {
+  const { spec, domain } = prepared, blockers = [], holds = [];
+  const block = detail => { if (!blockers.includes(detail)) blockers.push(detail); };
+  const hold = reason => { if (!holds.includes(reason)) holds.push(reason); };
+
+  if (evidence.contradictions.length) block(`the evidence names ${evidence.contradictions.join(', ')}`);
+
+  const quality = evidence.quality;
+  if (quality.artifact_sha256 !== domain.quality_thresholds_sha256) block('the quality stage did not run the released thresholds');
+  for (const [check, passed] of Object.entries(quality.value.checks)) if (!passed) block(`quality check ${check} failed`);
+
+  const assessed = evidence.domain;
+  if (!assessed.value.in_domain) block('the sample is outside the released domain');
+  if (assessed.artifact_sha256 !== domain.unknown_assessment_sha256) block('the domain stage did not run the released assessment');
+  if (!domain.profile_sha256s.includes(assessed.value.profile_sha256)) block('the domain stage used an unreleased profile');
+
+  const fabric = evidence.fabric, value = fabric.value;
+  if (fabric.artifact_sha256 !== domain.fabric_artifact_sha256) block('the fabric stage did not run the released classifier');
+  if (value.unknown || value.label === null) block('the fabric label is unknown');
+  else {
+    if (value.taxonomy_version !== spec.taxonomy_version) block('the fabric label uses another taxonomy');
+    if (!domain.effective_labels.includes(value.label)) block(`fabric label ${value.label} is outside the released domain`);
+    else if (!spec.allowed_fabric_labels.includes(value.label)) hold('FABRIC_MISMATCH');
+  }
+  if (value.calibrated_probability === null) block('the fabric label has no matching calibration');
+
+  const defects = evidence.defects, aggregate = defects.value.score, views = defects.value.views, top = views.length ? Math.max(...views.map(view => view.score)) : 0;
+  if (defects.artifact_sha256 !== domain.defect_artifact_sha256) block('the defects stage did not run the released model');
+  if (!views.length || Math.abs(aggregate - top) > 1e-9) block('the defect aggregate is not the largest view');
+  else if (Math.max(aggregate, top) >= domain.defect_hold_at_or_above) hold('DEFECT_SUSPECTED');
+  else if (Math.max(aggregate, top) >= domain.defect_accept_below) block('the defect score is in the grey zone');
+
+  const metrology = evidence.metrology;
+  if (metrology.artifact_sha256 !== domain.metrology_validation_sha256) block('the metrology stage did not run the released validation');
+  const measured = new Map(metrology.value.map(measurement => [measurement.axis, measurement])), needed = AXES[spec.construction] ?? [];
+  if (measured.size !== needed.length || needed.some(axis => !measured.has(axis))) block('the metrology stage does not measure this construction');
+  else for (const wanted of spec.density) {
+    const [low, high] = measured.get(wanted.axis).interval95;
+    const lower = normalizeDensity(wanted.lower, wanted.unit), upper = normalizeDensity(wanted.upper, wanted.unit);
+    if (lower <= low && high <= upper) continue;
+    if (high < lower || low > upper) hold('CONSTRUCTION_OUTSIDE_TOLERANCE');
+    else block('a measurement interval crosses a PO limit');
+  }
+  return { blockers, holds };
+}
+
 /** The candidate must be the answer to exactly the request the Worker signed, and its draft must be one the Worker may store. */
 export async function checkCandidate(candidate, prepared) {
   const { request, policy, release } = prepared, bad = detail => qcFail('SERVICE_UNAVAILABLE', ['STAGE_UNAVAILABLE'], detail);
@@ -577,6 +631,26 @@ export async function checkCandidate(candidate, prepared) {
   if (draft.automatic) {
     if (!(release && release.state === 'ACTIVE' && policy.mode === 'AUTOMATIC' && prepared.domain && evidence.domain_id === prepared.domain.id)) bad('The scanner proposed an automatic status without a released domain. Nothing was recorded.');
     if (STAGES.some(name => evidence[name]?.state !== 'OK' || evidence[name].reasons.length !== 0)) bad('The scanner proposed an automatic status while a required evidence stage is not OK. Nothing was recorded.');
+    // The release must name the exact domain manifest and policy the Worker is using, in this workspace (R04 B4/F6).
+    if (!(release.domain_sha256 === prepared.domain.sha256 && prepared.domain.sha256 === await contentSha256(prepared.domain, HASH_EXCLUDES.DomainManifest))) bad('The scanner proposed an automatic status under a domain manifest the release does not name. Nothing was recorded.');
+    if (!(release.policy_sha256 === policy.sha256 && policy.sha256 === await contentSha256(policy, HASH_EXCLUDES.Policy))) bad('The scanner proposed an automatic status under a policy the release does not name. Nothing was recorded.');
+    if (release.workspace_id !== request.workspace_id) bad('The scanner proposed an automatic status under a release of another workspace. Nothing was recorded.');
+    // Every measurement artifact must be the value the Worker signed for that capture; the uncertainty report is the
+    // metrology validation the released domain names (R04 B3/F2). Signed as null today, so no calibrated measurement can
+    // be automatic until the Worker signs it.
+    const captureById = new Map(request.captures.map(c => [c.capture.id, c]));
+    for (const measurement of evidence.metrology.value) {
+      const capture = captureById.get(measurement.capture_id);
+      if (measurement.geometry_artifact_sha256 !== (capture.geometry_artifact_sha256 ?? null)
+        || measurement.calibration_sha256 !== (capture.calibration?.sha256 ?? null)
+        || measurement.axis_registration_id !== (capture.axis_registration?.id ?? null)
+        || measurement.reference_id !== (capture.reference?.id ?? null)
+        || measurement.uncertainty_report_sha256 !== prepared.domain.metrology_validation_sha256) bad('The scanner evidence cites a measurement artifact that was not signed.');
+    }
+    // The draft must also agree with what that signed evidence supports (R04 B1/F1, B2/F5).
+    const { blockers, holds } = automaticEvidence(evidence, prepared);
+    if (draft.status === 'ACCEPT' && (blockers.length || holds.length)) bad(`The scanner proposed an automatic ACCEPT its signed evidence contradicts: ${[...blockers, ...holds].join('; ')}.`);
+    if (draft.status === 'HOLD' && (blockers.length || draft.reasons.some(reason => !holds.includes(reason)))) bad(`The scanner proposed an automatic HOLD its signed evidence does not support: ${[...blockers, ...draft.reasons.filter(reason => !holds.includes(reason))].join('; ')}.`);
   }
   return candidate;
 }
@@ -611,7 +685,8 @@ export async function finalizeQC(db, authContext, result, expectedRevision, now)
     guard(db, "SELECT 1 WHERE (SELECT COUNT(*) FROM qc_captures c JOIN qc_blob_claims b ON b.object_key=c.object_key WHERE c.workspace_id=? AND c.capture_set_id=? AND c.original_state='AVAILABLE' AND b.state='REFERENCED')=?", w, set.id, prepared.request.captures.length),
     ...prepared.request.captures.map(c => guard(db, "SELECT 1 FROM qc_captures c JOIN qc_blob_claims b ON b.object_key=c.object_key WHERE c.workspace_id=? AND c.id=? AND c.sample_id=? AND c.capture_set_id=? AND c.original_sha256=? AND c.original_state='AVAILABLE' AND b.state='REFERENCED'", w, c.capture.id, sample.id, set.id, c.verified_sha256)),
     release
-      ? guard(db, "SELECT 1 FROM qc_releases WHERE workspace_id=? AND id=? AND state='ACTIVE' AND expires_at>? AND sha256=?", w, release.id, fresh, release.sha256)
+      ? guard(db, `SELECT 1 FROM qc_releases WHERE workspace_id=? AND id=? AND state='ACTIVE' AND expires_at>? AND sha256=?${prepared.domain ? " AND json_extract(json,'$.domain_sha256')=? AND json_extract(json,'$.policy_sha256')=?" : ''}`,
+        w, release.id, fresh, release.sha256, ...(prepared.domain ? [prepared.domain.sha256, policy.sha256] : []))
       : guard(db, "SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM qc_releases WHERE workspace_id=? AND state='ACTIVE' AND expires_at>?)", w, fresh),
     query(db, 'INSERT INTO qc_evidence(workspace_id,id,sample_id,capture_set_id,spec_id,spec_version,manifest_sha256,json,created_at) VALUES(?,?,?,?,?,?,?,?,?)', w, evidence.id, sample.id, set.id, sample.spec_id, sample.spec_version, evidence.manifest_sha256, JSON.stringify(evidence), fresh),
     query(db, 'INSERT INTO qc_decisions(workspace_id,id,sample_id,evidence_id,spec_id,spec_version,revision,status,automatic,release_id,domain_id,policy_version,request_id,json,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',

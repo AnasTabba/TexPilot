@@ -37,7 +37,7 @@ def manifest_double(*items, sources=None):
         "research",
         sources
         or tuple(
-            SourceRecord(s, "double", "local:test-double", "test-only-rights", ("research",))
+            SourceRecord(s, "double", "local:test-double", "CC-BY-4.0", ("research",))
             for s in sorted({i.source for i in items})
         ),
         tuple(items),
@@ -91,11 +91,11 @@ def test_declared_compilation_overlap_without_matching_hashes_blocks_test():
             "ADNet",
             "double",
             "local:double",
-            "test-only-rights",
+            "CC-BY-4.0",
             ("research",),
             derived_from=("AITEX",),
         ),
-        SourceRecord("AITEX", "double", "local:double", "test-only-rights", ("research",)),
+        SourceRecord("AITEX", "double", "local:double", "CC-BY-4.0", ("research",)),
     )
     report = audit_splits(
         manifest_double(
@@ -356,3 +356,85 @@ def test_identifier_case_and_padding_cannot_split_one_physical_group(link):
     a = item_double("a", **{link: "Roll-7"})
     b = item_double("b", split="release_test", **{link: " roll-7 "})
     assert "GROUP_SPANS_SPLITS" in audit_splits(manifest_double(a, b)).codes()
+
+
+def test_correlated_confirmatory_selections_block_promotion():
+    a = confirmatory_double("a", selection_id="sel-1", roll_id="ONE-ROLL", parent_id="P1")
+    b = confirmatory_double("b", selection_id="sel-2", roll_id="ONE-ROLL", parent_id="P1")
+    rep = audit_splits(manifest_double(a, b))
+    assert not rep.promotable
+    assert "CORRELATED_CONFIRMATORY_SELECTIONS" in rep.codes()
+    assert not rep.confirmatory_release_eligible
+
+
+@pytest.mark.parametrize("variant", ["Ｒｏｌｌ-7", "roll\xa0-7", "roll-7\u200b"])
+def test_identifier_unicode_normalization_links_splits(variant):
+    a = item_double("a", roll_id="roll-7")
+    b = item_double("b", split="release_test", roll_id=variant)
+    assert "GROUP_SPANS_SPLITS" in audit_splits(manifest_double(a, b)).codes()
+
+
+LAB_SRC = (
+    SourceRecord("lab-source-double", "1", "x", "CC-BY-4.0", ("release-evaluation", "research")),
+)
+
+
+def lab_manifest(*items, sources=LAB_SRC):
+    return DatasetManifest("m", "1", "release-evaluation", sources, tuple(items))
+
+
+@pytest.mark.parametrize("decl", [("mvtec",), ("MVTec",), (" MVTEC ",)])
+def test_derived_from_matches_source_names_regardless_of_case(decl):
+    a = item_double("a", source="ADNet")
+    b = item_double("b", source="MVTec", split="release_test")
+    srcs = (
+        SourceRecord("ADNet", "1", "x", "CC-BY-4.0", ("research",), derived_from=decl),
+        SourceRecord("MVTec", "1", "x", "CC-BY-4.0", ("research",)),
+    )
+    assert (
+        "CROSS_SOURCE_OVERLAP_IN_TEST" in audit_splits(manifest_double(a, b, sources=srcs)).codes()
+    )
+
+
+@pytest.mark.parametrize("cohort", ["challenge", "CHALLENGE ", "PILOT", ""])
+def test_unknown_or_misspelt_cohort_blocks(cohort):
+    rep = audit_splits(lab_manifest(confirmatory_double("a", cohort=cohort)))
+    assert not rep.promotable
+    assert not rep.confirmatory_release_eligible
+
+
+@pytest.mark.parametrize("name", ["AITEX", "AITEX ", "aitex", "Ａｉｔｅｘ"])
+def test_aitex_g5_stays_open_for_any_spelling(name):
+    src = (SourceRecord(name, "1", "x", "CC-BY-4.0", ("release-evaluation",)),)
+    rep = audit_splits(lab_manifest(confirmatory_double("a", source=name), sources=src))
+    assert "G5" in rep.open_gates
+    assert not rep.promotable
+    assert not rep.confirmatory_release_eligible
+
+
+@pytest.mark.parametrize("lic", ["TBD", "tbc", "?", "-", "undecided", "to be confirmed"])
+def test_placeholder_licence_blocks_promotion(lic):
+    src = (SourceRecord("lab-source-double", "1", "x", lic, ("release-evaluation",)),)
+    rep = audit_splits(lab_manifest(confirmatory_double("a"), sources=src))
+    assert "LICENSE_UNKNOWN" in rep.codes()
+    assert not rep.confirmatory_release_eligible
+
+
+def test_malformed_perceptual_hash_blocks():
+    a = item_double("a", perceptual_hash="0" * 16)
+    b = item_double("b", split="release_test", perceptual_hash="Z" * 16)
+    assert "PHASH_INVALID" in audit_splits(manifest_double(a, b)).codes()
+
+
+def test_selection_id_spelling_does_not_hide_inconsistent_rolls():
+    a = confirmatory_double("a", selection_id="SEL-1", roll_id="roll-A")
+    b = confirmatory_double("b", selection_id="sel-1", roll_id="roll-B")
+    rep = audit_splits(lab_manifest(a, b))
+    assert "SELECTION_INCONSISTENT" in rep.codes()
+    assert not rep.confirmatory_release_eligible
+
+
+def test_placeholder_roll_ids_do_not_link_unrelated_items():
+    a = item_double("a", roll_id="unknown", lot_id="la")
+    b = item_double("b", split="release_test", roll_id="Unknown", lot_id="lb")
+    assert "GROUP_SPANS_SPLITS" not in audit_splits(manifest_double(a, b)).codes()

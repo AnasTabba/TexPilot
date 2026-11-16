@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from services.api.qc_schemas import canonical_json, sha256_hex
-from training.qc.manifest import SEALED_SPLITS, DatasetManifest
+from training.qc.manifest import SEALED_SPLITS, DatasetManifest, consent_issues
 from training.qc.split_audit import AuditReport, audit_splits
 
 #: Legacy split files that predate the grouped manifest and must not replace it.
@@ -67,6 +67,7 @@ def verify_training_inputs(
     feature_files: dict[str, Path] | None = None,
     mask_files: dict[str, Path] | None = None,
     input_sources: Iterable[str] = (),
+    as_of: str | None = None,
 ) -> ConsumptionLog:
     """Check everything a trainer is about to read. Raises TrainingInputError on any problem.
 
@@ -75,6 +76,8 @@ def verify_training_inputs(
     All manifest images and annotations, including sealed rows, are checked for integrity;
     only explicitly logged nonsealed IDs are handed to the trainer.
     ``input_sources`` are the paths the trainer was pointed at (to catch a legacy CSV).
+    ``as_of`` is the trusted UTC time consent expiry is evaluated against; bounded consent
+    without it is refused.
     """
     reasons: list[str] = []
     actual = manifest.sha256()
@@ -85,8 +88,12 @@ def verify_training_inputs(
     audit_hash = sha256_hex(canonical_json(asdict(audit)))
     if audit_hash != expected_audit_sha256:
         reasons.append("AUDIT_HASH_MISMATCH")
-    if audit != audit_splits(manifest):
+    if audit != audit_splits(manifest, as_of=as_of):
         reasons.append("AUDIT_CONTENT_MISMATCH")
+    # Consent is checked again at the training boundary, not only during the audit.
+    for source in manifest.sources:
+        for issue in consent_issues(source, manifest.purpose, as_of):
+            reasons.append(f"CONSENT_INVALID:{source.name}:{issue}")
     if audit.manifest_sha256 != actual:
         reasons.append("AUDIT_NOT_FOR_THIS_MANIFEST")
     if not audit.promotable:

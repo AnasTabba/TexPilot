@@ -370,9 +370,10 @@ struct QCConsentAuthority: Codable, Equatable, Identifiable, QCChecked {
     var research_use: Bool; var training_use: Bool; var export_destinations: [String]; var valid_from: String; var expires_at: String; var withdrawn_at: String?
     func check() throws {}
     /// Whether the app may offer this record for an operational capture now. The server checks again.
+    /// Times are compared as instants. An unparsable time means the consent is not usable.
     func permitsCapture(at now: Date) -> Bool {
-        let stamp = QCTime.string(now)
-        return operational_capture && withdrawn_at == nil && valid_from <= stamp && stamp < expires_at
+        guard operational_capture, withdrawn_at == nil, let from = QCTime.date(valid_from), let until = QCTime.date(expires_at) else { return false }
+        return from <= now && now < until
     }
 }
 

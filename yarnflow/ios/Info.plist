@@ -65,6 +65,8 @@
 		<true/>
 	</dict>
 	<key>YFQCAppOrigin</key>
+	<string>https://yarnflow.yarnflow-workspace.workers.dev</string>
+	<key>YFQCAppOriginDebug</key>
 	<string>http://127.0.0.1:8788</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Import selected original fabric photos for review-only sample QC.</string>

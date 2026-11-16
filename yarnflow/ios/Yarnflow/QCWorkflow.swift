@@ -27,8 +27,10 @@ enum QCText {
     var epoch = 0
     var selectedOrder = ""
     var drafts: QCDraftStore?
-    private var analysisKey: UUID?
-    private var analysisBinding: String?
+    /// Idempotency keys by action signature (action, sample, revision and the inputs that define it). See `keyed`.
+    private var keys: [String: UUID] = [:]
+    /// The sample the operator asked to open. An answer for any other sample is never installed.
+    private var requestedSampleID: String?
     init() {
         do {
             drafts = try QCDraftStore()
@@ -42,11 +44,15 @@ enum QCText {
             try? drafts?.purge()
             Task { @MainActor [weak self] in self?.clear() }
         }
-        signedIn = await client.isSignedIn
+        let current = epoch
+        let value = await client.isSignedIn
+        guard epoch == current else { return }
+        signedIn = value
         if signedIn { await refresh() }
     }
+    /// Bumps `epoch`: every operation started before this call writes nothing when it completes.
     func clear() {
-        epoch += 1; result = nil; specification = nil; status = nil; orders = []; samples = []; authorities = []; familyHistory = []; signedIn = false; busy = false; analysisKey = nil; analysisBinding = nil; selectedOrder = ""; state = "qc.state.draft"
+        epoch += 1; result = nil; specification = nil; status = nil; orders = []; samples = []; authorities = []; familyHistory = []; signedIn = false; busy = false; keys = [:]; requestedSampleID = nil; selectedOrder = ""; state = "qc.state.draft"
         try? drafts?.purge()
     }
     func logout() {
@@ -54,120 +60,157 @@ enum QCText {
         let client = client
         Task { await client?.signOut() }
     }
-    func run(_ operation: () async throws -> Void) async {
+    /// Callers check `busy` before they change any state. Operations call `alive` after every await and before every write.
+    func run(_ operation: (Int) async throws -> Void) async {
         guard !busy else { return }
         busy = true; error = ""; let current = epoch
         defer { if epoch == current { busy = false } }
-        do { try await operation() }
+        do { try await operation(current) }
         catch { if epoch == current { self.error = error.localizedDescription; state = (error as? QCError) == .unknownOutcome ? "qc.state.unknown" : "qc.state.failed" } }
     }
-    func login(name: String, pin: String) async {
-        clear()
-        await run {
-            guard let client else { throw QCError.notConfigured }
-            try await client.signIn(name: name, pin: pin)
-            signedIn = true
-            try await load()
+    private func alive(_ current: Int) throws { guard epoch == current else { throw QCError.stale } }
+    /// One key per logical action: a retry reuses it. It is dropped only after a definitive answer, or after the whole flow succeeds when `keep` is set.
+    private func keyed<T>(_ action: String, keep: Bool = false, _ call: (UUID) async throws -> T) async throws -> T {
+        let key = keys[action] ?? UUID(); keys[action] = key
+        do { let value = try await call(key); if !keep { keys[action] = nil }; return value }
+        catch { if Self.definitive(error) { keys[action] = nil }; throw error }
+    }
+    /// The server answered and refused (4xx, or a failed request record): nothing was committed, so a new attempt may use a new key.
+    private static func definitive(_ error: Error) -> Bool {
+        switch error as? QCError {
+        case .server(let status, _)?, .unexpected(let status)?: return (400..<500).contains(status) || status == 0
+        default: return false
         }
     }
-    private func load() async throws {
-        guard let client else { throw QCError.notConfigured }
-        status = try await client.status()
-        orders = try await client.purchaseOrders()
-        authorities = try await client.consentAuthorities()
+    func login(name: String, pin: String) async {
+        guard !busy else { return }
+        clear()
+        await run { current in
+            guard let client else { throw QCError.notConfigured }
+            try await client.signIn(name: name, pin: pin); try alive(current)
+            signedIn = true
+            try await load(current)
+        }
     }
-    func refresh() async { await run { try await load() } }
+    private func load(_ current: Int) async throws {
+        guard let client else { throw QCError.notConfigured }
+        let value = try await client.status(); try alive(current); status = value
+        let items = try await client.purchaseOrders(); try alive(current); orders = items
+        let authorityItems = try await client.consentAuthorities(); try alive(current); authorities = authorityItems
+    }
+    func refresh() async {
+        guard !busy else { return }
+        await run { current in try await load(current) }
+    }
     func choose(_ order: QCPurchaseOrderItem) async {
-        result = nil; specification = nil; familyHistory = []; selectedOrder = order.id; analysisKey = nil
-        await client?.bindScreen(nil)
-        await run {
+        guard !busy else { return }
+        result = nil; specification = nil; familyHistory = []; selectedOrder = order.id; requestedSampleID = nil
+        await run { current in
+            await client?.bindScreen(nil); try alive(current)
             guard let client, let spec = order.current_spec else { throw QCError.contract(.semantic("PO_UNCONFIRMED")) }
-            specification = try await client.spec(id: spec.id, version: spec.version).spec
-            samples = try await client.samples(purchaseOrderID: order.id)
+            let value = try await client.spec(id: spec.id, version: spec.version).spec; try alive(current); specification = value
+            let list = try await client.samples(purchaseOrderID: order.id); try alive(current); samples = list
         }
     }
     func open(_ id: String) async {
-        result = nil; familyHistory = []; await client?.bindScreen(nil)
-        await run {
+        guard !busy else { return }
+        result = nil; familyHistory = []; requestedSampleID = id
+        await run { current in
+            await client?.bindScreen(nil); try alive(current)
             guard let client else { throw QCError.notConfigured }
-            let value = try await client.sample(id: id)
-            specification = try await client.spec(id: value.sample.spec_id, version: value.sample.spec_version).spec
-            try await install(value)
-            if let prior = value.family.predecessor_sample_id { familyHistory.append(try await client.sample(id: prior)) }
-            for next in value.family.successor_sample_ids { familyHistory.append(try await client.sample(id: next)) }
+            let value = try await client.sample(id: id); try alive(current)
+            guard value.sample.id == requestedSampleID else { throw QCError.stale }
+            let spec = try await client.spec(id: value.sample.spec_id, version: value.sample.spec_version).spec; try alive(current)
+            specification = spec
+            try await install(value, current)
+            var history: [QCResult] = []
+            if let prior = value.family.predecessor_sample_id { history.append(try await client.sample(id: prior)); try alive(current) }
+            for next in value.family.successor_sample_ids { history.append(try await client.sample(id: next)); try alive(current) }
+            try alive(current); familyHistory = history
         }
     }
-    private func install(_ value: QCResult) async throws {
+    private func install(_ value: QCResult, _ current: Int) async throws {
+        try alive(current)
         if let specification { guard specification.id == value.sample.spec_id, specification.version == value.sample.spec_version else { throw QCError.stale } }
-        result = value
         let set = value.capture_sets.last
         await client?.bindScreen(QCExpectation(sampleID: value.sample.id, specID: value.sample.spec_id, specVersion: value.sample.spec_version, captureSetID: set?.id, minimumRevision: value.revision))
+        try alive(current)
+        result = value
         state = value.decision == nil ? "qc.state.draft" : "qc.state.complete"
     }
     func createSelection(plan: String, group: String, lot: String, roll: String, location: String, area: String, method: String, face: QCFace) async {
-        await run {
+        guard !busy else { return }
+        await run { current in
             guard let client, let specification, let number = Double(area), number > 0 else { throw QCError.contract(.semantic("selection requires confirmed specification and positive area")) }
             let input = QCSelectionInput(purchase_order_id: specification.purchase_order_id, plan_version: plan, plan_sha256: nil, randomization_seed: nil, draw_index: nil, selection_probability: nil, cohort: .OPERATIONAL, independent_group_id: group, lot_ref: lot, roll_ref: roll, location_ref: location, face: face, planned_area_cm2: number, method: method)
-            let selection = try await client.createSelection(input, idempotencyKey: UUID())
-            try await install(client.createSample(QCSampleInput(selectionID: selection.id, specID: specification.id, specVersion: specification.version), idempotencyKey: UUID()))
+            // The selection key is kept until the sample exists, so a retry after a lost sample answer does not create a second selection.
+            let action = ["selection", specification.id, String(specification.version), plan, group, lot, roll, location, area, method, face.rawValue].joined(separator: "|")
+            let selection = try await keyed(action, keep: true) { try await client.createSelection(input, idempotencyKey: $0) }
+            try alive(current)
+            let value = try await keyed("sample|\(selection.id)|\(specification.id)|\(specification.version)") { try await client.createSample(QCSampleInput(selectionID: selection.id, specID: specification.id, specVersion: specification.version), idempotencyKey: $0) }
+            keys[action] = nil
+            try await install(value, current)
         }
     }
     func linkedEvaluation(reason: String) async {
-        guard let previous = result else { return }
-        await run {
+        guard !busy, let previous = result else { return }
+        await run { current in
             guard let client else { throw QCError.notConfigured }
-            let current = try await client.spec(id: previous.sample.spec_id, version: previous.family.current_spec_version).spec
-            let value = try await client.createSample(QCSampleInput(selectionID: previous.sample.selection_id, specID: current.id, specVersion: current.version, predecessorSampleID: previous.sample.id, expectedPredecessorRevision: previous.revision, reason: reason), idempotencyKey: UUID())
-            familyHistory = [previous]; specification = current
-            try await install(value)
+            let next = try await client.spec(id: previous.sample.spec_id, version: previous.family.current_spec_version).spec; try alive(current)
+            let value = try await keyed("linked|\(previous.sample.id)|\(previous.revision)|\(next.id)|\(next.version)|\(reason)") { try await client.createSample(QCSampleInput(selectionID: previous.sample.selection_id, specID: next.id, specVersion: next.version, predecessorSampleID: previous.sample.id, expectedPredecessorRevision: previous.revision, reason: reason), idempotencyKey: $0) }
+            try alive(current)
+            familyHistory = [previous]; specification = next
+            try await install(value, current)
         }
     }
     func beginCaptureSet() async {
-        guard let value = result else { return }
-        await run {
+        guard !busy, let value = result else { return }
+        await run { current in
             guard let client else { throw QCError.notConfigured }
-            try await install(client.createCaptureSet(sampleID: value.sample.id, expectedRevision: value.revision, idempotencyKey: UUID()))
+            let next = try await keyed("capture-set|\(value.sample.id)|\(value.revision)") { try await client.createCaptureSet(sampleID: value.sample.id, expectedRevision: value.revision, idempotencyKey: $0) }
+            try await install(next, current)
         }
     }
     func upload(id: UUID, role: QCCaptureRole, consent: String, profile: String) async {
-        guard let value = result, let set = value.capture_sets.last, let drafts else { return }
+        guard !busy, let value = result, let set = value.capture_sets.last, let drafts else { return }
         // Hide the old answer before acquisition changes; no cached status replaces an upload failure.
         state = "qc.state.uploading"
-        await run {
+        await run { current in
             guard let client else { throw QCError.notConfigured }
             let original = try drafts.load(id: id)
             let upload = QCCaptureUpload(captureID: id.uuidString.lowercased(), role: role, data: original.data, mediaType: original.mediaType, sha256: original.attestation.image_sha256, takenAt: original.attestation.captured_at, deviceProfileID: profile, consentRecordID: consent, attestation: original.attestation)
-            try await install(client.uploadCapture(upload, sampleID: value.sample.id, captureSetID: set.id, expectedRevision: value.revision))
+            let next = try await client.uploadCapture(upload, sampleID: value.sample.id, captureSetID: set.id, expectedRevision: value.revision)
+            try await install(next, current)
             drafts.remove(id: id)
         }
     }
     func close() async {
-        guard let value = result, let set = value.capture_sets.last else { return }
-        await run {
+        guard !busy, let value = result, let set = value.capture_sets.last else { return }
+        await run { current in
             guard let client else { throw QCError.notConfigured }
-            try await install(client.closeCaptureSet(sampleID: value.sample.id, captureSetID: set.id, expectedRevision: value.revision, idempotencyKey: UUID()))
+            let next = try await keyed("close|\(value.sample.id)|\(set.id)|\(value.revision)") { try await client.closeCaptureSet(sampleID: value.sample.id, captureSetID: set.id, expectedRevision: value.revision, idempotencyKey: $0) }
+            try await install(next, current)
         }
     }
     func analyze() async {
-        guard let value = result, let set = value.capture_sets.last, let sample = UUID(uuidString: value.sample.id), let setID = UUID(uuidString: set.id) else { return }
-        let binding = "\(sample)|\(setID)|\(value.revision)"
-        if analysisBinding != binding { analysisKey = UUID(); analysisBinding = binding }
-        guard let key = analysisKey else { return }
+        guard !busy, let value = result, let set = value.capture_sets.last, let sample = UUID(uuidString: value.sample.id), let setID = UUID(uuidString: set.id) else { return }
         state = "qc.state.analyzing"
-        await run {
+        await run { current in
             guard let client else { throw QCError.notConfigured }
-            let generation = epoch
-            let answer = try await client.analyze(sampleID: sample, captureSetID: setID, expectedRevision: value.revision, idempotencyKey: key)
-            guard generation == epoch, result?.revision == value.revision, result?.sample.id == value.sample.id else { throw QCError.stale }
-            try await install(answer)
+            let answer = try await keyed("analyze|\(sample)|\(setID)|\(value.revision)") { try await client.analyze(sampleID: sample, captureSetID: setID, expectedRevision: value.revision, idempotencyKey: $0) }
+            try alive(current)
+            guard result?.revision == value.revision, result?.sample.id == value.sample.id else { throw QCError.stale }
+            try await install(answer, current)
         }
     }
     func adjudicate(outcome: QCAdjudicationOutcome, reason: String, references: String, intervention: String) async {
-        guard let value = result else { return }
-        await run {
+        guard !busy, let value = result else { return }
+        await run { current in
             guard let client else { throw QCError.notConfigured }
             let input = QCAdjudicationInput(outcome: outcome, reason: reason, referenceIDs: references.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }, supersedesID: value.current_human_disposition?.id, interventionReason: intervention.isEmpty ? nil : intervention)
-            try await install(client.adjudicate(sampleID: value.sample.id, expectedRevision: value.revision, input: input, idempotencyKey: UUID()))
+            let action = ["adjudicate", value.sample.id, String(value.revision), outcome.rawValue, reason, references, intervention, value.current_human_disposition?.id ?? ""].joined(separator: "|")
+            let next = try await keyed(action) { try await client.adjudicate(sampleID: value.sample.id, expectedRevision: value.revision, input: input, idempotencyKey: $0) }
+            try await install(next, current)
         }
     }
 }
@@ -225,7 +268,7 @@ struct QCWorkflow: View {
                         if model.result == nil && model.status?.can.create_sample == true { selection }
                     }
                     if !model.samples.isEmpty {
-                        Section(QCText.t("qc.samples")) { ForEach(model.samples) { sample in Button { Task { await model.open(sample.id) } } label: { Text(QCText.isolated("\(sample.roll_ref) / \(sample.location_ref) · v\(sample.spec_version)")) } } }
+                        Section(QCText.t("qc.samples")) { ForEach(model.samples) { sample in Button { Task { await model.open(sample.id) } } label: { Text(QCText.isolated("\(sample.roll_ref) / \(sample.location_ref) · v\(sample.spec_version)")) }.disabled(model.busy) } }
                     }
                     if let result = model.result { resultView(result) }
                     Section { Button(QCText.t("qc.logout")) { model.logout(); originalID = nil; camera.stop() }.accessibilityIdentifier("qc-logout") }

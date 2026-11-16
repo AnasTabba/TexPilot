@@ -99,7 +99,7 @@ frozen wire contract:
   both physical `axes`, and qualified `yarn_identity: RESOLVED_UNPRINTED_YARNS`. This evidence
   must come from independent physical registration/inspection; the optical estimators never
   create it. Printed/unknown identity abstains even when FFT and spatial estimates agree.
-- `qc-quality-thresholds` binds `method_version: qc-quality-1`, all seven `validated_checks`,
+- `qc-quality-thresholds` binds `method_version: qc-quality-2`, all seven `validated_checks`,
   and every numeric threshold in `qc_quality.THRESHOLD_KEYS`. A missing, expired, nonfinite,
   invalid or partly validated artifact yields ABSTAINED with engineering hints and
   STAGE_UNAVAILABLE. Quality is never silently passed by skipping a check.

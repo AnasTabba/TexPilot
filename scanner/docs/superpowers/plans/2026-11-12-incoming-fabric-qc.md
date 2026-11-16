@@ -1,5 +1,7 @@
 # Incoming fabric QC Implementation Plan
 
+> **Status (16 Nov 2026):** checkboxes below are not ticked on purpose. Status of record: `/handoff.md` and `scanner/research/qc/agent-ledger.md`. System is REVIEW_ONLY; gates G1-G8 open.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver a stationary, sample-scoped, PO-version-bound fabric QC workflow with central fabric classification, defect evidence and validated construction measurement, defaulting to review-only.

@@ -385,6 +385,22 @@ def test_a_defect_aggregate_score_equal_to_its_largest_view_is_accepted():
     assert (draft.status, draft.reasons, draft.automatic) == ("ACCEPT", [], True)
 
 
+def test_defect_view_at_accept_boundary_with_lower_aggregate_within_tolerance_is_not_accepted():
+    # B2: view is exactly at domain.defect_accept_below (0.2), aggregate is 5e-10 lower
+    # (within 1e-9 tolerance). Must NOT be automatic ACCEPT; grey zone MANUAL_REVIEW.
+    score = 0.2 - 5e-10
+    draft = released(
+        evidence(
+            defects__value__score=score,
+            defects__value__views__0__score=0.2,
+            defects__value__views__1__score=0.05,
+        )
+    )
+    assert draft.status == "MANUAL_REVIEW"
+    assert "DEFECT_SUSPECTED" in draft.reasons
+    assert not draft.automatic
+
+
 def test_an_ok_defect_stage_without_views_is_not_trusted():
     draft = released(_without_defect_views(evidence()))
     assert (draft.status, draft.reasons) == ("MANUAL_REVIEW", ["STAGE_UNAVAILABLE"])

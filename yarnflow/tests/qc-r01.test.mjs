@@ -18,10 +18,29 @@ function allOkEvidence(prepared, at) {
   evidence.domain_id = prepared.domain?.id ?? null;
   evidence.created_at = new Date(at).toISOString();
   // The fixture measures both axes on the structure original; keep that shape on the signed set.
-  evidence.metrology.value = evidence.metrology.value.map(measurement => ({ ...measurement, ...pick(Math.min(1, ids.length - 1)) }));
+  evidence.metrology.value = evidence.metrology.value.map(measurement => {
+    const m = { ...measurement, ...pick(Math.min(1, ids.length - 1)) };
+    if (m.axis === 'ends') { m.value = 70.0; m.interval95 = [68.0, 72.0]; }
+    if (prepared.domain) m.uncertainty_report_sha256 = prepared.domain.metrology_validation_sha256;
+    return m;
+  });
   evidence.defects.value.views = evidence.defects.value.views.map((view, i) => ({ ...view, ...pick(i) }));
   evidence.defects.value.regions = evidence.defects.value.regions.map((region, i) => ({ ...region, capture_id: ids[i % ids.length] }));
+  evidence.fabric.value.taxonomy_version = prepared.spec.taxonomy_version;
+  evidence.fabric.value.calibrated_probability = 0.97;
   return evidence;
+}
+/** Sign the measurement artifacts the scanner cites, exactly as C04 does for a measured capture. */
+function signCaptures(prepared, evidence) {
+  const byId = new Map(evidence.metrology.value.map(m => [m.capture_id, m]));
+  for (const c of prepared.request.captures) {
+    const m = byId.get(c.capture.id);
+    if (!m) continue;
+    c.geometry_artifact_sha256 = m.geometry_artifact_sha256;
+    c.calibration = { sha256: m.calibration_sha256 };
+    c.reference = { id: m.reference_id };
+    c.axis_registration = { id: m.axis_registration_id };
+  }
 }
 async function candidateDouble(prepared, started, evidence, automatic = false) {
   evidence.manifest_sha256 = await contentSha256(evidence, HASH_EXCLUDES.Evidence);
@@ -51,7 +70,9 @@ test('R01 automatic ACCEPT is stored when every evidence stage is OK and the rel
   const f = await fixtureDouble(); t.after(() => f.sql.close());
   await activeReleaseDouble(f);
   const u = await uploadedDouble(f), a = await analysisDouble(f, u);
-  a.candidate = await candidateDouble(a.prepared, a.started, allOkEvidence(a.prepared, f.now), true);
+  const evidence = allOkEvidence(a.prepared, f.now);
+  signCaptures(a.prepared, evidence);
+  a.candidate = await candidateDouble(a.prepared, a.started, evidence, true);
   const decision = await store.finalizeQC(f.env.DB, f.ctx, a, u.result.revision, f.now), result = await store.loadResult(f.env.DB, f.workspaceId, u.result.sample.id, f.now);
   assert.equal(decision.automatic, true); assert.equal(decision.status, 'ACCEPT'); assert.equal(decision.release_id, a.prepared.release.id);
   assert.deepEqual(result.decision, decision); assert.equal(result.history.length, 1);

@@ -11,18 +11,33 @@ import math
 import sqlite3
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from decimal import Decimal, localcontext
 from pathlib import Path
 
 from services.api.qc_schemas import canonical_json, sha256_hex
+from training.qc.manifest import normalise_identifier
+from training.qc.split_audit import AuditReport
 from training.qc.workflow_metrics import (
     CohortCounts,
     Interval,
     UnitOutcome,
     aggregate,
     descriptive_metrics,
+    group_key,
     grouped_uncertainty,
     unique_outcomes,
 )
+
+
+def _decimal_cdf(k: int, n: int, p: Decimal) -> Decimal:
+    with localcontext() as ctx:
+        ctx.prec = 60
+        q = 1 - p
+        term, total = q**n, Decimal(0)
+        for i in range(k + 1):
+            total += term
+            term = term * (n - i) / (i + 1) * p / q
+        return total
 
 
 def _binomial_cdf(k: int, n: int, p: float) -> float:
@@ -65,7 +80,19 @@ def false_accept_upper(failures: int, accepted_independent_units: int, alpha: fl
             low = mid
         else:
             high = mid
-    return high
+    # Float CDF error can leave `high` a few 1e-13 below the exact bound. Refine in 50-digit
+    # decimals inside a narrow bracket and return the upper end, so the bound never rounds down.
+    lo, hi = (
+        Decimal(high) * (1 - Decimal("1e-10")),
+        min(Decimal(1), Decimal(high) * (1 + Decimal("1e-10"))),
+    )
+    for _ in range(50):
+        mid = (lo + hi) / 2
+        if _decimal_cdf(x, n, mid) > Decimal(alpha):
+            lo = mid
+        else:
+            hi = mid
+    return min(1.0, math.nextafter(float(hi), math.inf))
 
 
 def proportion_lower(successes: int, n: int, alpha: float) -> float:
@@ -108,6 +135,10 @@ class ReleasePlan:
     endpoint: str = "ANY_ACCEPT_SELECTION_FAMILY_OWN_FROZEN_SPEC"
     bootstrap_seed: int = 0
     bootstrap_replicates: int = 2000
+    #: Sealed decision parameters; every one changes the plan hash when it changes.
+    risk_target: float | None = None
+    family_alpha: float | None = None
+    hold_criterion: HoldCriterion | None = None
 
     def sha256(self) -> str:
         return sha256_hex(canonical_json(asdict(self)))
@@ -153,6 +184,10 @@ class ReleaseReport:
     calibration_binding_sha256: str
     serving_binding_sha256: str
     reference_records_eligible: bool
+    #: The audited manifest and audit this release report is bound to.
+    manifest_sha256: str | None = None
+    audit_sha256: str | None = None
+    audit: AuditReport | None = None
     plan_sha256: str | None = None
     bootstrap_seed: int = 0
     bootstrap_replicates: int = 2000
@@ -206,14 +241,17 @@ def _reserve_cohort(report: ReleaseReport, registry: str) -> bool:
     """Atomic durable first-look claim, before examining results. Never delete a claim.
 
     Group identity prevents disguising a previously examined cohort with a new content hash.
-    The registry must be protected, backed up, and shared by every evaluation (G7/G8).
+    Every group used to calibrate or release is claimed in the role it was used, so a group
+    spent on calibration can never reappear as a release group (or the reverse) in a later
+    look. The registry must be protected, backed up, and shared by every evaluation (G7/G8).
     """
     if not registry or registry == ":memory:" or registry.startswith("file:"):
         raise ValueError("a durable local registry is required")
     path = Path(registry)
     path.parent.mkdir(parents=True, exist_ok=True)
-    actual_groups = {o.independent_group_id for d in report.domains for o in d.outcomes}
-    groups = actual_groups | set(report.release_group_ids)
+    actual_groups = {group_key(o.independent_group_id) for d in report.domains for o in d.outcomes}
+    groups = actual_groups | {group_key(g) for g in report.release_group_ids}
+    calibration = {group_key(g) for g in report.calibration_group_ids}
     with sqlite3.connect(str(path), timeout=5) as db:
         db.executescript("""
             CREATE TABLE IF NOT EXISTS cohorts (sha256 TEXT PRIMARY KEY, plan TEXT);
@@ -231,8 +269,8 @@ def _reserve_cohort(report: ReleaseReport, registry: str) -> bool:
         reused = db.execute(
             "SELECT 1 FROM cohorts WHERE sha256=?", (report.release_cohort_sha256,)
         ).fetchone()
-        # Also refuse calibration on a previously unblinded release group.
-        for group in groups | set(report.calibration_group_ids):
+        # A group already spent on calibration or release is never fresh again.
+        for group in sorted((groups | calibration) - {""}):
             reused = (
                 reused
                 or db.execute("SELECT 1 FROM groups_seen WHERE group_id=?", (group,)).fetchone()
@@ -243,7 +281,17 @@ def _reserve_cohort(report: ReleaseReport, registry: str) -> bool:
         )
         db.executemany(
             "INSERT OR IGNORE INTO groups_seen VALUES (?, ?)",
-            ((g, report.release_cohort_sha256) for g in sorted(groups)),
+            (
+                (group, f"release:{report.release_cohort_sha256}")
+                for group in sorted(groups - {""})
+            ),
+        )
+        db.executemany(
+            "INSERT OR IGNORE INTO groups_seen VALUES (?, ?)",
+            (
+                (group, f"calibration:{report.calibration_cohort_sha256}")
+                for group in sorted(calibration - {""})
+            ),
         )
         return not bool(reused)
 
@@ -274,9 +322,9 @@ def evaluate_release(report: ReleaseReport, authority: Authority) -> GateResult:
         reasons.append("AUTHORITY_SIGNATURE_MISSING")
     if not (authority.independent_signatory or "").strip():
         reasons.append("INDEPENDENT_SIGNATORY_MISSING")
-    elif (
-        authority.name or ""
-    ).strip().casefold() == authority.independent_signatory.strip().casefold():
+    elif normalise_identifier(authority.name) == normalise_identifier(
+        authority.independent_signatory
+    ):
         reasons.append("SIGNATORY_NOT_INDEPENDENT")
     if not _hash(authority.sampling_agreement_sha256):
         reasons.append("SAMPLING_AGREEMENT_MISSING")
@@ -290,15 +338,35 @@ def evaluate_release(report: ReleaseReport, authority: Authority) -> GateResult:
         )
     ):
         reasons.append("ARTIFACT_HASH_MISSING")
-    actual_groups = {r.independent_group_id for d in report.domains for r in d.outcomes}
-    if set(report.calibration_group_ids) & (actual_groups | set(report.release_group_ids)):
+    actual_groups = {group_key(r.independent_group_id) for d in report.domains for r in d.outcomes}
+    release_groups = {group_key(g) for g in report.release_group_ids}
+    calibration_groups = {group_key(g) for g in report.calibration_group_ids}
+    if calibration_groups & (actual_groups | release_groups):
         reasons.append("CALIBRATION_RELEASE_OVERLAP")
     if report.calibration_cohort_sha256 == report.release_cohort_sha256:
         reasons.append("CALIBRATION_IS_RELEASE_COHORT")
-    if not report.calibration_group_ids or any(not g for g in report.calibration_group_ids):
+    if not calibration_groups or "" in calibration_groups:
         reasons.append("CALIBRATION_GROUPS_MISSING")
-    if actual_groups != set(report.release_group_ids):
+    if actual_groups != release_groups:
         reasons.append("RELEASE_GROUPS_MISMATCH")
+    # The gate may not certify a cohort whose independence was never audited: the audit must
+    # be present, match its pinned hash, be for this manifest, and be non-blocking. Every
+    # correlated component (several selections in one physical group) blocks it.
+    audit = report.audit
+    if not isinstance(audit, AuditReport):
+        reasons.append("AUDIT_MISSING")
+    else:
+        if not _hash(report.manifest_sha256) or audit.manifest_sha256 != report.manifest_sha256:
+            reasons.append("AUDIT_NOT_FOR_THIS_MANIFEST")
+        if not _hash(report.audit_sha256):
+            reasons.append("AUDIT_HASH_MISSING")
+        elif sha256_hex(canonical_json(asdict(audit))) != report.audit_sha256:
+            reasons.append("AUDIT_HASH_MISMATCH")
+        if not audit.promotable:
+            reasons.append(
+                "AUDIT_BLOCKING:"
+                + ",".join(sorted({f.code for f in audit.findings if f.blocking}))
+            )
     if report.release_cohort_reused is not False:
         reasons.append("RELEASE_COHORT_REUSED")
     if report.calibration_binding_sha256 != report.serving_binding_sha256:
@@ -326,6 +394,9 @@ def evaluate_release(report: ReleaseReport, authority: Authority) -> GateResult:
                 or plan.endpoint != "ANY_ACCEPT_SELECTION_FAMILY_OWN_FROZEN_SPEC"
                 or plan.bootstrap_seed != report.bootstrap_seed
                 or plan.bootstrap_replicates != report.bootstrap_replicates
+                or plan.risk_target != authority.risk_target
+                or plan.family_alpha != authority.family_alpha
+                or plan.hold_criterion != authority.hold_criterion
             ):
                 reasons.append("PLAN_MISMATCH")
             planned = {d.domain_id: d for d in plan.domains}
@@ -352,10 +423,12 @@ def evaluate_release(report: ReleaseReport, authority: Authority) -> GateResult:
                 reasons.append("ALPHA_ALLOCATION_EXCEEDS_FAMILY")
             for d in report.domains:
                 p = planned.get(d.domain_id)
-                actual = {(r.selection_id, r.independent_group_id) for r in d.outcomes}
+                actual = {
+                    (r.selection_id, group_key(r.independent_group_id)) for r in d.outcomes
+                }
                 if p is not None and (
                     not p.enrollments
-                    or set(p.enrollments) != actual
+                    or {(sid, group_key(g)) for sid, g in p.enrollments} != actual
                     or len({sid for sid, _ in p.enrollments}) != len(p.enrollments)
                 ):
                     reasons.append("ENROLLMENT_MISMATCH")
@@ -387,7 +460,7 @@ def evaluate_release(report: ReleaseReport, authority: Authority) -> GateResult:
     group_domains: dict[str, set[str]] = {}
     for d in report.domains:
         for r in d.outcomes:
-            group_domains.setdefault(r.independent_group_id, set()).add(d.domain_id)
+            group_domains.setdefault(group_key(r.independent_group_id), set()).add(d.domain_id)
     if any(len(ids) > 1 for ids in group_domains.values()):
         reasons.append("GROUP_IN_MULTIPLE_DOMAINS")
     if (

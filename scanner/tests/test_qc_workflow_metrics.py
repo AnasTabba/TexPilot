@@ -112,6 +112,7 @@ def test_group_bootstrap_seeded_resamples_groups_not_tiles():
         failure=0,
         held=0,
         final_state_failure=0,
+        final_status="MANUAL_REVIEW",
     )
     ci = wm.grouped_uncertainty([a, b], seed=17, replicates=80)
     assert ci == wm.grouped_uncertainty([a, b, a], seed=17, replicates=80)
@@ -157,3 +158,9 @@ def test_final_state_endpoint_has_its_own_accept_denominator():
     counts = wm.aggregate([a, b])
     assert counts.accepted_independent_units == 2
     assert counts.final_state_accepted_groups == counts.final_state_failures == 1
+
+
+def test_final_status_must_agree_with_accept_flags():
+    row = wm.UnitOutcome("s1", "g1", 1, 0, 0, 0, 0, 0, 0, "ACCEPT", 0, True, 1, 1, 0, None, True)
+    with pytest.raises(ValueError):
+        wm.aggregate([row])

@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import PurePosixPath
 
-from training.qc.manifest import known_license, valid_sha256
+from training.qc.manifest import known_license, normalise_identifier, valid_sha256
 
 
 @dataclass(frozen=True)
@@ -45,6 +45,7 @@ class RightsEntry:
     redistribution_permitted: bool = False
     required_notices: tuple[str, ...] = ()
     consent_withdrawn: bool = False
+    consent_expires_at: str | None = None
     valid_from: str | None = None
     expires_at: str | None = None
 
@@ -107,6 +108,12 @@ def validate_export(staged: ExportManifest, rights: RightsRegistry) -> ExportEli
                 reasons.append(f"RIGHTS_TIME_UNKNOWN:{file.path}")
         if entry.consent_withdrawn is not False:
             reasons.append(f"CONSENT_WITHDRAWN:{file.path}")
+        if entry.consent_expires_at is not None:
+            try:
+                if _utc(rights.evaluated_at) >= _utc(entry.consent_expires_at):
+                    reasons.append(f"CONSENT_EXPIRED:{file.path}")
+            except (ValueError, TypeError):
+                reasons.append(f"CONSENT_TIME_UNKNOWN:{file.path}")
         if staged.purpose not in entry.permitted_purposes:
             reasons.append(f"PURPOSE_NOT_PERMITTED:{file.path}")
         if entry.redistribution_permitted is not True:
@@ -117,7 +124,9 @@ def validate_export(staged: ExportManifest, rights: RightsRegistry) -> ExportEli
         if missing:
             reasons.append(f"NOTICE_MISSING:{file.path}")
     # One licence label over files with different rights is a false statement about some.
-    if licences and licences != {staged.declared_license}:
+    if licences and {normalise_identifier(value) for value in licences} != {
+        normalise_identifier(staged.declared_license)
+    }:
         reasons.append("BLANKET_LICENSE_MISMATCH")
     return ExportEligibility(
         allowed=not reasons,

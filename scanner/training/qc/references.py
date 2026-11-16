@@ -235,10 +235,16 @@ def validate_reference(
                 valid_parents &= not issues
             if valid_parents and record_valid:
                 first, second = chosen
+                # The tolerance is the observers' own stated measurement uncertainty, never a
+                # number the consensus record supplies for itself.
+                tolerance = {
+                    axis: max(first.uncertainty[axis], second.uncertainty[axis])
+                    for axis in AXES_BY_CONSTRUCTION[record.construction]
+                }
                 disagreement = any(
                     max(r.density_per_inch(axis) for r in (record, first, second))
                     - min(r.density_per_inch(axis) for r in (record, first, second))
-                    > record.uncertainty[axis]
+                    > tolerance[axis]
                     for axis in AXES_BY_CONSTRUCTION[record.construction]
                 )
                 for parent in chosen:

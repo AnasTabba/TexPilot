@@ -1,18 +1,68 @@
 """Synthetic arithmetic and authority doubles; no actual release approvals."""
 
 import math
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 import pytest
 
 from services.api.qc_schemas import canonical_json, sha256_hex
 from training.qc import calibrate as cal
 from training.qc import release_gate as gate
+from training.qc.manifest import DatasetManifest, ManifestItem, SourceRecord
+from training.qc.split_audit import audit_splits
 from training.qc.workflow_metrics import DecisionEvent, Reference, aggregate, reduce_workflow
 
 
 def synthetic_hash(label):
     return sha256_hex("synthetic:" + label)
+
+
+def synthetic_audit(rows, purpose="release-evaluation"):
+    """A clean audit of a synthetic manifest carrying the same selections and groups."""
+    items = tuple(
+        ManifestItem(
+            f"item-{row.selection_id}",
+            "synthetic-source",
+            synthetic_hash("img:" + row.selection_id),
+            "release_test",
+            "normal",
+            "valid-clean",
+            mask_sha256=synthetic_hash("mask"),
+            roll_id=f"roll-{row.independent_group_id}",
+            lot_id=f"lot-{row.independent_group_id}",
+            cohort="CONFIRMATORY",
+            selection_id=row.selection_id,
+            plan_sha256=synthetic_hash("plan"),
+            face="face",
+            location_ref=f"loc-{row.selection_id}",
+            selection_probability=0.5,
+            factory_id="synthetic-factory",
+            supplier_id="synthetic-supplier",
+            sampling_method="synthetic-randomized",
+            planned_area_cm2=1.0,
+            usable_area_cm2=1.0,
+        )
+        for row in rows
+    )
+    manifest = DatasetManifest(
+        "synthetic-manifest",
+        "1",
+        purpose,
+        (
+            SourceRecord(
+                "synthetic-source", "1", "synthetic://double", "CC-BY-4.0", (purpose,)
+            ),
+        ),
+        items,
+    )
+    return manifest, audit_splits(manifest)
+
+
+def resealed(report, authority, **changes):
+    """Re-seal the plan with new decision parameters; the authority must follow them."""
+    plan = replace(authority.plan, **changes)
+    authority = replace(authority, plan=plan, **changes)
+    return replace(report, plan_sha256=plan.sha256()), authority
 
 
 def synthetic_inputs(tmp_path, n=3, status="ACCEPT", truth="CONFORMING", alpha=0.05):
@@ -46,6 +96,9 @@ def synthetic_inputs(tmp_path, n=3, status="ACCEPT", truth="CONFORMING", alpha=0
         "2000-01-01T00:00:00Z",
         bootstrap_seed=19,
         bootstrap_replicates=40,
+        risk_target=0.9,
+        family_alpha=alpha,
+        hold_criterion=None,
     )
     authority = gate.Authority(
         "synthetic-authority-double",
@@ -68,6 +121,7 @@ def synthetic_inputs(tmp_path, n=3, status="ACCEPT", truth="CONFORMING", alpha=0
         n if truth == "CONFORMING" else 0,
         outcomes=rows,
     )
+    manifest, audit = synthetic_audit(rows)
     report = gate.ReleaseReport(
         synthetic_hash("release"),
         synthetic_hash("calibration"),
@@ -80,6 +134,9 @@ def synthetic_inputs(tmp_path, n=3, status="ACCEPT", truth="CONFORMING", alpha=0
         synthetic_hash("binding"),
         synthetic_hash("binding"),
         True,
+        manifest_sha256=manifest.sha256(),
+        audit_sha256=sha256_hex(canonical_json(asdict(audit))),
+        audit=audit,
         plan_sha256=plan.sha256(),
         bootstrap_replicates=40,
         bootstrap_seed=19,
@@ -158,7 +215,8 @@ def test_zero_sparse_and_high_classifier_f1_cannot_override_qc_failure(tmp_path)
     r, a = synthetic_inputs(tmp_path, n=0)
     assert gate.evaluate_release(r, a).state == "NO_RELEASE"
     r, a = synthetic_inputs(tmp_path / "sparse")
-    out = gate.evaluate_release(r, replace(a, risk_target=0.01))
+    r, a = resealed(r, a, risk_target=0.01)
+    out = gate.evaluate_release(r, a)
     assert out.review_only_domains == ("synthetic-domain",)
     assert "SPARSE_DOMAIN" in out.domains[0].reasons
     r, a = synthetic_inputs(tmp_path / "bad", truth="NONCONFORMING")
@@ -186,6 +244,7 @@ def test_hold_endpoints_share_family_alpha(tmp_path):
                 hold_rate_alpha=0.025,
             ),
         ),
+        hold_criterion=gate.HoldCriterion(0.5, 0.5),
     )
     r = replace(r, plan_sha256=plan.sha256())
     a = replace(a, plan=plan, hold_criterion=gate.HoldCriterion(0.5, 0.5))
@@ -236,7 +295,8 @@ def test_bindings_and_references(tmp_path, change, reason):
 
 def test_failed_cohort_persistently_frozen_after_tuning_and_hash_change(tmp_path):
     r, a = synthetic_inputs(tmp_path)
-    first = gate.evaluate_release(r, replace(a, risk_target=0.01))
+    r, a = resealed(r, a, risk_target=0.01)
+    first = gate.evaluate_release(r, a)
     assert first.state == "NO_RELEASE" and first.cohort_frozen
     out = gate.evaluate_release(replace(r, release_cohort_sha256=synthetic_hash("renamed")), a)
     assert out.state == "NO_RELEASE" and "RELEASE_COHORT_REUSED" in out.reasons
@@ -254,6 +314,7 @@ def test_hold_everything_is_not_useful_coverage(tmp_path):
                 hold_rate_alpha=0.015,
             ),
         ),
+        hold_criterion=gate.HoldCriterion(0.8, 0.1),
     )
     a = replace(a, plan=plan, hold_criterion=gate.HoldCriterion(0.8, 0.1))
     r = replace(r, domains=(replace(r.domains[0], alpha=0.02),), plan_sha256=plan.sha256())
@@ -426,3 +487,76 @@ def test_calibration_production_entry_uses_raw_multiview_inputs_and_saved_bindin
             alpha=0.05,
             cohort_role="calibration",
         )
+
+
+def test_non_normalised_group_ids_counted_as_one_group(tmp_path):
+    r, a = synthetic_inputs(tmp_path, n=2)
+    rows = list(r.domains[0].outcomes)
+    rows = [
+        replace(rows[0], independent_group_id="Roll-7"),
+        replace(rows[1], independent_group_id="roll-7 "),
+    ]
+    counts = aggregate(rows)
+    assert counts.independent_groups == 1
+
+
+def test_calibration_groups_reserved_across_looks(tmp_path):
+    reg = tmp_path / "shared-reg.sqlite"
+    r1, a1 = synthetic_inputs(tmp_path, n=3)
+    r1 = replace(r1, calibration_group_ids=("cal-X",))
+    a1 = replace(a1, cohort_registry=str(reg))
+    o1 = gate.evaluate_release(r1, a1)
+    assert o1.state == "STATISTICAL_CANDIDATE"
+
+    # Look 2: fresh cohort hash; cal-X is now a release group; calibration is cal-Y
+    r2, a2 = synthetic_inputs(tmp_path, n=3)
+    mapping = {"synthetic-0": "cal-X", "synthetic-1": "fresh-1", "synthetic-2": "fresh-2"}
+    rows = tuple(
+        replace(
+            o,
+            independent_group_id=mapping.get(o.independent_group_id, o.independent_group_id),
+        )
+        for o in r2.domains[0].outcomes
+    )
+    dom = (replace(r2.domains[0], outcomes=rows, counts=aggregate(rows)),)
+    enroll = tuple((s, mapping.get(g, g)) for s, g in a2.plan.domains[0].enrollments)
+    plan = replace(a2.plan, domains=(replace(a2.plan.domains[0], enrollments=enroll),))
+    r2 = replace(
+        r2,
+        domains=dom,
+        release_group_ids=tuple(mapping.get(g, g) for g in r2.release_group_ids),
+        plan_sha256=plan.sha256(),
+        release_cohort_sha256=synthetic_hash("second-cohort"),
+        calibration_group_ids=("cal-Y",),
+    )
+    a2 = replace(a2, plan=plan, cohort_registry=str(reg))
+    o2 = gate.evaluate_release(r2, a2)
+    assert o2.state == "NO_RELEASE"
+    assert "RELEASE_COHORT_REUSED" in o2.reasons
+
+
+
+
+@pytest.mark.parametrize(
+    "x,n,a", [(1, 300, 0.05), (3, 1000, 0.05), (50, 100, 0.05), (100, 10000, 0.05)]
+)
+def test_bound_never_rounds_below_exact_tail(x, n, a):
+    from fractions import Fraction
+    from math import comb
+
+    p = Fraction(gate.false_accept_upper(x, n, a))
+    tail = sum(comb(n, k) * p**k * (1 - p) ** (n - k) for k in range(x + 1))
+    assert tail <= Fraction(a)
+
+
+def test_risk_target_is_sealed_in_the_plan(tmp_path):
+    r, a = synthetic_inputs(tmp_path / "x", n=3)
+    out = gate.evaluate_release(r, replace(a, risk_target=0.5))
+    assert "PLAN_MISMATCH" in out.reasons
+    assert out.state == "NO_RELEASE"
+
+
+def test_nbsp_variant_signatory_is_not_independent(tmp_path):
+    r, a = synthetic_inputs(tmp_path / "x")
+    a = replace(a, name="Factory QC Owner", independent_signatory="Factory QC Owner")
+    assert "SIGNATORY_NOT_INDEPENDENT" in gate.evaluate_release(r, a).reasons

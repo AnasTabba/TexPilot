@@ -28,7 +28,7 @@ def export_double():
     return ExportManifest(
         "local:destination-double",
         "research",
-        "notice-license-double",
+        "CC-BY-4.0",
         (StagedFile("image-double", "a" * 64, "source-double", ("notice-double",)),),
     )
 
@@ -36,7 +36,7 @@ def export_double():
 def rights_double(**changes):
     entry = RightsEntry(
         "source-double",
-        "notice-license-double",
+        "CC-BY-4.0",
         ("research",),
         ("local:destination-double",),
         True,

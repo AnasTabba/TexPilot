@@ -182,10 +182,12 @@ def _check_stages(
             # The aggregate is the largest single view (DefectValue): a score that is not that
             # maximum, or that stands for no view at all, is not the record it claims to be.
             f.need_review("STAGE_UNAVAILABLE")
-        elif score >= domain.defect_hold_at_or_above:
-            f.nonconforming("DEFECT_SUSPECTED")
-        elif score >= domain.defect_accept_below:
-            f.need_review("DEFECT_SUSPECTED")  # grey zone, lower bound included
+        else:
+            peak = max(score, max(v.score for v in views))
+            if peak >= domain.defect_hold_at_or_above:
+                f.nonconforming("DEFECT_SUSPECTED")
+            elif peak >= domain.defect_accept_below:
+                f.need_review("DEFECT_SUSPECTED")  # grey zone, lower bound included
 
     metrology = evidence.metrology
     if metrology.state == "OK":

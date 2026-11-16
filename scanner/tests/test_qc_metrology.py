@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 import cv2
 import numpy as np
@@ -36,6 +37,12 @@ def synthetic_weave(turn=0, *, pattern="weave", markers=True):
         along = np.zeros_like(along)
     elif pattern == "harmonic":
         across += 36 * np.cos(2 * np.pi * x / 20)
+    elif pattern == "weak_third":  # 20 tpi at 0.3 under a dominant 60 tpi third harmonic
+        across = 0.3 * 42 * np.cos(2 * np.pi * 20 * x / 508)
+        across = across + 42 * np.cos(2 * np.pi * 60 * x / 508 + 0.7)
+    elif pattern == "weak_second":  # 25 tpi at 0.3 under a dominant 50 tpi second harmonic
+        across = 0.3 * 42 * np.cos(2 * np.pi * 25 * x / 508)
+        across = across + 42 * np.cos(2 * np.pi * 50 * x / 508 + 0.7)
     gray = np.clip(128 + across + along, 0, 255).astype(np.uint8)
     if markers:
         dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
@@ -66,7 +73,19 @@ def synthetic_double(tmp_path, monkeypatch):
             }
         )
 
-    def build(turn=0, pattern="weave", markers=True, **validation_updates):
+    def build(
+        turn=0,
+        pattern="weave",
+        markers=True,
+        *,
+        component=0.005,
+        reference_uncertainty=(0.01, 0.01),
+        traceability=None,
+        print_check=None,
+        **validation_updates,
+    ):
+        traceability = {"status": "PASSED"} if traceability is None else traceability
+        print_check = {"status": "PASSED"} if print_check is None else print_check
         image = synthetic_weave(turn, pattern=pattern, markers=markers)
         image_sha = sha256_hex(image.tobytes())  # synthetic raster binding, not an upload
         processing = artifact("qc-processing", processing="synthetic-unprocessed")
@@ -80,16 +99,23 @@ def synthetic_double(tmp_path, monkeypatch):
         uncertainty = artifact(
             "qc-uncertainty-model",
             coverage_factor=1.96,
-            components={k: 0.005 for k in metrology.UNCERTAINTY_COMPONENTS},
+            components={k: component for k in metrology.UNCERTAINTY_COMPONENTS},
         )
         reference_data = dict(
             id="synthetic-reference-double",
             dimensions_mm=[8.0, 8.0],
-            uncertainty_mm=[0.01, 0.01],
-            traceability_report_sha256=artifact("qc-reference-traceability"),
-            print_verification_sha256=artifact("qc-print-verification"),
+            uncertainty_mm=list(reference_uncertainty),
+            traceability_report_sha256=artifact("qc-reference-traceability", **traceability),
+            print_verification_sha256=artifact("qc-print-verification", **print_check),
         )
-        reference = ScaleReference.model_validate({**reference_data, "sha256": put(reference_data)})
+        if min(reference_uncertainty) > 0:
+            reference = ScaleReference.model_validate(
+                {**reference_data, "sha256": put(reference_data)}
+            )
+        else:  # the schema forbids zero uncertainty; construct it anyway, as a bypass would
+            reference = ScaleReference.model_construct(
+                **{**reference_data, "sha256": put(reference_data)}
+            )
         profile_data = dict(
             id="synthetic-profile-double",
             version="synthetic-test-double-1",
@@ -149,7 +175,7 @@ def synthetic_double(tmp_path, monkeypatch):
             source_roi=[0.0, 0.0, 1.0, 1.0],
             axes=["ends", "picks"],
             yarn_identity="RESOLVED_UNPRINTED_YARNS"
-            if pattern == "weave"
+            if pattern in ("weave", "weak_third", "weak_second")
             else "PRINTED_OR_AMBIGUOUS",
         )
         axis = AxisRegistration(
@@ -171,7 +197,7 @@ def synthetic_double(tmp_path, monkeypatch):
         )
         quality_sha = artifact(
             "qc-quality-thresholds",
-            method_version="qc-quality-1",
+            method_version="qc-quality-2",
             validated_checks=[
                 "blur",
                 "glare",
@@ -187,7 +213,7 @@ def synthetic_double(tmp_path, monkeypatch):
             min_short_side_px=1200,
             marker_max_stretch=1.35,
             framing_min_texture_fill=0.9,
-            moire_max_ratio=5.0,
+            moire_max_ratio=0.1,
             fold_max_shading=0.25,
         )
         validation = dict(
@@ -234,6 +260,10 @@ def assert_abstains(result, reason):
     assert result.stage.state == "ABSTAINED", result.stage
     assert result.stage.value is None and reason in result.stage.reasons
     assert result.geometry is None and result.uncertainty is None
+
+
+def validation_of(case):
+    return ArtifactStore(os.environ["TEXPILOT_QC_ARTIFACTS"]).load(case[3]["validation_sha256"])
 
 
 def test_no_profile_public_adapter_abstains_without_additional_bindings():
@@ -471,3 +501,57 @@ def test_distortion_inverse_maps_geometry_back_to_original_source_pixels():
     source = metrology._source_points(np.array([[1200.0, 800.0]]), camera, coeffs)
     # Ideal normalized radius .4: x distortion is x*(1 + .1*.4**2).
     assert source[0] == pytest.approx([1206.4, 800.0])
+
+
+@pytest.mark.parametrize("harmonic,amp", [(3, 0.1), (3, 0.3), (2, 0.1), (2, 0.3)])
+def test_weak_fundamental_under_dominant_harmonic_abstains(synthetic_double, harmonic, amp):
+    # Report R05 P0-1: the fundamental sits at 1/harmonic of the dominant peak, below 0.15 power.
+    top = {2: 50.0, 3: 60.0}[harmonic]
+    x = np.arange(1024, dtype=float)
+    tone = lambda tpi, a, ph: a * np.cos(2 * np.pi * tpi / 508.0 * x + ph)  # noqa: E731
+    signal = tone(top / harmonic, amp, 0.3) + tone(top, 1.0, 0.7)
+    with pytest.raises(metrology._Abstain) as error:
+        metrology._estimate(signal, 508.0, validation_of(synthetic_double[0]()))
+    assert error.value.reasons == ["PATTERN_AMBIGUOUS"]
+
+
+@pytest.mark.parametrize("pattern", ["weak_third", "weak_second"])
+def test_weak_fundamental_under_dominant_harmonic_never_measures(synthetic_double, pattern):
+    assert_abstains(run(synthetic_double[0](pattern=pattern)), "PATTERN_AMBIGUOUS")
+
+
+@pytest.mark.parametrize("density", [20.0, 25.0, 50.0, 60.0])
+def test_pure_grating_at_harmonic_densities_still_measures(synthetic_double, density):
+    x = np.arange(1024, dtype=float)
+    signal = np.cos(2 * np.pi * density / 508.0 * x + 0.3)
+    value, _spread = metrology._estimate(signal, 508.0, validation_of(synthetic_double[0]()))
+    assert value == pytest.approx(density, rel=0.005)
+
+
+def test_zero_model_uncertainty_still_gives_a_real_interval(synthetic_double):
+    # Report R05 P1-1: zero components and zero reference uncertainty gave low == high.
+    result = run(synthetic_double[0](component=0.0, reference_uncertainty=(0.0, 0.0)))
+    assert result.stage.state == "OK", result.stage
+    truth = {"ends": 50.8, "picks": 31.75}
+    for m in result.stage.value:
+        low, high = m.interval95
+        assert low < m.value < high
+        assert low <= truth[m.axis] <= high
+
+
+@pytest.mark.parametrize("which", ["traceability", "print_check"])
+@pytest.mark.parametrize("status", ["FAILED", "PENDING", None])
+def test_failed_or_unstated_reference_verification_abstains(synthetic_double, which, status):
+    # Report R05 P1-2: the traceability and print reports were loaded but never read.
+    fields = {} if status is None else {"status": status}
+    case = synthetic_double[0](**{which: fields})
+    assert_abstains(run(case), "DOMAIN_UNVALIDATED")
+
+
+def test_non_finite_zoom_cannot_pass_the_binding(synthetic_double):
+    # Report R05 P2-1: NaN makes the abs(...) > 1e-6 comparison False.
+    case = synthetic_double[0]()
+    case[3]["attestation"] = case[3]["attestation"].model_copy(
+        update={"zoom_factor": float("nan")}
+    )
+    assert_abstains(run(case), "DOMAIN_UNVALIDATED")

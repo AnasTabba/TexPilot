@@ -133,7 +133,8 @@ final class QCDraftStore: @unchecked Sendable {
     func stop() { let session = session; queue.async { session.stopRunning() } }
     func capture() {
         guard let device, access == .ready else { return }
-        observed = QCAcquisitionAttestation(image_sha256: "", capture_mode: .NATIVE_CAMERA, device_model: Self.hardwareModel, lens_id: device.uniqueID, zoom_factor: Double(device.videoZoomFactor), focus_mode: String(describing: device.focusMode), exposure_mode: String(describing: device.exposureMode), resolution: nil, orientation: nil, processing: "AVCapturePhotoOutput JPEG; device processing", captured_at: QCTime.string(Date()))
+        // processing stays nil: AVCapturePhoto does not report which processing was applied, and the schema allows null (review-only).
+        observed = QCAcquisitionAttestation(image_sha256: "", capture_mode: .NATIVE_CAMERA, device_model: Self.hardwareModel, lens_id: device.uniqueID, zoom_factor: Double(device.videoZoomFactor), focus_mode: String(describing: device.focusMode), exposure_mode: String(describing: device.exposureMode), resolution: nil, orientation: nil, processing: nil, captured_at: QCTime.string(Date()))
         let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
         output.capturePhoto(with: settings, delegate: self)
     }

@@ -28,7 +28,7 @@ import numpy as np
 
 from services.api.qc_schemas import QUALITY_CHECKS, QualityChecks, QualityValue, Stage
 
-QUALITY_VERSION = "qc-quality-1"
+QUALITY_VERSION = "qc-quality-2"
 #: Unvalidated engineering constants, used only to give recapture hints while abstaining.
 ENGINEERING = {
     "blur_min_laplacian_var": 60.0,
@@ -37,7 +37,7 @@ ENGINEERING = {
     "min_short_side_px": 1200,
     "marker_max_stretch": 1.35,
     "framing_min_texture_fill": 0.9,
-    "moire_max_ratio": 5.0,
+    "moire_max_ratio": 0.1,
     "fold_max_shading": 0.25,
 }
 #: Every key a validated threshold artifact must carry; a missing one abstains.
@@ -53,6 +53,19 @@ THRESHOLD_KEYS = (
 )
 #: Roles whose view must show the scale marker.
 MARKER_ROLES = ("scale",)
+#: Whole-frame heuristics run on a copy this wide, in pixels.
+_ANALYSIS_WIDTH = 512
+#: Radial band (cycles per pixel at the analysis width) where a yarn grid can appear: above the
+#: frame-scale shading and any moire beat (periods of 16 px and longer at the analysis width),
+#: below Nyquist.
+_FABRIC_MIN_FREQ = 1 / 16
+#: Peak-to-floor ratio the spectrum of a periodic yarn grid reaches against grain, which is a
+#: flat floor. Engineering floor only: no capture profile has been physically validated (G3).
+_MIN_STRUCTURE_PROMINENCE = 200.0
+#: A moire beat is slower than a third of the fabric's own thread frequency.
+_MOIRE_SLOW_FRACTION = 1 / 3
+#: Slowest beat the moire measure looks at, in cycles per pixel at the analysis width.
+_MOIRE_MIN_FREQ = 1 / 256
 _REASON = {
     "blur": "QUALITY_BLUR",
     "glare": "QUALITY_GLARE",
@@ -155,6 +168,52 @@ def _gray(image: np.ndarray) -> np.ndarray:
     return image if image.ndim == 2 else cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
 
+def _spectrum(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Windowed 2-D power spectrum of the analysis copy, and the radial frequency of each bin."""
+    window = np.outer(np.hanning(gray.shape[0]), np.hanning(gray.shape[1]))
+    power = np.abs(np.fft.rfft2(gray * window)) ** 2
+    fy = np.fft.fftfreq(gray.shape[0])[:, None]
+    fx = np.fft.rfftfreq(gray.shape[1])[None, :]
+    return power, np.hypot(fy, fx)
+
+
+def _structure(power: np.ndarray, freq: np.ndarray) -> tuple[float, float]:
+    """(peak-to-floor prominence, thread frequency) of the strongest periodic yarn line.
+
+    Grain and noise spread over every bin, so they raise the floor without raising the peak; a
+    yarn grid concentrates power in a narrow line. (0.0, 0.0) means no periodic structure at all.
+    """
+    band = (freq >= _FABRIC_MIN_FREQ) & (freq < 0.5)
+    if not band.any():
+        return 0.0, 0.0
+    values = power[band]
+    floor = float(np.median(values))
+    peak = float(values.max())
+    if not math.isfinite(peak) or floor <= 0 or not math.isfinite(floor):
+        return 0.0, 0.0
+    prominence = peak / floor
+    if prominence < _MIN_STRUCTURE_PROMINENCE:
+        return 0.0, 0.0
+    return prominence, float(freq[band][int(np.argmax(values))])
+
+
+def _moire(power: np.ndarray, freq: np.ndarray, thread_freq: float) -> float:
+    """Power of a beat slower than the yarn grid relative to the yarn grid's own line.
+
+    Measuring the beat on the 2-D spectrum rather than on row and column means keeps a sheet
+    that is merely off-axis from looking like an interference pattern: rotation moves the yarn
+    line, it does not create slow structure.
+    """
+    if thread_freq <= 0:
+        return 0.0  # nothing periodic to beat against
+    slow = (freq >= _MOIRE_MIN_FREQ) & (freq < thread_freq * _MOIRE_SLOW_FRACTION)
+    fine = (freq >= thread_freq / 1.5) & (freq <= min(0.49, thread_freq * 1.5))
+    if not slow.any() or not fine.any():
+        return 0.0
+    line = float(power[fine].max())
+    return float(power[slow].max()) / line if line > 0 else 0.0
+
+
 def measure_view(image: np.ndarray) -> dict[str, float]:
     """Raw quality numbers of one view. No thresholds here."""
     import cv2
@@ -162,8 +221,11 @@ def measure_view(image: np.ndarray) -> dict[str, float]:
     gray = _gray(image)
     h, w = gray.shape
     small = gray
-    if w > 512:
-        small = cv2.resize(gray, (512, max(1, round(h * 512 / w))), interpolation=cv2.INTER_AREA)
+    if w > _ANALYSIS_WIDTH:
+        height = max(1, round(h * _ANALYSIS_WIDTH / w))
+        small = cv2.resize(gray, (_ANALYSIS_WIDTH, height), interpolation=cv2.INTER_AREA)
+    power, freq = _spectrum(small.astype(np.float64))
+    prominence, thread_freq = _structure(power, freq)
     # Texture fill: share of an 8x8 grid whose cells show any structure (not table or sky).
     gh, gw = small.shape[0] // 8, small.shape[1] // 8
     cells = small[: gh * 8, : gw * 8].reshape(8, gh, 8, gw).astype(np.float32)
@@ -172,25 +234,15 @@ def measure_view(image: np.ndarray) -> dict[str, float]:
     # lamp falling off shows here; flat diffuse light does not).
     coarse = cv2.resize(small, (16, 16), interpolation=cv2.INTER_AREA).astype(np.float32)
     shading = float(coarse.std() / max(float(coarse.mean()), 1.0))
-    # Moire: a strong slow beat (period 16-256 px at 512 width) relative to the fine texture.
-    moire = 0.0
-    for axis in (0, 1):
-        p = small.mean(axis).astype(np.float64)
-        p = (p - p.mean()) * np.hanning(len(p))
-        power = np.abs(np.fft.rfft(p)) ** 2
-        f = np.fft.rfftfreq(len(p))
-        slow = power[(f >= 1 / 256) & (f <= 1 / 16)]
-        fine = power[f > 1 / 16]
-        if len(slow) and len(fine) and fine.max() > 0:
-            moire = max(moire, float(slow.max() / fine.max()))
     return {
         "laplacian_var": float(cv2.Laplacian(small, cv2.CV_64F).var()),
+        "structure_prominence": prominence,
         "clipped_bright": float((gray >= 250).mean()),
         "clipped_dark": float((gray <= 5).mean()),
         "short_side_px": float(min(h, w)),
         "texture_fill": fill,
         "shading": shading,
-        "moire_ratio": moire,
+        "moire_ratio": _moire(power, freq, thread_freq),
     }
 
 
@@ -216,7 +268,10 @@ def _failures(views: Sequence[QualityView], t: dict, full: bool) -> dict[str, st
     failed: dict[str, str] = {}
     for view in views:
         m = measure_view(view.image)
-        if m["laplacian_var"] < t["blur_min_laplacian_var"]:
+        # No periodic yarn structure (noise, grain, blank) is neither sharp nor framed: raw
+        # Laplacian variance alone rewards grain.
+        structured = m["structure_prominence"] > 0
+        if m["laplacian_var"] < t["blur_min_laplacian_var"] or not structured:
             failed["blur"] = _REASON["blur"]
         # The reason catalogue has no separate under-exposure code; both are lighting faults.
         if (
@@ -227,7 +282,7 @@ def _failures(views: Sequence[QualityView], t: dict, full: bool) -> dict[str, st
         if m["short_side_px"] < t["min_short_side_px"]:
             failed["resolution"] = _REASON["resolution"]
         if full:
-            if m["texture_fill"] < t["framing_min_texture_fill"]:
+            if m["texture_fill"] < t["framing_min_texture_fill"] or not structured:
                 failed["framing"] = _REASON["framing"]
             if m["moire_ratio"] > t["moire_max_ratio"]:
                 failed["moire"] = _REASON["moire"]
