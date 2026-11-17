@@ -22,15 +22,15 @@ export async function upload(fields: Record<string, string>, file: File) {
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'The photo was not saved. Try again.');
 }
 export default function Inspections() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [lots, setLots] = useState<Lot[] | null>(null), [inspections, setInspections] = useState<Inspection[]>([]), [error, setError] = useState(''), [open, setOpen] = useState(''), [notice, setNotice] = useState('');
   const load = useCallback(async () => {
-    try { const [a, b] = await Promise.all([api<{ lots: Lot[] }>('/erp/qc/lots'), api<{ inspections: Inspection[] }>('/erp/qc/inspections?mine=1')]); setLots(a.lots); setInspections(b.inspections); setError(''); } catch (e) { setError(errorMessage(e)); }
-  }, []);
+    try { const [a, b] = await Promise.all([api<{ lots: Lot[] }>('/erp/qc/lots'), api<{ inspections: Inspection[] }>('/erp/qc/inspections?mine=1')]); setLots(a.lots); setInspections(b.inspections); setError(''); } catch (e) { setError(errorMessage(e, language)); }
+  }, [language]);
   useEffect(() => { void load(); }, [load]);
   const saved = (message: string) => async () => { setOpen(''); setNotice(message); await load(); };
   const drafts = inspections.filter(i => i.status === 'draft'), sent = inspections.filter(i => i.status === 'submitted');
-  return <section className="live-panel"><div className="yf-head"><div><h2>{t('Inspections', 'معائنے')}</h2><p>{t('Count what you accept and what you reject, photograph the accepted quantity, describe every rejection, then submit.', 'جو قبول اور جو مسترد کریں اسے گنیں، قبول شدہ مقدار کی تصویر لیں، ہر مسترد مال کی وجہ لکھیں، پھر جمع کریں۔')}</p></div><button className="button" onClick={() => void load()}><RefreshCw size={18} />{t('Refresh', 'تازہ کریں')}</button></div>
+  return <section className="live-panel yf-inspections"><div className="yf-head"><div><h2>{t('Inspections', 'معائنے')}</h2><p>{t('Count what you accept and what you reject, photograph the accepted quantity, describe every rejection, then submit.', 'جو قبول اور جو مسترد کریں اسے گنیں، قبول شدہ مقدار کی تصویر لیں، ہر مسترد مال کی وجہ لکھیں، پھر جمع کریں۔')}</p></div><button className="button" onClick={() => void load()}><RefreshCw size={18} aria-hidden="true" />{t('Refresh', 'تازہ کریں')}</button></div>
     {error && <p className="live-error" role="alert">{t(error)}</p>}{notice && <p className="live-success" role="status">{notice}</p>}{!lots && !error && <p role="status">{t('Loading lots…', 'لاٹس لوڈ ہو رہی ہیں…')}</p>}
     <h3 className="live-subheading">{t('Lots to inspect', 'معائنے کی لاٹس')}</h3>
     {lots && !lots.some(l => l.open_milli > 0) && <p className="live-muted">{t('Lots appear here when the purchase manager registers an arrival.', 'خریداری مینیجر کی آمد درج کرنے پر لاٹس یہاں نظر آئیں گی۔')}</p>}
@@ -53,8 +53,8 @@ function NewInspection({ lot, onSaved, onCancel }: { lot: Lot; onSaved: () => Pr
   </AsyncForm>;
 }
 function Draft({ inspection: i, open, setOpen, onChanged, onSubmitted, onDeleted }: { inspection: Inspection; open: string; setOpen: (value: string) => void; onChanged: () => Promise<void>; onSubmitted: () => Promise<void>; onDeleted: () => Promise<void> }) {
-  const { t } = useLanguage(); const [error, setError] = useState(''), [busy, setBusy] = useState(false);
-  const run = async (action: () => Promise<void>) => { setBusy(true); setError(''); try { await action(); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); } };
+  const { t, language } = useLanguage(); const [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const run = async (action: () => Promise<void>) => { setBusy(true); setError(''); try { await action(); } catch (e) { setError(errorMessage(e, language)); } finally { setBusy(false); } };
   const attach = (target: Record<string, string>) => (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void run(async () => { await upload({ id: crypto.randomUUID(), ...target }, file); await onChanged(); }); };
   const shots = (issueId: string | null) => i.photos.filter(p => p.issue_id === issueId);
   const gallery = (issueId: string | null) => shots(issueId).length > 0 && <div className="live-actions">{shots(issueId).map(p => <span key={p.id}><a href={photoUrl(p.id)} target="_blank" rel="noreferrer"><img src={photoUrl(p.id)} alt={t(`Photo taken ${factoryTime(p.taken_at)}`, `تصویر ${factoryTime(p.taken_at)}`)} width={72} height={72} /></a>

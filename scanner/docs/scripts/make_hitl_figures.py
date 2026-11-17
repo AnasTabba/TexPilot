@@ -54,7 +54,12 @@ def risk_coverage() -> None:
     rows = [
         r
         for r in csv.DictReader(path.open())
-        if r["split"] == "test" and r["confidence"] == "maxprob" and r["macro_f1_answered"] and r["acc_answered"]
+        if (
+            r["split"] == "test"
+            and r["confidence"] == "maxprob"
+            and r["macro_f1_answered"]
+            and r["acc_answered"]
+        )
     ]  # rows with nothing answered have empty metrics and are skipped
     rows.sort(key=lambda r: float(r["coverage"]))
     cov = [float(r["coverage"]) for r in rows]
@@ -65,13 +70,23 @@ def risk_coverage() -> None:
 
     fig, ax = plt.subplots(figsize=(6.2, 4.2))
     ax.plot(cov, f1, color=C_F1, lw=2, label="macro F1, answered photos (primary)")
-    ax.plot(cov, floor, color=C_FLOOR, lw=1.6, ls="--", label="macro F1, abstentions counted as wrong")
+    ax.plot(
+        cov,
+        floor,
+        color=C_FLOOR,
+        lw=1.6,
+        ls="--",
+        label="macro F1, abstentions counted as wrong",
+    )
     ax.plot(cov, acc, color=C_ACC, lw=1.4, label="accuracy, answered photos")
     ax.scatter([primary["coverage"]], [primary["macro_f1_answered"]], color=C_F1, zorder=5, s=40)
     ax.annotate(
-        f"tau 0.665 (val target 0.90)\ncoverage {primary['coverage']:.3f}, macro F1 {primary['macro_f1_answered']:.3f}",
+        f"tau 0.665 (val target 0.90)\ncoverage {primary['coverage']:.3f}, "
+        f"macro F1 {primary['macro_f1_answered']:.3f}",
         xy=(primary["coverage"], primary["macro_f1_answered"]),
-        xytext=(0.42, 0.74), fontsize=8, arrowprops=dict(arrowstyle="-", lw=0.6),
+        xytext=(0.42, 0.74),
+        fontsize=8,
+        arrowprops=dict(arrowstyle="-", lw=0.6),
     )
     ax.set_xlabel("coverage (fraction of test photos answered)")
     ax.set_ylabel("score on test (scanner-v8 head A, 24 classes)")
@@ -94,7 +109,11 @@ def reliability() -> None:
     fig, axes = plt.subplots(1, 2, figsize=(7.4, 3.6), sharey=True)
     for ax, key, title in (
         (axes[0], "before", f"uncalibrated (T=1), ECE {ece['T1']:.4f}"),
-        (axes[1], "after", f"temperature T={s['calibration']['t_served']:.3f}, ECE {ece['T_served']:.4f}"),
+        (
+            axes[1],
+            "after",
+            f"temperature T={s['calibration']['t_served']:.3f}, ECE {ece['T_served']:.4f}",
+        ),
     ):
         pts = [b for b in bins[key] if b["n"] > 0]
         ax.plot([0, 1], [0, 1], color="#999999", lw=1, ls=":")
@@ -103,7 +122,10 @@ def reliability() -> None:
         ax.set_xlabel("mean confidence in bin")
         ax.grid(alpha=0.25)
     axes[0].set_ylabel("accuracy in bin (test)")
-    fig.suptitle("Reliability diagram, scanner-v8 head A, test split (empty bins omitted)", fontsize=9)
+    fig.suptitle(
+        "Reliability diagram, scanner-v8 head A, test split (empty bins omitted)",
+        fontsize=9,
+    )
     save(fig, "reliability")
 
 

@@ -70,9 +70,7 @@ def fit_naming(features: np.ndarray, labels: list[str], groups: list[str]) -> Na
     classes = sorted(set(labels))
     thin = [c for c in classes if len({gr for gr in g[y == c]}) < 2]
     if thin:
-        raise ValueError(
-            f"need at least 2 groups per class to split by group; too few for: {thin}"
-        )
+        raise ValueError(f"need at least 2 groups per class to split by group; too few for: {thin}")
 
     fit_idx, val_idx = next(
         GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=SEED).split(x, y, g)

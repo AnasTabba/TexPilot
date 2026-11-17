@@ -1,18 +1,21 @@
-/* Admin screens: sections sit on the sheet; rows use the shared inset rhythm. */
-.yf-admin,.yf-admin-sections{display:grid;gap:36px}
-.yf-admin .live-segments{margin:24px 0}
+.yf-admin,.yf-admin-sections{display:grid;gap:24px;min-width:0}
 .yf-section{min-width:0}
+.yf-section>h2,.yf-admin h2{color:var(--ink);font-size:20px;line-height:1.4}
 .yf-facts{list-style:none;padding:0;margin:0;display:grid;gap:0}
 .yf-facts>li,.yf-facts>div{display:flex;justify-content:space-between;gap:20px;padding:13px 0;border-bottom:1px solid var(--line)}
 .yf-facts dt{color:var(--ink-2)}
 .yf-facts dd{margin:0;text-align:end}
 .yf-facts pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:8px 0}
-.yf-admin-list{list-style:none;padding:0;margin:12px 0}
-.yf-admin-list>li{border-bottom:1px solid var(--line)}
-.yf-admin-list>li>button{appearance:none;border:0;background:none;color:inherit;font:inherit;text-align:start;width:100%;min-height:64px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-radius:16px;cursor:pointer}
-.yf-admin-list>li>button:hover{background:var(--ground)}
-.yf-admin-list span{display:grid;gap:5px}
+.yf-admin-list{list-style:none;padding:0;margin:12px 0;display:grid;gap:8px}
+.yf-admin-list>li{min-width:0}
+.yf-admin-list>li>button,.yf-activity-row{appearance:none;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;min-height:64px;margin:0;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-row);background:var(--sheet);color:var(--ink);font:400 16px/1.4 var(--font);text-align:start;cursor:pointer;transition:border-color var(--motion-fast) ease,background-color var(--motion-fast) ease,transform var(--motion-fast) ease}
+.yf-admin-list>li>button:hover{border-color:var(--brand)}
+.yf-admin-list>li>button:active{background:var(--tint);transform:scale(.98)}
+.yf-admin-list>li>button>svg:last-child{flex:none;color:var(--ink-2)}
+.yf-row-copy{display:grid;flex:1 1 auto;min-width:0;gap:4px}
+.yf-row-copy strong{font-weight:600;overflow-wrap:anywhere}
 .yf-admin-list small{font-size:14px;color:var(--ink-2)}
+@media (prefers-reduced-motion:reduce){.yf-admin-list>li>button,.yf-activity-row{transition:none}.yf-admin-list>li>button:active{transform:none}}
 .yf-admin-list pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:8px 0}
 .yf-admin form{display:grid;gap:14px}
 .yf-admin .live-empty{margin-top:20px}
@@ -21,4 +24,11 @@
 .yf-table{width:100%;border-collapse:collapse;margin:12px 0;font-variant-numeric:tabular-nums}
 .yf-table th,.yf-table td{padding:12px 10px;border-bottom:1px solid var(--line);text-align:start;vertical-align:top;overflow-wrap:anywhere}
 .yf-table th{color:var(--ink-2);font-size:14px;font-weight:600}
-.yf-factory-limits { margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--line); }
+.yf-factory-limits{margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
+.yf-fact-line{display:block}
+.yf-report-detail{display:grid;gap:16px}
+.yf-report-detail>h3{font-size:20px;margin:0}
+.yf-report-detail details{border-block-start:1px solid var(--line);padding-block:12px}
+.yf-report-detail summary{min-height:48px;display:flex;align-items:center;cursor:pointer;font-weight:600}
+.yf-report-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}
+@media (max-width:600px){.yf-facts>li,.yf-facts>div{flex-direction:column;align-items:stretch}.yf-facts dd{text-align:start}}

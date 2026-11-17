@@ -3,6 +3,8 @@
 import base64
 import io
 import json
+import sys
+import types
 
 import pytest
 
@@ -162,6 +164,22 @@ def test_small_box_is_skipped_with_a_reason(tmp_path):
     assert det.tile_shapes == []  # the network never ran
 
 
+def test_fabric_unlike_the_trained_ones_is_judged_against_its_own_level(tmp_path):
+    d = _model_dir(tmp_path)
+    cfg = json.loads((d / "config.json").read_text())
+    (d / "config.json").write_text(json.dumps(cfg | {"max_map_median": 0.2, "relative_z": 7.5}))
+    rng = np.random.default_rng(0)
+    plain = np.full((300, 400, 3), 120, np.uint8)  # whole map raised (0.47), above the 0.5 gate's
+    plain[:, :, 0] = rng.integers(115, 126, (300, 400))  # fixed threshold for none of it: no fault
+    out = StubDetector(d).detect(plain, None)
+    assert out.skipped_reason is None and not out.is_fault and out.heatmap_png_b64
+    spot = plain.copy()
+    spot[100:160, 200:260, 0] = 255  # one hot square on the same raised fabric: a fault, located
+    out = StubDetector(d).detect(spot, None)
+    assert out.is_fault and len(out.regions) == 1
+    assert out.regions[0].box == pytest.approx((0.5, 1 / 3, 0.65, 160 / 300), abs=0.01)
+
+
 def test_region_boxes_land_on_the_hot_square(tmp_path):
     out = StubDetector(_model_dir(tmp_path)).detect(_hot_square_image(), None)
     assert out.is_fault and out.skipped_reason is None
@@ -194,3 +212,131 @@ def test_heatmap_is_a_png_no_larger_than_512(tmp_path):
     assert raw[:8] == b"\x89PNG\r\n\x1a\n"
     im = Image.open(io.BytesIO(raw))
     assert im.format == "PNG" and max(im.size) <= 512
+
+
+def _write_cfg(d, cfg):
+    (d / "config.json").write_text(json.dumps(cfg))
+
+
+def _selfref_dir(tmp_path):
+    """A selfref fault folder: encoder file present, no weights.pt, no backbone key."""
+    d = tmp_path / "fault-sr"
+    (d / "encoders").mkdir(parents=True)
+    (d / "encoders" / "dinov2.pt").write_bytes(b"x")
+    _write_cfg(
+        d,
+        {
+            "method": "selfref",
+            "encoder_file": "encoders/dinov2.pt",
+            "params": {"layers": [5, 8, 11], "k": 3},
+            "image_size": 392,
+            "thresholds": {"default": 0.5},
+            "version": "sr-1",
+        },
+    )
+    return d
+
+
+@pytest.fixture
+def fake_selfref(monkeypatch):
+    """Replace training.fault.methods.selfref; returns the list of constructed instances."""
+    made = []
+
+    class SelfReference:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            self.tile_shapes = []
+            made.append(self)
+
+        def fit(self, train):
+            pass
+
+        def score_tiles(self, tiles):
+            self.tile_shapes += [(t.shape, t.dtype) for t in tiles]
+            maps = []
+            for _ in tiles:
+                m = np.full((392, 392), 0.1, np.float32)
+                m[100:160, 200:260] = 0.9  # the hot square, in tile pixels
+                maps.append(m)
+            return maps
+
+    mod = types.ModuleType("training.fault.methods.selfref")
+    mod.SelfReference = SelfReference
+    monkeypatch.setitem(sys.modules, "training.fault.methods.selfref", mod)
+    return made
+
+
+def test_config_without_method_takes_the_dinomaly_path(tmp_path, monkeypatch):
+    seen = {}
+
+    class Dinomaly:
+        def __init__(self, repo, backbone, device):
+            seen.update(repo=repo, backbone=backbone, device=device)
+
+        def load(self, path):
+            seen["weights"] = path
+
+        def score_tiles(self, tiles):
+            return [np.zeros(t.shape[:2], np.float32) for t in tiles]
+
+    mod = types.ModuleType("training.fault.methods.dinomaly")
+    mod.Dinomaly = Dinomaly
+    monkeypatch.setitem(sys.modules, "training.fault.methods.dinomaly", mod)
+    d = _model_dir(tmp_path)
+    det = FaultDetector(d, "cpu")
+    assert det.method == "dinomaly"
+    assert seen == {
+        "repo": str(d / "Dinomaly"),
+        "backbone": "vit_s",
+        "device": "cpu",
+        "weights": d / "weights.pt",
+    }
+
+
+def test_selfref_needs_no_weights_and_forwards_params(tmp_path, fake_selfref):
+    d = _selfref_dir(tmp_path)
+    det = FaultDetector(d, "cpu")
+    assert det.backbone == "dinov2reg_vit_base_14"  # optional for selfref
+    (sr,) = fake_selfref
+    assert sr.kwargs["encoder_file"] == str(d / "encoders" / "dinov2.pt")
+    assert sr.kwargs["device"] == "cpu"
+    assert sr.kwargs["layers"] == (5, 8, 11) and isinstance(sr.kwargs["layers"], tuple)
+    assert sr.kwargs["k"] == 3
+    out = det.detect(_hot_square_image(), None)
+    assert np.isfinite(out.score) and out.is_fault
+    assert out.heatmap_png_b64
+    assert out.regions
+
+
+def test_selfref_non_392_tiles_are_resized_in_and_map_back(tmp_path, fake_selfref):
+    det = FaultDetector(_selfref_dir(tmp_path), "cpu")
+    out = det.detect(np.full((300, 500, 3), 30, np.uint8), None)
+    (sr,) = fake_selfref
+    assert sr.tile_shapes
+    assert all(shape == (392, 392, 3) and dt == np.uint8 for shape, dt in sr.tile_shapes)
+    assert np.isfinite(out.score) and out.heatmap_png_b64
+
+
+def test_selfref_missing_encoder_file_is_a_clear_file_not_found(tmp_path, fake_selfref):
+    d = _selfref_dir(tmp_path)
+    (d / "encoders" / "dinov2.pt").unlink()
+    with pytest.raises(FileNotFoundError, match="fault model file missing.*dinov2.pt"):
+        FaultDetector(d, "cpu")
+
+
+def test_selfref_without_encoder_file_names_the_key(tmp_path, fake_selfref):
+    d = _selfref_dir(tmp_path)
+    cfg = json.loads((d / "config.json").read_text())
+    del cfg["encoder_file"]
+    _write_cfg(d, cfg)
+    with pytest.raises(ValueError, match="encoder_file"):
+        FaultDetector(d, "cpu")
+
+
+def test_unknown_method_is_a_value_error(tmp_path):
+    d = _model_dir(tmp_path)
+    cfg = json.loads((d / "config.json").read_text())
+    cfg["method"] = "bogus"
+    _write_cfg(d, cfg)
+    with pytest.raises(ValueError, match="bogus"):
+        FaultDetector(d, "cpu")

@@ -27,7 +27,7 @@ export function PdfDownloadButton({ build, primary = false }: { build: () => Inv
 export function InvoiceDocument({ doc }: { doc: InvoiceDocData }) {
   const { t } = useLanguage();
   return <section className="invoice-screen" aria-label={t('Invoice document', 'انوائس کی دستاویز')}>
-    <div className="invoice-toolbar">
+    <div className="invoice-toolbar" aria-label={t('Invoice actions', 'انوائس کے کام')}>
       <PdfDownloadButton build={() => doc} primary />
       <button className="button" onClick={() => window.print()}><Printer size={18} aria-hidden="true" />{t('Print', 'پرنٹ کریں')}</button>
     </div>
@@ -55,15 +55,17 @@ export function InvoiceDocument({ doc }: { doc: InvoiceDocData }) {
       {doc.voidedAt !== null && <div className="invoice-void-stamp" role="img" aria-label={t('Voided invoice', 'منسوخ انوائس')}>
         VOID<small>{t('Voided', 'منسوخ')} {factoryDate(doc.voidedAt)}{doc.voidReason ? ` · ${doc.voidReason}` : ''}</small>
       </div>}
+      <div className="invoice-doc-scroll" aria-label={t('Invoice items', 'انوائس کی اشیا')}>
       <table className="invoice-doc-table">
         <thead><tr>
           <th>{t('Product', 'مصنوعات')}</th><th>{t('Type', 'قسم')}</th><th className="num">{t('Quantity', 'مقدار')}</th><th>{t('Unit', 'اکائی')}</th><th className="num">{t('Rate', 'شرح')}</th><th className="num">{t('Amount', 'رقم')}</th>
         </tr></thead>
         <tbody>{doc.lines.map((line, index) => <tr key={index}>
-          <td>{line.product}</td><td>{line.type}</td><td className="num">{quantityText(line.quantityMilli)}</td><td>{line.unit}</td>
-          <td className="num">{money(line.priceMinor, doc.currency)}</td><td className="num">{money(line.amountMinor, doc.currency)}</td>
+          <td data-label={t('Product', 'مصنوعات')}>{line.product}</td><td data-label={t('Type', 'قسم')}>{line.type}</td><td className="num" data-label={t('Quantity', 'مقدار')}>{quantityText(line.quantityMilli)}</td><td data-label={t('Unit', 'اکائی')}>{line.unit}</td>
+          <td className="num" data-label={t('Rate', 'شرح')}>{money(line.priceMinor, doc.currency)}</td><td className="num" data-label={t('Amount', 'رقم')}>{money(line.amountMinor, doc.currency)}</td>
         </tr>)}</tbody>
       </table>
+      </div>
       <dl className="invoice-doc-totals">
         {doc.subtotalMinor !== null && <div><dt>{t('Subtotal', 'ذیلی کل')}</dt><dd>{money(doc.subtotalMinor, doc.currency)}</dd></div>}
         {doc.taxMinor !== null && <div><dt>{t(`GST (${gstLabel(doc.taxRateBp)})`, `جی ایس ٹی (${gstLabel(doc.taxRateBp)})`)}</dt><dd>{money(doc.taxMinor, doc.currency)}</dd></div>}
@@ -72,7 +74,7 @@ export function InvoiceDocument({ doc }: { doc: InvoiceDocData }) {
         {doc.creditedMinor > 0 && <div><dt>{t('Credit notes', 'کریڈٹ نوٹس')}</dt><dd>{money(doc.creditedMinor, doc.currency)}</dd></div>}
         <div className="is-total"><dt>{t('Balance', 'بقایا')}</dt><dd>{money(doc.balanceMinor, doc.currency)}</dd></div>
       </dl>
-      <p className="invoice-doc-note">{t(`Payable per the quoted payment terms: ${doc.paymentTerms || '—'}.`, `ادائیگی مقررہ شرائط کے مطابق: ${doc.paymentTerms || '—'}۔`)}</p>
+      <p className="invoice-doc-note">{t(`Terms: ${doc.paymentTerms || '—'}.`, `شرائط: ${doc.paymentTerms || '—'}۔`)}</p>
     </article>
   </section>;
 }

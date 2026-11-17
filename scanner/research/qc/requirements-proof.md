@@ -1,8 +1,7 @@
 # Incoming-fabric QC v2 requirements evidence index
 
 > 14 Nov 2026: this index still records no test results and its file inventory predates
-> `qc-r01.test.mjs`, migration `0034` and the R02/R03 reviews. Current results are in
-> [`handoff.md`](../../../handoff.md).
+> `qc-r01.test.mjs` and migration `0034`.
 
 State: implemented, external evidence missing. This index maps the plan's 14 requirements
 matrix rows and five final traceability additions. It records file presence, proposed

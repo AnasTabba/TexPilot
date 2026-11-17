@@ -1,0 +1,18 @@
+{
+  "id": "anastabba/texpilot-selfref-bench",
+  "title": "texpilot-selfref-bench",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "machine_shape": "NvidiaTeslaT4",
+  "enable_internet": true,
+  "dataset_sources": [
+    "anastabba/texpilot-fault-code",
+    "ipythonx/mvtec-ad",
+    "hodinhtrieu/the-woven-fabric-defect-detection-wfdd"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}

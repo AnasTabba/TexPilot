@@ -1,12 +1,11 @@
 import { copy } from "./ui-copy";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Camera,
   ScanLine,
   Upload,
   Settings2,
   Check,
-  ArrowRight,
   RefreshCw,
   X,
   ImagePlus,
@@ -15,10 +14,8 @@ import {
   LoaderCircle,
   Download,
   Tag,
-  Focus,
   StopCircle,
   PlugZap,
-  CheckCheck,
   Blend,
   Paintbrush,
   Ruler,
@@ -32,15 +29,13 @@ import {
   validateImage,
   resultFilename,
   topGuess,
-  composition,
   ScanError,
   type ScanResult,
   type ModelInfo,
   type HeadPrediction,
 } from "./scanner-client";
 import ScannerArtwork from "./ScannerArtwork";
-import ScanStage from "./iso/ScanStage";
-import type { ArtworkKind } from "./scanner-artwork";
+import { ActionBar, Steps, Step, StatusTag, Confidence } from "./ui";
 import "./scan.css";
 type T = (en: string, ur?: string) => string;
 type Photo = {
@@ -82,11 +77,12 @@ export default function Scanner({
   const [camera, setCamera] = useState(false);
   const [openingCamera, setOpeningCamera] = useState(false);
   const [cameraError, setCameraError] = useState("");
+  const [previewPaused, setPreviewPaused] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
   const [connectionError, setConnectionError] = useState("");
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
   const mounted = useRef(true);
@@ -97,21 +93,21 @@ export default function Scanner({
   const nativeCamera = useRef<HTMLInputElement>(null);
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const activePhoto = slot === "surface" ? surface : label;
-  // Guided path: 0 = capture, 1 = result on screen, 2 = result confirmed.
-  const step = !result ? 0 : confirmed ? 2 : 1;
+  // Fabric scanning has three visible stages: photo, analysis, and result.
+  const step = scanning ? 1 : result ? 2 : 0;
   const msg = (e: unknown) => {
     const code = e instanceof ScanError ? e.code : "server";
     return {
       endpoint: t(copy.enterYourTexpilotServerUrlForExample, copy.url),
       insecure: t(copy.thisPublishedWorkspaceNeedsAnHttpsModel, copy.https),
-      unreachable: t(copy.couldNotReachTexpilotCheckTheServer, copy.urdu408),
+      unreachable: t("Could not reach TexPilot. Check the server address and internet connection.", "TexPilot سے رابطہ نہیں ہوا۔ پتہ اور انٹرنیٹ چیک کریں۔"),
       timeout: t(copy.theModelTookTooLongToRespond, copy.urdu409),
       aborted: t(
         copy.analysisCancelledYourPhotosAreStillAvailable,
         copy.urdu410,
       ),
       stub: t(copy.texpilotIsRunningWithoutItsTrainedModel, copy.scannerV2),
-      response: t(copy.theServerReturnedAnUnexpectedResultCheck, copy.mainApi),
+      response: t("The server did not return a result. Check the server address.", "سرور نے نتیجہ نہیں بھیجا۔ سرور کا پتہ چیک کریں۔"),
       server: t(copy.theTexpilotServerCouldNotFinishThis, copy.urdu411),
       unsupported: t(copy.useAJpegPngOrWebpPhoto, copy.jpegPngWebpHeic),
       "too-large": t(copy.thisPhotoIsLargerThan10Mb, copy.urdu412),
@@ -143,16 +139,26 @@ export default function Scanner({
       window.removeEventListener("offline", network);
     };
   }, []);
+  const previewBlocked = t("Start the preview, or upload a photo.", "پیش نظارہ شروع کریں یا تصویر اپ لوڈ کریں۔");
   useEffect(() => {
     if (camera && video.current && stream.current) {
       video.current.srcObject = stream.current;
       video.current
         .play()
-        .catch(() =>
-          setCameraError(t(copy.tapTheVideoToStartThePreview, copy.urdu415)),
-        );
+        .then(() => setPreviewPaused(false))
+        .catch(() => {
+          setPreviewPaused(true);
+          setCameraError(previewBlocked);
+        });
     }
-  }, [camera, t]);
+  }, [camera, previewBlocked]);
+  // Ticks while a scan runs, so a slow scan can show how long it has taken.
+  useEffect(() => {
+    if (!scanning) return;
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [scanning]);
   useEffect(() => {
     if (endpoint) void checkConnection(endpoint, false);
     // Nothing saved: quietly try this page's own server (the dev proxy serves the model).
@@ -301,9 +307,10 @@ export default function Scanner({
       return;
     }
     stopCamera();
+    setSlot("surface");
     setError("");
     setResult(null);
-    setConfirmed(false);
+    setElapsed(0);
     setScanning(true);
     const controller = new AbortController();
     scanRequest.current = controller;
@@ -324,7 +331,11 @@ export default function Scanner({
           mode: "scanner",
           verified: true,
         });
-        setTimeout(() => resultHeading.current?.focus(), 0);
+        // The heading's own panel header is hidden, so scroll to the results block itself.
+        setTimeout(() => {
+          resultHeading.current?.focus();
+          resultHeading.current?.closest(".scan-results")?.scrollIntoView({ block: "start" });
+        }, 0);
       }
     } catch (e) {
       if (mounted.current) setError(msg(e));
@@ -365,7 +376,19 @@ export default function Scanner({
     })[value] || value.replaceAll("_", " ");
   const pct = (p: number) => `${Math.round(p * 100)}%`;
   // Taught heads (models/custom) report their raw class names; blends are named the way yarn is bought.
-  const mixText = (key: string) =>
+  // A grouped head (no ":" in its classes) names the group; the older head names exact percentages.
+  const mixGroup: Record<string, string> = {
+    cotton: t("Cotton (90%+)", "کاٹن (90%+)"),
+    polyester: t("Polyester", "پولیسٹر"),
+    nylon: t("Nylon", "نائلون"),
+    cotton_polyester: t("Cotton/polyester blend", "کاٹن/پولیسٹر مکس"),
+    viscose: t("Viscose / rayon", "وسکوز / ریان"),
+    linen: t("Linen / hemp", "لینن / ہیمپ"),
+    wool: t("Wool", "اون"),
+    acrylic: t("Acrylic", "ایکریلک"),
+  };
+  const mixText = (key: string) => key.includes(":") ? mixParts(key) : mixGroup[key] ?? key.replaceAll("_", " ");
+  const mixParts = (key: string) =>
     key.split(",").map((part) => { const [fibre, pct] = part.split(":"); return `${pct}% ${taughtLabel("fibre", fibre)}`; }).join(" · ");
   const taughtLabel = (name: string, label: string) =>
     name === "blend"
@@ -382,18 +405,35 @@ export default function Scanner({
       synthetic: t("Synthetic (polyester, nylon)", "مصنوعی (پولیسٹر، نائلون)"),
       protein: t("Animal fibre (wool, silk)", "جانوروں کا ریشہ (اون، ریشم)"),
     })[label] ?? labelFor(label);
+  // The one thing still missing before Analyze can run (photo first, then model, then internet).
+  const analyzeHint = !surface
+    ? t("Take or upload a photo first.", "پہلے تصویر لیں یا اپ لوڈ کریں۔")
+    : connecting
+      ? t("Wait for the model to connect.", "ماڈل منسلک ہونے کا انتظار کریں۔")
+      : !info
+        ? t("Connect the model first.", "پہلے ماڈل منسلک کریں۔")
+        : !online
+          ? t("Connect to the internet to analyze.", "تجزیے کے لیے انٹرنیٹ سے جڑیں۔")
+          : null;
+  // Known flag codes get a translated sentence; unknown codes keep the server's text.
+  const flagText = (code: string, message: string) => {
+    const known: Record<string, string> = {
+      COMPOSITION_IMPLAUSIBLE: t("The label's composition does not fit this fabric type.", "لیبل پر درج بناوٹ اس قسم کے کپڑے سے میل نہیں کھاتی۔"),
+      TREATMENT_UNEXPECTED: t("The finish does not match what this fabric usually has.", "کپڑے کی فنش اس قسم کے کپڑے سے میل نہیں کھاتی۔"),
+      FAMILY_MISMATCH: t("The fibre does not match the label.", "ریشہ لیبل سے میل نہیں کھاتا۔"),
+    };
+    return Object.hasOwn(known, code) ? known[code] : message;
+  };
   return (
-    <div className="scanner-page">
+    <div className={`scanner-page scanner-stage-${scanning ? "analysing" : result ? "result" : "photo"}`}>
       <div className="scan-topline">
         <span className={`scan-model-badge ${info ? "is-on" : ""}`}>
-          {info ? <CheckCheck size={20} aria-hidden="true" /> : <WifiOff size={20} aria-hidden="true" />}
+          {!info && <WifiOff size={20} aria-hidden="true" />}
           {connecting
             ? t(copy.checkingModel, copy.urdu434)
             : info
-              ? info.verified
-                ? t(copy.texpilotModelConnected, copy.urdu435)
-                : t(copy.serverReachableVerifyOnScan, copy.urdu436)
-              : t(copy.modelNotConnected, copy.urdu437)}
+              ? <StatusTag tone="ok" label={t("Scanner connected", "اسکینر منسلک ہے")} />
+              : t("Scanner not connected", "اسکینر منسلک نہیں")}
         </span>
         <button
           className="live-icon-button"
@@ -482,22 +522,11 @@ export default function Scanner({
         </div>
       )}
       {/* Where the scan is: photo, optional care label, analysis, answer. */}
-      <ol className="yf-steps yf-scansteps scan-stepper" aria-label="Scan steps">
-        {([
-          t("Capture", "تصویر"),
-          t("Result", "نتیجہ"),
-          t("Confirm", "تصدیق"),
-        ] as const).map((name, i) => {
-          const done = i < step;
-          const current = i === step;
-          return (
-            <li key={name} className={done ? "done" : current ? "current" : ""} aria-current={current ? "step" : undefined}>
-              <span>{done ? <Check size={14} aria-hidden="true" /> : i + 1}</span>
-              {name}
-            </li>
-          );
-        })}
-      </ol>
+      <Steps className="scan-stepper" label={t("Scan steps", "اسکین کے مراحل")}>
+        <Step title={t("Photo", "تصویر")} state={step > 0 ? "done" : "current"} />
+        <Step title={t("Analysing", "تجزیہ جاری ہے")} state={step === 1 ? "current" : step > 1 ? "done" : "later"} />
+        <Step title={t("Result", "نتیجہ")} state={step === 2 ? "current" : "later"} />
+      </Steps>
       <div className="scanner-grid">
         <section className="scan-capture-panel panel">
           <div className="panel-heading">
@@ -507,7 +536,7 @@ export default function Scanner({
             </div>
           </div>
           <div
-            className="scan-photo-tabs"
+            className={`scan-photo-tabs${slot === "label" || label ? " is-shown" : ""}`}
             role="group"
             aria-label={t(copy.photoToCapture, copy.urdu446)}
           >
@@ -561,7 +590,6 @@ export default function Scanner({
                 playsInline
                 muted
                 aria-label={t(copy.liveCameraPreview, copy.urdu451)}
-                onClick={() => video.current?.play()}
               />
             ) : activePhoto ? (
               <img
@@ -575,24 +603,10 @@ export default function Scanner({
               />
             ) : (
               <div className="scan-camera-empty">
-                <ScanStage />
                 <span>
-                  <Camera size={37} strokeWidth={1.75} />
+                  <Camera size={32} strokeWidth={1.75} />
                 </span>
-                <h3>
-                  {slot === "surface"
-                    ? t(copy.everyMaterialHasAStory, copy.urdu454)
-                    : t(copy.letTheLabelFillInTheDetails, copy.urdu455)}
-                </h3>
-                <p>
-                  {slot === "surface"
-                    ? t(copy.getCloseFillTheFrameWithFabric, copy.getCloseFillTheFrameWithFabricUr)
-                    : t(copy.fillTheFrameWithTheCompositionLabel, copy.urdu457)}
-                </p>
-                <span className="scan-viewfinder-tip">
-                  <Focus size={14} />
-                  {t(copy.clearPhotoBetterEvidence, copy.urdu458)}
-                </span>
+                <p>{t("Hold the phone flat over the fabric, in good light", "فون کو کپڑے کے اوپر سیدھا رکھیں، اچھی روشنی میں")}</p>
               </div>
             )}
             <div className="scan-corner tl" />
@@ -622,12 +636,34 @@ export default function Scanner({
                     copy.urdu462,
                   )}
                 </span>
+                {elapsed >= 10 && (
+                  <span aria-hidden="true">
+                    {t(
+                      `Still working after ${elapsed} s. This can take up to two minutes.`,
+                      `ابھی کام جاری ہے (${elapsed} سیکنڈ)۔ اس میں دو منٹ تک لگ سکتے ہیں۔`,
+                    )}
+                  </span>
+                )}
               </div>
             )}
           </div>
           <div className="scan-camera-controls">
             {camera ? (
               <>
+                {previewPaused && (
+                  <button
+                    className="button"
+                    onClick={() =>
+                      video.current
+                        ?.play()
+                        .then(() => setPreviewPaused(false))
+                        .catch(() => setCameraError(previewBlocked))
+                    }
+                  >
+                    <Camera size={19} />
+                    {t("Start camera preview", "کیمرا پیش نظارہ شروع کریں")}
+                  </button>
+                )}
                 <button className="button" onClick={stopCamera}>
                   <StopCircle size={18} />
                   {t(copy.stopCamera, copy.urdu463)}
@@ -652,8 +688,8 @@ export default function Scanner({
                   {openingCamera
                     ? t(copy.openingCamera, copy.urdu465)
                     : activePhoto
-                      ? t(copy.retakePhoto, copy.urdu466)
-                      : t(copy.openCamera, copy.urdu467)}
+                      ? t("Retake", "دوبارہ تصویر لیں")
+                      : t("Take photo", "تصویر لیں")}
                 </button>
                 <input
                   ref={nativeCamera}
@@ -671,7 +707,7 @@ export default function Scanner({
                   className={`button scan-upload-button ${scanning ? "disabled" : ""}`}
                 >
                   <Upload size={18} />
-                  {t(copy.uploadPhoto, copy.urdu468)}
+                  {t("Choose photo", "تصویر منتخب کریں")}
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif,image/bmp"
@@ -720,9 +756,12 @@ export default function Scanner({
           <details className="scan-manual-label">
             <summary>
               <Tag size={16} />
-              {t(copy.typeLabelCompositionInstead, copy.urdu472)}
+              {t("Add care label", "کیئر لیبل شامل کریں")}
               <span>{t(copy.optional, copy.urdu450)}</span>
             </summary>
+            <button className="button scan-label-photo-button" type="button" disabled={scanning} onClick={() => { stopCamera(); setSlot("label"); }}>
+              <Camera size={18} aria-hidden="true" />{t("Add label photo", "لیبل کی تصویر شامل کریں")}
+            </button>
             <label>
               {t(copy.compositionPrintedOnTheCareLabel, copy.urdu473)}
               <textarea
@@ -745,13 +784,14 @@ export default function Scanner({
             <div className="error-banner" role="alert">
               <AlertTriangle size={18} />
               {error}
-              <small className="scan-retry-note">
-                {t("Your photo is still here. Analyse again when you are ready.", "آپ کی تصویر موجود ہے۔ تیار ہوں تو دوبارہ تجزیہ کریں۔")}
-              </small>
+              {surface && (
+                <small className="scan-retry-note">
+                  {t("Your photo is still here. Analyze again when you are ready.", "آپ کی تصویر موجود ہے۔ تیار ہوں تو دوبارہ تجزیہ کریں۔")}
+                </small>
+              )}
             </div>
           )}
           <div className="scan-analyze-row">
-            <span />
             {scanning ? (
               <button
                 className="button"
@@ -761,22 +801,15 @@ export default function Scanner({
                 {t(copy.cancelAnalysis, copy.urdu476)}
               </button>
             ) : (
-              <button
-                className={camera ? "button" : "button primary"}
-                disabled={!surface || !info || !online || connecting}
-                onClick={analyze}
-              >
-                <ScanLine size={19} />
-                {t(copy.analyzeMaterial, copy.urdu477)}
-                <ArrowRight size={16} />
-              </button>
+              <ActionBar primary={{
+                label: t("Analyze material", "کپڑے کا تجزیہ کریں"),
+                onClick: analyze,
+                disabled: !surface || !info || !online || connecting || camera,
+                icon: <ScanLine size={19} aria-hidden="true" />,
+              }} />
             )}
           </div>
-          {!info && (
-            <p className="scan-analysis-hint">
-              {t(copy.captureOrUploadAPhotoThenConnect, copy.urdu478)}
-            </p>
-          )}
+          {analyzeHint && <p className="scan-analysis-hint">{analyzeHint}</p>}
         </section>
         <aside className="scan-results-column">
           <section
@@ -785,52 +818,53 @@ export default function Scanner({
             <div className="panel-heading">
               <div>
                 <h2 ref={resultHeading} tabIndex={-1}>
-                  {t(copy.whatTheModelSees, copy.urdu479)}
+                  {t("Result", "نتیجہ")}
                 </h2>
                 <p>{t(copy.evidenceFirstAConfidentNextStep, copy.urdu480)}</p>
               </div>
             </div>
             {result ? (() => {
               // Every row shows the model's top answer with its confidence (colour-coded), never "not sure".
-              const garment =
+              const garment: [string, number | null] | null =
                 topGuess(result.custom.garment_type, result.candidates.garment_type) ??
-                (result.garment ? ([result.garment.label, result.garment.confidence ?? 0] as [string, number]) : null);
+                (result.garment ? [result.garment.label, result.garment.confidence] : null);
               const stated = result.stated_composition.fibers;
-              // Composition the way yarn is bought: 100% cotton, cotton + spandex, CVC, PC (blend head + fibre head).
-              // The taught "mix" head names the exact mix ("cotton:98,elastane_spandex:2"); else the blend head's group.
-              const mix = topGuess(result.custom.mix, result.candidates.mix);
-              const comp = composition(result);
-              const fibreWord = comp?.fibre ? taughtLabel("fibre", comp.fibre) : "";
-              const compText = !comp ? "" : comp.blend === "pure" ? (fibreWord ? `100% ${fibreWord}` : t("Single fibre (100%)", "ایک ریشہ"))
-                : comp.blend === "stretch" ? (fibreWord ? `${fibreWord} + spandex (stretch)` : t("Stretch (with spandex)", "اسٹریچ"))
-                : comp.blend === "CVC" ? t("CVC: cotton-rich cotton/polyester", "سی وی سی: زیادہ کاٹن، کچھ پولیسٹر")
-                : comp.blend === "PC" ? t("PC: polyester-rich polyester/cotton", "پی سی: زیادہ پولیسٹر، کچھ کاٹن")
-                : fibreWord;
+              // Composition from the photo only when the taught "mix" head clears its own threshold. Below it the
+              // head's top guess is not shown: a photo alone made polyester tees read "100% cotton, 96%".
+              const mix = result.custom.mix ? [result.custom.mix.label, result.custom.mix.confidence] as [string, number] : null;
               const rows = [
                 { key: "fabric", title: t("Fabric", "کپڑا"), art: "structure" as const, guess: topGuess(result.structure, result.candidates.structure), name: (l: string) => taughtLabel("structure", l) },
                 stated.length
-                  ? { key: "composition", title: t("Composition (from the label)", "بناوٹ (لیبل سے)"), icon: Blend, guess: null,
+                  ? { key: "composition", title: t("Composition (from the label)", "بناوٹ (لیبل سے)"), icon: Blend, guess: result.stated_composition.ocr_confidence === null ? null : ["label", result.stated_composition.ocr_confidence] as [string, number],
                       text: stated.map((f) => `${f.pct}% ${labelFor(f.name)}`).join(" · ") }
                   : mix
                     ? { key: "composition", title: t("Composition", "بناوٹ"), icon: Blend, guess: mix, name: mixText }
-                    : { key: "composition", title: t("Composition", "بناوٹ"), icon: Blend, guess: comp ? ([comp.blend ?? comp.fibre ?? "", comp.p] as [string, number]) : null, name: () => compText },
+                    : { key: "composition", title: t("Composition", "بناوٹ"), icon: Blend, guess: null,
+                        text: t("Can't tell from the photo. Scan the care label.", "تصویر سے معلوم نہیں ہو سکتا۔ کیئر لیبل اسکین کریں۔") },
                 { key: "finish", title: t("Finish", "فنش"), icon: Paintbrush, guess: topGuess(result.custom.finish, result.candidates.finish), name: (l: string) => taughtLabel("finish", l) },
-                { key: "pattern", title: t("Pattern", "پیٹرن"), icon: ScanLine, guess: topGuess(result.custom.pattern, result.candidates.pattern), name: (l: string) => taughtLabel("pattern", l) },
               ];
-              const level = (p: number) => (p >= 0.8 ? "high" : p >= 0.5 ? "mid" : "low");
+              const confidence = (p: number | null) => p === null ? null : <>
+                <Confidence value={p} className="scan-kit-confidence" />
+                <b className="scan-pct" aria-hidden="true">{pct(p)}</b>
+              </>;
               return (
               <>
-                <div className="scan-garment-hero">
-                  <ScannerArtwork kind="garment" label={garment?.[0]} />
-                  <div>
-                    <span>{t("Garment", "لباس")}</span>
-                    <h3>{garment ? taughtLabel("garment_type", garment[0]) : t("No garment found", "کوئی لباس نہیں ملا")}</h3>
-                  </div>
-                  {garment && <b className={`scan-pct ${level(garment[1])}`}>{pct(garment[1])}</b>}
+                <div className="scan-result-photo">
+                  {surface && <img src={surface.url} alt={t("Scanned fabric photo", "اسکین کیے گئے کپڑے کی تصویر")} />}
+                  <button className="text-button" type="button" onClick={() => { setResult(null); setSlot("surface"); setError(""); }}>
+                    <RefreshCw size={17} aria-hidden="true" />{t("New scan", "نیا اسکین")}
+                  </button>
                 </div>
                 <ul className="scan-rows">
+                  <li className="scan-garment-hero">
+                    <ScannerArtwork kind="garment" label={garment?.[0]} />
+                    <div>
+                      <span>{t("Garment", "لباس")}</span>
+                      <h3>{garment ? taughtLabel("garment_type", garment[0]) : t("No answer", "جواب نہیں")}</h3>
+                    </div>
+                    {confidence(garment?.[1] ?? null)}
+                  </li>
                   {rows.map((r) =>
-                    r.guess || r.text ? (
                       <li key={r.key}>
                         {r.art && r.guess ? (
                           <ScannerArtwork kind={r.art} label={r.guess[0]} />
@@ -839,50 +873,65 @@ export default function Scanner({
                         )}
                         <div>
                           <span>{r.title}</span>
-                          <strong>{r.guess && r.name ? r.name(r.guess[0]) : r.text}</strong>
+                          <strong>{r.guess && r.name ? r.name(r.guess[0]) : r.text || t("No answer returned", "جواب نہیں ملا")}</strong>
                         </div>
-                        {r.guess && <b className={`scan-pct ${level(r.guess[1])}`}>{pct(r.guess[1])}</b>}
+                        {r.guess ? confidence(r.guess[1]) : <span className="scan-confidence-word">{t("No answer", "جواب نہیں")}</span>}
                       </li>
-                    ) : null,
                   )}
                 </ul>
-                {result.verdict !== "INSUFFICIENT_EVIDENCE" && (
-                  <div className={`scan-verdict ${result.verdict.toLowerCase()}`}>
+                {/* Shown only when the fault check ran: a skipped check (unknown fabric, garment too small) shows nothing. */}
+                {result.fault && !result.fault.skipped_reason && (
+                  <div className={`scan-fault ${result.fault.is_fault ? "flag" : "pass"}`}>
+                    <strong>
+                      {result.fault.is_fault
+                        ? t("Possible fabric fault: look at the marked area", "کپڑے میں ممکنہ خرابی: نشان زد حصے کو دیکھیں")
+                        : t("No fabric fault found", "کپڑے میں کوئی خرابی نہیں ملی")}
+                    </strong>
+                    {result.fault.heatmap_png_b64 && (
+                      <>
+                        <div className="scan-fault-images">
+                          {surface && (
+                            <figure>
+                              <img src={surface.url} alt={t("Fabric photo", "کپڑے کی تصویر")} />
+                              <figcaption>{t("Your photo", "آپ کی تصویر")}</figcaption>
+                            </figure>
+                          )}
+                          <figure>
+                            <img src={`data:image/png;base64,${result.fault.heatmap_png_b64}`} alt={t("Fault heat map", "خرابی کا نقشہ")} />
+                            <figcaption>{t("Marked areas", "نشان زد حصے")}</figcaption>
+                          </figure>
+                        </div>
+                        <p className="scan-fault-legend">{t("Colour key: blue shows lower scores; yellow and red show higher scores.", "رنگوں کی وضاحت: نیلا کم اسکور اور پیلا اور سرخ زیادہ اسکور دکھاتے ہیں۔")}</p>
+                      </>
+                    )}
+                  </div>
+                )}
+                <div className={`scan-verdict ${result.verdict.toLowerCase()}`}>
+                  <span className="scan-verdict-icon">
                     <ScannerArtwork kind="verdict" label={result.verdict} />
-                    <div>
-                      <strong>
-                        {result.verdict === "PASS"
-                          ? t(copy.consistentWithTheLabel, copy.urdu481)
-                          : t(copy.needsACloserLook, copy.urdu482)}
-                      </strong>
-                      {result.flags.map((flag, i) => (
-                        <p key={flag.code + i}>{flag.message}</p>
-                      ))}
-                    </div>
+                  </span>
+                  <div>
+                    <strong>
+                      {result.verdict === "PASS"
+                        ? t("The fabric matches the care label.", "کپڑا کیئر لیبل سے میل کھاتا ہے۔")
+                        : result.verdict === "FLAG"
+                          ? t("The fabric does not match the care label.", "کپڑا کیئر لیبل سے میل نہیں کھاتا۔")
+                          : result.stated_composition.fibers.length === 0
+                            // The verdict compares the fabric with its care label; with no label read there is nothing to compare.
+                            ? t("No care label was read, so the label was not checked.", "کیئر لیبل نہیں پڑھا گیا، اس لیے لیبل کی جانچ نہیں ہوئی۔")
+                            : t("There is not enough evidence to judge the label.", "لیبل کے بارے میں فیصلہ کرنے کے لیے شواہد کافی نہیں۔")}
+                    </strong>
+                    {/* The fault box above already says it; FAULT_DETECTED would repeat it. */}
                   </div>
-                )}
-                {!confirmed ? (
-                  <div className="scan-next">
-                    <p>{t("Check the answer against the photo, then confirm it.", "جواب کو تصویر سے ملائیں، پھر تصدیق کریں۔")}</p>
-                    <button className="button primary" onClick={() => setConfirmed(true)}>
-                      <Check size={19} aria-hidden="true" />
-                      {t("Confirm result", "نتیجہ تصدیق کریں")}
-                    </button>
-                  </div>
-                ) : (
-                  <p className="scan-confirmed" role="status">
-                    <CheckCheck size={18} aria-hidden="true" />
-                    {t("Result confirmed. Choose what to do next.", "نتیجہ تصدیق ہو گیا۔ آگے کیا کرنا ہے چنیں۔")}
-                  </p>
-                )}
+                </div>
                 <div className="scan-actions">
                   {onMeasure && (
-                    <button className={confirmed ? "button primary" : "button"} onClick={onMeasure}>
+                    <button className="button" onClick={onMeasure}>
                       <Ruler size={20} aria-hidden="true" />
                       {t("Measure yarn count", "یارن کاؤنٹ ناپیں")}
                     </button>
                   )}
-                  <button className={confirmed && !onMeasure ? "button primary" : "button"} onClick={download}>
+                  <button className="button" onClick={download}>
                     <Download size={20} aria-hidden="true" />
                     {t("Download result", "نتیجہ ڈاؤن لوڈ کریں")}
                   </button>
@@ -911,6 +960,10 @@ export default function Scanner({
                     </figure>
                   )}
                   <dl>
+                    <div>
+                      <dt>{t("Model version", "ماڈل ورژن")}</dt>
+                      <dd>{result.model_version} · {t("Reference set", "حوالہ سیٹ")} {result.kb_version}</dd>
+                    </div>
                     {[
                       ["structure", t("Fabric", "کپڑا"), result.structure, labelFor],
                       ["fibre_family", t("Fibre", "ریشہ"), result.fibre_family, fibreName],
@@ -924,22 +977,20 @@ export default function Scanner({
                         </div>
                       ) : null;
                     })}
+                    {result.fault && !result.fault.skipped_reason && (
+                      <div>
+                        <dt>{t("Fault model", "خرابی کا ماڈل")}</dt>
+                        <dd>{result.fault.model_version}</dd>
+                        <dt>{t("Fault score", "خرابی کا اسکور")}</dt>
+                        <dd>
+                          {result.fault.score.toFixed(3)} · {t("limit", "حد")} {result.fault.threshold.toFixed(3)}
+                        </dd>
+                      </div>
+                    )}
                     {result.timings_ms?.total !== undefined && (
                       <div>
                         <dt>{t("Time", "وقت")}</dt>
-                        <dd>
-                          {(result.timings_ms.total / 1000).toFixed(2)} s:{" "}
-                          {[
-                            ["garment_detector", "garment detector (OWLv2)"],
-                            ["fabric_model", "fabric model (SigLIP 2)"],
-                            ["fibre_model", "fibre model (DINOv2)"],
-                            ["taught_model", "taught answers model"],
-                            ["label_reader", "label reader"],
-                          ]
-                            .filter(([k]) => result.timings_ms?.[k] !== undefined)
-                            .map(([k, name]) => `${name} ${Math.round(result.timings_ms![k])} ms`)
-                            .join(" · ")}
-                        </dd>
+                        <dd>{(result.timings_ms.total / 1000).toFixed(2)} s</dd>
                       </div>
                     )}
                     <div>
@@ -950,14 +1001,12 @@ export default function Scanner({
                         {result.capture_quality.blur === null ? "—" : result.capture_quality.blur.toFixed(1)}
                       </dd>
                     </div>
-                    <div>
-                      <dt>{t(copy.model, copy.urdu498)}</dt>
-                      <dd><bdi>{result.model_version}</bdi></dd>
-                    </div>
-                    <div>
-                      <dt>{t(copy.scan, copy.urdu499)}</dt>
-                      <dd><bdi>{result.scan_id}</bdi></dd>
-                    </div>
+                    {!!result.flags.length && (
+                      <div>
+                        <dt>{t("Model notes", "ماڈل کے نوٹس")}</dt>
+                        <dd>{result.flags.filter((flag) => flag.code !== "FAULT_DETECTED").map((flag) => flagText(flag.code, flag.message)).join(" · ") || t("No other notes.", "کوئی اور نوٹس نہیں۔")}</dd>
+                      </div>
+                    )}
                   </dl>
                 </details>
               </>

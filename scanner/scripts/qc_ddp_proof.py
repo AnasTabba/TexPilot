@@ -46,11 +46,13 @@ def _positive(value):
 
 def _hardware_report(record, expected_sha):
     _require(record.get("upstream_sha") == expected_sha, "hardware report upstream SHA mismatch")
-    _require(isinstance(record.get("source_commit"), str)
-             and re.fullmatch(r"[0-9a-f]{40}", record["source_commit"]) is not None
-             and _hash(record.get("dirty_patch_sha256"))
-             and _hash(record.get("environment_lock_sha256")),
-             "production source commit/patch/environment lock not pinned")
+    _require(
+        isinstance(record.get("source_commit"), str)
+        and re.fullmatch(r"[0-9a-f]{40}", record["source_commit"]) is not None
+        and _hash(record.get("dirty_patch_sha256"))
+        and _hash(record.get("environment_lock_sha256")),
+        "production source commit/patch/environment lock not pinned",
+    )
     _require(record.get("production_loop") is True, "real production-loop report not collected")
     _require(
         record.get("backend") == "nccl"
@@ -63,9 +65,14 @@ def _hardware_report(record, expected_sha):
         all(record.get(k) for k in ("commands", "hardware", "driver")),
         "report lacks exact command/hardware/driver",
     )
-    _require(all(str(record[k]).strip().casefold() not in (
-        "unknown", "not yet collected", "unavailable", "none", "n/a", "pending"
-    ) for k in ("hardware", "driver")), "measured hardware/driver report not yet collected")
+    _require(
+        all(
+            str(record[k]).strip().casefold()
+            not in ("unknown", "not yet collected", "unavailable", "none", "n/a", "pending")
+            for k in ("hardware", "driver")
+        ),
+        "measured hardware/driver report not yet collected",
+    )
     _require(
         isinstance(record["commands"], list)
         and all(isinstance(c, str) and c.strip() for c in record["commands"]),
@@ -166,8 +173,9 @@ def verify_ddp_proof(upstream: Path, expected_sha: str, report: Path) -> None:
         _hardware_report(record, expected_sha)
         with tempfile.TemporaryDirectory(prefix="qc-ddp-proof-") as folder:
             junit = Path(folder) / "numerical.xml"
-            env = dict(os.environ, DINOMALY_REPO=str(upstream), OMP_NUM_THREADS="1",
-                       PYTEST_ADDOPTS="")
+            env = dict(
+                os.environ, DINOMALY_REPO=str(upstream), OMP_NUM_THREADS="1", PYTEST_ADDOPTS=""
+            )
             result = subprocess.run(
                 [
                     sys.executable,
@@ -240,9 +248,12 @@ def main(argv=None):
         expected = manifest["expected_sha"]
         _require(bundle["upstream_sha"] == expected, "upstream pin differs from the real bundle")
         weights = bundle_path.parent / bundle["weights_file"]
-        _require(_hash(bundle["weights_sha256"]) and weights.is_file()
-                 and hashlib.sha256(weights.read_bytes()).hexdigest() == bundle["weights_sha256"],
-                 "real bundle weights absent or hash mismatch")
+        _require(
+            _hash(bundle["weights_sha256"])
+            and weights.is_file()
+            and hashlib.sha256(weights.read_bytes()).hexdigest() == bundle["weights_sha256"],
+            "real bundle weights absent or hash mismatch",
+        )
         report = SCANNER / manifest["report"]
         _require(
             _hash(manifest["report_sha256"])
@@ -251,8 +262,10 @@ def main(argv=None):
         )
         production = json.loads(report.read_bytes())
         for key in ("source_commit", "dirty_patch_sha256", "environment_lock_sha256"):
-            _require(bundle[key] == production[key], "production report source/environment "
-                     "differs from bundle")
+            _require(
+                bundle[key] == production[key],
+                "production report source/environment differs from bundle",
+            )
         verify_ddp_proof(SCANNER / manifest["upstream"], expected, report)
     except (DDPProofError, OSError, ValueError, TypeError, KeyError) as exc:
         print(f"G6 DDP proof FAILED: {exc}", file=sys.stderr)

@@ -39,8 +39,12 @@ production planning platform (MILP/CP-SAT) is designed but deliberately deferred
 
 \begin{itemize}[leftmargin=*]
   \item It does \textbf{not} predict fibre composition from an image. Real fibre ID
-        needs burn tests, microscopy, or FTIR/NIR. TextileNet's 33-class fibre ViT
-        caps at 53.3\% top-1; beating chance by correlation (``chunky knit $\to$ wool'')
+        needs burn tests, microscopy, or FTIR/NIR. The published TextileNet ViT-Tiny
+        reports macro F1 not reported and top-1 53.3\%
+        (\texttt{scanner/training/textilenet/aggregate.py}); our DINOv2 probe reports
+        macro F1 0.3530 and top-1 58.45\% on the 33-class fibre test set
+        (\texttt{scanner/runs/fibre/probe\_dinov2\_vitb14/seed*/test\_metrics.json}).
+        Beating chance by correlation (``chunky knit $\to$ wool'')
         collapses on silk vs.\ polyester satin, where both are satin.
   \item It does \textbf{not} always answer. \texttt{INSUFFICIENT\_EVIDENCE} is a
         first-class verdict, not an error path.
@@ -54,9 +58,10 @@ production planning platform (MILP/CP-SAT) is designed but deliberately deferred
 
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Verification, not prediction of composition.} Predict only what is
-        visible: fabric structure (27 classes), surface treatment (4), and coarse
-        fibre family (cellulosic / protein / synthetic). Exact composition comes
-        from OCR of the label at $\sim$100\% accuracy.
+        visible: fabric structure (24 classes in installed Head A;
+        \texttt{scanner/models/scanner-v8/head\_a/head.json}), surface treatment (4),
+        and coarse fibre family (cellulosic / protein / synthetic). OCR reads the
+        stated composition from the care label; OCR accuracy has not been measured here.
   \item \textbf{Abstention is a real verdict.} A classifier forced to always answer
         produces confident wrong answers, and those get it switched off at a QC desk.
         Precision on flags $>$ accuracy.
@@ -129,7 +134,7 @@ One shared backbone, three heads (multi-task learning).
 \toprule
 Head & Task & Classes & Label source \\
 \midrule
-A & Fabric structure & 27 & TextileNet fabric partition, direct \\
+A & Fabric structure & 24 (installed Head A); 27 (DINOv2 linear head) & TextileNet fabric partition, direct \\
 B & Surface treatment & 4 (printed / piece-dyed / yarn-dyed / undyed) & weak labels + hand-labelled subset \\
 C & Fibre family & 3 trained (4 in API) & TextileNet fibre, collapsed \\
 \bottomrule
@@ -140,8 +145,9 @@ C & Fibre family & 3 trained (4 in API) & TextileNet fibre, collapsed \\
 families: cellulosic (cotton, linen, viscose, modal, lyocell, \dots), protein
 (wool, silk, cashmere, \dots, plus fur/leather/suede as hides), synthetic
 (polyester, nylon, acrylic, \dots), blend (multi-family, from FabricsComposition's
-\texttt{\_pct} columns). This turns an unwinnable 33-class problem into a
-winnable one, because families \emph{are} visually separable. Exact composition
+        \texttt{\_pct} columns). On the TextileNet test set, the v8 family head has
+        macro F1 0.7326 and top-1 accuracy 74.47\%
+        (\texttt{scanner/models/scanner-v8/bundle.json}). Exact composition
 comes from the label.
 
 \textbf{Head B --- weak labels.} Several TextileNet fabric classes encode treatment
@@ -161,8 +167,8 @@ yarn-dyed), so joint training regularises all three.
 @ 384, WebLI) via LoRA, exported as a \emph{probe head} (frozen encoder + linear
 head on pooled features). Linear heads still use the frozen DINOv2 backbone. Views
 $=$ \texttt{whole} (classify the whole photo, not the cut-out: scanner-v4's SigLIP
-lost $\sim$11 pts top-1 on the white-filled cut-out). Per-class logit bias tuned
-on val for macro F1.
+        lost $\sim$11 pts top-1 on the white-filled cut-out). The installed export has
+        no per-class logit bias (\texttt{scanner/models/scanner-v8/head\_a/head.json}).
 
 \subsection{Custom (taught) heads}
 
@@ -299,7 +305,7 @@ changing old ones.
 \toprule
 Source & Use & Licence \\
 \midrule
-TextileNet fabric (27 cls) & Head A training & MIT (code) / CC BY (data) \\
+TextileNet fabric (27 cls) & DINOv2 linear head training; installed Head A uses 24 & MIT (code) / CC BY (data) \\
 TextileNet fibre (33 cls) & Head C training, after family collapse & as above \\
 FabricsCompositionDataset & codebook, Head B weak labels, real fabric attrs & CC BY / CC BY-NC (verify) \\
 Self-collected phone photos & evaluation only & own \\
@@ -340,18 +346,24 @@ copies from train and keeps test as shipped, so our comparison is the stricter o
 \centering
 \begin{tabular}{lccc}
 \toprule
-Model & Fabric top-1 / top-5 & Published best \\
+Model & Test macro F1 & Test top-1 / top-5 & Test set n \\
 \midrule
-Frozen DINOv2 ViT-B/14 + linear probe (3 seeds) & \textbf{72.0\% / 94.5\%} & ViT-Tiny: 67.3\% / 92.1\% \\
-v8 bundle (SigLIP Head A) & 74.4\% / 95.7\% (test) & --- \\
-Fibre family (3-class, v8) & 74.5\% (test) & none public \\
+Frozen DINOv2 ViT-B/14 + linear probe (3 seeds) & 0.5449 $\pm$ 0.0019 & 74.48\% $\pm$ 0.03\% / 95.68\% $\pm$ 0.01\% & 40{,}970 per seed \\
+v8 DINOv2 linear structure head (27 classes) & 0.5428 & 74.45\% / 95.66\% & 40{,}970 \\
+Installed v8 SigLIP Head A (24 classes) & 0.7666 & 82.22\% top-1 & 24{,}303 \\
+Frozen DINOv2 fibre probe, 33 classes (3 seeds) & 0.3530 $\pm$ 0.0020 & 58.45\% $\pm$ 0.04\% top-1 & 47{,}805 per seed \\
+Fibre family head, 3 classes & 0.7326 & 74.47\% top-1 & 47{,}805 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Macro-F1 $\approx 0.54$: rarest classes (canvas, twill) are weak. Fibre family
-macro-F1 $\approx 0.73$. Calibration: ECE before/after temperature scaling
-$\sim$0.086 $\to$ 0.012 (structure), 0.048 $\to$ 0.009 (family).
+The metric rows distinguish the installed 24-class Head A from the 27-class linear
+head. Evidence: the three-seed fabric and fibre probes are in
+\texttt{scanner/runs/fabric/probe\_dinov2\_vitb14/seed*/test\_metrics.json} and
+\texttt{scanner/runs/fibre/probe\_dinov2\_vitb14/seed*/test\_metrics.json}; the
+linear structure and family heads are in \texttt{scanner/models/scanner-v8/bundle.json};
+Head A is in \texttt{scanner/models/scanner-v8/head\_a/head.json}. All rows use
+TextileNet catalog test data; no phone-domain result is reported.
 
 \subsection{Phone-domain evaluation adapter}
 
@@ -396,48 +408,42 @@ incorrect label) --- the only way to measure flag precision, and cheap.
 
 \subsection{Motivation}
 
-A classifier that always answers is switched off at a QC desk the first time it is
-confidently wrong. The scanner therefore has an \texttt{Unsure} outcome: below the
-per-head threshold the head returns no class, and an operator decides. Corrections
-are captured, reviewed, and used to retrain. Two measurements motivate the design.
-On the 1{,}151-photo human survey, archive labels are noisy by class (label-right rate
-0\% for serge, 24\% for chenille, 42\% for taffeta, organza and corduroy, 92\% for
-faux\_leather), so the archive cannot be trusted blindly as ground truth. And errors
-concentrate in close pairs (tulle$\to$lace, knit$\to$lawn/chiffon, fleece$\to$flannel).
+A classifier that always answers can produce confident errors. The installed scanner
+uses a confidence threshold internally, but the Yarnflow screen shows the top answer
+and confidence; it has no correction picker or review queue. On the 1{,}151-photo human
+survey, archive labels are noisy by class (label-right rate 0\% for serge, 24\% for
+chenille, 42\% for taffeta, organza and corduroy, 92\% for faux\_leather;
+\texttt{scanner/docs/human-in-the-loop-writeup.md}). Errors concentrate in close pairs
+(tulle$\to$lace, knit$\to$lawn/chiffon, fleece$\to$flannel).
 
 \subsection{Method}
 
 \begin{enumerate}[leftmargin=*]
-  \item \textbf{Confidence and abstention.} Temperature scaling per head, fitted on
-        validation by NLL. Abstention threshold $\tau_h$ chosen on validation only, at the
-        lowest confidence where validation accuracy of kept predictions reaches the target.
-        Test is scored once after the threshold is fixed. Result: risk--coverage curve.
-  \item \textbf{Correction capture and review queue.} An \texttt{Unsure} photo is shown in
-        the Yarnflow UI with candidate classes. The operator picks a class or ``none fits''.
-        The correction stores the photo, model version, predicted class and confidence,
-        corrected class, operator and time. Corrections wait in a review queue; a second
-        person approves before a row can enter training.
-  \item \textbf{Simulated-correction retraining.} Real operators are not yet available in
-        volume, so corrections are simulated on Kaggle GPUs from training-side abstained
-        photos only. Each round adds corrected rows, retrains from the same initialisation,
-        selects on validation macro F1, and reports test once per round. Baselines: no
-        correction, and random additions of equal size.
+  \item \textbf{Confidence and abstention.} The installed Head A uses the confidence
+        threshold in its model metadata. On its catalog test set, the no-bias served
+        check has macro F1 0.8540 and answered accuracy 0.8952 at coverage 0.8201
+        (\texttt{scanner/docs/agent1-abstain-results.md}). These are answered-only
+        metrics; the report gives the abstain-as-wrong macro-F1 floor separately.
+  \item \textbf{Correction capture and review (future work).} The current UI has no
+        correction picker or review queue. A future workflow must preserve the photo,
+        model version, proposed label, operator and review status.
+  \item \textbf{Correction retraining (not measured).} No retraining result is claimed
+        here. Any future comparison should select on validation macro F1 and report
+        test results once per round against stated baselines.
 \end{enumerate}
 
 \subsection{Results}
 
-\textbf{PENDING.} Risk--coverage (macro F1 first, then accuracy, per coverage),
-reliability before and after temperature scaling, learning curve over correction
-rounds against the baselines, and per-class F1 before and after the final round.
-Figures: \texttt{docs/figures/}. Numbers are filled from saved result files only;
-any missing result is marked MISSING.
+Risk--coverage and reliability evidence is available in
+\texttt{scanner/training/textilenet/results/abstain/}. Correction-round learning
+curves and before/after per-class results are not available; no values are reported.
 
 \subsection{Threats to validity}
 
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Simulated, not real, operators.} Simulated corrections come from ground
-        truth or an assumed error model. Two human judges disagreed on the replacement
-        class for the same photo most of the time (36\% agreement where both said ``no'').
+  \item \textbf{No real operator correction data.} Two human judges agreed on the
+        replacement class for the same photo 36\% of the time when both said ``no''
+        (\texttt{scanner/docs/human-in-the-loop-writeup.md}).
   \item \textbf{Optimistic verified subset.} The 641-photo conservative subset keeps only
         photos the judges confirmed or agreed on; disputed photos are excluded. Counting
         them all as wrong gives a 0.603 floor.
@@ -460,7 +466,7 @@ any missing result is marked MISSING.
 \toprule
 Choice & Alternative rejected & Rationale \\
 \midrule
-Verification (not composition prediction) & Predict fibre from photo & Fibre is molecular; ceiling 53.3\%; shortcut collapses on silk vs polyester satin \\
+Verification (not composition prediction) & Predict exact fibre from photo & Fibre is molecular; the 33-class DINOv2 probe has macro F1 0.3530 and top-1 58.45\% on TextileNet test (\texttt{scanner/docs/results.md}) \\
 Fibre family (4$\to$3 classes) & 33 fibre classes & Families are visually separable even where members are not \\
 Abstention as verdict & Always answer & Confident wrong answers get the scanner switched off at QC \\
 Server-side inference (M1) & On-device & 6 weeks too short for conversion toolchains; SRS already mandates FastAPI \\
@@ -472,7 +478,7 @@ SAM 2.1 (Apache-2.0) & --- & Promptable segmentation, box-prompted, licensed for
 RT-DETR over YOLO & Ultralytics YOLO & Apache-2.0 vs AGPL-3.0 (licensing) \\
 Hand-built plausibility KB & Learned consistency & Auditable, versioned, self-explaining; mirrors SRS \S 27 \\
 Grouped splits by fabric id & Random image split & 44 fabrics only; random split leaks the same swatch \\
-Seed zips over scraping & Re-scrape TextileNet & 73\% of scrape targets dead (\texttt{contestimg.wish.com}) \\
+Seed zips over scraping & Re-scrape TextileNet & In the 2026-09-20 URL sample, 37--45\% of fabric URLs and about 65\% of fibre URLs returned an image; about 73\% pointed to \texttt{contestimg.wish.com} (\texttt{scanner/README.md}) \\
 Temperature scaling + $\tau_h$ & Raw softmax threshold & Calibrated confidences make KB thresholds meaningful across models \\
 Immutable bundles (v1..v8) & Overwrite in place & Reproducibility: every scan traces to exact models \\
 \texttt{None} on unknown fibre & Skip unknown fibre & Skipping leaves a sum that looks valid (confident wrong composition) \\

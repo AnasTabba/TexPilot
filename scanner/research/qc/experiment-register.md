@@ -17,9 +17,6 @@ Historical quota and job statuses in those documents are not current account evi
 | Existing result document | What it records | What it does not prove |
 |---|---|---|
 | [fault-a2-results-2026-11-13.md](../../docs/fault-a2-results-2026-11-13.md) | Reports completed single-device MVTec/WFDD benchmark runs, per-category metrics, source/data bindings and remotely retained artifacts. | Artifacts were not re-inspected here. Benchmark results do not establish phone/factory QC risk, release suitability, two-device utilization or DDP speedup. |
-| [fault-a2-ddp-2026-11-12.md](../../docs/fault-a2-ddp-2026-11-12.md) | Describes DDP implementation, historical local Gloo gradient/update tests, private snapshot verification and a hardware-proof submission rejected for concurrency. | Local numerical/control-flow proof is separate from a real StableAdamW/AMP/NCCL production-loop report. This document supplies no successful two-GPU utilization/speedup proof for C08. |
-| [fault-a2-launch-preflight.md](../../docs/fault-a2-launch-preflight.md) | Records historical preflight requirements, bounded inventories/resource checks, later launch handoffs and the AITEX empty-defective-mask blocker. | Its earlier running/queued/quota observations are historical. It does not independently prove present completion, free quota, DDP speedup, AITEX policy resolution or release permission. |
-| [kaggle-vitb-timing-2026-11-12.md](../../docs/kaggle-vitb-timing-2026-11-12.md) | Reports a bounded carpet FP32/AMP pilot and projected full-run budgets; distinguishes a failed pilot from its retry and records baseline preparation. | Pilot timings and estimates do not establish full-dataset stability, host-memory bounds, current quota, factory generalization, DDP throughput or an automatic-release gate. |
 
 ## Predeclared execution and integrity protocol
 

@@ -92,19 +92,21 @@ export async function buildInvoicePdf(doc: InvoiceDocData): Promise<jsPDF> {
     });
     y += (rows - 1) * 12;
   }
+  // The totals and note need about 160pt; start them on a fresh page rather than running past the bottom.
+  newPageIfNeeded(160);
   y += 10; rule(y);
   const gst = `GST (${(doc.taxRateBp ?? 0) / 100}%)`;
   const totals: [string, string, boolean][] = [];
   if (doc.subtotalMinor !== null) totals.push(['Subtotal', pdfMoney(doc.subtotalMinor, doc.currency), false]);
   if (doc.taxMinor !== null) totals.push([gst, pdfMoney(doc.taxMinor, doc.currency), false]);
-  totals.push(['Total due', pdfMoney(doc.totalMinor, doc.currency), true], ['Paid', pdfMoney(doc.paidMinor, doc.currency), false]);
+  totals.push(['Total due', pdfMoney(doc.totalMinor, doc.currency), true], ['Amount paid', pdfMoney(doc.paidMinor, doc.currency), false]);
   if (doc.creditedMinor > 0) totals.push(['Credit notes', pdfMoney(doc.creditedMinor, doc.currency), false]);
   totals.push(['Balance', pdfMoney(doc.balanceMinor, doc.currency), true]);
   for (const [label, value, strong] of totals) {
     y += 16; pdf.setFont('helvetica', strong ? 'bold' : 'normal'); text(label, middle + 60, y); text(value, right, y, 'right');
   }
   y += 40; pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(85);
-  text(`Payable per the quoted payment terms: ${doc.paymentTerms || '—'}.`, left, y);
+  text(`Terms: ${doc.paymentTerms || '—'}.`, left, y);
   if (doc.voidedAt !== null) {
     // A voided invoice keeps its numbers on record; the stamp marks it as not payable.
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(96); pdf.setTextColor(190, 30, 30);

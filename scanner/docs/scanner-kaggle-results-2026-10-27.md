@@ -1,21 +1,23 @@
 # Completed Kaggle scanner runs — 27 October 2026
 
-All four original notebook versions were freshly confirmed COMPLETE using their authenticated Kaggle accounts. Downloaded result archives are preserved under `runs/completed_20261027/` (ignored local artifacts). No model has been promoted by this review.
+All four original notebook versions were freshly confirmed COMPLETE using their authenticated Kaggle accounts. Downloaded result archives are preserved under `runs/completed_20261027/` (ignored local artifacts). The validation-selected ensemble was not promoted; shop heads and the fibre probe were separately installed in `models/custom/`.
 
 ## Ensemble decision
 
-Keep scanner-v8. The predeclared rule chooses on validation, then requires a meaningful held-out macro-F1 gain (approximately 0.005). The selected candidate is `avg(v8/final, v8/b12, v7/final)`, with weights [0.2, 0.3, 0.5].
+Keep scanner-v8. On the TextileNet fabric catalog test split, the predeclared rule chooses on validation, then requires a meaningful held-out macro-F1 gain (approximately 0.005). The selected candidate is `avg(v8/final, v8/b12, v7/final)`, with weights [0.2, 0.3, 0.5].
 
 | Candidate | Validation macro F1 | Test macro F1 | Test top-1 |
 | --- | ---: | ---: | ---: |
-| Current v8 | 75.5714% | 76.1889% | 82.3904% |
-| Validation-selected ensemble | 77.6142% | 75.8727% | 82.7045% |
+| Current v8 | 75.57% | 76.19% | 82.39% |
+| Validation-selected ensemble | 77.61% | 75.87% | 82.70% |
+
+Evidence: `runs/completed_20261027/depth/extracted/depth.log`.
 
 The selected ensemble improves validation but loses held-out macro F1. Its top-1 gain does not satisfy the predefined criterion. Some other candidates score better on test, but choosing one after inspecting test would contaminate model selection; those observations need a new independent evaluation, not deployment. The downloaded depth archive contains metrics/logs, not the intermediate head weights required to serve a winning ensemble.
 
 ## Shop heads
 
-Same shop product-level split as the preserved v7 reports; these are shop-photo benchmarks, not measured factory accuracy.
+Same shop product-level held-out test split as the preserved v7 reports; these are shop-photo benchmarks, not measured factory accuracy.
 
 | Head | v7 validation F1 | v8 validation F1 | v7 test F1 | v8 test F1 | v8 test top-1 |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -36,7 +38,10 @@ The ordinary linear recipe wins over square-root sampling on mean validation mac
 | v7 | 48.82% | 52.91% | 59.45% |
 | v8 | 51.29% | 55.35% | 60.21% |
 
-This is the 33-class archive fibre benchmark, distinct from the three-family head. The exported v8 probe is downloaded but not installed.
+The fibre rows are three-seed means; source metrics are in
+`runs/completed_20261027/fibre/extracted/probe/fibre/siglip2_linear/seed*/test_metrics.json`.
+
+This is the 33-class archive fibre benchmark, distinct from the three-family head. The v8 probe is installed at `models/custom/fibre/`; the packaged seed's test macro F1 is 55.33% (`models/custom/fibre/head.json`), while the table reports the three-seed mean.
 
 ## Job records
 
@@ -59,6 +64,6 @@ Pattern-head and label-cleaning follow-up notebooks are separate experiments; th
 | garment_type | 79.02% | 80.81% | 82.26% | 84.69% | +0.99 pts |
 | mix | 48.31% | 48.31% (bias rejected) | 73.34% | 73.34% | -0.60 pts |
 
-Installed in `models/custom` with the v8 fibre probe (55.33% test macro F1); the v7-encoder heads are kept in `models/custom_v7`. The scanner now runs one encoder pass.
+The v8 shop heads and fibre probe are installed in `models/custom`; the v7-encoder heads are kept in `models/custom_v7`. The scanner now runs one encoder pass. The packaged fibre probe has test macro F1 55.33% and top-1 accuracy 60.12% on its catalog test set, n=20,949 (`models/custom/fibre/head.json`).
 
-`anastabba/texpilot-label-clean-v8/2` (29 of 925 audit photos have no Kaggle features and were excluded): the rule chosen on audit half A (drop each class's lowest 30% by out-of-fold own-label probability) raised audit half B label-right macro F1 from 84.94% to 87.60% but lowered archive test macro F1 from 76.11% to 73.73%. It fails the predeclared gate; no head was exported. A milder rule looked better on both, but it was not the validation choice and needs an independent audit sample before use.
+`anastabba/texpilot-label-clean-v8/2` (29 of 925 audit photos have no Kaggle features and were excluded): the rule chosen on audit half A (drop each class's lowest 30% by out-of-fold own-label probability) raised audit half B label-right macro F1 from 84.94% to 87.60% but lowered archive test macro F1 from 76.11% to 73.73%. These are the separate label-cleaning evaluation results (`runs/completed_20261027/cleaning/v2/extracted/selection.json`), not the depth ensemble table above. It fails the predeclared gate; no head was exported. A milder rule looked better on both, but it was not the validation choice and needs an independent audit sample before use.

@@ -34,6 +34,7 @@ api: ## Run the API at http://127.0.0.1:8000 (docs at /docs)
 
 api-scanner: ## The real scanner on this Mac, reachable from phones on the same wifi
 	TEXPILOT_VISION=scanner TEXPILOT_GARMENT_DETECTOR=owlv2 TEXPILOT_OCR_BACKEND=apple \
+	TEXPILOT_FAULT_MODEL=models/fault-wfdd-v1 \
 	$(VENV)/bin/uvicorn services.api.main:app --host 0.0.0.0 --port 8000
 
 check-data: ## Smoke-test TextileNet availability (spec risk #2)

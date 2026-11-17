@@ -21,12 +21,12 @@ test("every fixed scanner outcome maps to an existing deployable illustration", 
 test("abstentions and unknown or mismatched labels never borrow a confident illustration", () => {
   for (const kind of ["structure", "treatment", "fibre_family", "garment", "verdict"] as const) {
     for (const label of [null, undefined, "", "new_factory_label", "constructor", "__proto__"]) {
-      assert.equal(scannerArtworkId(kind, label), "uncertain");
+      assert.equal(scannerArtworkId(kind, label), null);
     }
   }
-  assert.equal(scannerArtworkId("fibre_family", "cotton"), "uncertain");
-  assert.equal(scannerArtworkId("structure", "polyester"), "uncertain");
-  assert.equal(scannerArtworkId("structure", "PASS"), "uncertain");
+  assert.equal(scannerArtworkId("fibre_family", "cotton"), null);
+  assert.equal(scannerArtworkId("structure", "polyester"), null);
+  assert.equal(scannerArtworkId("structure", "PASS"), null);
   assert.equal(scannerArtworkId("garment", "pants"), "denim");
   // Taught garment types draw the nearest detector garment.
   for (const [label, art] of [["jeans", "denim"], ["kurta", "shirt_blouse"], ["t_shirt", "cotton"], ["dupatta_shawl", "scarf"], ["jacket", "polyester"]])

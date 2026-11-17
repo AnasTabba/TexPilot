@@ -1171,14 +1171,14 @@ export const copy = {
   urdu407: "پیش نظارہ مقامی محفوظ کریں",
   enterYourTexpilotServerUrlForExample:
     "Enter your TexPilot server URL, for example https://scanner.yourfactory.com.",
-  url: "اپنے ٹیکس پائلٹ سرور کا درست URL درج کریں۔",
+  url: "اپنے TexPilot سرور کا درست URL درج کریں۔",
   thisPublishedWorkspaceNeedsAnHttpsModel:
     "This published workspace needs an HTTPS model server. For a local HTTP server, use the local Yarnflow development app.",
   https: "اس شائع شدہ ورک اسپیس کے لیے HTTPS ماڈل سرور درکار ہے۔",
   couldNotReachTexpilotCheckTheServer:
     "Could not reach TexPilot. Check the server address, internet connection, and whether this workspace is allowed by the server. Your photo is still here.",
   urdu408:
-    "ٹیکس پائلٹ سے رابطہ نہیں ہوا۔ پتہ، انٹرنیٹ اور سرور کی اجازت چیک کریں۔ تصویر محفوظ ہے۔",
+    "TexPilot سے رابطہ نہیں ہوا۔ پتہ، انٹرنیٹ اور سرور کی اجازت چیک کریں۔ تصویر محفوظ ہے۔",
   theModelTookTooLongToRespond:
     "The model took too long to respond. Your photo is still here; try again when the server is ready.",
   urdu409:
@@ -1189,14 +1189,14 @@ export const copy = {
   texpilotIsRunningWithoutItsTrainedModel:
     "TexPilot is running without its trained model. Start the server with the scanner-v2 bundle; sample predictions are never shown here.",
   scannerV2:
-    "ٹیکس پائلٹ میں تربیت یافتہ ماڈل لوڈ نہیں ہے۔ scanner-v2 کے ساتھ سرور چلائیں۔",
+    "TexPilot میں تربیت یافتہ ماڈل لوڈ نہیں ہے۔ scanner-v2 کے ساتھ سرور چلائیں۔",
   theServerReturnedAnUnexpectedResultCheck:
     "The server returned an unexpected result. Check that it serves the TexPilot scan API from main.",
   mainApi:
-    "سرور کا جواب متوقع فارمیٹ میں نہیں۔ main کا ٹیکس پائلٹ API چیک کریں۔",
+    "سرور کا جواب متوقع فارمیٹ میں نہیں۔ main کا TexPilot API چیک کریں۔",
   theTexpilotServerCouldNotFinishThis:
     "The TexPilot server could not finish this request. Try again or check the model server.",
-  urdu411: "ٹیکس پائلٹ سرور درخواست مکمل نہیں کر سکا۔ دوبارہ کوشش کریں۔",
+  urdu411: "TexPilot سرور درخواست مکمل نہیں کر سکا۔ دوبارہ کوشش کریں۔",
   useAJpegPngOrWebpPhoto:
     "Use a JPEG, PNG, or WebP photo. HEIC is not supported; choose Most Compatible in your phone’s camera settings.",
   jpegPngWebpHeic: "JPEG، PNG یا WebP تصویر استعمال کریں۔ HEIC دستیاب نہیں۔",
@@ -1209,7 +1209,7 @@ export const copy = {
   urdu413: "تصویر پڑھی نہیں جا سکی۔ درست تصویر یا نیا شاٹ استعمال کریں۔",
   youAreOfflineYourSelectedPhotosStay:
     "You are offline. Your selected photos stay here, but analysis needs your TexPilot server.",
-  urdu414: "آپ آف لائن ہیں۔ تجزیے کے لیے ٹیکس پائلٹ سرور سے رابطہ ضروری ہے۔",
+  urdu414: "آپ آف لائن ہیں۔ تجزیے کے لیے TexPilot سرور سے رابطہ ضروری ہے۔",
   tapTheVideoToStartThePreview:
     "Tap the video to start the preview, or upload a photo.",
   urdu415: "پیش نظارہ شروع کریں یا تصویر اپ لوڈ کریں۔",
@@ -1260,7 +1260,7 @@ export const copy = {
   checkingModel: "Checking model…",
   urdu434: "ماڈل چیک ہو رہا ہے…",
   texpilotModelConnected: "TexPilot model connected",
-  urdu435: "ٹیکس پائلٹ ماڈل منسلک",
+  urdu435: "TexPilot ماڈل منسلک",
   serverReachableVerifyOnScan: "Server reachable · verify on scan",
   urdu436: "سرور دستیاب · اسکین پر تصدیق",
   modelNotConnected: "Model not connected",
@@ -1268,12 +1268,12 @@ export const copy = {
   modelConnection: "Model connection",
   urdu438: "ماڈل کنکشن",
   connectYourTexpilotModel: "Connect your TexPilot model",
-  urdu439: "اپنا ٹیکس پائلٹ ماڈل منسلک کریں",
+  urdu439: "اپنا TexPilot ماڈل منسلک کریں",
   connectTheModelServerUsedByYour:
     "Connect the model server used by your factory.",
   urdu440: "اپنی فیکٹری کے ماڈل سرور سے منسلک ہوں۔",
   texpilotServerUrl: "TexPilot server URL",
-  url2: "ٹیکس پائلٹ سرور URL",
+  url2: "TexPilot سرور URL",
   httpsScannerYourfactoryCom: "https://scanner.yourfactory.com",
   connecting: "Connecting…",
   urdu441: "منسلک ہو رہا ہے…",
@@ -1281,7 +1281,7 @@ export const copy = {
   urdu442: "ماڈل منسلک کریں",
   theServerUrlIsSavedOnThis:
     "The server URL is saved on this device. Photos go directly to your TexPilot server only when you choose Analyze material.",
-  url3: "سرور URL اس ڈیوائس پر محفوظ ہوگا۔ تجزیہ منتخب کرنے پر تصاویر آپ کے ٹیکس پائلٹ سرور کو بھیجی جائیں گی۔",
+  url3: "سرور URL اس ڈیوائس پر محفوظ ہوگا۔ تجزیہ منتخب کرنے پر تصاویر آپ کے TexPilot سرور کو بھیجی جائیں گی۔",
   checkConnection: "Check connection",
   urdu443: "کنکشن چیک کریں",
   aCloserLookAtYourMaterial: "Photograph the material",
@@ -1407,7 +1407,7 @@ export const copy = {
   framing: "Framing",
   urdu496: "فریم",
   sharpnessScore: "Sharpness score",
-  urdu497: "نفاست کا اسکور",
+  urdu497: "وضاحت کا اسکور",
   model: "Model",
   urdu498: "ماڈل",
   scan: "Scan",

@@ -16,9 +16,9 @@ const garmentAlias: Readonly<Record<string, string>> = {
   shirt: "shirt_blouse", polo: "top_tshirt_sweatshirt", t_shirt: "top_tshirt_sweatshirt",
 };
 
-/** The picture for a model answer (the answer card shows each head's top answer); unknown labels get "uncertain". */
-export function scannerArtworkId(kind: ArtworkKind, label?: string | null): string {
+/** The picture for a model answer; a label with no picture gets none (null), never a generic stand-in. */
+export function scannerArtworkId(kind: ArtworkKind, label?: string | null): string | null {
   const group = groups[kind];
   if (kind === "garment" && label && Object.hasOwn(garmentAlias, label)) label = garmentAlias[label];
-  return label && Object.hasOwn(group, label) ? group[label] : "uncertain";
+  return label && Object.hasOwn(group, label) ? group[label] : null;
 }

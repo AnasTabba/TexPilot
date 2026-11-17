@@ -314,20 +314,22 @@ def _cache_dns() -> None:
     for it made the system resolver fail in bursts. Failures are not cached."""
     real = socket.getaddrinfo
     cache: dict[tuple, list] = {}
+    lock = threading.Lock()
 
     def getaddrinfo(host, port, *args, **kwargs):
         key = (host, port, args, tuple(sorted(kwargs.items())))
-        if key not in cache:
-            try:
-                cache[key] = real(host, port, *args, **kwargs)
-            except socket.gaierror:
-                # macOS's resolver can stick on a cached failure for one name while
-                # DNS itself answers fine. Ask DNS directly; TLS still verifies `host`.
-                ips = _dig(host)
-                if not ips:
-                    raise
-                cache[key] = [ai for ip in ips for ai in real(ip, port, *args, **kwargs)]
-        return cache[key]
+        with lock:
+            if key not in cache:
+                try:
+                    cache[key] = real(host, port, *args, **kwargs)
+                except socket.gaierror:
+                    # macOS's resolver can stick on a cached failure for one name while
+                    # DNS itself answers fine. Ask DNS directly; TLS still verifies `host`.
+                    ips = _dig(host)
+                    if not ips:
+                        raise
+                    cache[key] = [ai for ip in ips for ai in real(ip, port, *args, **kwargs)]
+            return cache[key]
 
     socket.getaddrinfo = getaddrinfo
 

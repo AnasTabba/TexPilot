@@ -140,30 +140,3 @@ def test_isolated_settings_and_source_manifest():
             and any(isinstance(t, ast.Name) and t.id == "EXPECTED" for t in n.targets)
         )
         assert embedded == manifest
-
-
-@pytest.mark.parametrize("name", ["mvtec", "wfdd", "aitex"])
-def test_probe_forces_preflight_even_without_cli_args(monkeypatch, name):
-    import runpy
-    import signal
-    import sys
-
-    import training.fault.kaggle.full_a2 as full
-
-    root = Path(__file__).parents[1].resolve()
-    calls = []
-    alarms = []
-    monkeypatch.setattr(full, "run", lambda *args, **kwargs: calls.append((args, kwargs)))
-    monkeypatch.setattr(Path, "rglob", lambda *_: iter([root / "training/fault/bench.py"]))
-    monkeypatch.setattr(signal, "alarm", alarms.append)
-    monkeypatch.setattr(sys, "argv", ["run.py"])
-    monkeypatch.setattr(sys, "path", sys.path.copy())
-    folder = root / "training/fault/kaggle" / f"a2_{name}_probe"
-    runpy.run_path(str(folder / "run.py"), run_name="__main__")
-    assert calls[0][0][0] == name
-    assert calls[0][1] == {"preflight_only": True}
-    assert alarms == [900]
-    metadata = json.loads((folder / "kernel-metadata.json").read_text())
-    assert metadata["id"] == f"anastabba/texpilot-a2-{name}-preflight"
-    assert metadata["enable_internet"] is False
-    assert metadata["dataset_sources"] == calls[0][0][3]

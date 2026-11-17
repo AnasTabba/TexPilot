@@ -254,8 +254,7 @@ def run(dataset, root, expected, input_bindings, preflight_only=False, gpus=1):
             provenance = {
                 "dataset": dataset,
                 "kernel_id": (
-                    f"anastabba/texpilot-a2-{dataset}-"
-                    f"{'ddp2' if gpus == 2 else 'amp'}-10k"
+                    f"anastabba/texpilot-a2-{dataset}-{'ddp2' if gpus == 2 else 'amp'}-10k"
                 ),
                 "source_slug": SOURCES[dataset],
                 "code_root": str(root),

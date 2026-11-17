@@ -11,8 +11,6 @@ import {
   validateScan,
   ScanError,
   topGuess,
-  madeOf,
-  composition,
   type ScanResult,
   type SpecResult,
 } from "../src/scanner-client.ts";
@@ -46,6 +44,8 @@ test("Scanner endpoint normalization preserves API prefixes and rejects credenti
     normalizeEndpoint("https://model.example/texpilot/"),
     "https://model.example/texpilot",
   );
+  for (const path of ["/api/v1", "/api/v1/", "/api/v1/model", "/api/v1/spec/"])
+    assert.equal(normalizeEndpoint("https://model.example" + path), "https://model.example");
   for (const url of [
     "javascript:alert(1)",
     "https://user:pass@model.example",
@@ -323,26 +323,43 @@ test("answer card always shows the top answer: the accepted one, else the head's
   assert.equal(topGuess(undefined, []), null);
 });
 
-test("made of: the 33-fibre model's top fibre inside the winning family, with the family's confidence", () => {
-  const base = { fibre_family: null, custom: {}, candidates: {} } as const;
-  // Jeans scan 26 Oct: family cellulosic 63%, fibre head cotton 19% / nylon 14% / elastane 13%.
-  assert.deepEqual(madeOf({ ...base, candidates: { fibre_family: [["cellulosic", 0.63], ["synthetic", 0.21]], fibre: [["nylon", 0.2], ["cotton", 0.19]] } }),
-    { fibre: "cotton", family: "cellulosic", p: 0.63 });
-  // No fibre of that family among the fibre head's guesses: the family alone.
-  assert.deepEqual(madeOf({ ...base, candidates: { fibre_family: [["protein", 0.7]], fibre: [["cotton", 0.3]] } }),
-    { fibre: null, family: "protein", p: 0.7 });
-  // An accepted fibre answer wins over the family's guess.
-  assert.deepEqual(madeOf({ ...base, custom: { fibre: { label: "polyester", confidence: 0.92, topk: [["polyester", 0.92]] } }, candidates: { fibre_family: [["cellulosic", 0.5]] } }),
-    { fibre: "polyester", family: "synthetic", p: 0.92 });
-  assert.equal(madeOf(base), null);
+test("Fault check: absent, null and well-formed results pass; malformed ones are refused", () => {
+  const fault = { score: 0.42, is_fault: true, threshold: 0.3, regions: [], heatmap_png_b64: "iVBORw0KGgo=", model_version: "fault-wfdd-v1", skipped_reason: null };
+  assert.equal(parseScanResult(fixture).fault, undefined);
+  assert.equal(parseScanResult({ ...fixture, fault: null }).fault, null);
+  assert.equal(parseScanResult({ ...fixture, fault }).fault?.is_fault, true);
+  assert.equal(parseScanResult({ ...fixture, fault: { ...fault, heatmap_png_b64: null, skipped_reason: "garment too small for a close-up fault check" } }).fault?.heatmap_png_b64, null);
+  for (const bad of [
+    { ...fault, score: "high" },
+    { ...fault, score: Number.NaN },
+    { ...fault, is_fault: "yes" },
+    { ...fault, threshold: undefined },
+    { ...fault, heatmap_png_b64: '"><img src=x onerror=alert(1)>' },
+    { ...fault, model_version: 1 },
+    "fault",
+  ])
+    assert.throws(() => parseScanResult({ ...fixture, fault: bad }), ScanError);
 });
-
-test("composition in trade terms: the blend head (pure / stretch / CVC / PC) with the fibre it is made of", () => {
-  const jeans = { fibre_family: null, custom: { blend: null }, candidates: { blend: [["stretch", 0.81], ["pure", 0.15]], fibre_family: [["cellulosic", 0.63]], fibre: [["cotton", 0.19], ["nylon", 0.14]] } };
-  assert.deepEqual(composition(jeans), { blend: "stretch", fibre: "cotton", p: 0.81 });
-  assert.deepEqual(composition({ ...jeans, custom: { blend: { label: "pure", confidence: 0.95, topk: [] } } }), { blend: "pure", fibre: "cotton", p: 0.95 });
-  assert.deepEqual(composition({ ...jeans, candidates: { ...jeans.candidates, blend: [["CVC", 0.6]] } }), { blend: "CVC", fibre: "cotton", p: 0.6 });
-  // No blend head (older server): the fibre alone, with its family's confidence.
-  assert.deepEqual(composition({ ...jeans, custom: {}, candidates: { ...jeans.candidates, blend: undefined } }), { blend: null, fibre: "cotton", p: 0.63 });
-  assert.equal(composition({ fibre_family: null, custom: {}, candidates: {} }), null);
+test("Spec label photo over 10 MB is named as the label, not the fabric scan", async () => {
+  const scan = new File([new Uint8Array([73, 73, 42, 0])], "swatch.tif", { type: "image/tiff" });
+  const label = new File([new Uint8Array(11 * 1024 * 1024)], "label.jpg", { type: "image/jpeg" });
+  await assert.rejects(
+    analyzeSpec("https://model.example", scan, { construction: "woven", label }),
+    (e) => e instanceof ScanError && e.code === "too-large" && e.detail === "label",
+  );
+});
+test("A spec response that stalls after its headers times out instead of hanging", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  context.mock.method(globalThis, "fetch", async (_url: string, init: RequestInit) => {
+    const stalled = new ReadableStream({
+      start(controller) {
+        init.signal?.addEventListener("abort", () => controller.error(new Error("aborted")), { once: true });
+      },
+    });
+    return new Response(stalled, { status: 200 });
+  });
+  const scan = new File([new Uint8Array([73, 73, 42, 0])], "swatch.tif", { type: "image/tiff" });
+  const measuring = analyzeSpec("https://model.example", scan, { construction: "woven" });
+  context.mock.timers.tick(120000);
+  await assert.rejects(measuring, (e) => e instanceof ScanError && e.code === "timeout");
 });

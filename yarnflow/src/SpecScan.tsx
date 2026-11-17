@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
-import { Camera, Check, ClipboardCopy, LoaderCircle, Ruler, Scale, Shirt, TriangleAlert } from "lucide-react";
+import { Check, ClipboardCopy, LoaderCircle, Ruler, TriangleAlert } from "lucide-react";
+import { ActionBar, Stat, Step, Steps } from './ui';
 import { analyzeSpec, ScanError, type SpecResult } from "./scanner-client";
 import { translate, useLanguage } from "./i18n";
+import "./spec-scan.css";
 
 /** The model server: the one the fabric scanner connected to, else this page's own origin
  * (the dev proxy serves /api/v1 there). */
@@ -13,10 +15,18 @@ function endpoint(): string {
   }
 }
 
+/** Urdu for the server's fixed flag texts, by code. Other flags keep the server's English. */
+const FLAG_URDU: Record<string, string> = {
+  NO_WEIGHT: "10 × 10 cm کے ٹکڑے کا وزن کریں (گرام × 100 = g/m²)، یا GSM کٹر استعمال کریں، تاکہ دھاگے کا کاؤنٹ مل سکے۔",
+  WEFT_ASSUMED: "تانے اور بانے کے دھاگے کا کاؤنٹ ایک جیسا سمجھا گیا ہے؛ تصدیق کے لیے ایک پک کا دھاگہ کھول کر وزن کریں۔",
+  SMALL_SCAN: "پکا کاؤنٹ کے لیے کم از کم 1 × 1 انچ کپڑے کا اسکین کریں۔",
+};
+
 function message(e: unknown, language: 'en' | 'ur'): string {
   if (!(e instanceof ScanError)) return translate(language, "Something went wrong. Your inputs are still here; try again.", "کچھ غلط ہو گیا۔ آپ کی درج کردہ معلومات موجود ہیں؛ دوبارہ کوشش کریں۔");
   if (e.code === "invalid-image")
-    return e.detail ? translate(language, e.detail) : translate(language, "This scan cannot be measured. Check the dpi and the weight.", "اس اسکین سے پیمائش نہیں ہو سکی۔ dpi اور وزن جانچیں۔");
+    return translate(language, "This scan cannot be measured. Check the dpi and the weight.", "اس اسکین سے پیمائش نہیں ہو سکی۔ dpi اور وزن جانچیں۔");
+  if (e.code === "too-large" && e.detail === "label") return translate(language, "The care label photo is over 10 MB. Send a smaller photo.", "کیئر لیبل کی تصویر 10 MB سے بڑی ہے۔ چھوٹی تصویر بھیجیں۔");
   if (e.code === "too-large") return translate(language, "The scan is over 60 MB: crop it to the swatch and save again.", "اسکین 60 MB سے بڑا ہے۔ صرف کپڑے کا نمونہ کراپ کرکے دوبارہ محفوظ کریں۔");
   if (e.code === "unsupported") return translate(language, "Use a PNG, JPEG or TIFF scan (not HEIC).", "PNG، JPEG یا TIFF اسکین استعمال کریں؛ HEIC نہیں۔");
   if (e.code === "unreachable" || e.code === "timeout")
@@ -53,6 +63,8 @@ export default function SpecScan() {
   const [error, setError] = useState<{ cause: unknown } | null>(null);
   const [result, setResult] = useState<SpecResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const [step, setStep] = useState(1);
 
   async function run(e: FormEvent) {
     e.preventDefault();
@@ -61,6 +73,7 @@ export default function SpecScan() {
     setError(null);
     setResult(null);
     setCopied(false);
+    setCopyFailed(false);
     try {
       setResult(
         await analyzeSpec(endpoint(), scan, {
@@ -83,25 +96,122 @@ export default function SpecScan() {
   const knit = result?.construction === "knit";
   return (
     <div className="spec-scan">
-      <section className="live-panel">
-        <div className="live-panel-heading">
-          <div>
-            <h2>{t('Yarn count', 'دھاگے کا کاؤنٹ')}</h2>
-            <p>{t('Measure the threads and yarn count from a photo with the reference card.', 'ریفرنس کارڈ کے ساتھ تصویر سے کپڑے کے دھاگے اور یارن کاؤنٹ کی پیمائش کریں۔')}</p>
+      {result && (
+        <section className="live-panel spec-result" aria-live="polite">
+          <div className="live-panel-heading">
+            <div>
+              {result.yarn ? (
+                <>
+                  <h2>{t('Yarn count', 'دھاگے کا کاؤنٹ')}</h2>
+                  <p>{t('Measured from your scan; check the first orders against a pick glass.', 'یہ پیمائش آپ کے اسکین سے ہے؛ پہلے آرڈر کی پک گلاس سے تصدیق کریں۔')}</p>
+                </>
+              ) : (
+                <>
+                  <h2>{t('Weight needed', 'وزن درکار ہے')}</h2>
+                  <p>{t('Enter the weight to get the yarn count.', 'دھاگے کا کاؤنٹ جاننے کے لیے وزن درج کریں۔')}</p>
+                </>
+              )}
+            </div>
+            {result.yarn && (
+              <button
+                className="button"
+                type="button"
+                onClick={async () => {
+                  const ok = await copy(result.yarn_order.join("\n"));
+                  setCopied(ok);
+                  setCopyFailed(!ok);
+                }}
+              >
+                {copied ? <Check size={16} /> : <ClipboardCopy size={16} />}
+                {copied ? t('Copied', 'کاپی ہو گیا') : t('Copy', 'کاپی کریں')}
+              </button>
+            )}
           </div>
-          <Ruler size={22} aria-hidden="true" />
-        </div>
-        <details className="spec-guide">
-          <summary>{t('How to take the photo', 'تصویر کیسے لیں')}</summary>
-          <ol className="spec-steps">
-            <li><Camera size={22} aria-hidden="true" /><span><strong>{t('Photo', 'تصویر')}</strong> {t('Lay the', 'کپڑے پر')} <a href="/texpilot-card.svg" target="_blank" rel="noreferrer">{t('printed TexPilot card', 'پرنٹ کیا ہوا TexPilot کارڈ')}</a> {t('on the fabric and take a photo from about 15 cm.', 'رکھیں اور تقریباً 15 cm دور سے تصویر لیں۔')}</span></li>
-            <li><Scale size={22} aria-hidden="true" /><span><strong>{t('Weight', 'وزن')}</strong> {t('Weigh a 10 × 10 cm piece. Optional, but needed for the yarn count.', '10 × 10 cm کے ٹکڑے کا وزن کریں۔ یہ اختیاری ہے، لیکن یارن کاؤنٹ کے لیے ضروری ہے۔')}</span></li>
-            <li><Shirt size={22} aria-hidden="true" /><span><strong>{t('Woven or knit', 'وون یا نِٹ')}</strong> {t('Pick one, then tap Work out the yarn.', 'ایک چنیں، پھر «دھاگے کا حساب لگائیں» دبائیں۔')}</span></li>
-          </ol>
-        </details>
+          {result.yarn && <Stat label={knit ? t('Yarn count', 'دھاگے کا کاؤنٹ') : t('Warp count', 'تانے کا کاؤنٹ')} value={<span dir="ltr">Ne {result.yarn.warp_ne[0].toFixed(1)}–{result.yarn.warp_ne[1].toFixed(1)}</span>} />}
+          {copyFailed && (
+            <p className="spec-error" role="alert">
+              <TriangleAlert size={18} aria-hidden="true" /> {t('Copy did not work. Select the lines and copy them.', 'کاپی نہیں ہو سکا۔ لائنیں منتخب کر کے خود کاپی کریں۔')}
+            </p>
+          )}
+          {result.yarn && (
+            <h3 className="spec-order-title">{t('What to order', 'کیا آرڈر کریں')}</h3>
+          )}
+          {result.yarn && (
+            <ul className="spec-order">
+              {result.yarn_order.map((line) => (
+                <li key={line}>{t(line)}</li>
+              ))}
+            </ul>
+          )}
+          <details className="spec-details"><summary>{t('Details', 'تفصیل')}</summary>
+          <dl className="spec-measures">
+            {result.weave && (
+              <div>
+                <dt>{t('Weave', 'بُنائی')}</dt>
+                <dd>{t(result.weave)}</dd>
+              </div>
+            )}
+            <div>
+              <dt>{knit ? t('Wales per inch', 'فی انچ ویلز') : t('Ends per inch (warp)', 'فی انچ تانے کے دھاگے')}</dt>
+              <dd dir="ltr">{result.density.ends_per_inch.toFixed(1)} per inch</dd>
+            </div>
+            <div>
+              <dt>{knit ? t('Courses per inch', 'فی انچ کورسز') : t('Picks per inch (weft)', 'فی انچ بانے کے دھاگے')}</dt>
+              <dd dir="ltr">{result.density.picks_per_inch.toFixed(1)} per inch</dd>
+            </div>
+            <div>
+              <dt>{t('Scale', 'پیمائش کا حوالہ')}</dt>
+              <dd>
+                {result.scale_source === "card" ? t('card', 'کارڈ') : t('scan', 'اسکین')}, <span dir="ltr">{result.dpi.toFixed(0)} ppi</span>
+              </dd>
+            </div>
+            <div>
+              <dt>{t('Agreement', 'پیمائش کی یکسانیت')}</dt>
+              <dd>
+                {t(`${result.density.tiles} areas within ${result.density.spread_pct.toFixed(1)}%`, `${result.density.tiles} حصوں میں ${result.density.spread_pct.toFixed(1)}% کے اندر فرق`)}
+              </dd>
+            </div>
+            <div>
+              <dt>{t('Weight', 'وزن')}</dt>
+              <dd>{result.weight_gsm ? <span dir="ltr">{result.weight_gsm.toFixed(0)} g/m²</span> : t('not given', 'درج نہیں')}</dd>
+            </div>
+            {result.yarn && (
+              <div>
+                <dt>{knit ? t('Yarn count', 'دھاگے کا کاؤنٹ') : t('Warp count', 'تانے کا کاؤنٹ')}</dt>
+                <dd dir="ltr">
+                  Ne {result.yarn.warp_ne[0].toFixed(1)}–{result.yarn.warp_ne[1].toFixed(1)}
+                </dd>
+              </div>
+            )}
+            {result.yarn?.weft_ne && (
+              <div>
+                <dt>{t('Weft count', 'بانے کا کاؤنٹ')}</dt>
+                <dd dir="ltr">
+                  Ne {result.yarn.weft_ne[0].toFixed(1)}–{result.yarn.weft_ne[1].toFixed(1)}
+                </dd>
+              </div>
+            )}
+          </dl>
+          {result.yarn && <p className="spec-basis">{t('Assumes:', 'بنیاد:')} {t(result.yarn.basis)}.</p>}
+          {!!result.flags.length && (
+            <ul className="spec-flags">
+              {result.flags.map((f) => (
+                <li key={f.code} data-severity={f.severity}>
+                  {t(f.message, FLAG_URDU[f.code])}
+                </li>
+              ))}
+            </ul>
+          )}
+          </details>
+        </section>
+      )}
+      <section className="live-panel">
+        <div className="live-panel-heading"><div><h2>{t('Yarn count', 'دھاگے کا کاؤنٹ')}</h2><p>{t('Add a swatch photo and its weight.', 'کپڑے کے نمونے کی تصویر اور وزن درج کریں۔')}</p></div><Ruler size={22} aria-hidden="true" /></div>
         <form className="spec-form" onSubmit={run}>
+          <Steps label={t('Yarn count steps', 'دھاگے کے کاؤنٹ کے مراحل')}>
+          <Step title={t('Photo of the swatch', 'نمونے کی تصویر')} state={step === 1 ? 'current' : step > 1 ? 'done' : 'later'}>
           <label>
-            {t('1. Photo of the fabric with the card', '1. کارڈ کے ساتھ کپڑے کی تصویر')}
+            {t('Photo of the swatch with the printed card', 'پرنٹ شدہ کارڈ کے ساتھ نمونے کی تصویر')}
             <input
               type="file"
               accept="image/png,image/jpeg,image/tiff,.tif,.tiff"
@@ -109,8 +219,10 @@ export default function SpecScan() {
               onChange={(e) => setScan(e.target.files?.[0] ?? null)}
             />
           </label>
+          </Step>
+          <Step title={t('Weight and size', 'وزن اور سائز')} state={step === 2 ? 'current' : step > 2 ? 'done' : 'later'}>
           <label>
-            {t('2. Weight', '2. وزن')} ({unit === "gsm" ? t('g/m²: grams of a 10 × 10 cm piece × 100', 'g/m²: دس بائی دس سینٹی میٹر کے ٹکڑے کا وزن گرام میں × 100') : "oz/yd²"}, {t('optional', 'اختیاری')})
+            {t('Weight', 'وزن')} ({unit === "gsm" ? t('g/m²', 'g/m²') : "oz/yd²"})
             <input
               type="number"
               dir="ltr"
@@ -122,8 +234,9 @@ export default function SpecScan() {
               onChange={(e) => setWeight(e.target.value)}
             />
           </label>
+          <p className="spec-hint">{t('Weigh a 10 × 10 cm piece; its grams × 100 gives g/m².', '10 × 10 cm کا ٹکڑا تولیں؛ گرام × 100 سے g/m² ملتا ہے۔')}</p>
           <fieldset className="spec-choice">
-            <legend>{t('3. Woven or knit', '3. وون یا نِٹ')}</legend>
+            <legend>{t('Fabric type', 'کپڑے کی قسم')}</legend>
             {(["woven", "knit"] as const).map((c) => (
               <label key={c}>
                 <input
@@ -136,6 +249,11 @@ export default function SpecScan() {
               </label>
             ))}
           </fieldset>
+          </Step>
+          <Step title={t('Yarn count', 'دھاگے کا کاؤنٹ')} state={step === 3 ? 'current' : 'later'}>
+            <p>{t('Review your swatch and calculate its yarn count.', 'نمونے کی تصدیق کریں اور دھاگے کا کاؤنٹ معلوم کریں۔')}</p>
+          </Step>
+          </Steps>
           <details className="spec-more">
             <summary>{t('More options', 'مزید اختیارات')}</summary>
             <label>
@@ -190,10 +308,7 @@ export default function SpecScan() {
               />
             </label>
           </details>
-          <button className="button primary" type="submit" disabled={!scan || busy}>
-            {busy ? <LoaderCircle className="spin" size={18} /> : <Ruler size={18} />}
-            {busy ? t('Measuring the threads…', 'دھاگوں کی پیمائش ہو رہی ہے…') : t('Work out the yarn', 'دھاگے کا حساب لگائیں')}
-          </button>
+          <ActionBar primary={step < 3 ? { label: t('Next', 'اگلا'), onClick: () => setStep(step + 1), icon: <Ruler aria-hidden="true" />, disabled: step === 1 && !scan } : { label: busy ? t('Measuring…', 'پیمائش جاری ہے…') : t('Work out yarn count', 'دھاگے کا کاؤنٹ معلوم کریں'), onClick: () => { const form = document.querySelector<HTMLFormElement>('.spec-form'); form?.requestSubmit(); }, icon: busy ? <LoaderCircle className="spin" /> : <Ruler aria-hidden="true" />, disabled: !scan || busy }} secondary={step > 1 ? { label: t('Back', 'واپس'), onClick: () => setStep(step - 1) } : undefined} />
         </form>
         {error && (
           <p className="spec-error" role="alert">
@@ -202,87 +317,7 @@ export default function SpecScan() {
         )}
       </section>
 
-      {result && (
-        <section className="live-panel spec-result" aria-live="polite">
-          <div className="live-panel-heading">
-            <div>
-              <h2>{t('Yarn to order', 'خریدنے کے لیے دھاگا')}</h2>
-              <p>{t('Measured from your scan; check the first orders against a pick glass.', 'یہ پیمائش آپ کے اسکین سے ہے؛ پہلے آرڈر کی پک گلاس سے تصدیق کریں۔')}</p>
-            </div>
-            <button
-              className="button"
-              type="button"
-              onClick={async () => setCopied(await copy(result.yarn_order.join("\n")))}
-            >
-              {copied ? <Check size={16} /> : <ClipboardCopy size={16} />}
-              {copied ? t('Copied', 'کاپی ہو گیا') : t('Copy', 'کاپی کریں')}
-            </button>
-          </div>
-          <ul className="spec-order">
-            {result.yarn_order.map((line) => (
-              <li key={line}>{t(line)}</li>
-            ))}
-          </ul>
-          <dl className="spec-measures">
-            {result.weave && (
-              <div>
-                <dt>{t('Weave', 'بُنائی')}</dt>
-                <dd>{t(result.weave)}</dd>
-              </div>
-            )}
-            <div>
-              <dt>{knit ? t('Wales per inch', 'فی انچ ویلز') : t('Ends per inch (warp)', 'فی انچ تانے کے دھاگے')}</dt>
-              <dd dir="ltr">{result.density.ends_per_inch.toFixed(1)}</dd>
-            </div>
-            <div>
-              <dt>{knit ? t('Courses per inch', 'فی انچ کورسز') : t('Picks per inch (weft)', 'فی انچ بانے کے دھاگے')}</dt>
-              <dd dir="ltr">{result.density.picks_per_inch.toFixed(1)}</dd>
-            </div>
-            <div>
-              <dt>{t('Scale', 'پیمائش کا حوالہ')}</dt>
-              <dd>
-                {result.scale_source === "card" ? t('card', 'کارڈ') : t('scan', 'اسکین')}, <span dir="ltr">{result.dpi.toFixed(0)} ppi</span>
-              </dd>
-            </div>
-            <div>
-              <dt>{t('Agreement', 'پیمائش کی یکسانیت')}</dt>
-              <dd>
-                {t(`${result.density.tiles} areas within ${result.density.spread_pct.toFixed(1)}%`, `${result.density.tiles} حصوں میں ${result.density.spread_pct.toFixed(1)}% کے اندر فرق`)}
-              </dd>
-            </div>
-            <div>
-              <dt>{t('Weight', 'وزن')}</dt>
-              <dd>{result.weight_gsm ? <span dir="ltr">{result.weight_gsm.toFixed(0)} g/m²</span> : t('not given', 'درج نہیں')}</dd>
-            </div>
-            {result.yarn && (
-              <div>
-                <dt>{knit ? t('Yarn count', 'دھاگے کا کاؤنٹ') : t('Warp count', 'تانے کا کاؤنٹ')}</dt>
-                <dd dir="ltr">
-                  Ne {result.yarn.warp_ne[0].toFixed(1)}–{result.yarn.warp_ne[1].toFixed(1)}
-                </dd>
-              </div>
-            )}
-            {result.yarn?.weft_ne && (
-              <div>
-                <dt>{t('Weft count', 'بانے کا کاؤنٹ')}</dt>
-                <dd dir="ltr">
-                  Ne {result.yarn.weft_ne[0].toFixed(1)}–{result.yarn.weft_ne[1].toFixed(1)}
-                </dd>
-              </div>
-            )}
-          </dl>
-          {result.yarn && <p className="spec-basis">{t('Assumes:', 'بنیاد:')} {t(result.yarn.basis)}.</p>}
-          {!!result.flags.length && (
-            <ul className="spec-flags">
-              {result.flags.map((f) => (
-                <li key={f.code} data-severity={f.severity}>
-                  {t(f.message)}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+
     </div>
   );
 }

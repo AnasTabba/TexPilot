@@ -248,9 +248,10 @@ def audit_splits(
                     (item.id,),
                 )
             )
-        if item.perceptual_hash is not None and PHASH_PATTERN.fullmatch(
-            item.perceptual_hash
-        ) is None:
+        if (
+            item.perceptual_hash is not None
+            and PHASH_PATTERN.fullmatch(item.perceptual_hash) is None
+        ):
             findings.append(
                 Finding(
                     "PHASH_INVALID",
@@ -278,9 +279,7 @@ def audit_splits(
         by_source[item.source].append(item.id)
     for name in sorted(by_source):
         ids = tuple(by_source[name])
-        matches = [
-            s for s in manifest.sources if _ident(s.name) == _ident(name)
-        ]
+        matches = [s for s in manifest.sources if _ident(s.name) == _ident(name)]
         source = matches[0] if len(matches) == 1 else None
         if source is None:
             findings.append(Finding("SOURCE_UNREGISTERED", f"source {name!r} has no record", ids))
@@ -597,9 +596,7 @@ def audit_splits(
             }
             for i in items
         ),
-        open_gates=("G5",)
-        if unresolved or any(_ident(i.source) == "aitex" for i in items)
-        else (),
+        open_gates=("G5",) if unresolved or any(_ident(i.source) == "aitex" for i in items) else (),
         benchmark_status="CONTAMINATED_EXPLORATORY"
         if any(f.code.startswith("CROSS_SOURCE_OVERLAP") for f in findings)
         else "NO_DETECTED_OVERLAP",

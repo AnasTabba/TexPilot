@@ -48,11 +48,7 @@ def synthetic_audit(rows, purpose="release-evaluation"):
         "synthetic-manifest",
         "1",
         purpose,
-        (
-            SourceRecord(
-                "synthetic-source", "1", "synthetic://double", "CC-BY-4.0", (purpose,)
-            ),
-        ),
+        (SourceRecord("synthetic-source", "1", "synthetic://double", "CC-BY-4.0", (purpose,)),),
         items,
     )
     return manifest, audit_splits(manifest)
@@ -533,8 +529,6 @@ def test_calibration_groups_reserved_across_looks(tmp_path):
     o2 = gate.evaluate_release(r2, a2)
     assert o2.state == "NO_RELEASE"
     assert "RELEASE_COHORT_REUSED" in o2.reasons
-
-
 
 
 @pytest.mark.parametrize(

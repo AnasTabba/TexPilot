@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
 import { useLanguage } from './i18n';
 import { RANGES, type Range } from './range-buckets';
 import './range-select.css';
@@ -27,12 +26,9 @@ export function useRange(storageKey: string, fallback: Range = '14d') {
 
 export function RangeSelect({ value, onChange, label }: { value: Range; onChange: (range: Range) => void; label: string }) {
   const { t } = useLanguage();
-  return (
-    <span className="rs">
-      <select className="rs-select" aria-label={label} value={value} onChange={e => onChange(e.target.value as Range)}>
-        {RANGES.map(r => <option key={r.value} value={r.value}>{t(r.en, r.ur)}</option>)}
-      </select>
-      <ChevronDown className="rs-chev" size={12} aria-hidden />
-    </span>
-  );
+  return <span className="rs">
+    <select className="rs-select" aria-label={label} value={value} onChange={e => onChange(e.target.value as Range)}>
+      {RANGES.map(r => <option key={r.value} value={r.value}>{t(r.en, r.ur)}</option>)}
+    </select>
+  </span>;
 }

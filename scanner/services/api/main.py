@@ -23,6 +23,7 @@ from services.api.schemas import FlagModel, ScanResult, SpecResult
 from services.api.spec import run_spec
 from services.api.uploads import check_upload
 from services.vision.errors import UnsupportedImage
+from services.vision.imageio import decode_image
 from services.vision.predictor import Predictor, StubPredictor
 
 log = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ def model_info() -> dict[str, str | bool]:
 
 
 @app.post("/api/v1/scan", response_model=ScanResult)
-async def scan(
+def scan(
     surface_image: UploadFile = File(...),
     label_image: UploadFile | None = File(default=None),
     label_text: str | None = Form(default=None),
@@ -82,10 +83,15 @@ async def scan(
     ``label_image`` is read by server-side OCR; ``label_text``, if given, overrides it.
     Undecodable images (e.g. HEIC) are a 422.
     """
-    data = await surface_image.read()
-    label = await label_image.read() if label_image is not None else None
+    data = surface_image.file.read()
+    label = label_image.file.read() if label_image is not None else None
     try:
         check_upload(data, "surface_image")
+        try:
+            decode_image(data, min_side=224)
+        except UnsupportedImage as e:
+            if "too small to read" in str(e):
+                raise
         if label is not None:
             check_upload(label, "label_image")
         result = run_scan(

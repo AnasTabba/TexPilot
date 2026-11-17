@@ -133,12 +133,13 @@ export function trackingView(shipment: Pick<Shipment, 'status' | 'last_status_js
   const data = parseTrackingData(shipment.last_status_json);
   const events = shipment.events !== undefined ? readEvents(shipment.events) : data?.events ?? [];
   const latest = events[0] ?? null;
-  const locations = events.map(e => e.location).filter(Boolean);
-  const origin = str(shipment.origin) ?? data?.origin ?? locations[locations.length - 1] ?? null;
-  const destination = str(shipment.destination) ?? data?.destination ?? locations[0] ?? null;
+  // Route ends come only from the provider: an event's location is where the container is now, not where it started or is going.
+  const origin = str(shipment.origin) ?? data?.origin ?? null;
+  const destination = str(shipment.destination) ?? data?.destination ?? null;
 
   let derived: TrackingStage;
-  if (data?.empty) derived = 'delivered';
+  // No containers, events or reference from the provider: nothing is known, so never read as delivered.
+  if (data?.empty) derived = 'not_checked';
   else if (latest) derived = stageOf(latest, destination) ?? 'booked';
   else if (shipment.status === 'error') derived = 'error';
   else if (shipment.status === 'tracked') derived = 'booked';

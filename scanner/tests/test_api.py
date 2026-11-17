@@ -1,3 +1,4 @@
+import inspect
 import io
 
 import pytest
@@ -15,6 +16,21 @@ JPEG = b"\xff\xd8\xff\xe0 stub never decodes this"
 
 def test_health():
     assert client.get("/health").json() == {"status": "ok"}
+
+
+def test_scan_handler_runs_in_fastapis_sync_threadpool():
+    assert not inspect.iscoroutinefunction(main.scan)
+
+
+def test_scan_rejects_a_too_small_photo_with_a_retake_message():
+    Image = pytest.importorskip("PIL.Image")
+    buf = io.BytesIO()
+    Image.new("RGB", (10, 10), "white").save(buf, format="PNG")
+    r = client.post(
+        "/api/v1/scan", files={"surface_image": ("tiny.png", buf.getvalue(), "image/png")}
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"] == "The photo is too small to read. Take it again closer and sharper."
 
 
 def test_scan_abstains_with_the_stub_predictor():
@@ -108,6 +124,46 @@ def test_typed_label_text_overrides_the_photo(state):
     )
     assert [f["name"] for f in r.json()["stated_composition"]["fibers"]] == ["cotton"]
     assert ocr.calls == 0
+
+
+def test_invalid_typed_text_falls_back_to_label_photo_and_explains_text(state):
+    ocr = FakeOcr([TextLine("100% POLYESTER", 0.9, (0, 0, 100, 10))])
+    state["ocr"] = ocr
+    r = client.post(
+        "/api/v1/scan",
+        files={
+            "surface_image": ("g.jpg", JPEG, "image/jpeg"),
+            "label_image": ("l.png", _png(), "image/png"),
+        },
+        data={"label_text": "60% cotton 30% polyester"},
+    )
+    body = r.json()
+    assert r.status_code == 200
+    assert [f["name"] for f in body["stated_composition"]["fibers"]] == ["polyester"]
+    assert "LABEL_TEXT_UNREADABLE" in [f["code"] for f in body["flags"]]
+
+
+def test_typed_label_uses_shell_and_ignores_lining(state):
+    r = client.post(
+        "/api/v1/scan",
+        files={"surface_image": ("g.jpg", JPEG, "image/jpeg")},
+        data={"label_text": "Shell: 100% cotton. Lining: 100% polyester"},
+    )
+    assert r.status_code == 200
+    assert [f["name"] for f in r.json()["stated_composition"]["fibers"]] == ["cotton"]
+
+
+def test_undecodable_label_photo_abstains_without_rejecting_scan(state):
+    state["ocr"] = FakeOcr()
+    r = client.post(
+        "/api/v1/scan",
+        files={
+            "surface_image": ("g.jpg", JPEG, "image/jpeg"),
+            "label_image": ("l.png", b"\x89PNG\r\n\x1a\ntruncated", "image/png"),
+        },
+    )
+    assert r.status_code == 200
+    assert "LABEL_UNREADABLE" in [f["code"] for f in r.json()["flags"]]
 
 
 def test_unreadable_label_explains_itself(state):

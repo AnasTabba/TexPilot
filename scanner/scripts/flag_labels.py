@@ -43,8 +43,10 @@ def available_rows(rows, caches, allow_missing=False):
     missing_paths = set().union(*(set(c.missing([r.path for r in rows])) for c in caches))
     missing = [r for r in rows if r.path in missing_paths]
     if missing and not allow_missing:
-        raise ValueError(f'{len(missing)} rows not cached in every encoder; '
-                         'inspect them before --allow-missing-features')
+        raise ValueError(
+            f"{len(missing)} rows not cached in every encoder; "
+            "inspect them before --allow-missing-features"
+        )
     return [r for r in rows if r.path not in missing_paths], missing
 
 
@@ -101,8 +103,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--folds", type=int, default=5)
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     ap.add_argument("--device", default="mps" if torch.backends.mps.is_available() else "cpu")
-    ap.add_argument("--allow-missing-features", action="store_true",
-                    help="explicitly compare only common cached rows; exports missing_features.csv")
+    ap.add_argument(
+        "--allow-missing-features",
+        action="store_true",
+        help="explicitly compare only common cached rows; exports missing_features.csv",
+    )
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
@@ -115,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     rows, missing = available_rows(rows, caches, args.allow_missing_features)
     if missing:
         from collections import Counter
+
         counts = Counter((r.label, r.split) for r in missing)
         print("EXPLICITLY EXCLUDED uncached rows:", dict(counts), flush=True)
         with (args.out / "missing_features.csv").open("w", newline="") as fh:
@@ -192,9 +198,17 @@ def main(argv: list[str] | None = None) -> int:
     pick = max(results, key=lambda k: results[k]["ab"]["audit A: label right"]["macro_f1"])
     print("chosen on audit half A:", pick, flush=True)
     (args.out / "result.json").write_text(
-        json.dumps(dict(features=args.features, ab_features=args.ab_features, chosen=pick,
-                        n_rows=len(rows), missing_features=len(missing),
-                        results=results), indent=1)  # fmt: skip
+        json.dumps(
+            dict(
+                features=args.features,
+                ab_features=args.ab_features,
+                chosen=pick,
+                n_rows=len(rows),
+                missing_features=len(missing),
+                results=results,
+            ),
+            indent=1,
+        )  # fmt: skip
     )
 
     f = flagged.get(pick, np.zeros(len(rows), bool))

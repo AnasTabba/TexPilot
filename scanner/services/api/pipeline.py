@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 
@@ -21,6 +22,7 @@ from services.api.schemas import (
 )
 from services.consistency.engine import evaluate, yarn_advice
 from services.ocr.parser import parse_composition
+from services.vision.errors import UnsupportedImage
 from services.vision.predictor import FaultOutput, HeadOutput, Predictor, structure_answer
 
 log = logging.getLogger(__name__)
@@ -75,7 +77,11 @@ def _read_label(ocr, label_image: bytes, flags: list[FlagModel]):
     from services.ocr.extract import read_composition
     from services.vision.imageio import decode_image
 
-    image = decode_image(label_image)  # UnsupportedImage propagates -> HTTP 422
+    try:
+        image = decode_image(label_image)
+    except UnsupportedImage:
+        flags.append(_info("LABEL_UNREADABLE", "The label photo could not be read."))
+        return None
     try:
         return read_composition(ocr, image)
     except Exception as e:  # noqa: BLE001 -- a failing engine abstains, it does not 500
@@ -88,13 +94,25 @@ def stated_composition(label_text, label_image, ocr, notes: list[FlagModel]):
     """(fibres, StatedComposition) from typed label text (wins: a human correction) or a label
     photo read by OCR; explains in ``notes`` when a photo gave nothing usable."""
     if label_text:
-        composition = parse_composition(label_text)
+        main_text = re.split(
+            r"\b(?:lining|trim|rib|filling|padding|pocketing|contrast)\b",
+            label_text,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0]
+        composition = parse_composition(main_text)
         if composition is not None:
             return composition, StatedComposition(
                 source=CompositionSource.CARE_LABEL,
                 fibers=[FiberComponent(name=c.name, pct=c.pct) for c in composition],
             )
-    elif label_image is not None and ocr is not None:
+        notes.append(
+            _info(
+                "LABEL_TEXT_UNREADABLE",
+                "The typed label text could not be read as fibre percentages.",
+            )
+        )
+    if label_image is not None and ocr is not None:
         ex = _read_label(ocr, label_image, notes)
         if ex is not None and ex.fibers:
             return ex.fibers, StatedComposition(

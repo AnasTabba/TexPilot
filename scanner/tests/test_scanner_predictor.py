@@ -97,7 +97,7 @@ def test_detection_below_threshold_counts_as_no_garment():
 
 def test_failing_detector_abstains_with_a_reason_instead_of_crashing():
     out = _scanner(det=Det(error=RuntimeError("boom"))).predict(_jpeg())
-    assert [n.code for n in out.notes] == ["COMPONENT_FAILED", "NO_GARMENT_DETECTED"]
+    assert [n.code for n in out.notes] == ["COMPONENT_FAILED"]
     assert "garment detector" in out.notes[0].message
 
 

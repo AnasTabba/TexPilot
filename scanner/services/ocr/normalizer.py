@@ -32,6 +32,19 @@ _CODEBOOK: dict[str, str] = {
     "spandex": "elastane_spandex",
     "elastane": "elastane_spandex",
     "elastan": "elastane_spandex",
+    "elasthane": "elastane_spandex",
+    # Urdu-script fibre names; fluent reader must confirm these spellings.
+    "کاٹن": "cotton",
+    "کپاس": "cotton",
+    "پالیسٹر": "polyester",
+    "پالئیسٹر": "polyester",
+    "ریشم": "silk",
+    "اون": "wool",
+    "نائلون": "nylon",
+    "ایلاسٹین": "elastane_spandex",
+    "اسپینڈیکس": "elastane_spandex",
+    "ویسکوز": "viscose_rayon",
+    "ایکریلک": "acrylic",
     "wo": "wool",
     "wool": "wool",
     "wv": "wool",
@@ -102,9 +115,19 @@ _CODEBOOK: dict[str, str] = {
 
 
 def fold_text(text: str) -> str:
-    """Accents stripped and ß expanded, so ALGODÓN and algodon compare equal."""
+    """Strip accents while preserving non-Latin scripts, and expand ß."""
     text = text.replace("ß", "ss").replace("ẞ", "SS")
-    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    out = []
+    for char in unicodedata.normalize("NFKC", text):
+        if "LATIN" in unicodedata.name(char, ""):
+            out.extend(
+                part
+                for part in unicodedata.normalize("NFKD", char)
+                if not unicodedata.combining(part)
+            )
+        elif not unicodedata.combining(char):
+            out.append(char)
+    return "".join(out)
 
 
 def normalize_fiber_name(raw: str) -> str | None:

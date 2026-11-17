@@ -53,7 +53,7 @@ You can use **Record manual inspection** now: select a batch, record the care-la
 
 If a real connected TexPilot server returns a result, **Attach scan to batch** saves the result as client-supplied evidence. It never silently approves QC. Exact fibre percentages are care-label claims, not a molecular measurement made from the photo. Missing model outputs and uncertainty remain visible.
 
-Model recovery and startup: see [MODEL-LOCATION.md](MODEL-LOCATION.md) and [MODEL-CONNECTION.md](MODEL-CONNECTION.md). The compatible trained bundle needs `bundle.json` and `heads.safetensors`, plus any referenced head checkpoints.
+Scanner startup: see [`scanner/deployment/README.md`](../../scanner/deployment/README.md).
 
 ## Offline and recovery
 

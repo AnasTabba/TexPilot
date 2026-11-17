@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, FileText, LogOut, RefreshCw, Truck } from 'lucide-react';
+import { CheckCircle2, CircleHelp, CircleCheck, Clock3, FileText, LogOut, RefreshCw, Truck, XCircle } from 'lucide-react';
 import { AsyncForm, Field, errorMessage } from './forms';
 import { LanguageSelect, useLanguage } from './i18n';
 import { factoryInput, fixedInput, localFactoryInput, factoryTime, quantity, rate } from './erp-client';
@@ -12,10 +12,12 @@ import {
 import type { SalesDispatch } from './sales-client';
 import { PdfDownloadButton } from './InvoiceDocument';
 import { invoiceDocData, type BuyerSource, type InvoiceSource, type SaleLineSource } from './invoice-pdf';
-import { SplitView, StepFlow, type SplitItem } from './SplitView';
+import { StepFlow } from './SplitView';
+import { ActionBar, EmptyState, KeyFacts, RowCard, Section, Stat, StatusTag, Step, Steps, Tabs } from './ui';
 import './erp.css';
 import './sales-screens.css';
 import './approvals-ui.css';
+import './buyer-rating.css';
 
 type BuyerInvoiceResponse = { invoice: InvoiceSource; lines: SaleLineSource[]; buyer: BuyerSource; factoryName: string };
 /** The buyer's own invoice with its balance, from the buyer invoice route; the PDF is built here from that data. */
@@ -27,7 +29,7 @@ const buyerInvoiceDocument = async (invoiceId: string) => {
 export default function BuyerPortal() {
   const { t } = useLanguage();
   const [identity, setIdentity] = useState<BuyerIdentity | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
-  const [config, setConfig] = useState<{ factory: string; registrationAvailable: boolean } | null>(null);
+  const [config, setConfig] = useState<{ factory: string; registrationAvailable: boolean } | null>(null), [configError, setConfigError] = useState(false);
   const [mode, setMode] = useState<'login' | 'register' | 'sent'>('login');
   const [state, setState] = useState<BuyerWorkspace | null>(null), [open, setOpen] = useState(''), [notice, setNotice] = useState('');
   const load = useCallback(async () => {
@@ -39,7 +41,8 @@ export default function BuyerPortal() {
       if (e instanceof InventoryError && e.status === 401) { setIdentity(null); setState(null); } else setError(errorMessage(e));
     } finally { setLoading(false); }
   }, []);
-  useEffect(() => { void buyerRequest<typeof config>('/config').then(setConfig).catch(() => setConfig(null)); void load(); }, [load]);
+  const loadConfig = useCallback(() => { setConfigError(false); void buyerRequest<typeof config>('/config').then(setConfig).catch(() => setConfigError(true)); }, []);
+  useEffect(() => { loadConfig(); void load(); }, [load, loadConfig]);
   useEffect(() => {
     const focus = () => { if (!document.hidden) void load(); };
     const timer = setInterval(focus, 30000); window.addEventListener('focus', focus);
@@ -56,7 +59,7 @@ export default function BuyerPortal() {
     <div className="live-page-heading"><div><h1>{identity ? identity.buyer.name : t('Buy from our factory', 'ہماری فیکٹری سے خریداری کریں')}</h1>
       <p>{config?.factory || 'Yarnflow'} · {t('Your purchase orders, quotes and invoices', 'آپ کے آرڈرز، کوٹیشنز اور انوائسز')}</p></div>
      {identity && <button className="button" onClick={() => void load()}><RefreshCw size={18} />{t('Refresh', 'تازہ کریں')}</button>}</div>
-    {error && <p className="live-error" role="alert">{t(error)}<button className="live-text-button" onClick={() => void load()}>{t('Retry', 'دوبارہ کوشش کریں')}</button></p>}
+    {error && <p className="live-error" role="alert"><CircleHelp aria-hidden="true" />{t(error)}<button className="live-text-button" onClick={() => void load()}>{t('Try again', 'دوبارہ کوشش کریں')}</button></p>}
     {notice && <p className="live-success" role="status">{notice}</p>}
     {loading ? <p role="status">{t('Opening your portal…', 'آپ کا پورٹل کھل رہا ہے…')}</p> : !identity ? <>
       <div className="live-segments" aria-label={t('Buyer account', 'خریدار اکاؤنٹ')}>
@@ -64,16 +67,16 @@ export default function BuyerPortal() {
         <button aria-pressed={mode === 'register'} onClick={() => setMode('register')}>{t('Register company', 'کمپنی رجسٹر کریں')}</button></div>
       {mode === 'sent' && <p className="live-success" role="status">{t('Registration saved. Sign in to check your approval status.', 'رجسٹریشن محفوظ ہو گئی۔ منظوری کی حالت دیکھنے کے لیے سائن اِن کریں۔')}</p>}
       {mode === 'register' ? config?.registrationAvailable ? <BuyerRegistration onSent={() => setMode('sent')} />
-        : <p>{t('Registration is not available for this factory. Contact the factory sales team.', 'اس فیکٹری کے لیے رجسٹریشن دستیاب نہیں۔ فیکٹری کی فروخت ٹیم سے رابطہ کریں۔')}</p>
+        : config ? <p>{t('Registration is not available for this factory. Contact the factory sales team.', 'اس فیکٹری کے لیے رجسٹریشن دستیاب نہیں۔ فیکٹری کی فروخت ٹیم سے رابطہ کریں۔')}</p>
+        : configError ? <p className="live-error" role="alert">{t('Could not load. Try again.', 'لوڈ نہیں ہو سکا۔ دوبارہ کوشش کریں۔')}<button className="live-text-button" onClick={loadConfig}>{t('Retry', 'دوبارہ کوشش کریں')}</button></p> : null
         : <BuyerLogin onSignedIn={load} />}
-      <a href="#/overview" className="button">{t('Factory team sign in', 'فیکٹری ٹیم سائن اِن')}</a>
+      <a href="#/overview" className="button yf-buyer-team-link">{t('Factory team sign in', 'فیکٹری ٹیم سائن اِن')}</a>
     </> : identity.buyer.status !== 'active' ? <section className="live-panel erp-approval">
       <FileText size={36} />
       <h2>{t(identity.buyer.status === 'pending' ? 'Waiting for the sales team to activate your company' : 'Your company access is not active',
         identity.buyer.status === 'pending' ? 'فروخت ٹیم کی جانب سے آپ کی کمپنی کے فعال ہونے کا انتظار' : 'آپ کی کمپنی کی رسائی فعال نہیں')}</h2>
       <p>{t('The factory sales team reviews your company details. Quotes, orders and invoices appear here after activation. Your assigned sales manager is shown once active.',
         'فیکٹری کی فروخت ٹیم آپ کی کمپنی کی تفصیلات کا جائزہ لیتی ہے۔ فعال ہونے کے بعد کوٹیشنز، آرڈرز اور انوائسز یہاں نظر آئیں گے۔ مقررہ مینیگر فعال ہونے پر دکھے گا۔')}</p>
-      <p className="live-muted">{identity.buyer.manager_name ? t('Sales manager:', 'فروخت مینیجر:').replace(':', '') + ' ' + identity.buyer.manager_name : ''}</p>
     </section> : state && <BuyerWorkspaceView state={state} open={open} setOpen={setOpen} saved={saved} />}
    </main></div>;
 }
@@ -97,14 +100,14 @@ function BuyerWorkspaceView({ state, open, setOpen, saved }: { state: BuyerWorks
     { id: 'purchase', label: t('Purchase orders', 'پرچیز آرڈرز'), count: state.pos.length },
     { id: 'account', label: t('Account', 'حساب'), count: state.invoices.length },
   ];
-  const items: Record<BuyerTab, SplitItem[]> = {
+  const items: Record<BuyerTab, { id: string; title: string; meta: string; status: React.ReactNode; value?: string; icon: React.ReactNode }[]> = {
     approve: approvable.map(r => {
       const po = state.pos.find(p => p.id === r.buyer_po_id);
-      return { id: r.id, title: `${po?.reference ?? ''} · ${t('revision', 'ترمیم')} ${r.version}`, meta: `${quantity(r.quantity_milli)} ${r.unit} · ${rate(r.price_minor * r.quantity_milli / 1000, r.currency)}`, status: <span className="erp-status is-pending">{t('Needs your approval', 'آپ کی منظوری درکار')}</span> };
+      return { id: r.id, title: `${po?.reference ?? ''} · ${t('Quote', 'کوٹیشن')}`, meta: `${quantity(r.quantity_milli)} ${r.unit}`, value: rate(r.price_minor * r.quantity_milli / 1000, r.currency), icon: <FileText aria-hidden="true" />, status: <StatusTag tone="warn" label={t('Needs approval', 'منظوری درکار')} /> };
     }),
-    orders: state.orders.map(o => ({ id: o.id, title: o.reference, meta: `${quantity(o.terms.quantity_milli)} ${o.terms.unit} · ${rate(o.terms.price_minor * o.terms.quantity_milli / 1000, o.terms.currency)}`, status: <span className="erp-status">{t(o.status, { confirmed: 'مستقل', partially_dispatched: 'جزوی روانگی', dispatched: 'روانہ', cancelled: 'منسوخ' }[o.status])}</span> })),
-    purchase: state.pos.map(p => ({ id: p.id, title: p.reference, meta: `${quantity(p.quantity_milli)} ${p.unit} · ${t('requested', 'مطلوبہ')} ${factoryTime(p.requested_delivery_at)}`, status: <span className="erp-status">{t(p.status, { entered: 'موصول', quoted: 'کوٹیشن موصول', confirmed: 'مستقل', cancelled: 'منسوخ' }[p.status])}</span> })),
-    account: state.invoices.map(i => ({ id: i.id, title: i.number, meta: `${rate(i.total_minor, i.currency)} · ${factoryTime(i.issued_at)}`, status: <span className="erp-status">{(i.outstanding_minor ?? i.total_minor) === 0 ? t('Settled', 'مکمل وصول') : t('Outstanding', 'بقایا')}</span> })),
+    orders: state.orders.map(o => ({ id: o.id, title: o.reference, meta: `${quantity(o.terms.quantity_milli)} ${o.terms.unit} · ${factoryTime(o.terms.approved_at)}`, value: rate(o.terms.price_minor * o.terms.quantity_milli / 1000, o.terms.currency), icon: <Truck aria-hidden="true" />, status: buyerStatus(o.status === 'cancelled' ? 'bad' : o.status === 'dispatched' ? 'ok' : 'pending', t({ confirmed: 'Confirmed', partially_dispatched: 'Partly dispatched', dispatched: 'Dispatched', cancelled: 'Cancelled' }[o.status] ?? o.status, { confirmed: 'مستقل', partially_dispatched: 'جزوی روانگی', dispatched: 'روانہ', cancelled: 'منسوخ' }[o.status])) })),
+    purchase: state.pos.map(p => ({ id: p.id, title: p.reference, meta: `${quantity(p.quantity_milli)} ${p.unit} · ${t('Delivery', 'ترسیل')} ${factoryTime(p.requested_delivery_at)}`, value: '', icon: <FileText aria-hidden="true" />, status: buyerStatus(p.status === 'cancelled' ? 'bad' : p.status === 'confirmed' ? 'ok' : 'pending', t({ entered: 'Received', quoted: 'Quoted', confirmed: 'Confirmed', cancelled: 'Cancelled' }[p.status] ?? p.status, { entered: 'موصول', quoted: 'کوٹیشن موصول', confirmed: 'مستقل', cancelled: 'منسوخ' }[p.status])) })),
+    account: state.invoices.map(i => ({ id: i.id, title: i.number, meta: `${t('Balance', 'بقایا')} ${rate(i.outstanding_minor ?? i.total_minor, i.currency)} · ${factoryTime(i.issued_at)}`, value: rate(i.total_minor, i.currency), icon: <FileText aria-hidden="true" />, status: buyerStatus((i.outstanding_minor ?? i.total_minor) === 0 ? 'ok' : 'pending', (i.outstanding_minor ?? i.total_minor) === 0 ? t('Paid', 'ادا شدہ') : t('Due', 'واجب الادا')) })),
   };
   const emptyLists: Record<BuyerTab, string> = {
     approve: t('Nothing to approve right now. New quotes from the factory appear here.', 'ابھی منظوری کے لیے کچھ نہیں۔ فیکٹری کے نئے کوٹیشنز یہاں آئیں گے۔'),
@@ -145,7 +148,7 @@ function BuyerWorkspaceView({ state, open, setOpen, saved }: { state: BuyerWorks
       <p>{quantity(o.terms.quantity_milli)} {o.terms.unit} × {rate(o.terms.price_minor, o.terms.currency)} = <b>{rate(o.terms.price_minor * o.terms.quantity_milli / 1000, o.terms.currency)}</b></p>
       <p className="live-muted">{t('Payment terms:', 'ادائیگی کی شرائط:')} {o.terms.payment_terms} · {t('requested delivery', 'مطلوبہ ترسیل')} {factoryTime(o.terms.requested_delivery_at)}</p>
       {state.invoices.filter(i => i.sales_order_id === o.id).map(i => <div className="sales-invoice" key={i.id}>
-        <div className="erp-record-head"><div><h4><FileText size={18} /> {i.number}</h4><p>{rate(i.total_minor, i.currency)} · {factoryTime(i.issued_at)}</p></div>
+        <div className="erp-record-head"><div><h3><FileText size={18} /> {i.number}</h3><p>{rate(i.total_minor, i.currency)} · {factoryTime(i.issued_at)}</p></div>
           <PdfDownloadButton build={() => buyerInvoiceDocument(i.id)} /></div>
         <ul className="sales-lines">{(JSON.parse(i.lines_json) as { specifications: string; quantity_milli: number; unit: string; price_minor: number; amount_minor: number }[]).map((l, n) =>
           <li key={n}><span className="erp-multiline">{l.specifications}</span><span>{quantity(l.quantity_milli)} {l.unit} × {rate(l.price_minor, i.currency)} = <b>{rate(l.amount_minor, i.currency)}</b></span></li>)}</ul>
@@ -181,9 +184,10 @@ function BuyerWorkspaceView({ state, open, setOpen, saved }: { state: BuyerWorks
     if (!invoice) return null;
     return <section className="yf-detail-stack">
       <div className="yf-detail-head"><div><h2>{invoice.number}</h2>
-        <p>{t('Total', 'کل')}: {rate(invoice.total_minor, invoice.currency)} · {t('Paid', 'ادا شدہ')}: {rate(invoice.paid_minor ?? 0, invoice.currency)}</p></div></div>
-      <p>{t('Balance', 'بقایا')}: <b>{rate(invoice.outstanding_minor ?? invoice.total_minor, invoice.currency)}</b></p>
-      {invoice.due_at && <p className="live-muted">{t('Payment due under your invoice terms', 'انوائس کی شرائط کے مطابق ادائیگی کی تاریخ')}: {factoryTime(invoice.due_at)}</p>}
+        <StatusTag tone={(invoice.outstanding_minor ?? invoice.total_minor) === 0 ? 'ok' : 'warn'} label={(invoice.outstanding_minor ?? invoice.total_minor) === 0 ? t('Paid', 'ادا شدہ') : t('Due', 'واجب الادا')} /></div></div>
+      <Stat label={t('Amount due', 'واجب الادا رقم')} value={rate(invoice.outstanding_minor ?? invoice.total_minor, invoice.currency)} />
+      <p>{t('Next step', 'اگلا قدم')}: {t('Pay the balance by the due date.', 'آخری تاریخ تک بقایا ادا کریں۔')}</p>
+      <KeyFacts items={[{ label: t('Invoice total', 'انوائس کی کل رقم'), value: rate(invoice.total_minor, invoice.currency) }, { label: t('Paid', 'ادا شدہ'), value: rate(invoice.paid_minor ?? 0, invoice.currency) }, { label: t('Issued', 'جاری ہوئی'), value: factoryTime(invoice.issued_at) }, ...(invoice.due_at ? [{ label: t('Due date', 'آخری تاریخ'), value: factoryTime(invoice.due_at) }] : [])]} />
     </section>;
   };
 
@@ -195,10 +199,25 @@ function BuyerWorkspaceView({ state, open, setOpen, saved }: { state: BuyerWorks
       <p className="live-muted">{t('The factory enters this order and quotes it.', 'فیکٹری یہ آرڈر درج کرکے کوٹیشن دے گی۔')}</p>
       <button className="button primary" onClick={() => setOpen('po:new')}>{t('Submit a purchase order', 'پرچیز آرڈر جمع کروائیں')}</button>
     </div>}
-    <SplitView label={tabs.find(item => item.id === tab)?.label ?? ''} tabs={tabs} tab={tab} onTab={chooseTab}
-      items={items[tab]} selectedId={picked} onSelect={setPicked} renderDetail={renderDetail}
-      empty={emptyLists[tab]} emptyDetail={t('Choose a record to see its details and next step.', 'تفصیل اور اگلا قدم دیکھنے کے لیے ریکارڈ منتخب کریں۔')} />
+    <nav className="yf-buyer-tiles" aria-label={t('Your account', 'آپ کا اکاؤنٹ')}>
+      <button type="button" onClick={() => { chooseTab('purchase'); setOpen('po:new'); }}><FileText aria-hidden="true" /><span>{t('Ask for a quote', 'کوٹیشن مانگیں')}</span></button>
+      <button type="button" onClick={() => chooseTab('orders')}><Truck aria-hidden="true" /><span>{t('My orders', 'میرے آرڈرز')}</span><b>{state.orders.length}</b></button>
+      <button type="button" onClick={() => chooseTab('account')}><FileText aria-hidden="true" /><span>{t('My invoices', 'میری انوائسز')}</span><b>{state.invoices.length}</b></button>
+    </nav>
+    <Tabs items={tabs} value={tab} onChange={chooseTab} label={t('Buyer records', 'خریدار ریکارڈ')} />
+    <div id={`ui-panel-${tab}`} role="tabpanel" aria-labelledby={`ui-tab-${tab}`}>
+    <Section title={tabs.find(item => item.id === tab)?.label ?? ''}>
+      {items[tab].length ? <div className="yf-buyer-list">{items[tab].map(item => <RowCard key={item.id} title={item.title} detail={item.meta} leading={item.icon} status={item.status} value={item.value || undefined} onClick={() => setPicked(picked === item.id ? '' : item.id)} />)}</div>
+        : <EmptyState message={emptyLists[tab]} icon={FileText} action={tab === 'purchase' ? <button className="button primary" onClick={() => setOpen('po:new')}>{t('Ask for a quote', 'کوٹیشن مانگیں')}</button> : undefined} />}
+    </Section>
+    </div>
+    {picked && <Section title={t('Details', 'تفصیل')} className="yf-buyer-detail">{renderDetail(picked)}</Section>}
   </>;
+}
+
+function buyerStatus(state: 'ok' | 'pending' | 'bad', label: string) {
+  const Icon = state === 'ok' ? CircleCheck : state === 'bad' ? XCircle : Clock3;
+  return <StatusTag tone={state === 'ok' ? 'ok' : state === 'bad' ? 'bad' : 'warn'} label={label} icon={Icon} />;
 }
 
 function BuyerDeliveryForm({ dispatch, onCancel, onSaved }: { dispatch: SalesDispatch; onCancel: () => void; onSaved: (message?: string) => Promise<void> }) {
@@ -252,7 +271,7 @@ function BuyerPoForm({ onSaved, onCancel }: { onSaved: (message?: string) => Pro
     <div className="live-fields"><Field>{t('Quantity', 'مقدار')}<input inputMode="decimal" value={qty} onChange={e => setQty(e.target.value)} required /></Field>
       <Field>{t('Unit', 'اکائی')}<select value={unit} onChange={e => setUnit(e.target.value as 'kg' | 'metre' | 'piece')}><option value="kg">kg</option><option value="metre">metre</option><option value="piece">piece</option></select></Field></div>
     <Field>{t('Requested delivery (PKT)', 'مطلوبہ ترسیل (پاکستان)')}<input type="datetime-local" value={delivery} onChange={e => setDelivery(e.target.value)} required /></Field>
-    <Field>{t('Your payment terms', 'آپ کی ادائیگی کی شرائط')}<textarea value={terms} onChange={e => setTerms(e.target.value)} required minLength={3} maxLength={1000} placeholder="Net 30 days after delivery" /></Field>
+    <Field>{t('Your payment terms', 'آپ کی ادائیگی کی شرائط')}<textarea value={terms} onChange={e => setTerms(e.target.value)} required minLength={3} maxLength={1000} placeholder={t('Net 30 days after delivery', 'ڈیلیوری کے 30 دن بعد')} /></Field>
   </AsyncForm>;
 }
 
@@ -267,19 +286,23 @@ function BuyerLogin({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
 
 function BuyerRegistration({ onSent }: { onSent: () => void }) {
   const { t } = useLanguage();
+  const [step, setStep] = useState(0);
   const [company, setCompany] = useState(''), [contactName, setContactName] = useState(''), [email, setEmail] = useState(''), [phone, setPhone] = useState(''), [city, setCity] = useState('');
   const [password, setPassword] = useState(''), [again, setAgain] = useState('');
-  return <AsyncForm title={t('Register your company', 'اپنی کمپنی رجسٹر کریں')} submit={t('Request approval', 'منظوری کی درخواست کریں')} note={t('The factory sales team verifies your company details before activating the portal.', 'فیکٹری کی فروخت ٹیم پورٹل فعال کرنے سے پہلے آپ کی کمپنی کی تفصیلات کی تصدیق کرتی ہے۔')}
+  return <section className="yf-registration"><h2>{t('Register your company', 'اپنی کمپنی رجسٹر کریں')}</h2>
+    <Steps label={t('Registration steps', 'رجسٹریشن کے مراحل')}>
+      {(['Company', 'Contact', 'Review'] as const).map((name, index) => <Step key={name} title={t(name, ['کمپنی', 'رابطہ', 'جائزہ'][index])} state={index < step ? 'done' : index === step ? 'current' : 'later'} />)}
+    </Steps>
+    {step === 0 && <div className="yf-registration-fields"><Field>{t('Company name', 'کمپنی کا نام')}<input value={company} onChange={e => setCompany(e.target.value)} required minLength={2} maxLength={120} autoComplete="organization" /></Field><Field>{t('City (optional)', 'شہر (اختیاری)')}<input value={city} onChange={e => setCity(e.target.value)} maxLength={100} autoComplete="address-level2" /></Field><ActionBar primary={{ label: t('Next', 'اگلا'), onClick: () => setStep(1), disabled: company.trim().length < 2 }} /> </div>}
+    {step === 1 && <div className="yf-registration-fields"><Field>{t('Contact name', 'رابطے کا نام')}<input value={contactName} onChange={e => setContactName(e.target.value)} required minLength={2} maxLength={80} autoComplete="name" /></Field><Field>{t('Email', 'ای میل')}<input type="email" dir="ltr" value={email} onChange={e => setEmail(e.target.value)} required maxLength={254} autoComplete="username" /></Field><Field>{t('Phone with country code', 'ملکی کوڈ کے ساتھ فون')}<input type="tel" dir="ltr" value={phone} onChange={e => setPhone(e.target.value)} required maxLength={30} placeholder="+923001234567" autoComplete="tel" /></Field><ActionBar secondary={{ label: t('Back', 'واپس'), onClick: () => setStep(0) }} primary={{ label: t('Next', 'اگلا'), onClick: () => setStep(2), disabled: contactName.trim().length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !phone.trim() }} /></div>}
+    {step === 2 && <AsyncForm title={t('Review and create account', 'جائزہ لیں اور اکاؤنٹ بنائیں')} submit={t('Request approval', 'منظوری کی درخواست کریں')} note={t('The factory sales team verifies your company details before activating the portal.', 'فیکٹری کی فروخت ٹیم پورٹل فعال کرنے سے پہلے آپ کی کمپنی کی تفصیلات کی تصدیق کرتی ہے۔')}
     onSubmit={async () => {
       if (password !== again) throw Error(t('The passwords do not match.', 'پاس ورڈ ایک جیسے نہیں ہیں۔'));
       await buyerRequest('/register', { company, contactName, email, phone, city, password }); setPassword(''); setAgain(''); onSent();
     }}>
-    <Field>{t('Company name', 'کمپنی کا نام')}<input value={company} onChange={e => setCompany(e.target.value)} required minLength={2} maxLength={120} autoComplete="organization" /></Field>
-    <Field>{t('Contact name', 'رابطے کا نام')}<input value={contactName} onChange={e => setContactName(e.target.value)} required minLength={2} maxLength={80} autoComplete="name" /></Field>
-    <div className="live-fields"><Field>{t('Email', 'ای میل')}<input type="email" dir="ltr" value={email} onChange={e => setEmail(e.target.value)} required maxLength={254} autoComplete="username" /></Field>
-      <Field>{t('Phone with country code', 'ملکی کوڈ کے ساتھ فون')}<input type="tel" dir="ltr" value={phone} onChange={e => setPhone(e.target.value)} required maxLength={30} placeholder="+923001234567" autoComplete="tel" /></Field></div>
-    <Field>{t('City', 'شہر')}<input value={city} onChange={e => setCity(e.target.value)} maxLength={100} autoComplete="address-level2" /></Field>
+    <p>{t('Company', 'کمپنی')}: <strong>{company}</strong>{city ? ` · ${city}` : ''}</p><p>{t('Contact', 'رابطہ')}: <strong>{contactName}</strong></p><p dir="ltr">{email} · {phone}</p>
     <Field>{t('Choose password (12–128 characters)', 'پاس ورڈ منتخب کریں (۱۲ تا ۱۲۸ حروف)')}<input type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} minLength={12} maxLength={128} required /></Field>
     <Field>{t('Repeat password', 'پاس ورڈ دوبارہ درج کریں')}<input type="password" autoComplete="new-password" value={again} onChange={e => setAgain(e.target.value)} minLength={12} maxLength={128} required /></Field>
-  </AsyncForm>;
+    <button type="button" className="yf-registration-back" onClick={() => setStep(1)}>{t('Back', 'واپس')}</button>
+  </AsyncForm>}</section>;
 }

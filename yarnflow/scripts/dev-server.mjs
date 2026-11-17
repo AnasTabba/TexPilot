@@ -5,6 +5,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { inventoryApi } from '../server/inventory.mjs';
+// The published Worker's own entry: /api/v1/* goes to the scanner exactly as it does in production.
+import worker from '../server/cloudflare.mjs';
 import { sqliteBinding } from '../server/sqlite.mjs';
 import { seedRows, userRow } from '../server/auth.mjs';
 import { notifyRole } from '../server/notify.mjs';
@@ -80,11 +82,11 @@ const server = createServer(async (incoming, outgoing) => {
       }
       if (incoming.method !== 'GET' && incoming.method !== 'HEAD') {
         const chunks = []; let size = 0;
-        const limit = ['/api/photos', '/api/erp/qc/photos'].includes(url.pathname) ? 11 * 1024 * 1024 : 65536;
+        const limit = url.pathname.startsWith('/api/v1/') ? 61 * 1024 * 1024 : ['/api/photos', '/api/erp/qc/photos'].includes(url.pathname) ? 11 * 1024 * 1024 : 65536;
         for await (const chunk of incoming) { size += chunk.length; if (size > limit) { outgoing.writeHead(413, { 'Content-Type': 'application/json' }); outgoing.end(JSON.stringify({ error: 'Request too large' })); return; } chunks.push(chunk); }
         body = Buffer.concat(chunks);
       }
-      const response = await inventoryApi(new Request(url, { method: incoming.method, headers, ...(body ? { body } : {}) }), env);
+      const response = await worker.fetch(new Request(url, { method: incoming.method, headers, ...(body ? { body } : {}) }), env);
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer())); return;
     }
     const dist = resolve(root, 'dist');

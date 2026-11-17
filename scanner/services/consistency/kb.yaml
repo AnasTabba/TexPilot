@@ -36,9 +36,9 @@ fabrics:
   chenille:
     families: [cellulosic, synthetic]
   chiffon:
-    families: [protein, synthetic]
+    families: [protein, synthetic, cellulosic]
   corduroy:
-    families: [cellulosic]
+    families: [cellulosic, synthetic]
   crepe:
     families: [protein, synthetic, cellulosic]
   denim:
@@ -49,9 +49,9 @@ fabrics:
   faux_leather:
     families: [synthetic]
   flannel:
-    families: [protein, cellulosic]
+    families: [protein, cellulosic, synthetic]
   fleece:
-    families: [synthetic]
+    families: [cellulosic, protein, synthetic, blend]
   gingham:
     families: [cellulosic]
     expected_treatment: yarn_dyed
@@ -60,9 +60,9 @@ fabrics:
   knit:
     families: [cellulosic, protein, synthetic, blend]
   lace:
-    families: [synthetic, cellulosic]
+    families: [synthetic, cellulosic, protein]
   lawn:
-    families: [cellulosic]
+    families: [cellulosic, synthetic]
   neoprene:
     families: [synthetic]
   organza:
@@ -76,9 +76,9 @@ fabrics:
   taffeta:
     families: [protein, synthetic]
   tulle:
-    families: [synthetic, cellulosic]
+    families: [synthetic, cellulosic, protein]
   tweed:
-    families: [protein]
+    families: [protein, synthetic, cellulosic]
   twill:
     families: [cellulosic, protein, synthetic, blend]
   velvet:

@@ -67,11 +67,7 @@ def synthetic_inputs(tmp_path):
         "synthetic-only",
         "1",
         "research",
-        (
-            SourceRecord(
-                "synthetic", "1", "synthetic://generated", "CC-BY-4.0", ("research",)
-            ),
-        ),
+        (SourceRecord("synthetic", "1", "synthetic://generated", "CC-BY-4.0", ("research",)),),
         tuple(items),
         {"taxonomy_version": "synthetic-fabric22", "label_universe": ["a", "b"]},
     )
@@ -330,8 +326,13 @@ def test_synthetic_fixed_universe_abstentions_unknown_and_absent_support():
 
 
 def test_synthetic_serialized_resume_record_retains_its_provenance():
-    resume = ResumeRecord(synthetic_hash("parent"), 2, synthetic_hash("optimizer"),
-                          synthetic_hash("scaler"), "synthetic-resume")
+    resume = ResumeRecord(
+        synthetic_hash("parent"),
+        2,
+        synthetic_hash("optimizer"),
+        synthetic_hash("scaler"),
+        "synthetic-resume",
+    )
     record = dict(synthetic_run_record(), resumed_from=asdict(resume))
     assert not validate_run_record(json.loads(json.dumps(record)))
     assert independent_seed_count([record]) == 0
@@ -504,9 +505,27 @@ def test_ddp_missing_real_evidence_fails_g6(tmp_path, missing):
         )
 
 
-@pytest.mark.parametrize("outcome", ["passed", "skipped", "failed", "absent", "wrong-sha",
-    "dirty", "unknown-hardware", "no-nccl", "no-amp", "no-production-loop", "idle-device",
-    "missing-report", "bad-counts", "missing-source", "nonfinite-loss", "speedup-unmeasured"])
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        "passed",
+        "skipped",
+        "failed",
+        "absent",
+        "wrong-sha",
+        "dirty",
+        "unknown-hardware",
+        "no-nccl",
+        "no-amp",
+        "no-production-loop",
+        "idle-device",
+        "missing-report",
+        "bad-counts",
+        "missing-source",
+        "nonfinite-loss",
+        "speedup-unmeasured",
+    ],
+)
 def test_synthetic_ddp_runner_double_requires_exact_unskipped_test_and_pinned_upstream(
     tmp_path, monkeypatch, outcome
 ):
@@ -518,7 +537,8 @@ def test_synthetic_ddp_runner_double_requires_exact_unskipped_test_and_pinned_up
     report = tmp_path / "synthetic-hardware-report.json"
     record = dict(
         upstream_sha="1" * 40,
-        source_commit="2" * 40, dirty_patch_sha256=synthetic_hash("synthetic-source-diff"),
+        source_commit="2" * 40,
+        dirty_patch_sha256=synthetic_hash("synthetic-source-diff"),
         environment_lock_sha256=synthetic_hash("synthetic-env-lock"),
         backend="nccl",
         amp=True,
@@ -548,9 +568,12 @@ def test_synthetic_ddp_runner_double_requires_exact_unskipped_test_and_pinned_up
         ],
     )
     damages = {
-        "unknown-hardware": {"hardware": "unknown"}, "no-nccl": {"backend": "gloo"},
-        "no-amp": {"amp": False}, "no-production-loop": {"production_loop": False},
-        "bad-counts": {"steps_attempted": 0}, "missing-source": {"source_commit": ""},
+        "unknown-hardware": {"hardware": "unknown"},
+        "no-nccl": {"backend": "gloo"},
+        "no-amp": {"amp": False},
+        "no-production-loop": {"production_loop": False},
+        "bad-counts": {"steps_attempted": 0},
+        "missing-source": {"source_commit": ""},
         "nonfinite-loss": {"losses": [float("nan")]},
         "speedup-unmeasured": {"speedup_claimed": True},
     }
@@ -597,15 +620,30 @@ def test_synthetic_ddp_cli_requires_actual_bundle_weights(tmp_path, monkeypatch)
     from scripts import qc_ddp_proof as proof
 
     bundle = tmp_path / "synthetic-bundle.json"
-    bundle.write_text(json.dumps(dict(upstream_sha="1" * 40, weights_file="absent-weights",
-                                     weights_sha256=synthetic_hash("not-collected"))))
+    bundle.write_text(
+        json.dumps(
+            dict(
+                upstream_sha="1" * 40,
+                weights_file="absent-weights",
+                weights_sha256=synthetic_hash("not-collected"),
+            )
+        )
+    )
     report = tmp_path / "synthetic-hardware-report.json"
     report.write_text("{}")
     manifest = tmp_path / "synthetic-proof-manifest.json"
-    manifest.write_text(json.dumps(dict(bundle_manifest=str(bundle),
-        bundle_manifest_sha256=hashlib.sha256(bundle.read_bytes()).hexdigest(),
-        upstream=str(tmp_path), expected_sha="1" * 40, report=str(report),
-        report_sha256=hashlib.sha256(report.read_bytes()).hexdigest())))
+    manifest.write_text(
+        json.dumps(
+            dict(
+                bundle_manifest=str(bundle),
+                bundle_manifest_sha256=hashlib.sha256(bundle.read_bytes()).hexdigest(),
+                upstream=str(tmp_path),
+                expected_sha="1" * 40,
+                report=str(report),
+                report_sha256=hashlib.sha256(report.read_bytes()).hexdigest(),
+            )
+        )
+    )
     called = []
     monkeypatch.setattr(proof, "verify_ddp_proof", lambda *_: called.append("synthetic-double"))
     assert proof.main(["--manifest", str(manifest)]) == 1

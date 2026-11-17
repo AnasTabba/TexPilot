@@ -126,9 +126,12 @@ def test_failed_method_continues_and_exits_one(tmp_path, monkeypatch):
 
     calls = []
     cuda = types.SimpleNamespace(
-        is_available=lambda: True, get_device_name=lambda _: "fake GPU",
-        reset_peak_memory_stats=lambda: None, synchronize=lambda: None,
-        max_memory_allocated=lambda: 0, empty_cache=lambda: None,
+        is_available=lambda: True,
+        get_device_name=lambda _: "fake GPU",
+        reset_peak_memory_stats=lambda: None,
+        synchronize=lambda: None,
+        max_memory_allocated=lambda: 0,
+        empty_cache=lambda: None,
     )
     monkeypatch.setitem(sys.modules, "torch", types.SimpleNamespace(cuda=cuda))
     monkeypatch.setattr(run, "WORK", tmp_path)
@@ -164,9 +167,13 @@ def test_cleanup_removes_repos_and_weights_but_keeps_results(tmp_path, monkeypat
     work, home = tmp_path / "work", tmp_path / "home"
     monkeypatch.setattr(common, "WORK", work)
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
-    for path in (work / "repos/MuSc/weight.pt", work / "model.pth",
-                 home / ".cache/torch/hub/checkpoints/backbone.pth",
-                 work / "results/test.json", work / "log.txt"):
+    for path in (
+        work / "repos/MuSc/weight.pt",
+        work / "model.pth",
+        home / ".cache/torch/hub/checkpoints/backbone.pth",
+        work / "results/test.json",
+        work / "log.txt",
+    ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("small fixture")
     common.cleanup()

@@ -105,9 +105,11 @@ def repo(monkeypatch):
             monkeypatch.setitem(sys.modules, name, fake())
     from training.fault.methods._upstream import _MODULES
 
-    monkeypatch.setitem(_MODULES, str(Path(path).resolve()), {
-        "utils": sys.modules["utils"], "optimizers": sys.modules["optimizers"]
-    })
+    monkeypatch.setitem(
+        _MODULES,
+        str(Path(path).resolve()),
+        {"utils": sys.modules["utils"], "optimizers": sys.modules["optimizers"]},
+    )
     monkeypatch.setattr(Dinomaly, "_build", _stub_build)  # tiny stand-in, no weights
     return path
 
@@ -200,9 +202,9 @@ def test_fit_and_score_restore_foreign_upstream_modules(monkeypatch, tmp_path):
     repo_path = str(tmp_path)
     foreign = types.ModuleType("utils")
     monkeypatch.setitem(sys.modules, "utils", foreign)
-    monkeypatch.setitem(_MODULES, repo_path, {
-        "utils": _fake_utils(), "optimizers": _fake_optimizers()
-    })
+    monkeypatch.setitem(
+        _MODULES, repo_path, {"utils": _fake_utils(), "optimizers": _fake_optimizers()}
+    )
     before = sys.path.copy()
     monkeypatch.setattr(Dinomaly, "_build", _stub_build)
     method = Dinomaly(repo_path, iters=1, batch_size=1, device="cpu")
@@ -217,6 +219,7 @@ def test_fit_and_score_restore_foreign_upstream_modules(monkeypatch, tmp_path):
 def test_amp_keeps_linear_attention_contractions_in_float32(monkeypatch, tmp_path):
     """FP16 unnormalised contractions overflow even when inputs are finite."""
     monkeypatch.setattr(sys, "path", sys.path.copy())
+
     class Attention(nn.Module):
         def __init__(self, *args, **kwargs):
             super().__init__()
@@ -238,19 +241,36 @@ def test_amp_keeps_linear_attention_contractions_in_float32(monkeypatch, tmp_pat
 
     module("dinov1")
     module("dinov1.utils", trunc_normal_=lambda *args, **kwargs: None)
-    module("models.uad", ViTill=lambda **kwargs: nn.ModuleDict({
-        "decoder": kwargs["decoder"], "encoder": kwargs["encoder"]
-    }))
-    module("models.vision_transformer", Block=Block, LinearAttention2=Attention,
-           bMlp=lambda *args, **kwargs: nn.Identity())
+    module(
+        "models.uad",
+        ViTill=lambda **kwargs: nn.ModuleDict(
+            {"decoder": kwargs["decoder"], "encoder": kwargs["encoder"]}
+        ),
+    )
+    module(
+        "models.vision_transformer",
+        Block=Block,
+        LinearAttention2=Attention,
+        bMlp=lambda *args, **kwargs: nn.Identity(),
+    )
     encoder = types.SimpleNamespace(load=lambda _: nn.Identity())
     module("models", vit_encoder=encoder)
     from training.fault.methods._upstream import _MODULES
 
-    monkeypatch.setitem(_MODULES, str(tmp_path), {
-        name: sys.modules[name] for name in
-        ("dinov1", "dinov1.utils", "models", "models.uad", "models.vision_transformer")
-    })
+    monkeypatch.setitem(
+        _MODULES,
+        str(tmp_path),
+        {
+            name: sys.modules[name]
+            for name in (
+                "dinov1",
+                "dinov1.utils",
+                "models",
+                "models.uad",
+                "models.vision_transformer",
+            )
+        },
+    )
     method = Dinomaly(str(tmp_path), amp=True, device="cpu")
     model, _ = method._build()
     x = torch.full((2, 2), 1000.0)

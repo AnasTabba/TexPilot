@@ -72,18 +72,42 @@ def test_jury_bar_pass_and_miss(tmp_path: Path):
         tmp_path,
         "aitex__good__ft.json",
         [
-            _row("01", dataset="aitex", method="good", auroc=0.98, recall=0.95,
-                 n_defect=20, false_alarms_per_1000=2.0, n_good=500),
-            _row("02", dataset="aitex", method="good", auroc=0.98, recall=0.95,
-                 n_defect=20, false_alarms_per_1000=2.0, n_good=500),
+            _row(
+                "01",
+                dataset="aitex",
+                method="good",
+                auroc=0.98,
+                recall=0.95,
+                n_defect=20,
+                false_alarms_per_1000=2.0,
+                n_good=500,
+            ),
+            _row(
+                "02",
+                dataset="aitex",
+                method="good",
+                auroc=0.98,
+                recall=0.95,
+                n_defect=20,
+                false_alarms_per_1000=2.0,
+                n_good=500,
+            ),
         ],
     )
     _write(
         tmp_path,
         "aitex__weak__ft.json",
         [
-            _row("01", dataset="aitex", method="weak", auroc=0.95, recall=0.85,
-                 n_defect=20, false_alarms_per_1000=9.0, n_good=500),
+            _row(
+                "01",
+                dataset="aitex",
+                method="weak",
+                auroc=0.95,
+                recall=0.85,
+                n_defect=20,
+                false_alarms_per_1000=9.0,
+                n_good=500,
+            ),
         ],
     )
     out = render([tmp_path])

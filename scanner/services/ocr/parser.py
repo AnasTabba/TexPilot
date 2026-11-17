@@ -13,12 +13,12 @@ from dataclasses import dataclass
 from services.ocr.normalizer import normalize_fiber_name
 
 #: Percentages must sum to 100 within this tolerance. Care labels round.
-SUM_TOLERANCE = 2.0
+SUM_TOLERANCE = 1.5  # 33/33/33 and other rounded labels sum to 99 or 101; 102 is a misread
 
 _WORD = r"[^\W\d_]"  # any letter, accented included (A-Z missed ALGODÓN)
 _NAME = rf"{_WORD}(?:{_WORD}|[\s\-]){{1,24}}"
-_PCT_FIRST = re.compile(rf"(\d{{1,3}})\s*%\s*({_NAME})")
-_NAME_FIRST = re.compile(rf"({_NAME}?)\s*[:\-]?\s*(\d{{1,3}})\s*%")
+_PCT_FIRST = re.compile(rf"(?<![\d.])(\d{{1,3}}(?:\.\d+)?)\s*%\s*({_NAME})")
+_NAME_FIRST = re.compile(rf"({_NAME}?)\s*[:\-]?\s*(?<![\d.])(\d{{1,3}}(?:\.\d+)?)\s*%")
 
 #: Words that qualify a fibre without changing it ("RECYCLED POLYESTER" is polyester).
 _QUALIFIERS = frozenset({"recycled", "organic", "combed", "mercerised", "mercerized"})
@@ -93,6 +93,6 @@ def parse_composition(text: str) -> list[FiberPct] | None:
         return None
 
     return sorted(
-        (FiberPct(n, p) for n, p in merged.items()),
+        (FiberPct(n, p * 100.0 / total) for n, p in merged.items()),
         key=lambda f: (-f.pct, f.name),
     )

@@ -11,9 +11,7 @@ from training.qc.manifest import DatasetManifest, ManifestItem, SourceRecord
 
 @pytest.fixture
 def synthetic_arms():
-    source = SourceRecord(
-        "synthetic", "1", "synthetic://generated", "CC-BY-4.0", ("research",)
-    )
+    source = SourceRecord("synthetic", "1", "synthetic://generated", "CC-BY-4.0", ("research",))
     calibration = DatasetManifest(
         "synthetic-calibration",
         "1",
@@ -53,8 +51,10 @@ def synthetic_arms():
                 face="face",
                 location_ref=f"synthetic-location-{n}",
                 selection_probability=0.5,
-                supplier_id="synthetic-supplier", sampling_method="synthetic-randomized",
-                planned_area_cm2=1.0, usable_area_cm2=1.0,
+                supplier_id="synthetic-supplier",
+                sampling_method="synthetic-randomized",
+                planned_area_cm2=1.0,
+                usable_area_cm2=1.0,
             )
         )
         accepted = frozenset(ARMS if n < 10 else ("classifier-only", "classifier+metrology"))

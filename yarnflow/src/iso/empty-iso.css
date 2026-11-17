@@ -1,34 +1,13 @@
 .empty-iso {
   display: block;
-  width: auto;
-  height: 120px;
-  max-width: 100%;
-  margin: 0 auto 6px;
-  overflow: visible;
-  animation: eiso-in 220ms var(--ease-out) both;
-}
-
-.empty-iso polygon {
-  stroke: var(--line-strong);
-  stroke-width: 0.6;
+  width: min(100%, 96px);
+  max-width: 96px;
+  height: auto;
+  margin: 0 auto 8px;
+  color: var(--ink-2);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.eiso-ground { fill: var(--line-strong); opacity: 0.45; }
-
-.eiso-top { fill: color-mix(in srgb, var(--brand) 70%, white); }
-.eiso-left { fill: var(--brand); }
-.eiso-right { fill: color-mix(in srgb, var(--brand) 70%, black); }
-
-.eiso-pop-top { fill: color-mix(in srgb, var(--pop) 70%, white); }
-.eiso-pop-left { fill: var(--pop); }
-.eiso-pop-right { fill: color-mix(in srgb, var(--pop) 70%, black); }
-
-@keyframes eiso-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .empty-iso { animation: none; }
 }

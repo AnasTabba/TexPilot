@@ -14,6 +14,7 @@ export default function ScannerArtwork({ kind, label }: {
   label?: string | null;
 }) {
   const id = scannerArtworkId(kind, label);
+  if (!id) return null;
   return (
     <span className="scanner-artwork" data-artwork-kind={kind} data-artwork-id={id} aria-hidden="true">
       <img

@@ -198,8 +198,14 @@ def run_benchmark(
         else:
             print(f"WARNING: skipping {key[0]}/{key[1]}: no train or no calib samples")
 
-    timing = {"load_tile_seconds": 0.0, "fit_seconds": 0.0,
-              "evaluation_seconds": 0.0, "train_tiles": 0, "test_images": 0, "test_tiles": 0}
+    timing = {
+        "load_tile_seconds": 0.0,
+        "fit_seconds": 0.0,
+        "evaluation_seconds": 0.0,
+        "train_tiles": 0,
+        "test_images": 0,
+        "test_tiles": 0,
+    }
 
     def fit(train_samples):
         started = time.perf_counter()

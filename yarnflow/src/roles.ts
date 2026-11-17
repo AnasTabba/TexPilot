@@ -1,14 +1,13 @@
-import { Bell, ChartNoAxesCombined, MessageCircle, CircleHelp, ClipboardCheck, ClipboardList, CircleUserRound, FileText, House, History, ListChecks, PackagePlus, ScanSearch, Settings, ShieldCheck, Truck, UsersRound, type LucideIcon } from 'lucide-react';
-import { ConeIcon } from './icons';
+import { Bell, Boxes, ChartNoAxesCombined, MessageCircle, CircleHelp, ClipboardCheck, ClipboardList, CircleUserRound, FileText, House, History, ListChecks, PackagePlus, ScanSearch, Settings, ShieldCheck, Truck, UsersRound, type LucideIcon } from 'lucide-react';
 import type { Role } from './inventory-client';
 import { objectRoute as route } from './routes.ts';
 export { eventTitle, parseHash } from './routes.ts';
 
 export interface Section { id: string; en: string; ur: string; icon: LucideIcon; tabs?: { id: string; en: string; ur: string }[] }
 
-const dashboard: Section = { id: 'dashboard', en: 'Dashboard', ur: 'ڈیش بورڈ', icon: House };
+const dashboard: Section = { id: 'dashboard', en: 'Home', ur: 'گھر', icon: House };
 const scan: Section = { id: 'scanner', en: 'Scan', ur: 'اسکین', icon: ScanSearch };
-const stock: Section = { id: 'inventory', en: 'Stock', ur: 'اسٹاک', icon: ConeIcon as LucideIcon };
+const stock: Section = { id: 'inventory', en: 'Stock', ur: 'اسٹاک', icon: Boxes };
 const history: Section = { id: 'activity', en: 'History', ur: 'ہسٹری', icon: History };
 const procurement: Section = { id: 'procurement', en: 'Procurement', ur: 'خریداری', icon: PackagePlus };
 const lots: Section = { id: 'lots', en: 'Inspections', ur: 'معائنے', icon: ClipboardCheck };
@@ -23,7 +22,7 @@ const adminActivity: Section = { id: 'admin-activity', en: 'Activity', ur: 'سر
 const reports: Section = { id: 'reports', en: 'Reports', ur: 'رپورٹس', icon: FileText };
 const analytics: Section = { id: 'analytics', en: 'Analytics', ur: 'تجزیات', icon: ChartNoAxesCombined };
 const buyers: Section = { id: 'buyers', en: 'Sales portal', ur: 'سیلز پورٹل', icon: UsersRound, tabs: [{ id: 'pending', en: 'To approve', ur: 'منظوری کے لیے' }, { id: 'active', en: 'Buyers', ur: 'خریدار' }, { id: 'all', en: 'All', ur: 'سب' }, { id: 'settings', en: 'Settings', ur: 'ترتیبات' }] };
-const buyerRfqs: Section = { id: 'buyer-rfqs', en: 'Buyer RFQs', ur: 'خریدار کی درخواستیں', icon: FileText, tabs: [{ id: 'open', en: 'To quote', ur: 'قیمت دینے کے لیے' }, { id: 'quoted', en: 'Quoted', ur: 'قیمت دی گئی' }, { id: 'sold', en: 'Sold', ur: 'فروخت شدہ' }, { id: 'all', en: 'All', ur: 'سب' }] };
+const buyerRfqs: Section = { id: 'buyer-rfqs', en: 'Buyer requests', ur: 'خریدار کی درخواستیں', icon: FileText, tabs: [{ id: 'open', en: 'To quote', ur: 'قیمت دینے کے لیے' }, { id: 'quoted', en: 'Quoted', ur: 'قیمت دی گئی' }, { id: 'sold', en: 'Sold', ur: 'فروخت شدہ' }, { id: 'all', en: 'All', ur: 'سب' }] };
 const invoices: Section = { id: 'invoices', en: 'Invoices', ur: 'انوائسز', icon: FileText, tabs: [{ id: 'owed', en: 'To collect', ur: 'وصولی کے لیے' }, { id: 'paid', en: 'Paid', ur: 'ادا شدہ' }, { id: 'all', en: 'All', ur: 'سب' }] };
 const dispatchRequests: Section = { id: 'dispatch-requests', en: 'Dispatch requests', ur: 'ڈسپیچ درخواستیں', icon: Truck, tabs: [{ id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'all', en: 'All', ur: 'سب' }] };
 const dispatches: Section = { id: 'dispatches', en: 'Dispatches', ur: 'ڈسپیچز', icon: Truck, tabs: [{ id: 'all', en: 'All', ur: 'سب' }, { id: 'pending_approval', en: 'Needs approval', ur: 'منظوری درکار' }, { id: 'approved', en: 'Approved', ur: 'منظور شدہ' }, { id: 'on_hold', en: 'On hold', ur: 'روکی گئی' }, { id: 'dispatched', en: 'Dispatched', ur: 'روانہ' }, { id: 'delivered', en: 'Delivered', ur: 'پہنچائی گئی' }] };

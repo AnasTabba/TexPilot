@@ -1,6 +1,6 @@
 .po { display: grid; gap: 14px; }
 .po-mono { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }
-.po-muted { color: var(--ink-2); margin: 0; font-size: 13px; }
+.po-muted { color: var(--ink-2); margin: 0; font-size: 14px; }
 .po-unit { color: var(--ink-2); margin-left: 2px; }
 .po-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .po-empty { padding: 32px; text-align: center; color: var(--ink-2); border: 1px dashed var(--line); border-radius: 16px; background: var(--panel); }
@@ -22,7 +22,7 @@
 /* Table */
 .po-table-wrap { max-height: 70vh; overflow: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
 .po-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; color: var(--ink); }
-.po-table th { position: sticky; top: 0; z-index: 1; padding: 12px 14px; text-align: left; white-space: nowrap; background: var(--sunken); border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.po-table th { position: sticky; top: 0; z-index: 1; padding: 12px 14px; text-align: left; white-space: nowrap; background: var(--sunken); border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 600; color: var(--ink-2); }
 .po-table td { padding: 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .po-table th.po-num, .po-table td.po-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .po-table th.po-num .po-sort { justify-content: flex-end; }
@@ -31,7 +31,7 @@
 .po-sort-idle { opacity: 0.4; }
 .po-ref { font-weight: 700; white-space: nowrap; }
 .po-item strong { display: block; color: var(--ink); }
-.po-spec { display: block; max-width: 340px; margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-2); font-size: 13px; }
+.po-spec { display: block; max-width: 340px; margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-2); font-size: 14px; }
 .po-ships { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
 .po-chev { width: 40px; color: var(--ink-2); }
 .po-chev svg { transition: transform 220ms ease; }
@@ -44,7 +44,7 @@
 
 /* Status pills */
 .po-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.po-pill { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--on-ink); }
+.po-pill { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap; color: var(--on-ink); }
 .po-pill.is-accepted { background: var(--rail); }
 .po-pill.is-dispatched { background: var(--brand-ink); }
 .po-pill.is-received { background: var(--ok); }
@@ -59,9 +59,9 @@
 .po-detail.is-open .po-expand { grid-template-rows: 1fr; }
 .po-expand-body { min-height: 0; overflow: hidden; }
 .po-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; padding: 20px 20px 0; }
-.po-block h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.po-block h4 { margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
 .po-specs { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.po-ship { display: grid; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.po-ship { display: grid; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
 .po-ship:first-of-type { border-top: 0; padding-top: 0; }
 .po-ship strong { display: flex; align-items: center; gap: 6px; }
 .po-actions { display: flex; flex-wrap: wrap; gap: 10px; padding: 16px 20px 20px; }
@@ -76,7 +76,7 @@
  .po-row td { display: block; min-width: 0; padding: 0; border: 0; text-align: left; white-space: normal; }
  .po-row td.po-ref, .po-row td.po-item, .po-row td:nth-child(2) { grid-column: 1 / -1; }
  .po-row td.po-chev { display: none; }
- .po-row td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px; font-size: 12px; color: var(--ink-2); }
+ .po-row td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 2px; font-size: 14px; color: var(--ink-2); }
  .po-spec { max-width: none; white-space: normal; }
  .po-detail { display: block; margin: -12px 0 12px; border: 1px solid var(--line); border-radius: 0 0 16px 16px; }
  .po-detail td { display: block; }
@@ -86,4 +86,44 @@
 
 @media (prefers-reduced-motion: reduce) {
  .po-expand, .po-chev svg, .po-row, .po-chip { transition: none; }
+}
+
+/* Procurement: one stage row, one list of cards, and the detail sheet beside it on wide screens. */
+@keyframes pb-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.pb { max-width: 1040px; }
+.pb .pb-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; align-items: start; }
+.pb .pb-layout.has-sheet { grid-template-columns: minmax(0, 1.35fr) minmax(320px, .8fr); }
+.pb .pb-main { min-width: 0; }
+.pb .pb-next { margin: 4px 0 0; color: var(--ink-2); font-size: 14px; line-height: 1.4; }
+.pb .pb-list-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pb .pb-refresh { display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding: 8px 12px; border: 0; border-radius: var(--r-control); background: transparent; color: var(--brand); font: 600 16px/1.4 var(--font); cursor: pointer; transition: background-color 150ms ease, transform 150ms ease; }
+.pb .pb-refresh:hover { background: var(--raised); }
+.pb .pb-refresh:active { background: var(--tint); transform: scale(.98); }
+.pb .pb-refresh:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.pb .pb-list-view { display: grid; gap: 8px; animation: pb-rise 150ms ease-out; }
+.pb .ui-row-leading .iso-stage { width: 32px; height: 32px; }
+.pb .ui-row-copy > span { white-space: normal; overflow-wrap: anywhere; }
+.pb .ui-row-wrap .ui-row { min-height: 72px; }
+.pb .pb-filter-options { display: grid; gap: 12px; }
+.pb .pb-filter-options > .button { justify-content: flex-start; }
+.pb .pb-filter-options > .button[aria-pressed="true"] { border-color: var(--brand); background: var(--raised); }
+.pb .pb-sheet { box-shadow: none; animation: pb-rise 150ms ease-out; }
+.pb .pb-kicker { margin: 0; color: var(--brand); font: 600 14px/1.4 var(--font); letter-spacing: 0; text-transform: none; }
+.pb .pb-tag { display: inline-flex; align-items: center; min-height: 32px; padding: 4px 10px; border-radius: var(--r-pill); background: var(--sunken); color: var(--ink-2); font-size: 14px; }
+.pb .pb-record-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pb .pb-record-title h3 { margin: 0; }
+.pb .pb-chip-icon { display: grid; flex: 0 0 44px; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--tint); color: var(--brand); }
+.pb .pb-chip-icon svg { width: 24px; height: 24px; }
+.pb .pb-directory .erp-records { gap: 12px; }
+.pb .pb-directory .erp-record { border-radius: var(--r-row); }
+@media (max-width: 900px) {
+ .pb .pb-layout.has-sheet { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+ .pb .ui-row-value { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+ .pb .pb-list-view, .pb .pb-sheet { animation: none; }
+ .pb .pb-refresh { transition: none; }
+ .pb .pb-refresh:active { transform: none; }
 }

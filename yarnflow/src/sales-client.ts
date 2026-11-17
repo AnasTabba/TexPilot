@@ -1,7 +1,6 @@
 // Types and request helpers for the sales domain (/api/erp/sales/*) and the buyer portal
 // (/api/buyer/*, its own cookie and identity). Mirrors server/sales.mjs and server/buyer-portal.mjs.
-import { InventoryError, Member, Permission } from './inventory-client';
-import { factoryTime } from './erp-client';
+import { InventoryError } from './inventory-client';
 
 export type SalesUnit = 'kg' | 'metre' | 'piece';
 export type BuyerStatus = 'pending' | 'active' | 'rejected' | 'suspended' | 'archived';
@@ -97,31 +96,11 @@ const request = async <T>(base: string, path: string, data?: unknown): Promise<T
 export const salesRequest = <T>(path: string, data?: unknown) => request<T>('/api/erp/sales', path, data);
 /** Buyer portal API; the server issues and clears its own `yf_buyer_session` cookie. */
 export const buyerRequest = <T>(path: string, data?: unknown) => request<T>('/api/buyer', path, data);
-export const canSell = (member: Member) => member.admin || member.permissions.includes('sales');
-export const canBill = (member: Member) => member.admin || member.permissions.includes('payments');
-export const canDispatchSales = (member: Member) => member.admin || member.permissions.includes('dispatch' as Permission);
 export const factoryDate = (time: number) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium' }).format(time);
 export const factoryDay = (time: number) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', day: '2-digit', month: 'short', year: 'numeric' }).format(time);
-export const dueLabel = (receivable: Receivable, serverTime: number) => `${factoryDay(receivable.due_at)} · ${receivable.due_at <= serverTime ? 'overdue' : `in ${Math.max(1, Math.ceil((receivable.due_at - serverTime) / 86400000))} days`}`;
-export const orderStatusName: Record<SalesOrder['status'], string> = {
-  confirmed: 'Confirmed', partially_dispatched: 'Partially dispatched', dispatched: 'Dispatched', cancelled: 'Cancelled',
-};
-export const buyerStatusName: Record<BuyerStatus, string> = {
-  pending: 'Pending review', active: 'Active', rejected: 'Rejected', suspended: 'Suspended', archived: 'Archived',
-};
-export const outboxStateName: Record<SalesOutboxMessage['state'], string> = {
-  queued: 'Queued, not yet sent', sent: 'Sent', failed: 'Failed',
-};
-export const outboxWhen = (message: SalesOutboxMessage) =>
-  message.sent_at ? factoryTime(message.sent_at) : message.last_attempted_at ? factoryTime(message.last_attempted_at) : '—';
-export const invoiceLines = (invoice: Invoice) => JSON.parse(invoice.lines_json) as {
-  specifications: string; quantity_milli: number; unit: SalesUnit; price_minor: number; amount_minor: number;
-}[];
 /** A civil PKT calendar date (from <input type="date">) as a timestamp at noon of that Karachi day. */
 export function factoryDateValue(value: string) {
   const result = Date.parse(value + 'T12:00:00+05:00');
   if (!Number.isFinite(result)) throw new Error('Choose a valid date.');
   return result;
 }
-/** Today's Karachi civil date for <input type="date">, independent of the device timezone. */
-export const localFactoryDateValue = (time: number) => new Date(time + 5 * 3600_000).toISOString().slice(0, 10);

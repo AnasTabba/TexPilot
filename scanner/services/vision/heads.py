@@ -126,7 +126,7 @@ class FineTunedHead:
             self.probe.load_state_dict(w)
             self.probe = self.probe.eval().to(device)
         else:
-            model = timm_classifier(m["timm_name"], len(self.classes), m["img_size"])
+            model = timm_classifier(m["timm_name"], len(self.meta["classes"]), m["img_size"])
             model.load_state_dict(load_file(str(head_dir / "model.safetensors")))
         # Halve before moving: a 400M-parameter encoder must not sit on the GPU in fp32 first.
         model = model.eval().half() if self.half else model.eval()

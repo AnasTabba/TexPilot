@@ -30,9 +30,10 @@ const termPresets = [
 ] as const;
 const owner = ['sales_manager'] as const;
 
-/** Whole amount in minor units from a quantity (up to three decimals) and a rate, or null when either is not usable. */
-function previewOf(quantity: string, rate: string, taxRateBp: number) {
-  const quantityMilli = /^\d+(\.\d{1,3})?$/.test(quantity.trim()) ? Math.round(Number(quantity) * 1000) : 0;
+/** Whole amount in minor units from a quantity (up to three decimals for kg, whole numbers otherwise) and a rate, or null when either is not usable. */
+function previewOf(quantity: string, rate: string, taxRateBp: number, unit: string) {
+  const quantityPattern = unit === 'kg' ? /^\d+(\.\d{1,3})?$/ : /^\d+$/;
+  const quantityMilli = quantityPattern.test(quantity.trim()) ? Math.round(Number(quantity) * 1000) : 0;
   let rateMinor = 0;
   try { rateMinor = fixedInput(rate, 2, 'Rate'); } catch { rateMinor = 0; }
   if (!quantityMilli || !rateMinor) return null;
@@ -72,7 +73,7 @@ export function InvoiceGenerator({ member, buyers, products, currency, taxRateBp
   };
   const selectedProduct = products.find(product => product.id === productId);
   const nextType = (typeChoice === 'other' ? typeText.trim() : typeChoice) || null;
-  const line = previewOf(quantity, rate, taxRateBp);
+  const line = previewOf(quantity, rate, taxRateBp, unit);
   const days = Number(creditDays) || 0;
   const due = factoryDate(Date.now() + days * 86400000);
   const preview = <section className="invoice-preview" aria-label={t('Invoice preview', 'انوائس کا پیش نظارہ')}>
@@ -80,13 +81,13 @@ export function InvoiceGenerator({ member, buyers, products, currency, taxRateBp
     {line?.error && <p className="live-warning">{t('Choose a quantity and rate that give a whole amount in the smallest currency unit.', 'ایسی مقدار اور شرح منتخب کریں جو سب سے چھوٹی کرنسی اکائی میں مکمل رقم دے۔')}</p>}
     {selectedProduct && line && !line.error ? <table className="invoice-preview-table">
       <thead><tr><th>{t('Product', 'مصنوعات')}</th><th className="num">{t('Quantity', 'مقدار')}</th><th className="num">{t('Rate', 'شرح')}</th><th className="num">{t('Amount', 'رقم')}</th></tr></thead>
-      <tbody><tr><td>{selectedProduct.name}{nextType && <small> · {nextType}</small>}{specifications.trim() && <small> · {specifications.trim()}</small>}</td><td className="num">{quantity} {unit}</td><td className="num">{money(line.rateMinor, invoiceCurrency)}</td><td className="num">{money(line.subtotal, invoiceCurrency)}</td></tr></tbody>
+      <tbody><tr><td>{selectedProduct.name}{nextType && <small> · {nextType}</small>}{specifications.trim() && <small> · {specifications.trim()}</small>}</td><td className="num" data-label={t('Quantity', 'مقدار')}>{quantity} {unit}</td><td className="num" data-label={t('Rate', 'شرح')}>{money(line.rateMinor, invoiceCurrency)}</td><td className="num" data-label={t('Amount', 'رقم')}>{money(line.subtotal, invoiceCurrency)}</td></tr></tbody>
     </table> : <p className="invoice-preview-empty">{t('Enter a product, quantity and rate to see the invoice.', 'انوائس دیکھنے کے لیے مصنوعات، مقدار اور شرح درج کریں۔')}</p>}
-    {line && !line.error && <dl className="invoice-doc-totals">
-      <div><dt>{t('Subtotal', 'ذیلی کل')}</dt><dd>{money(line.subtotal, invoiceCurrency)}</dd></div>
-      <div><dt>{t(`GST (${taxRateBp / 100}%)`, `جی ایس ٹی (${taxRateBp / 100}%)`)}</dt><dd>{money(line.tax, invoiceCurrency)}</dd></div>
-      <div className="is-total"><dt>{t('Total', 'کل')}</dt><dd>{money(line.total, invoiceCurrency)}</dd></div>
-    </dl>}
+    <dl className="invoice-doc-totals invoice-preview-totals" aria-live="polite">
+      <div><dt>{t('Subtotal', 'ذیلی کل')}</dt><dd>{line && !line.error ? money(line.subtotal, invoiceCurrency) : '—'}</dd></div>
+      <div><dt>{t(`GST (${taxRateBp / 100}%)`, `جی ایس ٹی (${taxRateBp / 100}%)`)}</dt><dd>{line && !line.error ? money(line.tax, invoiceCurrency) : '—'}</dd></div>
+      <div className="is-total"><dt>{t('Total', 'کل')}</dt><dd>{line && !line.error ? money(line.total, invoiceCurrency) : '—'}</dd></div>
+    </dl>
     <p className="invoice-preview-due">{t('Due', 'آخری تاریخ')}: <strong>{due}</strong> · {t(`${days} days credit`, `${days} دن ادھار`)}</p>
   </section>;
 
@@ -105,28 +106,31 @@ export function InvoiceGenerator({ member, buyers, products, currency, taxRateBp
     {prefill && <p className="invoice-prefill-note">{t(`Corrected invoice: values start from the voided invoice ${prefill.voidedNumber}. Check each one before issuing.`, `درست شدہ انوائس: قدریں منسوخ انوائس ${prefill.voidedNumber} سے شروع ہوئیں۔ جاری کرنے سے پہلے ہر ایک چیک کریں۔`)}</p>}
     {!approved.length && <p className="live-warning">{t('No approved buyers yet. Approve a buyer before issuing an invoice.', 'ابھی کوئی منظور شدہ خریدار نہیں۔ انوائس جاری کرنے سے پہلے خریدار منظور کریں۔')}</p>}
     <Field>{t('Buyer', 'خریدار')}<select value={buyerId} onChange={event => setBuyerId(event.target.value)} required>{approved.map(buyer => <option key={buyer.id} value={buyer.id}>{buyer.name}</option>)}</select></Field>
+    <Field>{t('Product', 'مصنوعات')}<select value={productId} onChange={event => chooseProduct(event.target.value)} required>{products.map(product => <option key={product.id} value={product.id}>{product.name} · {product.product_type || t('type not set', 'قسم درج نہیں')}</option>)}</select></Field>
     <div className="invoice-form-row">
-      <Field>{t('Product', 'مصنوعات')}<select value={productId} onChange={event => chooseProduct(event.target.value)} required>{products.map(product => <option key={product.id} value={product.id}>{product.name} · {product.product_type || t('type not set', 'قسم درج نہیں')}</option>)}</select></Field>
-      <Field>{t('Type', 'قسم')}<select value={typeChoice} onChange={event => setTypeChoice(event.target.value)}>
-        <option value="">{t('Not set', 'درج نہیں')}</option>{typePresets.map(item => <option key={item} value={item}>{item}</option>)}<option value="other">{t('Other', 'دیگر')}</option>
-      </select></Field>
-      {typeChoice === 'other' && <Field>{t('Type name', 'قسم کا نام')}<input value={typeText} onChange={event => setTypeText(event.target.value)} maxLength={60} required /></Field>}
-    </div>
-    {selectedProduct && nextType !== (selectedProduct.product_type || null) && <p className="invoice-type-hint">{t('Saving this invoice also changes the material’s type for future invoices. Invoices already issued keep their type.', 'یہ انوائس محفوظ کرنے سے مواد کی قسم آئندہ انوائسز کے لیے بھی بدل جائے گی۔ جاری شدہ انوائسز اپنی قسم برقرار رکھیں گی۔')}</p>}
-    <div className="invoice-form-row">
-      <Field>{t('Quantity', 'مقدار')}<input type="number" inputMode="decimal" min="0.001" step="0.001" value={quantity} onChange={event => setQuantity(event.target.value)} required /></Field>
+      <Field>{t('Quantity', 'مقدار')}<input type="number" inputMode="decimal" min={unit === 'kg' ? '0.001' : '1'} step={unit === 'kg' ? '0.001' : '1'} value={quantity} onChange={event => setQuantity(event.target.value)} required /></Field>
       <Field>{t('Unit', 'اکائی')}<select value={unit} onChange={event => setUnit(event.target.value)}><option value="kg">kg</option><option value="metre">{t('metre', 'میٹر')}</option><option value="piece">{t('piece', 'نگ')}</option></select></Field>
       <Field>{t('Rate per unit', 'فی اکائی شرح')}<input inputMode="decimal" value={rate} onChange={event => setRate(event.target.value)} required /></Field>
       <Field>{t('Currency', 'کرنسی')}<select value={invoiceCurrency} onChange={event => setInvoiceCurrency(event.target.value)}>{currencies.map(code => <option key={code} value={code} disabled={code !== currency}>{code}{code !== currency ? ` (${t('factory currency is ' + currency, 'فیکٹری کی کرنسی ' + currency)})` : ''}</option>)}</select></Field>
     </div>
-    <div className="invoice-form-row">
-      <Field>{t('Payment terms', 'ادائیگی کی شرائط')}<select value={preset} onChange={event => choosePreset(event.target.value)}>{termPresets.map(item => <option key={item.id} value={item.id}>{t(item.en, item.ur)}</option>)}</select></Field>
-      <Field>{t('Terms text', 'شرائط کا متن')}<input value={terms} onChange={event => setTerms(event.target.value)} minLength={3} maxLength={1000} required /></Field>
-      <Field>{t('Credit days', 'ادھار کے دن')}<input type="number" min="0" max="365" value={creditDays} onChange={event => setCreditDays(event.target.value)} required /></Field>
-      <Field>{t('Delivery date (optional)', 'ترسیل کی تاریخ (اختیاری)')}<input type="date" value={delivery} onChange={event => setDelivery(event.target.value)} /></Field>
-    </div>
-    <Field>{t('Specifications (optional)', 'تفصیلات (اختیاری)')}<textarea value={specifications} onChange={event => setSpecifications(event.target.value)} maxLength={4000} placeholder={t('Type or quality of the material, for example combed cotton 30/1', 'مواد کی قسم یا معیار، مثلاً کومبڈ کاٹن 30/1')} /></Field>
     {preview}
-    <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+    <details className="invoice-more">
+      <summary>{t('More invoice details', 'انوائس کی مزید تفصیلات')}</summary>
+      <div className="invoice-more-content">
+        <div className="invoice-form-row">
+          <Field>{t('Type', 'قسم')}<select value={typeChoice} onChange={event => setTypeChoice(event.target.value)}>
+            <option value="">{t('Not set', 'درج نہیں')}</option>{typePresets.map(item => <option key={item} value={item}>{item}</option>)}<option value="other">{t('Other', 'دیگر')}</option>
+          </select></Field>
+          {typeChoice === 'other' && <Field>{t('Type name', 'قسم کا نام')}<input value={typeText} onChange={event => setTypeText(event.target.value)} maxLength={60} required /></Field>}
+          <Field>{t('Payment terms', 'ادائیگی کی شرائط')}<select value={preset} onChange={event => choosePreset(event.target.value)}>{termPresets.map(item => <option key={item.id} value={item.id}>{t(item.en, item.ur)}</option>)}</select></Field>
+          <Field>{t('Terms text', 'شرائط کا متن')}<input value={terms} onChange={event => setTerms(event.target.value)} minLength={3} maxLength={1000} required /></Field>
+          <Field>{t('Credit days', 'ادھار کے دن')}<input type="number" min="0" max="365" value={creditDays} onChange={event => setCreditDays(event.target.value)} required /></Field>
+          <Field>{t('Delivery date (optional)', 'ترسیل کی تاریخ (اختیاری)')}<input type="date" value={delivery} onChange={event => setDelivery(event.target.value)} /></Field>
+        </div>
+        {selectedProduct && nextType !== (selectedProduct.product_type || null) && <p className="invoice-type-hint">{t('Saving this invoice also changes the material’s type for future invoices. Invoices already issued keep their type.', 'یہ انوائس محفوظ کرنے سے مواد کی قسم آئندہ انوائسز کے لیے بھی بدل جائے گی۔ جاری شدہ انوائسز اپنی قسم برقرار رکھیں گی۔')}</p>}
+        <Field>{t('Specifications (optional)', 'تفصیلات (اختیاری)')}<textarea value={specifications} onChange={event => setSpecifications(event.target.value)} maxLength={4000} placeholder={t('Type or quality of the material, for example combed cotton 30/1', 'مواد کی قسم یا معیار، مثلاً کومبڈ کاٹن 30/1')} /></Field>
+        <InterventionField member={member} owners={[...owner]} value={intervention} onChange={setIntervention} />
+      </div>
+    </details>
   </AsyncForm>;
 }

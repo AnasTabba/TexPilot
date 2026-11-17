@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { CheckCheck, RefreshCw, TriangleAlert } from 'lucide-react';
+import { CheckCheck, RefreshCw, TriangleAlert, CircleCheck, CircleX, Package, MessageSquare } from 'lucide-react';
 import './erp.css';
 import './supervisor-screens.css';
 import './approvals-ui.css';
@@ -9,7 +9,7 @@ import { stageName, weight, type Member, type WorkspaceState } from './inventory
 import { quantity } from './erp-client';
 import { useLanguage } from './i18n';
 import { ReverseControl } from './ToProduction';
-import { SplitView, type SplitItem } from './SplitView';
+import { ChoiceTiles, EmptyState, ErrorState, LoadingLines, RowCard, Section, Step, Steps, Tabs } from './ui';
 
 export const SUPERVISOR_SECTIONS = ['requests', 'report'] as const;
 export type SupervisorSection = (typeof SUPERVISOR_SECTIONS)[number];
@@ -48,7 +48,7 @@ const severityUr: Record<string, string> = { minor: 'معمولی', major: 'بڑ
 const pair = (table: Record<string, [string, string]>, key: string): [string, string] => table[key] ?? [key, key];
 const keyOf = (type: string, id: string) => `${type}:${id}`;
 const dateTime = (value: number) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium', timeStyle: 'short' }).format(value);
-const dateOnly = (value: number) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium' }).format(value);
+export const dateOnly = (value: number) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium' }).format(value);
 
 export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { section: SupervisorSection; member: Member; state?: WorkspaceState; tab?: string; itemId?: string }) {
   const { t } = useLanguage();
@@ -60,6 +60,7 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
   const [fromDate, setFromDate] = useState(() => `${dayInFactory(Date.now()).slice(0, 7)}-01`);
   const [toDate, setToDate] = useState(() => dayInFactory(Date.now()));
   const [draft, setDraft] = useState<ReportDraft | null>(null), [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+  const [reportStep, setReportStep] = useState(0);
   const [flags, setFlags] = useState<Record<string, { selected: boolean; note: string }>>({});
   const [reportNote, setReportNote] = useState(''), [reportId, setReportId] = useState(() => crypto.randomUUID());
   // A correction replaces a voided report: its period and note are copied, and the submitted report names what it corrects.
@@ -99,7 +100,7 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
   const listStatus = (count: number, empty: string) => {
     if (!loaded) return <p role="status">{t('Loading…', 'لوڈ ہو رہا ہے…')}</p>;
     if (error && !count) return <button className="button" type="button" disabled={busy} onClick={() => void refresh()}><RefreshCw size={18} aria-hidden="true" />{t('Try again', 'دوبارہ کوشش کریں')}</button>;
-    if (!count) return <p className="live-muted">{empty}</p>;
+    if (!count) return <EmptyState emptyIso="inbox" message={empty} />;
     return null;
   };
 
@@ -120,11 +121,12 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
       if (result.pendingApproval) return t('The decision and stock correction are waiting for admin approval.', 'فیصلہ اور اسٹاک کی درستگی ایڈمن کی منظوری کے منتظر ہیں۔');
     }, t(decision === 'accept' ? 'Stock issue accepted.' : 'Stock issue rejected.', decision === 'accept' ? 'اسٹاک کا مسئلہ قبول کیا گیا۔' : 'اسٹاک کا مسئلہ مسترد کیا گیا۔'));
   }
-  async function previewReport() {
+  // A reversal refreshes the draft and keeps the flags the supervisor already set; the preview button starts them afresh.
+  async function previewReport(keepFlags = false) {
     setBusy(true); setError(''); setNotice('');
     try {
       const bounds = periodBounds(fromDate, toDate);
-      setDraft(await portal<ReportDraft>(`/stock/reports/draft?from=${bounds.from}&to=${bounds.to}`)); setFlags({});
+      setDraft(await portal<ReportDraft>(`/stock/reports/draft?from=${bounds.from}&to=${bounds.to}`)); if (!keepFlags) setFlags({}); setReportStep(1);
     } catch (caught) { setError(errorMessage(caught)); }
     finally { setBusy(false); }
   }
@@ -135,13 +137,13 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
       const flagged = [...draft.confirmedRejections.map(row => ({ objectType: 'inspection', objectId: row.id })), ...draft.escalations.map(row => ({ objectType: 'inspection', objectId: row.id })), ...draft.adjustments.map(row => ({ objectType: 'adjustment', objectId: row.id }))]
         .flatMap(item => { const value = flags[keyOf(item.objectType, item.objectId)]; return value?.selected ? [{ ...item, note: value.note }] : []; });
       await portal('/stock/reports', { id: reportId, ...bounds, flagged, note: reportNote, ...(correcting ? { supersedes: correcting.id } : {}), ...stepIn });
-      setDraft(null); setFlags({}); setReportNote(''); setReportId(crypto.randomUUID()); setCorrecting(null); await loadReports();
+      setDraft(null); setFlags({}); setReportNote(''); setReportId(crypto.randomUUID()); setCorrecting(null); setReportStep(0); await loadReports();
     }, t('Report submitted and saved.', 'رپورٹ جمع اور محفوظ ہو گئی۔'));
   }
 
   const thresholdText = (amount: number, threshold: number | null) => threshold === null
     ? t(`${weight(amount)} kg · no approval threshold configured`, `${weight(amount)} کلوگرام · منظوری کی حد مقرر نہیں`)
-    : t(`${weight(amount)} kg against ${weight(threshold)} kg · ${amount >= threshold ? 'admin approval required' : 'no admin approval'}`, `${weight(amount)} کلوگرام، حد ${weight(threshold)} کلوگرام · ${amount >= threshold ? 'ایڈمن کی منظوری درکار' : 'ایڈمن کی منظوری درکار نہیں'}`);
+    : t(`${weight(amount)} kg against ${weight(threshold)} kg · ${amount >= threshold ? 'Needs admin approval' : 'Supervisor can decide this'}`, `${weight(amount)} کلوگرام، حد ${weight(threshold)} کلوگرام · ${amount >= threshold ? 'ایڈمن کی منظوری درکار' : 'سپروائزر خود فیصلہ کر سکتے ہیں'}`);
   const issueTab = tab === 'stock-issues';
   const startCorrection = (report: SavedReport) => {
     setCorrecting(report); setFromDate(dayInFactory(report.period_from)); setToDate(dayInFactory(report.period_to)); setReportNote(report.note); setDraft(null); setFlags({});
@@ -159,7 +161,7 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
       impact={item.delta_grams < 0 ? t(`Puts ${amount} kg back into ${stage}, batch ${item.batch}.`, `بیچ ${item.batch} کے ${amount} کلوگرام واپس ${stage} میں جائیں گے۔`) : t(`Takes ${amount} kg out of ${stage}, batch ${item.batch}.`, `بیچ ${item.batch} سے ${amount} کلوگرام ${stage} سے نکل جائیں گے۔`)}
       run={async ({ id, reason, interventionReason }) => {
         const result = await portal<{ pendingApproval?: boolean }>('/stock/adjustments', { id, lotId: item.lot_id, stage: item.stage, kind: item.delta_grams < 0 ? 'adjustment' : 'write_off', deltaGrams: -item.delta_grams, reason, compensatesId: item.id, ...(interventionReason ? { interventionReason } : {}) });
-        await previewReport();
+        await previewReport(true);
         setNotice(result.pendingApproval ? t('The reversal waits for admin approval.', 'الٹنے کا عمل ایڈمن کی منظوری کا منتظر ہے۔') : t('Adjustment reversed.', 'درستگی الٹ دی گئی۔'));
       }} />;
   };
@@ -190,8 +192,8 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
       <p>{t('Reported difference', 'درج شدہ فرق')}: {weight(issue.difference_grams)} kg · <StatusTag status={issue.status} /></p>
       {issue.decision_reason && <p>{t('Decision reason', 'فیصلے کی وجہ')}: {issue.decision_reason}</p>}
       {issue.status === 'open' && thresholds && <div className="live-muted" aria-label={t('Approval previews', 'منظوری کا پیش نظارہ')}>
-        <p>{t('Dispatch issue gate', 'ڈسپیچ مسئلے کی حد')}: {thresholdText(issue.difference_grams, thresholds.dispatchStockIssueGrams)}</p>
-        <p>{correction ? t('Inventory correction gate', 'انوینٹری کی درستگی کی حد') : t('Inventory correction gate: no stock change proposed', 'انوینٹری کی درستگی کی حد: اسٹاک میں تبدیلی تجویز نہیں کی گئی')}{correction ? `: ${thresholdText(Math.abs(correction), thresholds.inventoryAdjustmentGrams)}` : ''}</p>
+        <p>{t('Dispatch issue approval limit', 'ڈسپیچ مسئلے کی منظوری کی حد')}: {thresholdText(issue.difference_grams, thresholds.dispatchStockIssueGrams)}</p>
+        <p>{correction ? t('Inventory correction approval limit', 'انوینٹری کی درستگی کی منظوری کی حد') : t('Inventory correction approval limit: no stock change proposed', 'انوینٹری کی درستگی کی منظوری کی حد: اسٹاک میں تبدیلی تجویز نہیں کی گئی')}{correction ? `: ${thresholdText(Math.abs(correction), thresholds.inventoryAdjustmentGrams)}` : ''}</p>
       </div>}
       {issue.status === 'open' && <>
         <Field>{t('Correction (kg, optional)', 'درستگی (کلوگرام، اختیاری)')}<input value={values.correctionKg} onChange={event => setIssueDrafts(old => ({ ...old, [issue.id]: { ...values, correctionKg: event.target.value } }))} inputMode="decimal" placeholder="+0.000 / -0.000" /></Field>
@@ -206,37 +208,33 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
     { id: 'queries', label: t('Stock queries', 'اسٹاک کی درخواستیں'), count: queries.length },
     { id: 'stock-issues', label: t('Stock issues', 'اسٹاک کے مسائل'), count: issues.length },
   ];
-  const requestItems: SplitItem[] = issueTab
-    ? issues.map(issue => ({ id: issue.id, title: `${issue.product_name} · ${issue.lot_batch}`, meta: `${t(...pair(kindWords, issue.kind))} · ${weight(issue.difference_grams)} kg`, status: <StatusTag status={issue.status} /> }))
-    : queries.map(query => ({ id: query.id, title: `${query.product_name}${query.quantity_milli !== null ? ` · ${quantity(query.quantity_milli)} kg` : ''}`, meta: `${query.asked_by_name} · ${query.question}`, status: <StatusTag status={query.status} /> }));
-  const requestDetail = (rowId: string) => {
-    const missing = <p className="split-none">{t('This item is not in the list.', 'یہ آئٹم فہرست میں نہیں۔')}</p>;
-    if (issueTab) { const issue = issues.find(item => item.id === rowId); return issue ? issueCard(issue) : missing; }
-    const query = queries.find(item => item.id === rowId); return query ? queryCard(query) : missing;
-  };
   // The route carries the chosen request; the stock-issues tab keeps its own segment.
   const openRequest = (next: string) => { location.hash = `#/requests${issueTab ? '/stock-issues' : ''}${next ? `/${next}` : ''}`; };
-  const requestsStatus = listStatus(queries.length + issues.length, t('No stock queries or stock issues are waiting.', 'کوئی اسٹاک درخواست یا مسئلہ منتظر نہیں۔'));
-
   const actions = <button className="button" type="button" disabled={busy} onClick={() => void refresh()}><RefreshCw size={18} aria-hidden="true" />{t('Refresh', 'تازہ کریں')}</button>;
-  return <section className="live-panel" aria-label={t('Supervisor workspace', 'سپروائزر کا کام')}>
+  return <section className="live-panel yf-supervisor-screen" aria-label={t('Supervisor workspace', 'سپروائزر کا کام')}>
     <div className="live-panel-heading"><h2>{section === 'requests' ? t('Requests', 'درخواستیں') : t('Report to admin', 'ایڈمن کو رپورٹ')}</h2>{actions}</div>
     <InterventionField member={member} owners={['supervisor']} value={intervention} onChange={setIntervention} />
     {error && <p className="live-error" role="alert"><TriangleAlert size={18} aria-hidden="true" />{t(error)}</p>}
     {notice && <p className="live-success" role="status"><CheckCheck size={18} aria-hidden="true" />{notice}</p>}
 
-    {section === 'requests' && (requestsStatus ?? <div className="yf-supervisor">
-      <SplitView label={issueTab ? t('Stock issues from dispatch', 'ڈسپیچ کے اسٹاک مسائل') : t('Stock queries from sales', 'سیلز کی اسٹاک درخواستیں')}
-        tabs={requestTabs} tab={issueTab ? 'stock-issues' : 'queries'} onTab={value => { location.hash = `#/requests/${value}`; }}
-        items={requestItems} selectedId={itemId} onSelect={openRequest} renderDetail={requestDetail}
-        empty={issueTab ? t('No dispatch stock issues are waiting.', 'ڈسپیچ کا کوئی اسٹاک مسئلہ منتظر نہیں۔') : t('No stock queries have been raised.', 'اسٹاک کی کوئی درخواست موصول نہیں ہوئی۔')}
-        emptyDetail={t('Choose a request to answer it or decide it.', 'جواب دینے یا فیصلہ کرنے کے لیے درخواست منتخب کریں۔')} />
-    </div>)}
+    {section === 'requests' && <div className="yf-supervisor yf-request-flow">
+      <Tabs label={t('Request type', 'درخواست کی قسم')} items={requestTabs} value={issueTab ? 'stock-issues' : 'queries'} onChange={value => { location.hash = `#/requests/${value}`; }} />
+      {!loaded ? <LoadingLines lines={3} /> : error && !(issueTab ? issues.length : queries.length) ? <ErrorState reason={t(error)} onRetry={() => void refresh()} /> : <>
+        <Section title={issueTab ? t('Stock issues', 'اسٹاک کے مسائل') : t('Stock queries', 'اسٹاک کی درخواستیں')}>
+          {(issueTab ? issues : queries).length === 0 ? <EmptyState emptyIso={issueTab ? 'stock' : 'inbox'} message={issueTab ? t('No stock issues to review.', 'جائزے کے لیے کوئی اسٹاک مسئلہ نہیں۔') : t('No stock queries to answer.', 'جواب دینے کے لیے کوئی اسٹاک درخواست نہیں۔')} /> :
+            <div className="yf-request-list">{(issueTab ? issues : queries).map(row => {
+              const id = row.id, active = itemId === id;
+              const title = issueTab ? `${(row as StockIssue).product_name} · ${(row as StockIssue).lot_batch}` : (row as StockQuery).product_name;
+              const detail = issueTab ? `${t(...pair(kindWords, (row as StockIssue).kind))} · ${weight((row as StockIssue).difference_grams)} kg` : `${(row as StockQuery).asked_by_name} · ${(row as StockQuery).question}`;
+              return <div key={id} className={active ? 'yf-request-selected' : ''}><RowCard title={title} detail={detail} leading={issueTab ? <Package aria-hidden="true" /> : <MessageSquare aria-hidden="true" />} status={<StatusTag status={row.status} />} onClick={() => openRequest(active ? '' : id)} />{active && <div className="yf-request-detail">{issueTab ? issueCard(row as StockIssue) : queryCard(row as StockQuery)}</div>}</div>;
+            })}</div>}
+        </Section>
+      </>}
+    </div>}
 
-    {section === 'report' && <>
-      <p className="live-muted">{t('Choose a factory date period, preview its evidence, flag items that need attention, then submit an immutable snapshot.', 'فیکٹری کی تاریخیں منتخب کریں، شواہد دیکھیں، ضروری آئٹمز نشان زد کریں اور محفوظ رپورٹ جمع کریں۔')}</p>
-      <div className="live-fields"><Field>{t('From (factory date)', 'سے (فیکٹری تاریخ)')}<input type="date" value={fromDate} onChange={event => setFromDate(event.target.value)} required /></Field><Field>{t('To (factory date)', 'تک (فیکٹری تاریخ)')}<input type="date" value={toDate} onChange={event => setToDate(event.target.value)} required /></Field></div>
-      <button className="button" type="button" disabled={busy} onClick={() => void previewReport()}>{t('Preview period', 'مدت کا جائزہ')}</button>
+    {section === 'report' && <div className="yf-report-flow">
+      <p className="live-muted">{t('Choose dates, check the items, then save the report.', 'تاریخیں چنیں، آئٹمز دیکھیں، پھر رپورٹ محفوظ کریں۔')}</p>
+      <Steps label={t('Daily report', 'روزانہ رپورٹ')}><Step title={t('Choose dates', 'تاریخیں چنیں')} state={reportStep === 0 ? 'current' : 'done'}>{reportStep === 0 && <div className="live-fields"><Field>{t('From', 'سے')}<input type="date" value={fromDate} onChange={event => setFromDate(event.target.value)} required /></Field><Field>{t('To', 'تک')}<input type="date" value={toDate} onChange={event => setToDate(event.target.value)} required /></Field><button className="button" type="button" disabled={busy} onClick={() => void previewReport()}>{t('Check items', 'آئٹمز دیکھیں')}</button></div>}</Step><Step title={t('Review and send', 'جائزہ لیں اور بھیجیں')} state={reportStep === 1 ? 'current' : 'later'}>{reportStep === 1 && <p>{t('Review the items below and send the report.', 'نیچے دی گئی تفصیل دیکھیں اور رپورٹ بھیجیں۔')}</p>}</Step></Steps>
       {correcting && <p className="live-muted">{t('Correcting a voided report.', 'منسوخ شدہ رپورٹ کی درستگی جاری ہے۔')} <button className="live-text-button" type="button" onClick={() => setCorrecting(null)}>{t('Cancel correction', 'درستگی منسوخ کریں')}</button></p>}
       {draft && <form onSubmit={event => void submitReport(event)} aria-label={t('Report snapshot', 'رپورٹ کا خلاصہ')}>
         <h3 className="live-subheading">{t('Confirmed rejections', 'تصدیق شدہ مسترد مقداریں')} · {draft.confirmedRejections.length}</h3>
@@ -247,21 +245,21 @@ export function SupervisorScreens({ section, member, tab = '', itemId = '' }: { 
         {draft.adjustments.map(item => <ReportItem key={item.id} type="adjustment" item={item} flag={flags[keyOf('adjustment', item.id)]} setFlag={value => setFlags(old => ({ ...old, [keyOf('adjustment', item.id)]: value }))} control={reversalControl(item)} />)}
         {!draftCount && <p className="live-muted">{t('There are no report items in this period.', 'اس مدت میں رپورٹ کے لیے کوئی آئٹم نہیں۔')}</p>}
         <Field>{t('Note to admin (optional)', 'ایڈمن کے لیے نوٹ (اختیاری)')}<textarea value={reportNote} onChange={event => setReportNote(event.target.value)} rows={3} maxLength={1000} /></Field>
-        <button className="button primary" disabled={busy}><CheckCheck size={18} aria-hidden="true" />{t('Submit report', 'رپورٹ جمع کریں')}</button>
+        <button className="button primary" disabled={busy}><CheckCheck size={18} aria-hidden="true" />{t('Send report', 'رپورٹ بھیجیں')}</button>
       </form>}
       <section className="yf-section">
-        <h3 className="live-subheading">{t('Saved reports', 'محفوظ رپورٹس')}</h3>
+        <h3 className="live-subheading">{t('History', 'سابقہ رپورٹس')}</h3>
         {listStatus(savedReports.length, t('No reports have been submitted.', 'ابھی کوئی رپورٹ جمع نہیں ہوئی۔'))}
         <div className="erp-records">{savedReports.map(report => <SavedReportView key={report.id} report={report} isAdmin={member.role === 'admin'} correcting={correcting?.id === report.id} onVoid={voidReport(report)} onCorrect={() => startCorrection(report)} />)}</div>
       </section>
-    </>}
+    </div>}
   </section>;
 }
 
 function ReportItem({ type, item, flag, setFlag, control }: { type: 'inspection' | 'adjustment'; item: QcItem | Adjustment; flag?: { selected: boolean; note: string }; setFlag: (value: { selected: boolean; note: string }) => void; control?: ReactNode }) {
   const { t } = useLanguage(); const chosen = flag || { selected: false, note: '' };
   const flagControls = <>
-    <label className="live-check"><input type="checkbox" checked={chosen.selected} onChange={event => setFlag({ ...chosen, selected: event.target.checked })} />{t('Flag for admin', 'ایڈمن کے لیے نشان زد کریں')}</label>
+    <ChoiceTiles label={t('Does this need admin attention?', 'کیا اس پر ایڈمن کی توجہ چاہیے؟')} value={chosen.selected ? 'yes' : 'no'} onChange={value => setFlag({ ...chosen, selected: value === 'yes' })} options={[{ value: 'yes', title: t('Yes', 'ہاں'), icon: <CircleCheck aria-hidden="true" /> }, { value: 'no', title: t('No', 'نہیں'), icon: <CircleX aria-hidden="true" /> }]} />
     {chosen.selected && <Field>{t('Flag note', 'نشان کی وجہ')}<textarea value={chosen.note} onChange={event => setFlag({ ...chosen, note: event.target.value })} minLength={3} maxLength={500} required /></Field>}
   </>;
   if (type === 'inspection') {

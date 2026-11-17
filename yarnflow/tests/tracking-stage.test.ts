@@ -32,9 +32,10 @@ test('gate out counts as arrived only at the destination', () => {
   assert.equal(stageOf([ev('Gate out', 2, 'Karachi')], { destination: 'Rotterdam' }), 'booked');
 });
 
-test('empty flag means delivered even without a matching event', () => {
-  assert.equal(stageOf([ev('Unknown', 1)], { empty: true }), 'delivered');
-  assert.equal(trackingView(shipment({ containers: [], events: [], empty: true })).stage, 'delivered');
+test('empty provider data is not checked, never delivered', () => {
+  assert.equal(stageOf([ev('Unknown', 1)], { empty: true }), 'not_checked');
+  assert.equal(trackingView(shipment({ containers: [], events: [], empty: true })).stage, 'not_checked');
+  assert.equal(trackingView(shipment({ containers: [], events: [], empty: true }, 'tracked')).progress, 0);
 });
 
 test('tracked with no events is booked; error with no data is error', () => {
@@ -54,10 +55,10 @@ test('progress follows the stage', () => {
   assert.equal(trackingView(shipment({ events: [ev('Delivered', 1)] })).progress, 1);
 });
 
-test('origin and destination fall back to first and last event locations', () => {
+test('origin and destination are never guessed from event locations', () => {
   const view = trackingView(shipment({ events: [ev('Sailing', 3, 'Rotterdam'), ev('Loaded', 2, 'Karachi'), ev('Gate in', 1, 'Karachi')] }));
-  assert.equal(view.origin, 'Karachi');
-  assert.equal(view.destination, 'Rotterdam');
+  assert.equal(view.origin, null);
+  assert.equal(view.destination, null);
   assert.equal(view.lastEvent?.title, 'Sailing');
 });
 

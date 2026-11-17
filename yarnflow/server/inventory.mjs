@@ -214,7 +214,8 @@ async function route(request, env) {
   if (path === '/api/model' && request.method === 'GET') {
     if (!env.TEXPILOT_API_URL) return json({ ready: false, reason: 'The trained TexPilot model is not deployed. Barcode scanning and manual inspection work independently.' });
     try {
-      const response = await fetch(new URL('/api/v1/model', env.TEXPILOT_API_URL), { signal: AbortSignal.timeout(8000), redirect: 'error' });
+      // Workers accept only redirect 'follow' or 'manual'; 'error' throws there, so every check read "could not be reached".
+      const response = await fetch(new URL('/api/v1/model', env.TEXPILOT_API_URL), { signal: AbortSignal.timeout(8000), redirect: 'manual' });
       if (!response.ok) fail(503, 'The model server is unavailable.');
       return json(await response.json());
     } catch { return json({ ready: false, reason: 'The configured model server could not be reached.' }); }

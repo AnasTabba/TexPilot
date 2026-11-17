@@ -1,8 +1,8 @@
 # Incoming-fabric QC v2: lead contract decisions
 
-Lead integration owner's binding decisions for every implementer. The design and plan
-(`docs/superpowers/specs|plans/2026-11-12-incoming-fabric-qc*.md`) remain the requirements; this
-file only fixes what they left open so parallel work meets at one wire shape. Paths are
+Lead integration owner's binding decisions for every implementer. The original design and plan
+(12 Nov 2026, in git history) set the requirements; this file fixes what they left open so
+parallel work meets at one wire shape. Paths are
 repository-root relative.
 
 ## Source of truth

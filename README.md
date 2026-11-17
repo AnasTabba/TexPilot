@@ -6,7 +6,7 @@ Two projects live in this repository:
 | Folder | Project | Stack |
 |---|---|---|
 | [`yarnflow/`](yarnflow/) | **Yarnflow**: the factory app for yarn stock, production, quality and dispatch. A web app on a Cloudflare Worker with D1, plus a native SwiftUI iPhone app in `yarnflow/ios/`. | React, TypeScript, Vite, Cloudflare Workers, Swift |
-| [`scanner/`](scanner/) | **TexPilot scanner**: checks that a fabric's look matches what its care label claims, and returns PASS, FLAG or INSUFFICIENT_EVIDENCE. | Python, FastAPI, PyTorch |
+| [`scanner/`](scanner/) | **TexPilot scanner**: from one photo, the garment, fabric, composition group and fabric faults; checks them against the care label and returns PASS, FLAG or INSUFFICIENT_EVIDENCE. Results: [`scanner/docs/results.md`](scanner/docs/results.md). | Python, FastAPI, PyTorch |
 
 Yarnflow's scanner screen calls the scanner's HTTP API (`GET /api/v1/model`, `POST /api/v1/scan`,
 `POST /api/v1/spec`). The published site reaches it through the Worker secret `TEXPILOT_API_URL`.

@@ -242,3 +242,12 @@ def test_a_head_adds_its_class_bias_before_the_softmax(tmp_path, monkeypatch):
     (d / "head.json").write_text(json.dumps(meta | {"class_bias": [-0.5, 0.5]}))
     p = FineTunedHead(d, CPU).probs([np.zeros((64, 64, 3), np.uint8)])
     assert np.allclose(p, [1 / (1 + np.e), np.e / (1 + np.e)], atol=1e-5)
+
+
+def test_scoped_non_probe_head_loads_checkpoint_with_full_class_count(tmp_path):
+    d = _head_dir(tmp_path, 0.0)
+    meta = json.loads((d / "head.json").read_text())
+    meta["scope"] = {"drop": ["canvas"], "merge": {"lace": "denim"}}
+    (d / "head.json").write_text(json.dumps(meta))
+    head = FineTunedHead(d, CPU)
+    assert head.classes == ("denim",)

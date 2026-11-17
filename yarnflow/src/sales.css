@@ -23,3 +23,25 @@
  .sales-quote,.sales-invoice { padding:14px; }
  .sales-total { justify-content:flex-start; text-align:start; }
 }
+
+.sales-list-layout { display:grid; gap:24px; min-width:0; }
+.sales-list-layout > .ui-section { min-width:0; }
+/* Screen and record entry: 150 ms fade and 8 px rise, off under reduced motion. */
+.sales-list-layout, .sales-record-detail { animation:sales-rise 150ms ease-out both; }
+@keyframes sales-rise { from { opacity:0; transform:translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .sales-list-layout, .sales-record-detail { animation:none; } }
+.sales-list-layout .ui-tabs { display:flex; flex-wrap:nowrap; max-width:100%; overflow-x:auto; scrollbar-width:thin; }
+.sales-list-layout .ui-tabs button { flex:none; min-height:48px; white-space:nowrap; }
+.sales-list-layout > .ui-banner { min-width:0; }
+.sales-list-layout > .ui-banner .ui-banner-stat { overflow-wrap:anywhere; font-size:40px; }
+.sales-row-list { display:grid; gap:8px; margin-block-start:16px; }
+.sales-row-list .ui-row-wrap { min-width:0; }
+.sales-row-list .ui-row-leading { display:grid; place-items:center; width:48px; height:48px; border-radius:12px; background:var(--tint); color:var(--brand); }
+.sales-row-list .ui-row-value { font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; }
+.sales-record-detail { display:grid; gap:16px; min-width:0; }
+.sales-back-button { display:inline-flex; align-items:center; gap:8px; width:fit-content; min-height:48px; padding-inline:12px; }
+.sales-portal-link { display:flex; align-items:center; gap:8px; width:fit-content; min-height:48px; color:var(--ink-2); text-decoration:none; }
+.sales-portal-link:hover { color:var(--ink); text-decoration:underline; }
+.sales-analytics-stats { margin-block-end:24px; }
+.ak-page .ak-section { margin-block-end:16px; }
+.ak-page .ak-note { margin-block:4px 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

@@ -33,6 +33,33 @@ def test_rejects_composition_that_does_not_sum_to_100():
     assert parse_composition("60% COTTON 20% POLYESTER") is None
 
 
+def test_parses_decimal_percentages_without_starting_inside_a_number():
+    got = parse_composition("97.5% COTTON 2.5% ELASTANE")
+    assert [(f.name, f.pct) for f in got] == [("cotton", 97.5), ("elastane_spandex", 2.5)]
+
+
+def test_rejects_percentage_sum_102():
+    assert parse_composition("70% Cotton 30% Viscose 2% Elastane") is None
+
+
+def test_adds_common_urdu_fibre_names_pending_native_review():
+    assert normalize_fiber_name("کاٹن") == "cotton"
+    assert normalize_fiber_name("پالئیسٹر") == "polyester"
+    assert parse_composition("کاٹن 100%") == [
+        type(parse_composition("100% cotton")[0])("cotton", 100)
+    ]
+
+
+def test_recognizes_elasthane_spelling():
+    got = parse_composition("Elasthane 3% Cotton 97%")
+    assert [(f.name, f.pct) for f in got] == [("cotton", 97.0), ("elastane_spandex", 3.0)]
+
+
+def test_near_100_rounded_sum_is_normalized():
+    got = parse_composition("99.8% cotton")
+    assert got[0].pct == 100.0
+
+
 def test_rejects_when_a_component_is_unrecognised():
     # Dropping the unknown would leave 100% cotton -- a confident wrong answer.
     assert parse_composition("70% COTTON 30% ZZZFIBRE") is None
@@ -111,3 +138,8 @@ def test_a_second_fibre_in_one_component_is_not_dropped(text):
     # into 100% polyester. A dropped word that itself names a fibre means we do not know
     # the split, so the parse must fail rather than guess.
     assert parse_composition(text) is None
+
+
+def test_rounded_three_way_split_summing_to_99_is_accepted():
+    got = parse_composition("33% Cotton 33% Polyester 33% Viscose")
+    assert got is not None and abs(sum(f.pct for f in got) - 100.0) < 1e-6

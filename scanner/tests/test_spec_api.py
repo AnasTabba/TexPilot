@@ -76,6 +76,35 @@ def test_bad_inputs_are_a_422_not_a_guess(form):
     assert _spec(scan, **form).status_code == 422
 
 
+def test_unknown_dpi_message_is_split_into_short_actions():
+    scan = _png(render("3/1 twill", 64, 42, 600, size=1600))
+    detail = _spec(scan).json()["detail"]
+    assert detail == (
+        "Scan resolution is unknown or under 300 dpi. Scan the swatch flat at 600 dpi. "
+        "Or lay the printed TexPilot card on the fabric and photograph both."
+    )
+
+
+def test_phone_exif_orientation_is_applied_before_spec_measurement(monkeypatch):
+    from services.api.spec import run_spec
+    from services.vision import threads
+
+    seen = []
+    monkeypatch.setattr(
+        threads,
+        "thread_density",
+        lambda gray, *a, **k: seen.append(gray.shape) or threads.Density(30, 24, 0, 0, 4, 0),
+    )
+    monkeypatch.setattr(threads, "weave_pattern", lambda *a, **k: None)
+    image = Image.new("RGB", (40, 20), "gray")
+    exif = Image.Exif()
+    exif[0x0112] = 6
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", dpi=(600, 600), exif=exif)
+    run_spec(buf.getvalue(), dpi=600, gsm=100)
+    assert seen == [(40, 20)]
+
+
 def test_a_tiff_scan_is_accepted_flatbed_scanners_default_to_it():
     buf = io.BytesIO()
     Image.fromarray(render("3/1 twill", 64, 42, 600, size=1600)).save(buf, "TIFF", dpi=(600, 600))

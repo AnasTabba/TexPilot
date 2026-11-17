@@ -1,0 +1,14 @@
+{
+  "id": "yaseenazhar/texpilot-fabric-texture",
+  "title": "texpilot-fabric-texture",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "kernel_sources": ["yaseenazhar/texpilot-shop-scrape", "yaseenazhar/texpilot-shop-heads-v8-bias"],
+  "competition_sources": [],
+  "machine_shape": "NvidiaTeslaT4"
+}

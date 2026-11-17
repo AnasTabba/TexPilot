@@ -116,22 +116,34 @@ def _overview(entries: list[Entry]) -> list[str]:
     for key, items in sorted(_group(_unperturbed(entries)).items()):
         rows = [r for _, r in items]
         srcs.update(name for name, _ in items)
-        body.append([
-            *key,
-            str(len(rows)),
-            _pct(_mean([_num(r.get("auroc")) for r in rows])),
-            _pct(_mean([_num(r.get("pixel_auroc")) for r in rows])),
-            _pct(_mean([_num(r.get("aupro")) for r in rows])),
-            _pct(_mean([_num(r.get("f1")) for r in rows])),
-            _fmt(_pooled(rows, "false_alarms_per_1000", "n_good")),
-            _fmt(_mean([_num(r.get("latency_ms")) for r in rows])),
-        ])
+        body.append(
+            [
+                *key,
+                str(len(rows)),
+                _pct(_mean([_num(r.get("auroc")) for r in rows])),
+                _pct(_mean([_num(r.get("pixel_auroc")) for r in rows])),
+                _pct(_mean([_num(r.get("aupro")) for r in rows])),
+                _pct(_mean([_num(r.get("f1")) for r in rows])),
+                _fmt(_pooled(rows, "false_alarms_per_1000", "n_good")),
+                _fmt(_mean([_num(r.get("latency_ms")) for r in rows])),
+            ]
+        )
     return [
         "## 1. Per dataset and method (unperturbed)",
         "",
         *_table(
-            ["Dataset", "Method", "Mode", "Categories", "Image AUROC %", "Pixel AUROC %",
-             "AUPRO %", "F1 % (at threshold)", "FA / 1000 good (pooled)", "ms / image"],
+            [
+                "Dataset",
+                "Method",
+                "Mode",
+                "Categories",
+                "Image AUROC %",
+                "Pixel AUROC %",
+                "AUPRO %",
+                "F1 % (at threshold)",
+                "FA / 1000 good (pooled)",
+                "ms / image",
+            ],
             body,
             srcs,
         ),
@@ -182,8 +194,15 @@ def _robustness(entries: list[Entry]) -> list[str]:
             continue
         clean_mean = sum(base[c] for c in common) / len(common)
         pert_mean = sum(pert[c] for c in common) / len(common)
-        body.append([*key, str(len(common)), _pct(clean_mean), _pct(pert_mean),
-                     _fmt((pert_mean - clean_mean) * 100, signed=True)])
+        body.append(
+            [
+                *key,
+                str(len(common)),
+                _pct(clean_mean),
+                _pct(pert_mean),
+                _fmt((pert_mean - clean_mean) * 100, signed=True),
+            ]
+        )
         srcs |= srcs_by_key[key]
     return [
         "## 3. Robustness (image AUROC drop under each perturbation)",
@@ -191,8 +210,16 @@ def _robustness(entries: list[Entry]) -> list[str]:
         "Drop = perturbed mean minus unperturbed mean over the same categories, in points.",
         "",
         *_table(
-            ["Dataset", "Method", "Mode", "Perturbation", "Categories", "Clean image AUROC %",
-             "Perturbed image AUROC %", "Drop (pts)"],
+            [
+                "Dataset",
+                "Method",
+                "Mode",
+                "Perturbation",
+                "Categories",
+                "Clean image AUROC %",
+                "Perturbed image AUROC %",
+                "Drop (pts)",
+            ],
             body,
             srcs,
         ),
@@ -215,13 +242,15 @@ def _jury(entries: list[Entry]) -> list[str]:
 
         auc_pct = None if auc is None else auc * 100
         recall_pct = None if recall is None else recall * 100
-        body.append([
-            method,
-            mode,
-            _verdict(auc_pct, lambda v: v > JURY_AUROC_PCT, "%"),
-            _verdict(recall_pct, lambda v: v >= JURY_RECALL_PCT, "%"),
-            _verdict(fa, lambda v: v <= JURY_FA_PER_1000, "/ 1000"),
-        ])
+        body.append(
+            [
+                method,
+                mode,
+                _verdict(auc_pct, lambda v: v > JURY_AUROC_PCT, "%"),
+                _verdict(recall_pct, lambda v: v >= JURY_RECALL_PCT, "%"),
+                _verdict(fa, lambda v: v <= JURY_FA_PER_1000, "/ 1000"),
+            ]
+        )
     if not body:
         return [*head, "no AITEX results yet", ""]
     return [
@@ -230,9 +259,13 @@ def _jury(entries: list[Entry]) -> list[str]:
         f"pooled false alarms <= {JURY_FA_PER_1000:.0f} per 1000 good.",
         "",
         *_table(
-            ["Method", "Mode", f"Mean image AUROC > {JURY_AUROC_PCT}",
-             f"Pooled recall >= {JURY_RECALL_PCT:.0f} %",
-             f"Pooled FA <= {JURY_FA_PER_1000:.0f} / 1000"],
+            [
+                "Method",
+                "Mode",
+                f"Mean image AUROC > {JURY_AUROC_PCT}",
+                f"Pooled recall >= {JURY_RECALL_PCT:.0f} %",
+                f"Pooled FA <= {JURY_FA_PER_1000:.0f} / 1000",
+            ],
             body,
             srcs,
         ),
@@ -247,11 +280,15 @@ def _verdict(value: float | None, ok: Callable[[float], bool], unit: str) -> str
 
 def render(results_dirs: list[Path]) -> str:
     entries = _load(list(results_dirs))
-    head = ["# Fault detection results", "", "Input folders: "
-            + (", ".join(f"`{d}`" for d in results_dirs) or DASH), ""]
+    head = [
+        "# Fault detection results",
+        "",
+        "Input folders: " + (", ".join(f"`{d}`" for d in results_dirs) or DASH),
+        "",
+    ]
     if not entries:
         return "\n".join([*head, "No results found in the given folders.", ""])
-    sections = (_overview(entries) + _worst(entries) + _robustness(entries) + _jury(entries))
+    sections = _overview(entries) + _worst(entries) + _robustness(entries) + _jury(entries)
     return "\n".join([*head, *sections])
 
 

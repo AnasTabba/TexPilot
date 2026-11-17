@@ -1,3 +1,5 @@
+import pytest
+
 from services.consistency.engine import evaluate, load_kb
 from services.ocr.parser import FiberPct
 from services.vision.predictor import HeadOutput, VisionOutput
@@ -13,8 +15,24 @@ def _vision(structure: str, conf: float = 0.95, treatment=None):
 
 def test_flags_polyester_tweed():
     v = evaluate(_vision("tweed"), [FiberPct("polyester", 100.0)])
-    assert v.outcome == "FLAG"
-    assert v.flags[0].code == "COMPOSITION_IMPLAUSIBLE"
+    assert v.outcome == "PASS"
+
+
+@pytest.mark.parametrize(
+    "fabric,fibre",
+    [
+        ("fleece", "cotton"),
+        ("chiffon", "viscose_rayon"),
+        ("flannel", "polyester"),
+        ("lace", "silk"),
+        ("lawn", "polyester"),
+        ("tulle", "silk"),
+        ("tweed", "polyester"),
+        ("corduroy", "polyester"),
+    ],
+)
+def test_constructions_allow_common_fibre_families(fabric, fibre):
+    assert evaluate(_vision(fabric), [FiberPct(fibre, 100.0)]).outcome == "PASS"
 
 
 def test_passes_cotton_denim():
@@ -92,7 +110,7 @@ def test_structure_and_family_can_both_flag():
     v = evaluate(
         _family("synthetic", structure=HeadOutput("tweed", 0.95, [])), [FiberPct("cotton", 100.0)]
     )
-    assert {f.code for f in v.flags} == {"COMPOSITION_IMPLAUSIBLE", "FAMILY_MISMATCH"}
+    assert {f.code for f in v.flags} == {"FAMILY_MISMATCH"}
 
 
 def test_kb_has_a_family_threshold_and_imitation_exemptions():

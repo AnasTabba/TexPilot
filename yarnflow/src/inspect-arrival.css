@@ -1,9 +1,9 @@
-.inspect-arrival { width: min(520px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: var(--r-field); background: var(--panel); color: var(--ink); overflow: auto; box-shadow: 0 24px 60px color-mix(in oklab, var(--ink) 24%, transparent); transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out), display 200ms allow-discrete, overlay 200ms allow-discrete; }
+.inspect-arrival { width: min(520px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: var(--r-field); background: var(--panel); color: var(--ink); overflow: auto; transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out), display 200ms allow-discrete, overlay 200ms allow-discrete; }
 .inspect-arrival[open] { opacity: 1; transform: none; }
 @starting-style { .inspect-arrival[open] { opacity: 0; transform: translateY(12px) scale(0.98); } }
 .inspect-arrival:not([open]) { opacity: 0; transform: translateY(12px) scale(0.98); }
 .inspect-arrival::backdrop { background: color-mix(in oklab, var(--ink) 52%, transparent); }
-.inspect-arrival-form { display: grid; gap: 18px; padding: 24px; }
+.inspect-arrival-form { display: grid; gap: 20px; padding: 24px; }
 .inspect-arrival-form header h2 { margin: 0 0 6px; }
 .inspect-arrival-form header p { margin: 0; color: var(--ink-2); }
 .inspect-arrival-fields { display: grid; gap: 18px; min-width: 0; border: 0; margin: 0; padding: 0; }
@@ -11,10 +11,31 @@
 .inspect-arrival-preview { width: 96px; height: 96px; object-fit: cover; border-radius: var(--r-row); }
 .inspect-arrival .live-field small { display: flex; align-items: center; gap: 6px; }
 .inspect-arrival .live-actions { margin: 0; flex-wrap: wrap; }
-.inspect-arrival .button { min-height: 44px; transition: transform 160ms var(--ease-out), background-color 180ms ease; }
+.inspect-arrival .button { min-height: 48px; transition: transform 160ms var(--ease-out), background-color 180ms ease; }
 .inspect-arrival .button:active:not(:disabled) { transform: scale(0.97); }
-.inspect-arrival-form input[type="file"] { min-height: 44px; }
+.inspect-arrival-form input[type="file"] { min-height: 48px; }
 @media (prefers-reduced-motion: reduce) { .inspect-arrival, .inspect-arrival .button { transition: none; } }
 .inspect-arrival-quantities { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .inspect-arrival-quantities { grid-template-columns: minmax(0, 1fr); } }
 .inspect-arrival-quantities .live-field, .inspect-arrival-issue { min-width: 0; }
 .inspect-arrival-issue { display: grid; gap: 14px; }
+
+/* The inspection queues are work lists: give each lot room and a clear next action. */
+.yf-inspections .erp-records, .yf-review .erp-records { gap: 20px; }
+.yf-inspections .erp-record, .yf-review .erp-record { padding: 20px; border-radius: var(--r-row); }
+.yf-inspections .erp-record h3, .yf-review .erp-record h3 { font-size: 20px; line-height: 1.4; }
+.yf-inspections .erp-record p, .yf-review .erp-record p { font-size: 16px; line-height: 1.5; }
+.yf-inspections .button, .yf-review .button { min-height: 48px; }
+.yf-inspections .live-actions, .yf-review .live-actions { gap: 12px; }
+.yf-inspections .live-field input, .yf-inspections .live-field textarea, .yf-inspections .live-field select,
+.yf-review .live-field input, .yf-review .live-field textarea, .yf-review .live-field select { min-height: 48px; font-size: 16px; }
+.yf-review .erp-record > .live-actions .button { flex: 1 1 220px; justify-content: center; }
+.yf-review .erp-record > .live-actions .button.primary { background: var(--ok-bg); color: var(--ok); }
+.yf-review .erp-record > .live-actions .button:not(.primary) { background: var(--warn-bg); color: var(--warn); }
+@media (max-width: 640px) {
+  .inspect-arrival { width: 100%; max-height: 100dvh; height: 100dvh; border-radius: 0; }
+  .inspect-arrival-form { min-height: 100%; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
+  .inspect-arrival .live-actions { position: sticky; bottom: 0; display: grid; grid-template-columns: 1fr; gap: 8px; padding-block: 12px; background: var(--panel); }
+  .inspect-arrival .live-actions .button { width: 100%; justify-content: center; }
+  .yf-inspections .erp-record, .yf-review .erp-record { padding: 16px; }
+}

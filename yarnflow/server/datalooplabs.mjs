@@ -38,13 +38,6 @@ export function credentialOf(env) {
   return typeof key === 'string' && key.trim().length >= 12 ? key.trim() : null;
 }
 
-export async function accountScope(env) {
-  const key = credentialOf(env);
-  if (!key) return null;
-  // Only a masked fingerprint ever identifies the account: never the key itself.
-  return `${PROVIDER}:${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key))))
-    .slice(0, 6).map(b => b.toString(16).padStart(2, '0')).join('')}`;
-}
 
 export function maskedCredential(env) {
   const key = credentialOf(env);
@@ -84,13 +77,6 @@ export function contractGaps(account) {
   return gaps;
 }
 
-export function adapterReady(env, account) {
-  return {
-    credential: !!credentialOf(env),
-    contract: (account?.contract_verified_at ?? null) != null && contractGaps(account).length === 0,
-    gaps: contractGaps(account),
-  };
-}
 
 /** Build and send one tracking call. Throws ProviderProblem whose kind maps to an honest state. */
 export async function trackUnit(env, account, request, deps = {}) {

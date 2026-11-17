@@ -18,6 +18,10 @@ const CRITERIA = [
  { key: 'communication', en: 'Communication', ur: 'بات چیت' },
  { key: 'reliability', en: 'Orders as agreed', ur: 'طے شدہ کے مطابق آرڈر' },
 ] as const;
+const RATING_WORDS = [
+ { en: 'Choose a rating', ur: 'ریٹنگ منتخب کریں' },
+ { en: 'Poor', ur: 'کمزور' }, { en: 'Fair', ur: 'مناسب' }, { en: 'Good', ur: 'اچھی' }, { en: 'Very good', ur: 'بہت اچھی' }, { en: 'Excellent', ur: 'بہترین' },
+];
 type Criterion = typeof CRITERIA[number]['key'];
 const useBuyerRatings = (buyerId: string) => useResource<BuyerRatingDetail>(`/buyer-ratings?buyerId=${encodeURIComponent(buyerId)}`);
 
@@ -76,7 +80,8 @@ export function RateBuyer({ member, buyerId, onSaved, onCancel }: { member: Memb
  }}>
   {CRITERIA.map(c => { const shown = hover[c.key] ?? scores[c.key]; return <fieldset className="erp-rating-row" key={c.key} onPointerLeave={() => setHover(h => ({ ...h, [c.key]: undefined }))}>
    <legend>{t(c.en, c.ur)}</legend>
-   <div className="erp-rating-stars">{[1, 2, 3, 4, 5].map(n => <button type="button" key={n} className={`erp-star-button${n <= shown ? ' is-on' : ''}`} aria-label={t(`${n} of 5 stars`, `5 میں سے ${n} ستارے`)} aria-pressed={scores[c.key] === n} onPointerEnter={() => setHover(h => ({ ...h, [c.key]: n }))} onClick={() => setScores(s => ({ ...s, [c.key]: n }))}><Star size={28} /></button>)}</div>
+   <div className="erp-rating-stars">{[1, 2, 3, 4, 5].map(n => <button type="button" key={n} className={`erp-star-button${n <= shown ? ' is-on' : ''}`} aria-label={t(`${n} of 5 stars`, `5 میں سے ${n} ستارے`)} aria-pressed={scores[c.key] === n} onPointerEnter={() => setHover(h => ({ ...h, [c.key]: n }))} onClick={() => setScores(s => ({ ...s, [c.key]: n }))}><Star size={36} /></button>)}</div>
+   <p className="buyer-rating-word" aria-live="polite">{t(RATING_WORDS[shown].en, RATING_WORDS[shown].ur)}</p>
   </fieldset>; })}
   <Field>{t('Feedback (optional)', 'رائے (اختیاری)')}<textarea value={feedback} onChange={e => setFeedback(e.target.value)} maxLength={1000} /></Field>
   <InterventionField member={member} owners={['sales_manager']} value={intervention} onChange={setIntervention} />

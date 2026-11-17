@@ -36,7 +36,6 @@ def code_root():
     return roots[0].parents[2]
 
 
-
 def make_method(name, repo, smoke):
     if name == "musc":
         from training.fault.methods.musc import MuSc
@@ -95,8 +94,10 @@ def main():
                     print(f"START {dataset} {name} mode={MODE} samples={len(samples)}")
                     method = make_method(name, repo, SMOKE)
                     result = run_benchmark(
-                        method, samples,
-                        WORK / "results" / f"{dataset}__{name}__{MODE}.json", mode=MODE,
+                        method,
+                        samples,
+                        WORK / "results" / f"{dataset}__{name}__{MODE}.json",
+                        mode=MODE,
                     )
                     if not result["rows"]:
                         raise RuntimeError("benchmark returned no rows")

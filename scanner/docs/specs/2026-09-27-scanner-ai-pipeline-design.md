@@ -61,20 +61,26 @@ Five units, each with one job and a typed interface (Python `Protocol`s in
 ```python
 class GarmentDetector(Protocol):
     def detect(self, image: np.ndarray) -> list[Detection]: ...
+
     # Detection(label: str, score: float | None, box: tuple[float, float, float, float])
     # box in pixels (x0, y0, x1, y1); score None when the backend has none (Florence-2)
 
+
 class Segmenter(Protocol):
-    def segment(self, image: np.ndarray, box: Box) -> np.ndarray: ...   # bool mask, HxW
+    def segment(self, image: np.ndarray, box: Box) -> np.ndarray: ...  # bool mask, HxW
+
 
 class FabricCropper(Protocol):
     def views(self, image: np.ndarray, mask: np.ndarray | None) -> list[np.ndarray]: ...
 
+
 class FabricHeads(Protocol):
-    def predict(self, views: list[np.ndarray]) -> VisionOutput: ...    # existing type
+    def predict(self, views: list[np.ndarray]) -> VisionOutput: ...  # existing type
+
 
 class OcrEngine(Protocol):
     def read(self, image: np.ndarray) -> list[TextLine]: ...
+
     # TextLine(text: str, confidence: float, box: Box)
 ```
 
@@ -306,12 +312,13 @@ change goes in a PR the app owner reviews.
 
 ```python
 class GarmentPrediction(BaseModel):
-    label: str                       # vocabulary canonical name
-    confidence: float | None         # None for backends without scores (Florence-2)
+    label: str  # vocabulary canonical name
+    confidence: float | None  # None for backends without scores (Florence-2)
     box: tuple[float, float, float, float]  # normalised 0-1 (x0, y0, x1, y1)
 
+
 ScanResult.garment: GarmentPrediction | None = None
-StatedComposition.section: str | None = None      # e.g. "shell"
+StatedComposition.section: str | None = None  # e.g. "shell"
 ```
 
 **Flag codes**

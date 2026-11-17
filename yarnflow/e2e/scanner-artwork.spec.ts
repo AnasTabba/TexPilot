@@ -56,7 +56,7 @@ test("model responses choose illustrations; abstentions ignore candidates and la
   await expect(page.locator('[data-artwork-kind="garment"]')).toHaveAttribute("data-artwork-id", "denim");
   await expect(page.locator('[data-artwork-kind="verdict"]')).toHaveAttribute("data-artwork-id", "flag");
 
-  // Heads that abstained still show their top guess with its confidence, never "not sure"; the label's mix wins.
+  // Heads that abstained still show their top guess with its confidence; the label's mix wins.
   result = { ...result, scan_id: "artwork-fixture-3", verdict: "INSUFFICIENT_EVIDENCE",
     structure: null, treatment: null, fibre_family: null, garment: null,
     candidates: { structure: [["denim", 0.49]], fibre_family: [["synthetic", 0.45]], garment_type: [["kurta", 0.6]] },
@@ -67,6 +67,18 @@ test("model responses choose illustrations; abstentions ignore candidates and la
   await expect(fabricArt).toHaveAttribute("data-artwork-id", "denim");
   await expect(page.locator(".scan-rows")).toContainText("49%");
   await expect(page.locator(".scan-rows")).toContainText("100% Cotton");
-  await expect(page.locator(".scan-results")).not.toContainText(/not sure/i);
-  await expect(page.locator('[data-artwork-kind="verdict"]')).toHaveCount(0);
+
+  // No label and the mix head abstained: no photo guess at composition, only the honest line.
+  result = { ...result, scan_id: "artwork-fixture-4", stated_composition: { source: null, fibers: [], ocr_confidence: null, section: null },
+    candidates: { ...result.candidates, mix: [["cotton:100", 0.96]] }, custom: { mix: null } };
+  await analyze.click();
+  await expect(page.locator(".scan-rows")).toContainText("Can't tell from the photo. Scan the care label.");
+  await expect(page.locator(".scan-rows")).not.toContainText("100% Cotton");
+
+  // A grouped composition head answers with a group name.
+  result = { ...result, scan_id: "artwork-fixture-5", custom: { mix: head("polyester") } };
+  await analyze.click();
+  await expect(page.locator(".scan-rows")).toContainText("Polyester");
+  await expect(page.locator(".scan-rows")).toContainText("93%");
+  await expect(page.locator('[data-artwork-kind="verdict"]')).toHaveAttribute("data-artwork-id", "insufficient_evidence");
 });

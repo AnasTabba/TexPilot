@@ -37,18 +37,12 @@ EXPECTED = {
     "training/fault/__init__.py": (
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     ),
-    "training/fault/bench.py": (
-        "81185a672b16e21a62edd4b5aa2189c5bccdbab6aaad33a00e4a2b65a4546d7f"
-    ),
-    "training/fault/data.py": (
-        "6a80c40a1e822410b2dab621f8bcc16843d4e858ed4b73fa8ae82074379b1f7d"
-    ),
+    "training/fault/bench.py": ("81185a672b16e21a62edd4b5aa2189c5bccdbab6aaad33a00e4a2b65a4546d7f"),
+    "training/fault/data.py": ("6a80c40a1e822410b2dab621f8bcc16843d4e858ed4b73fa8ae82074379b1f7d"),
     "training/fault/metrics.py": (
         "e5cddf03e327d89ad55df0b2a766408df616aa2c31de68a39434564d1a1f91fb"
     ),
-    "training/fault/tiles.py": (
-        "4816ac763dba7c3bb805db45309bed848e3ebe8c54edbf90b5a561782ffb4710"
-    ),
+    "training/fault/tiles.py": ("4816ac763dba7c3bb805db45309bed848e3ebe8c54edbf90b5a561782ffb4710"),
     "training/fault/perturb.py": (
         "7a8effc29e7b5538fd82c0ad37e1aaf9447040a0e374a8a56c6601db5cbfcbbb"
     ),

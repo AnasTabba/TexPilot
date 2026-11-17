@@ -51,6 +51,7 @@ def main():
         download_weights,
         load_samples,
     )
+
     with (WORK / "log.txt").open("w", buffering=1) as log:
         stdout, stderr = sys.stdout, sys.stderr
         sys.stdout, sys.stderr = Tee(stdout, log), Tee(stderr, log)
@@ -86,10 +87,7 @@ def main():
             method = None
             try:
                 samples = load_samples(dataset, SMOKE)
-                print(
-                    f"START {dataset} {label} mode={MODE} "
-                    f"iters={iters} samples={len(samples)}"
-                )
+                print(f"START {dataset} {label} mode={MODE} iters={iters} samples={len(samples)}")
                 backbone = {
                     "dinomaly_vits": "dinov2reg_vit_small_14",
                     "dinomaly_vitb": "dinov2reg_vit_base_14",

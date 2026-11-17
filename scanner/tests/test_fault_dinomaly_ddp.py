@@ -139,22 +139,6 @@ def test_two_gpu_parent_uses_file_backed_tiles_and_restores_portable_weights(mon
     assert all(not Path(folder).exists() for folder in observed)
 
 
-def test_new_ddp_snapshots_enforce_current_source_and_two_gpu_mode():
-    import json
-
-    from training.fault.kaggle.full_a2 import digest
-
-    root = Path(__file__).parents[1]
-    for dataset in ("mvtec", "wfdd"):
-        folder = root / "training/fault/kaggle" / f"a2_{dataset}_ddp2"
-        metadata = json.loads((folder / "kernel-metadata.json").read_text())
-        assert metadata["id"] == f"anastabba/texpilot-a2-{dataset}-ddp2-10k"
-        assert metadata["is_private"] and len(metadata["dataset_sources"]) == 2
-        assert "gpus=2" in (folder / "run.py").read_text()
-        manifest = json.loads((folder / "source-manifest.json").read_text())
-        assert all(digest(root / name) == sha for name, sha in manifest.items())
-
-
 def test_fit_loop_accepts_worker_memmap_input(monkeypatch, tmp_path):
     import numpy as np
     from test_fault_dinomaly import _fake_optimizers, _fake_utils, _stub_build

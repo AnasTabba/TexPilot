@@ -1,7 +1,8 @@
 """Fabric fault check on the garment crop: tile, score, stitch, regions, heatmap.
 
-The network is not wired yet: ``_load_model`` and the tile contract are the only parts the
-Dinomaly export has to supply. Everything else here runs and is tested with a stub model.
+``_load_model`` wraps the fault network named by config ``method``: ``dinomaly`` (trained, needs
+``weights.pt``) or ``selfref`` (zero-shot, needs only ``encoder_file``). Everything else is tested
+with a stub model.
 """
 
 from __future__ import annotations
@@ -20,6 +21,11 @@ OVERLAP = 0.25
 #: A garment box covering less of the photo than this is too small for a close-up fault check.
 MIN_BOX_FRACTION = 0.15
 SMALL_REASON = "garment too small for a close-up fault check"
+#: The trained model learned "normal" from a few fabrics only. On a fabric unlike them its whole map
+#: is raised, not one spot, so the fixed threshold flags everything. Config ``max_map_median`` marks
+#: such a photo: on 17 Nov 2026 the median map value was 0.030-0.097 on all 444 WFDD test photos
+#: (good and defect) and 0.108-0.332 on all 195 real garment scans, every one of which the plain
+#: threshold flagged. Those photos are judged against their own level (``relative_z``) instead.
 MAX_REGIONS = 5
 HEATMAP_MAX = 512
 
@@ -83,27 +89,79 @@ def _heatmap_b64(image: np.ndarray, crop: tuple[int, int, int, int], amap, thr: 
     return base64.b64encode(png.tobytes()).decode("ascii")
 
 
+def _per_tile(score_tiles):
+    """Per-tile callable from a batch scorer. A tile not TILE x TILE is resized to TILE x TILE for
+    the network, and its map is resized back to the tile's own (w, h)."""
+    import cv2
+
+    def score(tile: np.ndarray) -> np.ndarray:
+        h, w = tile.shape[:2]
+        if (h, w) != (TILE, TILE):  # a crop side shorter than one tile
+            tile = cv2.resize(tile, (TILE, TILE), interpolation=cv2.INTER_LINEAR)
+        amap = score_tiles([np.ascontiguousarray(tile)])[0]
+        return amap if (h, w) == (TILE, TILE) else cv2.resize(amap, (w, h))
+
+    return score
+
+
 class FaultDetector:
     def __init__(self, model_dir: Path, device):
         model_dir = Path(model_dir)
         if not model_dir.is_dir():
             raise FileNotFoundError(f"fault model folder not found: {model_dir}")
-        for name in ("config.json", "weights.pt"):
-            if not (model_dir / name).is_file():
-                raise FileNotFoundError(f"fault model file missing: {model_dir / name}")
+        if not (model_dir / "config.json").is_file():
+            raise FileNotFoundError(f"fault model file missing: {model_dir / 'config.json'}")
         cfg = json.loads((model_dir / "config.json").read_text())
+        self.method = str(cfg.get("method", "dinomaly"))
+        if self.method not in ("dinomaly", "selfref"):
+            raise ValueError(f"unknown fault method: {self.method!r}")
+        if self.method == "dinomaly" and not (model_dir / "weights.pt").is_file():
+            raise FileNotFoundError(f"fault model file missing: {model_dir / 'weights.pt'}")
+        self.model_dir = model_dir
         self.device = device
         self.version = str(cfg["version"])
-        self.backbone = cfg["backbone"]
+        if self.method == "dinomaly":
+            self.backbone = cfg["backbone"]
+        else:
+            self.backbone = cfg.get("backbone", "dinov2reg_vit_base_14")
         self.image_size = int(cfg["image_size"])
         thresholds = cfg["thresholds"]
         default = thresholds["default"] if "default" in thresholds else max(thresholds.values())
         self.threshold = float(default)
+        gate = cfg.get("max_map_median")
+        self.max_map_median = None if gate is None else float(gate)
+        self.relative_z = float(cfg.get("relative_z", 7.5))
+        self._cfg = cfg
         self.model = self._load_model()
 
     def _load_model(self):
-        """Return a callable: HxWx3 uint8 RGB tile -> HxW float anomaly map (same H, W)."""
-        raise NotImplementedError("fault model loader is added with the Dinomaly export")
+        """Return a callable: HxWx3 uint8 RGB tile -> HxW float anomaly map (same H, W).
+
+        ``dinomaly``: the folder holds the trained bottleneck and decoder (``weights.pt``) and a
+        ``Dinomaly`` checkout at the training pin with the DINOv2 encoder in ``backbones/weights``.
+        ``selfref``: no trained weights; ``encoder_file`` is the frozen encoder, ``params`` go to
+        ``SelfReference``.
+        """
+        if self.method == "selfref":
+            from training.fault.methods.selfref import SelfReference
+
+            if "encoder_file" not in self._cfg:
+                raise ValueError(f"selfref config needs 'encoder_file': {self.model_dir}")
+            encoder = self.model_dir / self._cfg["encoder_file"]
+            if not encoder.is_file():
+                raise FileNotFoundError(f"fault model file missing: {encoder}")
+            params = dict(self._cfg.get("params", {}))
+            if "layers" in params:
+                params["layers"] = tuple(params["layers"])
+            net = SelfReference(encoder_file=str(encoder), device=str(self.device), **params)
+            return _per_tile(net.score_tiles)
+
+        from training.fault.methods.dinomaly import Dinomaly
+
+        repo = str(self.model_dir / "Dinomaly")
+        net = Dinomaly(repo, backbone=self.backbone, device=str(self.device))
+        net.load(self.model_dir / "weights.pt")
+        return _per_tile(net.score_tiles)
 
     def _score_tiles(self, tiles: list[np.ndarray]) -> list[np.ndarray]:
         """One HxW anomaly map per tile, same HxW as the tile (the model resizes internally)."""
@@ -142,6 +200,13 @@ class FaultDetector:
         maps = self._score_tiles([crop[y0:y1, x0:x1] for x0, y0, x1, y1 in boxes])
         amap = _stitch(maps, boxes, wh, ww)
         score = float(amap.max())
+        med = float(np.median(amap))
+        if self.max_map_median is not None and med > self.max_map_median:
+            # A fabric unlike the trained ones: the whole map is raised, so judge each spot against
+            # this photo's own level instead. A fault is a spot ``relative_z`` robust deviations
+            # above the photo's median; 7.5 flags 4.4 % of WFDD good photos (chosen there).
+            mad = float(np.median(np.abs(amap - med)))
+            thr = med + self.relative_z * 1.4826 * mad
 
         # Working-crop pixels -> normalised full-photo coordinates.
         fx, fy = cw / ww, ch / wh

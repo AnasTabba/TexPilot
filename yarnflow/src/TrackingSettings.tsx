@@ -22,8 +22,8 @@ interface Spec { key: TextKey; en: string; ur: string; type?: 'text' | 'url' | '
 
 const CONNECTION: Spec[] = [
   { key: 'baseUrl', en: 'Base URL', ur: 'بنیادی URL', type: 'url', required: true },
-  { key: 'trackPath', en: 'Track path', ur: 'ٹریک کرنے کا راستہ', required: true },
-  { key: 'requestNumber', en: 'Request field for the BL number', ur: 'BL نمبر کا request فیلڈ', required: true },
+  { key: 'trackPath', en: 'Tracking path', ur: 'ٹریک کرنے کا راستہ', required: true },
+  { key: 'requestNumber', en: 'Field name for the BL number', ur: 'BL نمبر کا فیلڈ نام', required: true },
   { key: 'requestType', en: 'Request type field (optional)', ur: 'request قسم کا فیلڈ (اختیاری)' },
   { key: 'bolValue', en: 'Type value for bills of lading (optional)', ur: 'بل آف لیڈنگ کی قسم کی قدر (اختیاری)' },
 ];
@@ -106,7 +106,7 @@ function ReadOnly({ settings }: { settings: SettingsData }) {
   return <>
     <dl className="trk-set-summary">
       <div><dt>{t('Base URL', 'بنیادی URL')}</dt><dd className="trk-mono">{settings.baseUrl || '—'}</dd></div>
-      <div><dt>{t('Track path', 'ٹریک کرنے کا راستہ')}</dt><dd className="trk-mono">{settings.trackPath || '—'}</dd></div>
+      <div><dt>{t('Tracking path', 'ٹریک کرنے کا راستہ')}</dt><dd className="trk-mono">{settings.trackPath || '—'}</dd></div>
       <div><dt>{t('Auto refresh', 'خودکار تازہ کاری')}</dt><dd>{settings.enabled ? t(`every ${settings.refreshHours} h`, `ہر ${settings.refreshHours} گھنٹے`) : t('off', 'بند')}</dd></div>
       <div><dt>{t('Daily call budget', 'روزانہ کالز کی حد')}</dt><dd>{settings.dailyBudget || t('off', 'بند')}</dd></div>
     </dl>
@@ -125,7 +125,7 @@ function SettingsForm({ settings, onSaved }: { settings: SettingsData; onSaved: 
 
   const input = (spec: Spec) => <div className="trk-set-cell" key={spec.key}>
     <Field>{t(spec.en, spec.ur)}<input type={spec.type ?? 'text'} value={draft[spec.key]} onChange={event => set(spec.key, event.target.value)} required={spec.required} min={spec.min} max={spec.max} /></Field>
-    {spec.help && <small className="trk-set-help">{spec.help === 'item' ? t('Path inside each item, like eventTime', 'ہر آئٹم کے اندر راستہ، جیسے eventTime') : t('Dot path inside the JSON, like data.events', 'JSON کے اندر ڈاٹ راستہ، جیسے data.events')}</small>}
+    {spec.help && <small className="trk-set-help">{spec.help === 'item' ? t('Path inside each item, like eventTime', 'ہر آئٹم کے اندر راستہ، جیسے eventTime') : t('Where the field sits in the provider’s reply, for example data.events', 'فراہم کنندہ کے جواب میں فیلڈ کہاں ہے، جیسے data.events')}</small>}
   </div>;
 
   async function save(event: FormEvent) {
@@ -190,7 +190,8 @@ export function TrackingSettings({ isAdmin, onStatus }: { isAdmin: boolean; onSt
   if (missing) return null;
   const status = loaded?.status ?? null;
   // Collapsed once configured, open while it still needs setting up.
-  const expanded = open ?? (status ? !status.configured : false);
+  // A failed load opens the panel so its error is visible; while loading it stays collapsed and the loading line sits beside the heading.
+  const expanded = open ?? (status ? !status.configured : Boolean(loadError));
   const summary = status ? [
     status.configured ? t('Configured', 'ترتیب شدہ') : t('Not configured yet', 'ابھی ترتیب نہیں دی گئی'),
     status.enabled ? t(`auto refresh every ${status.refreshHours} h`, `ہر ${status.refreshHours} گھنٹے خودکار تازہ کاری`) : t('auto refresh off', 'خودکار تازہ کاری بند'),
@@ -202,12 +203,12 @@ export function TrackingSettings({ isAdmin, onStatus }: { isAdmin: boolean; onSt
       {!expanded && summary && <span className="trk-muted">{summary}</span>}
       <ChevronDown size={18} aria-hidden="true" className={expanded ? 'is-open' : undefined} />
     </button>
+    {!loaded && !loadError && <p className="live-muted" role="status">{t('Loading connection settings…', 'کنکشن کی ترتیبات لوڈ ہو رہی ہیں…')}</p>}
     {expanded && <div className="trk-set-body" id={bodyId}>
       {loadError ? <p className="live-error" role="alert">{errorMessage(loadError, language)}</p> : null}
-      {!loaded && !loadError && <p className="live-muted" role="status">{t('Loading connection settings…', 'کنکشن کی ترتیبات لوڈ ہو رہی ہیں…')}</p>}
       {loaded && <>
         <StatusRow status={loaded.status} />
-        {!loaded.status.keyConfigured && <p className="trk-set-note">{t('The API key is stored as a secure server secret (DATALOOPLABS_API_KEY). Send it to your developer; it never appears in the app.', 'API کی ایک محفوظ سرور سیکرٹ (DATALOOPLABS_API_KEY) کے طور پر رکھی جاتی ہے۔ اسے اپنے ڈویلپر کو بھیجیں؛ یہ ایپ میں کبھی نہیں دکھائی جاتی۔')}</p>}
+        {!loaded.status.keyConfigured && <p className="trk-set-note">{t('The tracking key is set on the server by the developer. Ask them if it is missing.', 'ٹریکنگ کی کلید سرور پر ڈویلپر مقرر کرتے ہیں۔ اگر یہ موجود نہ ہو تو ان سے پوچھیں۔')}</p>}
         {isAdmin
           ? <SettingsForm settings={loaded.settings} onSaved={result => { setLoaded(result); onStatus?.(result.status); }} />
           : <ReadOnly settings={loaded.settings} />}

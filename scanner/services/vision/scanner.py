@@ -50,14 +50,17 @@ class ScannerPredictor:
         notes: list[Note] = []
         timings: dict[str, float] = {}
         t = time.perf_counter()
-        dets = self._try(notes, "garment detector", lambda: self.detector.detect(image)) or []
+        dets = self._try(notes, "garment detector", lambda: self.detector.detect(image))
+        detector_failed = dets is None
+        dets = dets or []
         timings["garment_detector"] = round(1000 * (time.perf_counter() - t), 1)
         primary = choose_primary(dets, w, h, self.min_det_score)
         garment = None
         if primary is None:
-            notes.append(
-                Note("NO_GARMENT_DETECTED", "No garment found; the whole photo was classified.")
-            )
+            if not detector_failed:
+                notes.append(
+                    Note("NO_GARMENT_DETECTED", "No garment found; the whole photo was classified.")
+                )
             views = [image]
         else:
             x0, y0, x1, y1 = primary.box

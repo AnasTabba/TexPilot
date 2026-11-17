@@ -12,13 +12,16 @@ np = pytest.importorskip("numpy")
 
 from training.fault.methods import inpformer as inp  # noqa: E402
 
-REPO = Path(os.environ.get(
-    "INPFORMER_REPO",
-    "/private/tmp/claude-501/-Users-anastabba-Documents-iba-sem7-FYP/7465821c-727f-422e-b6d5-83704616dd8a"
-    "/scratchpad/agents/inpformer-research/repo",
-))
-needs_clone = pytest.mark.skipif(not (REPO / "models" / "uad.py").is_file(),
-                                 reason="INP-Former clone folder not found")
+REPO = Path(
+    os.environ.get(
+        "INPFORMER_REPO",
+        "/private/tmp/claude-501/-Users-anastabba-Documents-iba-sem7-FYP/7465821c-727f-422e-b6d5-83704616dd8a"
+        "/scratchpad/agents/inpformer-research/repo",
+    )
+)
+needs_clone = pytest.mark.skipif(
+    not (REPO / "models" / "uad.py").is_file(), reason="INP-Former clone folder not found"
+)
 
 
 class Stand(torch.nn.Module):
@@ -150,6 +153,7 @@ def test_clone_modules_wire_and_run_on_stub_encoder():
 def test_real_clone_models_collide_without_isolation():
     """Changing sys.path cannot replace a cached upstream package or its children."""
     import importlib
+
     dinomaly = REPO.parent.parent / "dinomaly-research" / "repo"
     musc = REPO.parent.parent / "musc-research" / "MuSc"
     if not (dinomaly / "models/uad.py").exists() or not musc.exists():
@@ -184,6 +188,7 @@ def test_real_clone_models_collide_without_isolation():
 def test_real_clone_top_level_specs_are_cached_by_name(name):
     """Resolve actual source files without executing dependency-heavy utils/dataset bodies."""
     import importlib.util
+
     dinomaly = REPO.parent.parent / "dinomaly-research" / "repo"
     if not dinomaly.exists():
         pytest.skip("Dinomaly clone unavailable")
@@ -207,18 +212,21 @@ def test_real_clone_top_level_specs_are_cached_by_name(name):
 
 def test_import_scope_restores_modules_and_path_after_error(tmp_path):
     import importlib
+
     from training.fault.methods._upstream import upstream_repo
+
     (tmp_path / "models").mkdir()
     (tmp_path / "models/__init__.py").write_text("marker = 42\n")
     before = {k: v for k, v in sys.modules.items() if k == "models" or k.startswith("models.")}
     path = sys.path[:]
-    with pytest.raises(RuntimeError, match="deliberate"):
-        with upstream_repo(tmp_path):
-            module = importlib.import_module("models")
-            assert module.marker == 42
-            raise RuntimeError("deliberate")
+    with pytest.raises(RuntimeError, match="deliberate"), upstream_repo(tmp_path):
+        module = importlib.import_module("models")
+        assert module.marker == 42
+        raise RuntimeError("deliberate")
     assert sys.path == path
-    assert {k: v for k, v in sys.modules.items() if k == "models" or k.startswith("models.")} == before
+    assert {
+        k: v for k, v in sys.modules.items() if k == "models" or k.startswith("models.")
+    } == before
     with upstream_repo(tmp_path):
         assert importlib.import_module("models") is module
 
@@ -241,6 +249,7 @@ def test_checkpoint_records_and_checks_prototype_count(standin, tmp_path):
 
 def test_nested_same_repo_keeps_module_identity(tmp_path):
     import importlib
+
     (tmp_path / "models").mkdir()
     (tmp_path / "models/__init__.py").write_text("marker = object()\n")
     with inp.upstream_repo(tmp_path):
@@ -263,7 +272,8 @@ def test_encoder_failure_restores_cwd_and_import_path(tmp_path):
     (tmp_path / "models").mkdir()
     (tmp_path / "models/__init__.py").write_text("")
     (tmp_path / "models/vit_encoder.py").write_text(
-        "def load(backbone):\n    raise RuntimeError('encoder failed')\n")
+        "def load(backbone):\n    raise RuntimeError('encoder failed')\n"
+    )
     cwd, path = os.getcwd(), sys.path[:]
     m = _method(repo_dir=str(tmp_path))
     with pytest.raises(RuntimeError, match="encoder failed"):

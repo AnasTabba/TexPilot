@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
-import { ArrowRightLeft, ChevronDown, ClipboardCheck, KeyRound, Package, PackagePlus, ShieldCheck, Trash2, Truck, Undo2, UserCheck, UserPlus, type LucideIcon } from 'lucide-react';
+import { ArrowRightLeft, ClipboardCheck, KeyRound, Package, PackagePlus, ShieldCheck, Trash2, Truck, Undo2, UserCheck, UserPlus, type LucideIcon } from 'lucide-react';
 import { AsyncForm, Field, errorMessage } from './forms';
 import { Correction } from './CorrectionForm';
 import { Avatar } from './SignIn';
@@ -7,6 +7,7 @@ import { when } from './WorkspaceDashboard';
 import { inventoryRequest as api, roleLabel, type Role, type Member, type Permission } from './inventory-client';
 import { translate, useLanguage } from './i18n';
 import { kg, money } from './PortalCommon';
+import { ChoiceTiles, EmptyState, ErrorState, LoadingLines, RowCard, Sheet, StatusTag, Step, Steps, Tabs } from './ui';
 import './people-ui.css';
 
 interface Person { id: string; name: string; role: Role | null; status: 'active' | 'pending' | 'deactivated'; created_at: number; locked: boolean; needsPin?: boolean }
@@ -30,7 +31,7 @@ export const permissionInfo: [Permission, string, string, LucideIcon][] = [
 export const accessSummary = (role: Role, language: 'en' | 'ur' = 'en') => translate(language, ...roleLabel[role]);
 function RolePicker({ value, onChange, disabled = false }: { value: Role; onChange: (value: Role) => void; disabled?: boolean }) {
   const { t } = useLanguage();
-  return <Field>{t('Role', 'کردار')}<select value={value} disabled={disabled} onChange={e => onChange(e.target.value as Role)}>{(Object.keys(roleLabel) as Role[]).map(role => <option key={role} value={role}>{t(...roleLabel[role])}</option>)}</select></Field>;
+  return <ChoiceTiles label={t('Role', 'کردار')} value={value} onChange={v => onChange(v as Role)} options={(Object.keys(roleLabel) as Role[]).map((role, i) => ({ value: role, title: t(...roleLabel[role]), hint: t(['Full access', 'Buy and receive stock', 'Check fabric quality', 'Manage floor work', 'Manage sales', 'Send approved stock'][i] ?? 'Team access', ['مکمل اختیار', 'خرید اور وصولی', 'کپڑے کا معیار دیکھیں', 'کام سنبھالیں', 'فروخت سنبھالیں', 'منظور شدہ اسٹاک بھیجیں'][i] ?? 'ٹیم کا اختیار'), icon: <UserCheck aria-hidden="true" /> }))} />;
 }
 
 // Approval limits a supervisor gets for their own approvals. Blank means the factory limit applies.
@@ -58,25 +59,26 @@ const draftFrom = (rows: PersonalLimit[]): Draft => {
   return draft;
 };
 function useFactoryLimits() {
-  const [factory, setFactory] = useState<Factory | null>(null), [error, setError] = useState('');
+  const [factory, setFactory] = useState<Factory | null>(null), [error, setError] = useState(''), [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let live = true;
+    setError('');
     void Promise.all([api<{ thresholds: { type: LimitType; value: number }[] }>('/erp/admin/thresholds'), api<{ settings: { currency: string } }>('/erp/admin/settings')])
       .then(([thresholds, settings]) => { if (live) setFactory({ currency: settings.settings.currency, values: Object.fromEntries(thresholds.thresholds.map(row => [row.type, row.value])) }); })
       .catch(caught => { if (live) setError(errorMessage(caught)); });
     return () => { live = false; };
-  }, []);
-  return { factory, error };
+  }, [attempt]);
+  return { factory, error, retry: () => setAttempt(n => n + 1) };
 }
 // The changed limits only. Throws before anything is saved when a number is not valid.
-function limitChanges(draft: Draft, saved: Draft, factoryCurrency: string): LimitChange[] {
+function limitChanges(draft: Draft, saved: Draft, factoryCurrency: string, language: 'en' | 'ur'): LimitChange[] {
   return limitTypes.flatMap((type): LimitChange[] => {
     const next = draft[type], before = saved[type], amount = next.amount.trim();
     const sameCurrency = (next.currency || factoryCurrency) === (before.currency || factoryCurrency);
     if (amount === before.amount.trim() && (!moneyLimit(type) || sameCurrency)) return [];
     if (amount === '') return [{ type, value: null }];
     const parsed = Number(amount);
-    if (!Number.isFinite(parsed) || parsed < 0) throw new Error('Enter a valid non-negative limit.');
+    if (!Number.isFinite(parsed) || parsed < 0) throw new Error(translate(language, 'Enter a valid non-negative limit.', 'درست غیر منفی حد درج کریں۔'));
     return [{ type, value: Math.round(parsed * scaleOf(type)), ...(moneyLimit(type) && next.currency ? { currency: next.currency } : {}) }];
   });
 }
@@ -91,7 +93,8 @@ function LimitFields({ draft, onChange, factory, disabled }: { draft: Draft; onC
     <p className="live-muted">{t('Blank uses the factory limit. Amounts are in the factory currency; stock limits are in kg.', 'خالی چھوڑنے پر فیکٹری کی حد لاگو ہوگی۔ رقم فیکٹری کی کرنسی میں اور اسٹاک کی حد کلوگرام میں ہے۔')}</p>
     <div className="live-fields">{limitTypes.map(type => {
       const inherited = factory?.values[type];
-      const placeholder = !factory ? t('Loading…', 'لوڈ ہو رہا ہے…') : inherited === undefined ? t('Factory limit not set', 'فیکٹری کی حد مقرر نہیں') : `${t('Factory', 'فیکٹری')}: ${showLimit(type, inherited, factory.currency)}`;
+      // Nothing while the factory limits are loading or after they failed: the error and its retry sit above the list.
+      const placeholder = !factory ? '' : inherited === undefined ? t('Factory limit not set', 'فیکٹری کی حد مقرر نہیں') : `${t('Factory', 'فیکٹری')}: ${showLimit(type, inherited, factory.currency)}`;
       return <Fragment key={type}>
         <Field>{t(...limitName[type])}<input inputMode="decimal" aria-label={t(...limitName[type])} value={draft[type].amount} placeholder={placeholder} onChange={e => update(type, { amount: e.target.value })} /></Field>
         {moneyLimit(type) && <Field>{t('Currency', 'کرنسی')}<select aria-label={t('Currency', 'کرنسی')} value={draft[type].currency || factory?.currency || 'PKR'} onChange={e => update(type, { currency: e.target.value })}>{currencies.map(code => <option key={code} value={code}>{code}</option>)}</select></Field>}
@@ -106,7 +109,8 @@ export default function Team({ me, onChanged }: { me: Member; onChanged: () => P
   const [people, setPeople] = useState<Person[] | null>(null);
   const [error, setError] = useState(''); const [open, setOpen] = useState('');
   const [removedView, setRemovedView] = useState(false);
-  const { factory, error: factoryError } = useFactoryLimits();
+  const [addNote, setAddNote] = useState('');
+  const { factory, error: factoryError, retry: retryFactory } = useFactoryLimits();
   const load = useCallback(async () => {
     try { setPeople((await api<{ users: Person[] }>(removedView ? '/erp/admin/users?removed=1' : '/erp/admin/users')).users); setError(''); } catch (error) { setError(errorMessage(error)); }
   }, [removedView]);
@@ -115,19 +119,20 @@ export default function Team({ me, onChanged }: { me: Member; onChanged: () => P
   const waiting = people?.filter(p => p.status === 'pending') ?? [];
   const listed = people?.filter(p => p.status !== 'pending') ?? [];
   return <>
-    {error && <p className="live-error" role="alert">{t(error)}<button className="live-text-button" onClick={() => void load()}>{t('Retry', 'دوبارہ کوشش کریں')}</button></p>}
-    {factoryError && <p className="live-error" role="alert">{t(factoryError)}</p>}
-    {!people && !error && <p role="status" className="live-muted">{t('Loading the team…', 'ٹیم لوڈ ہو رہی ہے…')}</p>}
+    {error && <ErrorState reason={t(error)} onRetry={() => void load()} />}
+    {factoryError && <p className="live-error" role="alert">{t(factoryError)}<button className="live-text-button" onClick={retryFactory}>{t('Retry', 'دوبارہ کوشش کریں')}</button></p>}
+    {!people && !error && <LoadingLines lines={3} />}
     {waiting.length > 0 && <section className="live-panel" aria-labelledby="yf-waiting">
       <div className="yf-head"><h2 id="yf-waiting">{t('Waiting for you', 'آپ کی منظوری کا انتظار')}</h2><span>{t(waiting.length === 1 ? '1 request' : `${waiting.length} requests`, `${waiting.length} درخواست${waiting.length === 1 ? '' : 'یں'}`)}</span></div>
       <div className="yf-requests">{waiting.map(person => <Request key={person.id} person={person} onDone={changed} />)}</div>
     </section>}
-    {open === 'new' && <AddPerson factory={factory} onDone={async () => { setOpen(''); await changed(); }} onCancel={() => setOpen('')} />}
-    {people && <section className="live-panel" aria-labelledby="yf-people">
-      <div className="yf-head"><h2 id="yf-people">{removedView ? t('Removed people', 'ہٹائے گئے افراد') : t('People', 'ٹیم کے لوگ')}</h2>{open !== 'new' && !removedView && <button className="button" onClick={() => setOpen('new')}><UserPlus size={18} aria-hidden="true" />{t('Add a person', 'نیا فرد شامل کریں')}</button>}</div>
-      <div className="live-segments" role="group" aria-label={t('Show', 'دکھائیں')}><button type="button" aria-pressed={!removedView} onClick={() => setRemovedView(false)}>{t('Team', 'ٹیم')}</button><button type="button" aria-pressed={removedView} onClick={() => setRemovedView(true)}>{t('Removed', 'ہٹائے گئے')}</button></div>
+    {open === 'new' && <AddPerson factory={factory} onDone={async (openId, note) => { setOpen(openId ?? ''); setAddNote(note ?? ''); await changed(); }} onCancel={() => setOpen('')} />}
+    {people && <section className="yf-team-page" aria-label={t('Team', 'ٹیم')}>
+      <div className="yf-head yf-team-actions"><Tabs label={t('Show', 'دکھائیں')} items={[{id:'team',label:t('Team','ٹیم')},{id:'removed',label:t('Removed','ہٹائے گئے') }]} value={removedView ? 'removed' : 'team'} onChange={value => setRemovedView(value === 'removed')} />{open !== 'new' && !removedView && <button className="button" onClick={() => { setAddNote(''); setOpen('new'); }}><UserPlus size={18} aria-hidden="true" />{t('Add a person', 'نیا فرد شامل کریں')}</button>}</div>
+      {addNote && <p className="live-error" role="alert">{addNote}</p>}
       {removedView
         ? <ul className="yf-team">{listed.map(person => <RemovedPerson key={person.id} person={person} me={me} onDone={changed} />)}</ul>
+        : listed.length === 0 ? <EmptyState emptyIso="people" message={t('No one is on the team yet. Add a person to give them a name, role and PIN.', 'ابھی ٹیم میں کوئی نہیں۔ نام، کردار اور پن دینے کے لیے فرد شامل کریں۔')} action={<button className="button primary" onClick={() => setOpen('new')}><UserPlus size={18} aria-hidden="true" />{t('Add a person', 'نیا فرد شامل کریں')}</button>} />
         : <ul className="yf-team">{listed.map(person => <Member key={person.id} person={person} self={person.id === me.user_id} open={open === person.id} onToggle={() => setOpen(open === person.id ? '' : person.id)} onDone={changed} canLimits={me.admin} factory={factory} />)}</ul>}
     </section>}
   </>;
@@ -165,44 +170,49 @@ function Member({ person, self, open, onToggle, onDone, canLimits, factory }: { 
   const [role, setRole] = useState<Role>(person.role ?? 'quality_inspector');
   useEffect(() => setRole(person.role ?? 'quality_inspector'), [person.role]);
   const [pin, setPin] = useState(''); const [name, setName] = useState(person.name), [busy, setBusy] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   useEffect(() => setName(person.name), [person.name]);
   const [error, setError] = useState(''); const [notice, setNotice] = useState<[string, string?] | null>(null);
   const showLimits = canLimits && role === 'supervisor';
   const [limits, setLimits] = useState<Draft>(blankDraft), [savedLimits, setSavedLimits] = useState<Draft>(blankDraft), [limitsReady, setLimitsReady] = useState(false);
+  const [limitsError, setLimitsError] = useState(''), [limitsAttempt, setLimitsAttempt] = useState(0);
   useEffect(() => {
     if (!open || !showLimits) return;
     let live = true;
+    setLimitsError('');
     void api<{ thresholds: PersonalLimit[] }>(`/erp/admin/users/thresholds?userId=${person.id}`)
       .then(result => { if (live) { const saved = draftFrom(result.thresholds); setSavedLimits(saved); setLimits(saved); setLimitsReady(true); } })
-      .catch(caught => { if (live) setError(errorMessage(caught)); });
+      .catch(caught => { if (live) setLimitsError(errorMessage(caught)); });
     return () => { live = false; };
-  }, [open, showLimits, person.id]);
+  }, [open, showLimits, person.id, limitsAttempt]);
   async function saveLimitsNow() {
     setBusy(true); setError(''); setNotice(null);
-    try { await saveLimitChanges(person.id, limitChanges(limits, savedLimits, factory?.currency ?? '')); setSavedLimits(limits); setNotice([`${person.name}'s approval limits are saved.`, `${person.name} کی منظوری کی حدیں محفوظ ہو گئیں۔`]); }
+    try { await saveLimitChanges(person.id, limitChanges(limits, savedLimits, factory?.currency ?? '', language)); setSavedLimits(limits); setNotice([`${person.name}'s approval limits are saved.`, `${person.name} کی منظوری کی حدیں محفوظ ہو گئیں۔`]); }
     catch (caught) { setError(errorMessage(caught)); } finally { setBusy(false); }
   }
   const dirty = role !== person.role;
-  async function act(path: string, body: object, done: [string, string?] | null) {
+  // Resolves true only when the change was saved, so a typed PIN is cleared only then.
+  async function act(path: string, body: object, done: [string, string?] | null): Promise<boolean> {
     setBusy(true); setError(''); setNotice(null);
-    try { await api(path, body); setNotice(done); await onDone(); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); }
+    try { await api(path, body); setNotice(done); await onDone(); return true; } catch (error) { setError(errorMessage(error)); return false; } finally { setBusy(false); }
   }
   return <li className={`yf-member${open ? ' is-open' : ''}`}>
-    <button className="yf-member-row" aria-expanded={open} onClick={onToggle}>
-      <Avatar name={person.name} /><span><strong>{person.name}{self && <small> · {t('you', 'آپ')}</small>}</strong><span>{person.role ? <><span className="pp-role">{accessSummary(person.role, language)}</span>{canLimits && person.role === 'supervisor' && <span className="pp-limit">{t('Approval limits', 'منظوری کی حدیں')}</span>}</> : t('Role not assigned', 'کردار مقرر نہیں')}</span></span>
-      {person.status === 'deactivated' && <span className="live-quality hold"><ShieldCheck size={16} aria-hidden="true" />{t('Deactivated', 'غیر فعال')}</span>}{person.needsPin && <span className="live-quality hold">{t('Needs a new PIN', 'نئے پن کی ضرورت')}</span>}{person.locked && <span className="live-quality hold">{t('Locked', 'مقفل')}</span>}<ChevronDown size={20} aria-hidden="true" />
-    </button>
-    {open && <div className="yf-member-body">
+    <RowCard className="yf-member-card" title={`${person.name}${self ? ` · ${t('you', 'آپ')}` : ''}`} detail={person.role ? accessSummary(person.role, language) : t('Role not assigned', 'کردار مقرر نہیں')} leading={<Avatar name={person.name} />} onClick={onToggle} status={person.locked ? <StatusTag tone="bad" label={t('Locked', 'مقفل')} /> : person.needsPin ? <StatusTag tone="warn" label={t('Needs a new PIN', 'نئے پن کی ضرورت')} /> : person.status === 'deactivated' ? <StatusTag tone="neutral" label={t('Deactivated', 'غیر فعال')} /> : undefined} />
+    <Sheet open={open} title={person.name} onClose={onToggle} className="yf-person-sheet">
       <RolePicker value={role} onChange={setRole} disabled={busy} />
+      {dirty && <div className="live-actions"><button className="button primary" disabled={busy} onClick={() => void act('/erp/admin/users/update', { id: person.id, role }, [`${person.name}'s access is saved.`, `${person.name} کے اختیارات محفوظ ہو گئے۔`])}>{t('Save role', 'کردار محفوظ کریں')}</button></div>}
+      <button className="button" type="button" onClick={() => setMoreOpen(true)}>{t('More actions', 'مزید کام')}</button>
+    </Sheet>
+    <Sheet open={moreOpen} title={t('More actions', 'مزید کام')} onClose={() => setMoreOpen(false)} className="yf-person-sheet">
       {showLimits && (limitsReady
         ? <><LimitFields draft={limits} onChange={setLimits} factory={factory} disabled={busy} /><div className="live-actions"><button className="button primary" disabled={busy || !factory} onClick={() => void saveLimitsNow()}>{t('Save approval limits', 'منظوری کی حدیں محفوظ کریں')}</button></div></>
+        : limitsError ? <p className="live-error" role="alert">{t(limitsError)}<button className="live-text-button" onClick={() => setLimitsAttempt(n => n + 1)}>{t('Retry', 'دوبارہ کوشش کریں')}</button></p>
         : <p role="status" className="live-muted">{t('Loading approval limits…', 'منظوری کی حدیں لوڈ ہو رہی ہیں…')}</p>)}
-      {dirty && <div className="live-actions"><button className="button primary" disabled={busy} onClick={() => void act('/erp/admin/users/update', { id: person.id, role }, [`${person.name}'s access is saved.`, `${person.name} کے اختیارات محفوظ ہو گئے۔`])}>{t('Save access', 'اختیارات محفوظ کریں')}</button><button className="button" disabled={busy} onClick={() => { setRole(person.role ?? 'quality_inspector'); }}>{t('Undo changes', 'تبدیلیاں واپس کریں')}</button></div>}
       <form className="yf-pin-reset" onSubmit={event => { event.preventDefault(); void act('/erp/admin/users/update', { id: person.id, name: name.trim() }, [`${name.trim()} is the name now.`, `نام اب ${name.trim()} ہے۔`]); }}>
         <Field>{t('Name', 'نام')}<input value={name} onChange={e => setName(e.target.value)} minLength={2} maxLength={40} required /></Field>
         <button className="button" disabled={busy || name.trim() === person.name}>{t('Save name', 'نام محفوظ کریں')}</button>
       </form>
-      <form className="yf-pin-reset" onSubmit={event => { event.preventDefault(); void act('/erp/admin/users/update', { id: person.id, pin }, [`New PIN set. ${self ? 'Sign in again with it.' : `Tell ${person.name} the new PIN.`}`, `نیا پن مقرر ہو گیا۔ ${self ? 'اس سے دوبارہ سائن اِن کریں۔' : `${person.name} کو نیا پن بتا دیں۔`}`]).then(() => setPin('')); }}>
+      <form className="yf-pin-reset" onSubmit={event => { event.preventDefault(); void act('/erp/admin/users/update', { id: person.id, pin }, [`New PIN set. ${self ? 'Sign in again with it.' : `Tell ${person.name} the new PIN.`}`, `نیا پن مقرر ہو گیا۔ ${self ? 'اس سے دوبارہ سائن اِن کریں۔' : `${person.name} کو نیا پن بتا دیں۔`}`]).then(saved => { if (saved) setPin(''); }); }}>
         <Field>{person.locked ? t('Locked after wrong PINs. Set a new PIN to unlock', 'غلط پن سے اکاؤنٹ مقفل ہے۔ کھولنے کے لیے نیا پن مقرر کریں') : t('Set a new PIN', 'نیا پن مقرر کریں')}<input type="password" dir="ltr" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} autoComplete="new-password" value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, ''))} required /></Field>
         <button className="button" disabled={busy}><KeyRound size={18} aria-hidden="true" />{t('Set PIN', 'پن مقرر کریں')}</button>
       </form>
@@ -210,25 +220,28 @@ function Member({ person, self, open, onToggle, onDone, canLimits, factory }: { 
       {notice && <p className="live-success" role="status"><span>{t(...notice)}</span></p>}
       {!self && <button className="live-text-button yf-danger" disabled={busy} onClick={() => void act('/erp/admin/users/update', { id: person.id, active: person.status === 'deactivated' }, null)}>{person.status === 'deactivated' ? t('Reactivate', 'دوبارہ فعال کریں') : t('Deactivate', 'غیر فعال کریں')}</button>}
       {!self && person.role !== 'admin' && <button className="yf-remove" disabled={busy} onClick={() => { if (window.confirm(t(`Remove ${person.name} from the team? They will be signed out and cannot sign in again.`, `${person.name} کو ٹیم سے ہٹائیں؟ وہ سائن آؤٹ ہو جائیں گے اور دوبارہ سائن اِن نہیں کر سکیں گے۔`))) void act('/erp/admin/users/remove', { userId: person.id }, null); }}><Trash2 size={16} aria-hidden="true" />{t('Remove', 'ہٹائیں')}</button>}
-    </div>}
+    </Sheet>
   </li>;
 }
 
-function AddPerson({ factory, onDone, onCancel }: { factory: Factory | null; onDone: () => Promise<void>; onCancel: () => void }) {
-  const { t } = useLanguage();
+function AddPerson({ factory, onDone, onCancel }: { factory: Factory | null; onDone: (openId?: string, note?: string) => Promise<void>; onCancel: () => void }) {
+  const { t, language } = useLanguage();
+  const [step, setStep] = useState(0);
   const [name, setName] = useState(''); const [pin, setPin] = useState('');
   const [role, setRole] = useState<Role>('supervisor'); const [again, setAgain] = useState('');
   const [limits, setLimits] = useState<Draft>(blankDraft);
-  return <AsyncForm title={t('Add a person', 'نیا فرد شامل کریں')} detail={t('They sign in with this name and PIN. Tell them the PIN yourself.', 'وہ اس نام اور پن سے سائن اِن کریں گے۔ پن آپ خود انہیں بتائیں۔')} submit={t('Add person', 'فرد شامل کریں')} note={t('PINs are stored scrambled. Nobody can read them back, not even an admin.', 'پن خفیہ شکل میں محفوظ ہوتے ہیں۔ انہیں ایڈمن بھی نہیں پڑھ سکتا۔')} onCancel={onCancel} onSubmit={async () => {
+  return <AsyncForm title={t('Add a person', 'نیا فرد شامل کریں')} detail={t('They sign in with this name and PIN. Tell them the PIN yourself.', 'وہ اس نام اور پن سے سائن اِن کریں گے۔ پن آپ خود انہیں بتائیں۔')} submit={t(step < 3 ? 'Next' : 'Add person', step < 3 ? 'اگلا' : 'فرد شامل کریں')} note={t('PINs are stored scrambled. Nobody can read them back, not even an admin.', 'پن خفیہ شکل میں محفوظ ہوتے ہیں۔ انہیں ایڈمن بھی نہیں پڑھ سکتا۔')} review={step === 3 ? <p>{name} · {t(...roleLabel[role])} · {t('PIN entered twice', 'پن دو بار درج کیا گیا')}</p> : undefined} onCancel={onCancel} onSubmit={async () => {
+    if (step < 3) { if (step === 2 && pin !== again) throw new Error(t('The two PINs are different. Type the same 4 digits twice.', 'دونوں پن مختلف ہیں۔ ایک ہی چار ہندسے دو بار درج کریں۔')); setStep(step + 1); return; }
     if (pin !== again) throw new Error(t('The two PINs are different. Type the same 4 digits twice.', 'دونوں پن مختلف ہیں۔ ایک ہی چار ہندسے دو بار درج کریں۔'));
     // Limits are checked before the person exists, so a bad number never leaves a half-added person.
-    const changes = role === 'supervisor' ? limitChanges(limits, blankDraft(), factory?.currency ?? '') : [];
+    // A limit save that fails after the person exists is reported, never retried: a retry would add the person twice.
+    const changes = role === 'supervisor' ? limitChanges(limits, blankDraft(), factory?.currency ?? '', language) : [];
     const created = await api<{ id: string }>('/erp/admin/users', { name, pin, role });
-    await saveLimitChanges(created.id, changes); await onDone();
+    try { await saveLimitChanges(created.id, changes); }
+    catch { await onDone(created.id, t('Person added, but not all approval limits were saved. Set them from the list.', 'فرد شامل ہو گیا، مگر منظوری کی تمام حدیں محفوظ نہیں ہوئیں۔ فہرست سے مقرر کریں۔')); return; }
+    await onDone();
   }}>
-    <div className="live-fields yf-pin-fields"><Field>{t('Name', 'نام')}<input value={name} onChange={e => setName(e.target.value)} minLength={2} maxLength={40} required /></Field><Field>{t('4-digit PIN', 'چار ہندسوں کا پن')}<input type="password" dir="ltr" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} autoComplete="new-password" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} required /></Field></div>
-    <Field>{t('Type it again', 'دوبارہ درج کریں')}<input type="password" dir="ltr" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} autoComplete="new-password" value={again} onChange={e => setAgain(e.target.value.replace(/\D/g, ''))} required /></Field>
-    <RolePicker value={role} onChange={setRole} />
-    {role === 'supervisor' && <LimitFields draft={limits} onChange={setLimits} factory={factory} disabled={false} />}
+    <Steps label={t('Add a person', 'نیا فرد شامل کریں')}><Step title={t('Name', 'نام')} state={step === 0 ? 'current' : step > 0 ? 'done' : 'later'}>{step === 0 && <Field>{t('Name', 'نام')}<input value={name} onChange={e => setName(e.target.value)} minLength={2} maxLength={40} required /></Field>}</Step><Step title={t('Role', 'کردار')} state={step === 1 ? 'current' : step > 1 ? 'done' : 'later'}>{step === 1 && <RolePicker value={role} onChange={setRole} />}</Step><Step title={t('PIN', 'پن')} state={step === 2 ? 'current' : step > 2 ? 'done' : 'later'}>{step === 2 && <><Field>{t('4-digit PIN', 'چار ہندسوں کا پن')}<input type="password" dir="ltr" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} autoComplete="new-password" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} required /></Field><Field>{t('Type it again', 'دوبارہ درج کریں')}<input type="password" dir="ltr" inputMode="numeric" pattern="[0-9]{4}" minLength={4} maxLength={4} autoComplete="new-password" value={again} onChange={e => setAgain(e.target.value.replace(/\D/g, ''))} required /></Field></>}</Step><Step title={t('Review', 'جائزہ')} state={step === 3 ? 'current' : 'later'}>{step === 3 && role === 'supervisor' && <details className="yf-optional-limits"><summary>{t('Set approval limits', 'منظوری کی حدیں مقرر کریں')} <span>{t('Optional', 'اختیاری')}</span></summary><LimitFields draft={limits} onChange={setLimits} factory={factory} disabled={false} /></details>}</Step></Steps>
+    {step > 0 && <button type="button" className="button" onClick={() => setStep(step - 1)}>{t('Back', 'واپس')}</button>}
   </AsyncForm>;
 }

@@ -20,23 +20,23 @@ Success is a demo in which every answer on screen visibly comes from the project
 
 ## Positioning
 
-The answers come from the project's own trained vision models (scanner-v8 for fabric, plus heads taught on shop and factory photos for garment, fibre, mix and finish). Each answer carries the model's own confidence, and the photo it analysed is shown with the detector's box. Nothing is looked up or filled in from a table.
+The answers come from the project's trained vision models (scanner-v8 for fabric, plus shop-photo heads for garment, fibre, mix and finish). Display labels are translated for buyers, and the fibre-family mapping may supply a candidate fibre; that candidate is not a separate fibre-head prediction. Each model answer carries its confidence. The analysed photo and detector box appear under Details.
 
 ## Operating Context
 
-Menu: Home, Stock, Scan, History, Settings, Help. Stock is one page (material, then its batches) with filters for Needs QC, In production and To dispatch.
+Role menus include Dashboard, Stock and Scan; supervisors see History and admins see Activity. Help is available to all roles. Settings opens from the top-right gear. Stock is one page (material, then its batches) with filters for Needs QC, In production and To dispatch.
 
 Stock workflows: add a material, create a dye lot or batch, receive and move integer-gram quantities between stages, record inspection evidence, get owner QC approval before dispatch, and correct mistakes with reversals that keep the original entry.
 
-Scanning: the Scan page opens straight to the camera. The scanner API runs on the Mac (`../scripts/serve_yarnflow_scanner.py`, port 8000) and the phone reaches it over the network; a published HTTPS app needs an HTTPS scanner URL. Yarn count is a separate measurement flow (reference card or flatbed scan, plus fabric weight), not a plain-photo answer. Barcode/QR lookup and manual inspection work without the scanner.
+Scanning: the Scan page opens on the capture flow, with **Fabric / garment** and **Care label** photo controls. The scanner API runs from `scanner/` with `make api-scanner` (port 8000); the phone reaches it over the network. A published HTTPS app needs an HTTPS scanner URL. **Measure yarn count** opens a separate measurement flow. Barcode/QR lookup and manual inspection work without model inference.
 
 ## Capabilities and Constraints
 
 - Every scan answer shows its top result with the model's own confidence as a colour-coded %. There is no "not sure" state; the % carries the doubt. Closest alternatives, the analysed photo and per-model timings sit under Details.
 - Composition is said in trade terms (cotton, PC, CVC, polyester, with stretch where present); garments use local names (T-shirt, dupatta).
-- Only real output reaches the screen: model predictions, label reads and measurements. No lookup tables, typical-value fills or stand-in art.
+- Scan output includes model predictions, label reads, translated display labels and measurements. Some results also use label-guided family mappings and illustrative artwork.
 - A scan never approves a batch by itself. QC approval is an owner action.
-- Wash type (stone, enzyme, acid) has no model yet and gives no answer until factory photos per wash teach one.
+- No wash-type model or wash result is currently available.
 - Stock and accounts live in one shared Cloudflare D1 database. Everyone signs in with a name and PIN and sees the same stock; admins choose recording permissions. Draft forms and the language preference are local convenience state. The live database contains real entries only. Inspection photo upload is not implemented yet.
 - English and اردو are selectable on sign-in and in Settings. The choice persists locally; Urdu uses right-to-left layout while PINs, quantities and identifiers keep their intended order.
 - `ios/` holds a separate native iOS Yarnflow app from the team's 25 Oct work; this record covers the web app.
@@ -47,7 +47,7 @@ Name Yarnflow (wordmark "yarnflow.", logo at `public/brand/logo.png`); the scann
 
 ## Evidence on Hand
 
-Model results, test sets and accuracy are in `../docs/results.md`, `../docs/factory-guide.md` and `../docs/phone-test-set.md`; the archive label audit is in `../runs/label_audit`. Results are reported macro F1 first, then accuracy, and name the domain they were measured on (archive catalogue photos or shop product photos).
+Model results and test sets are in `../scanner/docs/results.md`, `../scanner/docs/factory-guide.md` and `../scanner/docs/phone-test-set.md`; the archive label audit is in `../scanner/runs/label_audit`. Results are reported macro F1 first, then accuracy, and name the domain they were measured on (catalogue or shop product photos).
 
 Absent, and not to be fabricated: accuracy on factory phone photos, a wash-type model, customers, testimonials or deployment claims.
 

@@ -36,6 +36,19 @@ def test_any_pixel_mode_becomes_rgb(mode):
     assert out.dtype == np.uint8
 
 
+def test_transparent_pixels_are_composited_on_white():
+    image = Image.new("RGBA", (224, 224), (0, 0, 0, 0))
+    image.putpixel((0, 0), (255, 0, 0, 255))
+    out = decode_image(_encode(image, fmt="PNG"))
+    assert tuple(out[100, 100]) == (255, 255, 255)
+
+
+def test_minimum_side_is_opt_in_for_scan_route_only():
+    with pytest.raises(UnsupportedImage, match="too small to read"):
+        decode_image(_encode(Image.new("RGB", (10, 10))), min_side=224)
+    assert decode_image(_encode(Image.new("RGB", (10, 10)))).shape == (10, 10, 3)
+
+
 @pytest.mark.parametrize(
     "data", [b"not an image", b"\x00\x00\x00\x18ftypheic" + b"\x00" * 64], ids=["junk", "heic"]
 )

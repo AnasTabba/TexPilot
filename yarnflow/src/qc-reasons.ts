@@ -7,7 +7,7 @@
  * until a named reviewer signs them off, and the screen says so while Urdu is selected. Numbers,
  * units, IDs and tolerances are never translated; they are rendered left-to-right in Latin digits.
  */
-import type { CaptureRole, DecisionStatus, ErrorCode, Outcome, QualityCheck, Reason, StageName, StageState } from './qc-types.ts';
+import type { CaptureRole, DecisionStatus, ErrorCode, Outcome, Reason, StageName, StageState } from './qc-types.ts';
 
 export const URDU_REVIEWED = false;
 export type Pair = readonly [english: string, urdu: string];
@@ -70,10 +70,6 @@ export const STATE_TEXT: Record<StageState, Pair> = {
   OK: ['Completed', 'مکمل'], ABSTAINED: ['Could not tell', 'نتیجہ نہیں نکل سکا'], FAILED: ['Failed to run', 'چل نہیں سکی'],
   DISABLED: ['Not available', 'دستیاب نہیں'], NOT_RUN: ['Not run', 'نہیں چلائی گئی'],
 };
-export const CHECK_TEXT: Record<QualityCheck, Pair> = {
-  blur: ['Sharpness', 'وضاحت'], glare: ['Glare', 'چمک'], moire: ['Moiré', 'موآرے'], fold: ['Flatness', 'ہمواری'],
-  framing: ['Framing', 'فریمنگ'], resolution: ['Thread detail', 'دھاگوں کی تفصیل'], marker_geometry: ['Scale card', 'پیمانہ کارڈ'],
-};
 export const ROLE_TEXT: Record<CaptureRole, { name: Pair; instruction: Pair }> = {
   overview: { name: ['Overview photo', 'مجموعی تصویر'], instruction: ['Stand back so the whole sampled area and its position on the roll are visible. Fabric flat, even light.', 'پیچھے ہٹیں تاکہ نمونے کا پورا حصہ اور رول پر اس کی جگہ نظر آئے۔ کپڑا سیدھا، روشنی یکساں۔'] },
   structure: { name: ['Close-up of the weave', 'بُنائی کی قریبی تصویر'], instruction: ['Hold the phone steady and square to the fabric, close enough to see single threads. No digital zoom.', 'فون کو ساکن اور کپڑے کے بالکل سامنے رکھیں، اتنا قریب کہ ایک ایک دھاگا نظر آئے۔ ڈیجیٹل زوم نہیں۔'] },
@@ -108,7 +104,7 @@ export const ERROR_TEXT: Record<FailureCode, Pair> = {
   STALE_SESSION: ['The signed-in person changed. Earlier work on this device was cleared.', 'سائن اِن فرد بدل گیا۔ اس ڈیوائس پر پہلے کا کام صاف کر دیا گیا۔'],
   ABORTED: ['Cancelled.', 'منسوخ۔'],
   BAD_RESPONSE: ['The server answered in a form this app does not understand, so nothing is shown as decided. Refresh the app.', 'سرور کا جواب ایپ کی سمجھ سے باہر ہے، اس لیے کچھ بھی طے شدہ نہیں دکھایا گیا۔ ایپ ریفریش کریں۔'],
-  UNKNOWN_OUTCOME: ['The connection dropped before the server answered. It is not known whether this was saved. Check again; repeating is safe.', 'سرور کے جواب سے پہلے رابطہ ٹوٹ گیا۔ معلوم نہیں کہ یہ محفوظ ہوا یا نہیں۔ دوبارہ جانچیں؛ دہرانا محفوظ ہے۔'],
+  UNKNOWN_OUTCOME: ['The connection dropped before the server answered, so it is not known whether this was saved. Reload the sample and check before doing it again.', 'سرور کے جواب سے پہلے رابطہ ٹوٹ گیا، اس لیے معلوم نہیں کہ یہ محفوظ ہوا یا نہیں۔ دوبارہ کرنے سے پہلے نمونہ دوبارہ لوڈ کر کے جانچ لیں۔'],
 };
 export const DRAFT_TEXT: Record<string, Pair> = {
   TOO_MANY: ['A capture set holds at most 4 photos.', 'ایک کیپچر سیٹ میں زیادہ سے زیادہ 4 تصاویر ہو سکتی ہیں۔'],
@@ -123,7 +119,7 @@ export const DRAFT_TEXT: Record<string, Pair> = {
 };
 export const CAMERA_TEXT: Record<'denied' | 'unsupported' | 'unavailable', Pair> = {
   denied: ['Camera access is blocked for this site. Allow the camera in the browser settings for this page, or choose a photo file instead.', 'اس سائٹ کے لیے کیمرے کی رسائی بند ہے۔ براؤزر کی ترتیبات میں اس صفحے کے لیے کیمرہ کھولیں، یا اس کی جگہ تصویر کی فائل چنیں۔'],
-  unsupported: ['This browser cannot take a full-resolution photo from the page. Use “Choose photo” to open the phone camera instead.', 'یہ براؤزر صفحے سے مکمل ریزولوشن تصویر نہیں لے سکتا۔ فون کا کیمرہ کھولنے کے لیے “تصویر چنیں” استعمال کریں۔'],
+  unsupported: ['This browser cannot take a full-resolution photo from the page. Use “Choose original” to pick a photo from this phone instead.', 'یہ براؤزر صفحے سے مکمل ریزولوشن تصویر نہیں لے سکتا۔ اس فون سے تصویر چننے کے لیے “اصل تصویر چنیں” استعمال کریں۔'],
   unavailable: ['No camera was found on this device. Choose a photo file instead.', 'اس ڈیوائس پر کوئی کیمرہ نہیں ملا۔ اس کی جگہ تصویر کی فائل چنیں۔'],
 };
 export const pick = (pair: Pair, language: 'en' | 'ur') => pair[language === 'ur' ? 1 : 0];

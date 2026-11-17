@@ -2,18 +2,8 @@ import { ArrowDownToLine, ArrowRightLeft, Factory, Package, PackageCheck, Trash2
 import type { ReactNode } from 'react';
 import type { StockStage } from './inventory-client';
 
-// Two mill objects Lucide has no glyph for, drawn in its line style (24 grid, 1.75 stroke).
+// A mill object Lucide has no glyph for, drawn in its line style (24 grid, 1.75 stroke).
 const line = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.75, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
-
-/** A yarn cone on its tube: the Stock icon. */
-export function ConeIcon({ size = 24, ...rest }: LucideProps) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...line} {...rest}>
-    <path d="M10.6 2h2.8l.5 3h-3.8z" />
-    <path d="M9.4 5h5.2l3.4 13.4c-3.8 1.6-8.2 1.6-12 0z" />
-    <path d="M8.6 9.6l6.7-1.9M7.7 13.6l8.6-2.4" />
-    <path d="M6.2 20.4c3.7 1.3 7.9 1.3 11.6 0" />
-  </svg>;
-}
 
 /** A cop: ring-frame yarn on its bobbin, the last stock stage. */
 export function CopIcon({ size = 24, ...rest }: LucideProps) {

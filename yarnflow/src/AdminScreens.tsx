@@ -1,13 +1,13 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowLeft, ArrowUpRight, Check, ChevronDown, ClipboardCheck, RotateCw, Save, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronRight, ClipboardCheck, FileText, History, RotateCw, Save, X } from 'lucide-react';
 import { AnalyticsSection, BarList, KpiStrip, StackedBar, firstCurrency, type BarRow, type Kpi, type Segment, type Tone } from './AnalyticsKit';
 import { Field, errorMessage } from './forms';
-import { useLanguage } from './i18n';
+import { useLanguage, type Language } from './i18n';
 import { inventoryRequest as api, roleLabel, type Member, type Role, type WorkspaceState } from './inventory-client';
 import { InterventionField, NextStep, ReasonField, SectionTabs, StatusTag, kg, money, portal } from './PortalCommon';
 import { Correction } from './CorrectionForm';
 import { when } from './WorkspaceDashboard';
-import { SplitView, StepFlow } from './SplitView';
+import { ActionBar, EmptyState, KeyFacts, RowCard, Sheet, Step, Steps, Tabs } from './ui';
 import './admin-screens.css';
 import './approvals-ui.css';
 import './sales-screens.css';
@@ -33,6 +33,9 @@ const outcomes: [string, string, string][] = [['return', 'Return', 'واپسی']
 const auditRoutes: Record<string, string> = { approval: 'approvals', claim: 'claims', supervisor_report: 'reports', user: 'team', threshold: 'thresholds', setting: 'settings' };
 const auditRoute = (event: any): [string, string | undefined] => [auditRoutes[event.object_type] || 'notifications', event.record_id || undefined];
 const amountOf = (row: any, value: number, currency: string) => (row.unit === 'minor' ? money(value, row.currency || currency) : kg(value));
+const dateOnly = (value: number) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'medium' }).format(value);
+const factRows = (value: unknown): [string, unknown][] =>
+  value && typeof value === 'object' && !Array.isArray(value) ? Object.entries(value) : [];
 
 type Filter = { objectType: string; action: string; actor: string; from: string; to: string };
 function auditQuery(filter: Filter, before?: string) {
@@ -80,7 +83,7 @@ export default function AdminScreens({ member, section, tab, id, navigate }: Pro
   const activeTab = tab === 'audit' ? 'audit' : 'monitor';
   return <div className="yf-admin">
     {['approvals', 'claims', 'thresholds'].includes(section) && settings.error && <RetryError error={settings.error} reload={settings.reload} />}
-    {section === 'approvals' && <Approvals member={member} id={id} currency={currency} navigate={navigate} />}
+    {section === 'approvals' && <Approvals member={member} currency={currency} />}
     {section === 'thresholds' && <section className="yf-factory-limits"><h2>{t('Factory default limits', 'فیکٹری کی بنیادی حدیں')}</h2><p className="live-muted">{t('Used for anyone who has no approval limit of their own. Set a supervisor’s own limits by opening them above.', 'ان سب کے لیے جن کی اپنی منظوری کی حد نہیں۔ کسی سپروائزر کی اپنی حدیں اوپر ان کو کھول کر مقرر کریں۔')}</p><Thresholds currency={currency} /></section>}
     {section === 'claims' && <Claims member={member} id={id} currency={currency} navigate={navigate} />}
     {section === 'admin-activity' && <>
@@ -94,58 +97,48 @@ export default function AdminScreens({ member, section, tab, id, navigate }: Pro
 }
 
 /** Approvals as a split view: groups filter the list, the chosen request sits beside it with one Approve action. */
-function Approvals({ member, id, currency, navigate }: { member: Member; id: string; currency: string; navigate: Navigate }) {
-  const { t, language } = useLanguage();
+function Approvals({ member, currency }: { member: Member; currency: string }) {
+  const { t } = useLanguage();
   const list = useLoad<{ approvals: any[] }>('/erp/approvals');
   const [group, setGroup] = useState('all');
   return <Loaded res={list}>{data => {
-    const rows = data.approvals || [];
-    const inGroup = (row: any) => group === 'all' || !!groups.find(g => g.id === group)?.types.includes(row.type);
-    const tabs = [{ id: 'all', label: t('All', 'سب'), count: rows.length }, ...groups.map(g => ({ id: g.id, label: t(g.en, g.ur), count: rows.filter(row => g.types.includes(row.type)).length }))];
-    return <div className="yf-approvals">
-      <SplitView label={t('Pending approval requests', 'منظوری کی منتظر درخواستیں')} tabs={tabs} tab={group} onTab={setGroup}
-        items={rows.filter(inGroup).map(row => ({ id: row.id, title: t(...named(row.type)), meta: `${row.requested_by_name} · ${when.format(row.created_at, language)}`, status: <b className="yf-approval-amount">{amountOf(row, row.amount, currency)}</b> }))}
-        selectedId={id} onSelect={next => navigate('approvals', next)}
-        renderDetail={rowId => { const row = rows.find(item => item.id === rowId); return row ? <ApprovalDetail key={row.id} member={member} row={row} currency={currency} navigate={navigate} reload={list.reload} /> : <p className="split-none">{t('This request is no longer in the list.', 'یہ درخواست اب فہرست میں نہیں۔')}</p>; }}
-        empty={t('No pending requests in this group.', 'اس گروپ میں کوئی زیرِ التوا درخواست نہیں۔')} emptyDetail={t('Choose a request to review it.', 'جائزہ لینے کے لیے کوئی درخواست منتخب کریں۔')} />
-    </div>;
+    const rows = (data.approvals || []).filter((row: any) => row.status === 'pending');
+    const tabs = [{ id: 'all', label: t('All', 'سب'), count: rows.length }, ...groups.map(g => ({ id: g.id, label: t(g.en, g.ur), count: rows.filter((row: any) => g.types.includes(row.type)).length }))];
+    const visible = rows.filter((row: any) => group === 'all' || !!groups.find(g => g.id === group)?.types.includes(row.type));
+    return <section className="yf-approval-queue"><Tabs items={tabs} value={group} onChange={setGroup} label={t('Request kind', 'درخواست کی قسم')} className="yf-kind-tabs" />
+      {visible.length ? visible.map((row: any) => <ApprovalDetail key={row.id} member={member} row={row} currency={currency} reload={list.reload} />) : <EmptyState emptyIso="inbox" message={t('Nothing to approve', 'منظوری کے لیے کچھ نہیں')} action={<button className="button" type="button" onClick={list.reload}><RotateCw size={18} aria-hidden="true" />{t('Refresh', 'تازہ کریں')}</button>} />}
+    </section>;
   }}</Loaded>;
 }
 
-function ApprovalDetail({ member, row, currency, navigate, reload }: { member: Member; row: any; currency: string; navigate: Navigate; reload: () => void }) {
+function ApprovalDetail({ member, row, currency, reload }: { member: Member; row: any; currency: string; reload: () => void }) {
   const { t, language } = useLanguage();
   const detail = useLoad<any>(`/erp/approvals/${row.id}`);
-  const [reason, setReason] = useState(''), [intervention, setIntervention] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const [reason, setReason] = useState(''), [showReject, setShowReject] = useState(false), [intervention, setIntervention] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   async function decide(decision: 'approve' | 'reject') {
     setError(''); setBusy(true);
-    try {
-      await portal('/approvals/decide', { id: row.id, decision, ...(decision === 'reject' ? { reason } : {}), ...(member.role === 'admin' ? { interventionReason: intervention } : {}) });
-      reload(); navigate('approvals');
-    } catch (e) { setError(errorMessage(e)); setBusy(false); }
+    try { await portal('/approvals/decide', { id: row.id, decision, ...(decision === 'reject' ? { reason } : {}), ...(member.role === 'admin' ? { interventionReason: intervention } : {}) }); reload(); }
+    catch (e) { setError(errorMessage(e)); setBusy(false); }
   }
-  // Two steps: the request is raised, then someone decides it.
-  const decided = row.status !== 'pending';
-  return <section className="yf-detail-stack">
-    <div className="yf-detail-head"><div><h2>{t(...named(row.type))}</h2><p>{row.requested_by_name} · {when.format(row.created_at, language)}</p></div><b className="yf-approval-amount">{amountOf(row, row.amount, currency)}</b></div>
-    <StepFlow label={t('Approval steps', 'منظوری کے مراحل')} current={decided ? 2 : 1}
-      steps={[{ icon: 'request', label: t('Requested', 'درخواست'), note: row.requested_by_name }, { icon: 'approve', label: t('Decision', 'فیصلہ') }]} />
-    <Loaded res={detail}>{data => data.object ? <>
-      <dl className="yf-facts">
-        <div><dt>{t('Item', 'آئٹم')}</dt><dd>{data.object.label}</dd></div>
-        <div><dt>{t('Threshold at request', 'درخواست کے وقت حد')}</dt><dd>{amountOf(row, row.threshold, currency)}</dd></div>
-        <div><dt>{t('Evidence', 'ثبوت')}</dt><dd><pre>{JSON.stringify(data.object.evidence, null, 2)}</pre></dd></div>
-        <div><dt>{t('Proposed change', 'مجوزہ تبدیلی')}</dt><dd><pre>{JSON.stringify(data.object.proposed, null, 2)}</pre></dd></div>
-      </dl>
-      <ReasonField label={t('Reason for rejection', 'مسترد کرنے کی وجہ')} value={reason} onChange={setReason} />
-      <InterventionField member={member} owners={['purchase_manager', 'supervisor', 'dispatch']} value={intervention} onChange={setIntervention} />
-      <div className="live-actions">
-        <button className="button primary" disabled={busy} onClick={() => void decide('approve')}><Check size={18} aria-hidden="true" />{t('Approve', 'منظور کریں')}</button>
-        <button className="button" disabled={busy || reason.trim().length < 5} onClick={() => void decide('reject')}><X size={18} aria-hidden="true" />{t('Reject', 'مسترد کریں')}</button>
-      </div>
-    </> : <p className="live-empty">{t('This request has no details to show.', 'اس درخواست کی کوئی تفصیل نہیں۔')}</p>}</Loaded>
+  return <article className="yf-approval-card">
+    <div className="yf-request-head"><span className="yf-icon-chip" aria-hidden="true"><ClipboardCheck /></span>
+      <div className="yf-request-copy"><p className="yf-request-sentence">{row.requested_by_name} {t('asks to approve', 'منظوری کی درخواست کرتے ہیں')} {t(...named(row.type))} {t('for', 'کے لیے')} {amountOf(row, row.amount, currency)}.</p>
+      <p className="yf-request-meta">{when.format(row.created_at, language)}</p></div></div>
+    <Loaded res={detail}>{data => data.object ? <KeyFacts items={[
+      { label: t('Item', 'آئٹم'), value: data.object.label },
+      { label: t('Request limit', 'درخواست کی حد'), value: amountOf(row, row.threshold, currency) },
+      ...factRows(data.object.evidence).map(([label, value]) => ({ label: label || t('Evidence', 'ثبوت'), value })),
+      ...factRows(data.object.proposed).map(([label, value]) => ({ label: label || t('Proposed change', 'مجوزہ تبدیلی'), value })),
+    ]} /> : <p className="live-empty">{t('Request details are unavailable.', 'درخواست کی تفصیل دستیاب نہیں۔')}</p>}</Loaded>
+    <InterventionField member={member} owners={['purchase_manager', 'supervisor', 'dispatch']} value={intervention} onChange={setIntervention} />
+    {showReject && <ReasonField label={t('Reason for rejection', 'مسترد کرنے کی وجہ')} value={reason} onChange={setReason} required />}
+    <div className="yf-approval-buttons">
+      <button className="button primary" disabled={busy} onClick={() => void decide('approve')}><Check size={20} aria-hidden="true" />{t('Approve', 'منظور کریں')}</button>
+      {showReject ? <button className="button" disabled={busy || reason.trim().length < 5} onClick={() => void decide('reject')}><X size={20} aria-hidden="true" />{t('Confirm reject', 'مسترد کریں')}</button> : <button className="button" disabled={busy} onClick={() => setShowReject(true)}><X size={20} aria-hidden="true" />{t('Reject', 'مسترد کریں')}</button>}
+    </div>
     {row.status === 'approved' && row.undo && <UndoApproval member={member} row={row} reload={reload} />}
-    {error && <p className="live-error" role="alert">{t(error)}</p>}
-  </section>;
+    {error && <p role="alert" className="live-error">{t(error)}</p>}
+  </article>;
 }
 
 /** Undo is offered only where the server can compensate (an award, undone by cancelling its order). Other decisions say they are final. */
@@ -198,11 +191,12 @@ export function Thresholds({ currency }: { currency: string }) {
 
 export function InvoiceSettings({ settings, loadError, reload }: { settings: Settings | null; loadError: string; reload: () => void }) {
   const { t } = useLanguage();
-  const [draft, setDraft] = useState<Settings | null>(null), [creditText, setCreditText] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<Settings | null>(null), [creditText, setCreditText] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false), [step, setStep] = useState(1);
   useEffect(() => { if (settings) { setDraft({ ...settings }); setCreditText(settings.credit_alert_days.join(', ')); } }, [settings]);
   if (!draft) return loadError ? <RetryError error={loadError} reload={reload} /> : <p className="live-muted" role="status">{t('Loading settings…', 'ترتیبات لوڈ ہو رہی ہیں…')}</p>;
   async function save(event: FormEvent) {
     event.preventDefault();
+    if (step === 1) { setStep(2); return; }
     const credit = creditText.split(',').map(s => s.trim()).filter(Boolean).map(Number).filter(Number.isFinite);
     const entries = [['currency', draft!.currency], ['tax_rate_bp', draft!.tax_rate_bp], ['invoice_format', draft!.invoice_format], ['reminder_hours', draft!.reminder_hours], ['credit_alert_days', credit]] as const;
     setError(''); setBusy(true);
@@ -213,15 +207,20 @@ export function InvoiceSettings({ settings, loadError, reload }: { settings: Set
   return <section className="yf-section">
     <h2>{t('Invoice and factory settings', 'انوائس اور فیکٹری کی ترتیبات')}</h2>
     <form onSubmit={save}>
-      <Field>{t('Currency', 'کرنسی')}<select value={draft.currency} onChange={e => setDraft({ ...draft, currency: e.target.value })}>{['PKR', 'USD', 'EUR', 'GBP'].map(v => <option key={v}>{v}</option>)}</select></Field>
+      <Steps label={t('Settings form', 'ترتیبات کا فارم')}><Step title={t('Invoice details', 'انوائس کی تفصیل')} state={step === 1 ? 'current' : 'done'}>{step === 1 && <><Field>{t('Currency', 'کرنسی')}<select value={draft.currency} onChange={e => setDraft({ ...draft, currency: e.target.value })}>{['PKR', 'USD', 'EUR', 'GBP'].map(v => <option key={v}>{v}</option>)}</select></Field>
       <Field>{t('GST (%)', 'جی ایس ٹی (%)')}<input type="number" min="0" max="100" step="0.01" value={draft.tax_rate_bp / 100} onChange={e => setDraft({ ...draft, tax_rate_bp: Math.round(Number(e.target.value) * 100) })} /></Field>
-      <Field>{t('Invoice number format', 'انوائس نمبر کی ترتیب')}<input value={draft.invoice_format} onChange={e => setDraft({ ...draft, invoice_format: e.target.value })} /></Field>
-      <Field>{t('Reminder hours', 'یاددہانی کے گھنٹے')}<input type="number" min="1" max="720" value={draft.reminder_hours} onChange={e => setDraft({ ...draft, reminder_hours: Number(e.target.value) })} /></Field>
-      <Field>{t('Credit alert days (comma separated)', 'ادھار یاددہانی کے دن')}<input value={creditText} onChange={e => setCreditText(e.target.value)} /></Field>
-      <button className="button primary" disabled={busy}><Save size={18} aria-hidden="true" />{t('Save settings', 'ترتیبات محفوظ کریں')}</button>
+      <Field>{t('Invoice number format', 'انوائس نمبر کی ترتیب')}<input value={draft.invoice_format} onChange={e => setDraft({ ...draft, invoice_format: e.target.value })} /></Field></>}</Step><Step title={t('Payment reminders', 'ادائیگی کی یاددہانی')} state={step === 2 ? 'current' : 'later'}>{step === 2 && <><Field>{t('Reminder hours', 'یاددہانی کے گھنٹے')}<input type="number" min="1" max="720" value={draft.reminder_hours} onChange={e => setDraft({ ...draft, reminder_hours: Number(e.target.value) })} /></Field>
+      <Field>{t('Credit alert days', 'ادھار یاددہانی کے دن')}<input inputMode="numeric" value={creditText} onChange={e => setCreditText(e.target.value)} /></Field></>}</Step></Steps>
+      <p>{t('This saves invoice currency, tax, number format and payment reminders.', 'اس سے انوائس کی کرنسی، ٹیکس، نمبر کی ترتیب اور ادائیگی کی یاددہانیاں محفوظ ہوں گی۔')}</p>
+      <ActionBar primary={{ label: step === 1 ? t('Next', 'اگلا') : t('Save settings', 'ترتیبات محفوظ کریں'), icon: step === 2 ? <Save aria-hidden="true" /> : undefined, type: step === 1 ? 'button' : 'submit', disabled: busy, onClick: step === 1 ? () => setStep(2) : () => undefined }} secondary={step === 2 ? { label: t('Back', 'واپس'), type: 'button', onClick: () => setStep(1) } : undefined} />
     </form>
     {error && <p className="live-error" role="alert">{t(error)}</p>}
   </section>;
+}
+
+function activitySentence(event: any, t: (en: string, ur?: string) => string, language: Language) {
+  const action = t(event.action); const object = t(...named(event.object_type));
+  return `${event.actor_name || '—'} ${action} ${object} · ${when.format(event.created_at, language)}`;
 }
 
 function AuditMonitor({ navigate }: { navigate: Navigate }) {
@@ -230,13 +229,13 @@ function AuditMonitor({ navigate }: { navigate: Navigate }) {
   return <section className="yf-section"><h2>{t('Recent activity', 'حالیہ سرگرمی')}</h2>
     <Loaded res={audit}>{data => {
       const events = data.events || [];
-      if (!events.length) return <p className="live-empty">{t('No activity recorded yet.', 'ابھی کوئی سرگرمی درج نہیں ہوئی۔')}</p>;
+      if (!events.length) return <EmptyState emptyIso="inbox" message={t('No activity recorded yet.', 'ابھی کوئی سرگرمی درج نہیں ہوئی۔')} />;
       const days = new Map<string, any[]>();
       for (const event of events) {
         const label = new Intl.DateTimeFormat(language === 'ur' ? 'ur-PK-u-nu-latn' : 'en-GB', { timeZone: 'Asia/Karachi', dateStyle: 'full' }).format(event.created_at);
         days.set(label, [...(days.get(label) || []), event]);
       }
-      return [...days].map(([day, rows]) => <section key={day}><h3>{day}</h3><ul className="yf-admin-list">{rows.map(event => <li key={event.id}><button onClick={() => { const [to, recordId] = auditRoute(event); navigate(to, recordId); }}><span><strong>{event.actor_name || '—'} · {t(event.action)}</strong><small>{event.object_type} · {when.format(event.created_at, language)}</small></span><ArrowUpRight aria-hidden="true" /></button></li>)}</ul></section>);
+      return [...days].map(([day, rows]) => <section key={day}><h3>{day}</h3><ul className="yf-admin-list">{rows.map(event => <li key={event.id}><button onClick={() => { const [to, recordId] = auditRoute(event); navigate(to, recordId); }}><span className="yf-icon-chip" aria-hidden="true"><History /></span><span className="yf-row-copy"><strong>{activitySentence(event, t, language)}</strong><small>{when.format(event.created_at, language)}</small></span><ChevronRight aria-hidden="true" /></button></li>)}</ul></section>);
     }}</Loaded>
   </section>;
 }
@@ -244,44 +243,42 @@ function AuditMonitor({ navigate }: { navigate: Navigate }) {
 /** Read-only, paged view of the audit trail: entries are only ever appended, never edited here. */
 function AuditLog() {
   const { t, language } = useLanguage();
+  const people = useLoad<{ users: { id: string; name: string }[] }>('/erp/admin/users');
   const [filter, setFilter] = useState<Filter>({ objectType: '', action: '', actor: '', from: '', to: '' });
+  const [filterOpen, setFilterOpen] = useState(false);
   const [rows, setRows] = useState<any[] | null>(null), [next, setNext] = useState<string | null>(null), [error, setError] = useState(''), [revision, setRevision] = useState(0), [busy, setBusy] = useState(false);
   const key = JSON.stringify(filter);
   useEffect(() => {
-    let active = true;
-    setRows(null); setError('');
+    let active = true; setRows(null); setError('');
     api<any>(`/erp/admin/audit?${auditQuery(filter)}`).then(page => { if (active) { setRows(page.events || []); setNext(page.next ?? null); } }).catch(e => { if (active) setError(errorMessage(e)); });
     return () => { active = false; };
   }, [key, revision]);
   async function loadOlder() {
     if (!next) return;
     setBusy(true); setError('');
-    try {
-      const page = await api<any>(`/erp/admin/audit?${auditQuery(filter, next)}`);
-      setRows(old => [...(old || []), ...(page.events || [])]); setNext(page.next ?? null);
-    } catch (e) { setError(errorMessage(e)); }
-    finally { setBusy(false); }
+    try { const page = await api<any>(`/erp/admin/audit?${auditQuery(filter, next)}`); setRows(old => [...(old || []), ...(page.events || [])]); setNext(page.next ?? null); }
+    catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
   const retry = () => { setError(''); setRevision(x => x + 1); };
   return <section className="yf-section">
-    <h2>{t('Audit log', 'آڈٹ لاگ')}</h2>
-    <p className="live-muted">{t('Entries are written by the system and cannot be edited or deleted.', 'اندراجات نظام خود درج کرتا ہے اور ان میں تبدیلی یا حذف ممکن نہیں۔')}</p>
-    <div className="live-fields">
-      <Field>{t('Object', 'آبجیکٹ')}<input value={filter.objectType} onChange={e => setFilter({ ...filter, objectType: e.target.value })} placeholder="user" /></Field>
-      <Field>{t('Action', 'عمل')}<input value={filter.action} onChange={e => setFilter({ ...filter, action: e.target.value })} /></Field>
-      <Field>{t('Person ID', 'شخص کی شناخت')}<input value={filter.actor} onChange={e => setFilter({ ...filter, actor: e.target.value })} /></Field>
-      <Field>{t('From date', 'ابتدائی تاریخ')}<input type="date" value={filter.from} onChange={e => setFilter({ ...filter, from: e.target.value })} /></Field>
-      <Field>{t('To date', 'آخری تاریخ')}<input type="date" value={filter.to} onChange={e => setFilter({ ...filter, to: e.target.value })} /></Field>
-    </div>
+    <h2>{t('Activity', 'سرگرمی')}</h2>
+    <button className="button" onClick={() => setFilterOpen(true)}>{t('Filter', 'فلٹر')}</button>
+    <Sheet open={filterOpen} title={t('Filter activity', 'سرگرمی چھانٹیں')} onClose={() => setFilterOpen(false)}>
+      <div className="live-fields">
+        <Field>{t('Kind', 'قسم')}<select value={filter.objectType} onChange={e => setFilter({ ...filter, objectType: e.target.value })}><option value="">{t('All kinds', 'تمام اقسام')}</option>{Object.keys(words).map(kind => <option key={kind} value={kind}>{t(...named(kind))}</option>)}</select></Field>
+        <Field>{t('Person', 'شخص')}<select value={filter.actor} onChange={e => setFilter({ ...filter, actor: e.target.value })}><option value="">{t('Everyone', 'سب')}</option>{(people.value?.users || []).map(person => <option key={person.id} value={person.id}>{person.name}</option>)}</select></Field>
+        <Field>{t('From date', 'ابتدائی تاریخ')}<input type="date" value={filter.from} onChange={e => setFilter({ ...filter, from: e.target.value })} /></Field>
+        <Field>{t('To date', 'آخری تاریخ')}<input type="date" value={filter.to} onChange={e => setFilter({ ...filter, to: e.target.value })} /></Field>
+      </div><button className="button primary" onClick={() => setFilterOpen(false)}>{t('Done', 'مکمل')}</button>
+    </Sheet>
     {error && <RetryError error={error} reload={retry} />}
     {!error && rows === null && <p className="live-muted" role="status">{t('Loading…', 'لوڈ ہو رہا ہے…')}</p>}
-    {rows && !rows.length && !error && <p className="live-empty">{t('No audit entries match these filters.', 'ان فلٹرز سے کوئی آڈٹ اندراج نہیں ملا۔')}</p>}
-    {rows && rows.length > 0 && <ul className="yf-admin-list">{rows.map(event => <li key={event.id}><div>
-      <strong>{event.actor_name || '—'} · {t(event.action)}</strong>
-      <small>{event.object_type} · {event.record_id} · {when.format(event.created_at, language)}</small>
-      <p>{event.old_json || '—'} → {event.new_json || '—'}</p>
-      {event.reason && <p>{t('Reason', 'وجہ')}: {event.reason}</p>}
-      {event.intervention_reason && <p>{t('Intervention', 'مداخلت')}: {event.intervention_reason}</p>}
+    {rows && !rows.length && !error && <EmptyState emptyIso="inbox" message={t('No activity matches these filters.', 'ان فلٹرز سے کوئی سرگرمی نہیں ملی۔')} />}
+    {rows && rows.length > 0 && <ul className="yf-admin-list">{rows.map(event => <li key={event.id}><div className="yf-activity-row">
+      <span className="yf-icon-chip" aria-hidden="true"><History /></span>
+      <span className="yf-row-copy"><strong>{activitySentence(event, t, language)}</strong>
+      {event.reason && <small>{t('Reason', 'وجہ')}: {event.reason}</small>}
+      {event.intervention_reason && <small>{t('Intervention', 'مداخلت')}: {event.intervention_reason}</small>}</span>
     </div></li>)}</ul>}
     {rows && next && <button className="button" disabled={busy} onClick={() => void loadOlder()}><ChevronDown size={18} aria-hidden="true" />{t('Load older', 'پرانے ریکارڈ')}</button>}
   </section>;
@@ -290,23 +287,23 @@ function AuditLog() {
 function Reports({ id, navigate }: { id: string; navigate: Navigate }) {
   const { t, language } = useLanguage();
   const list = useLoad<{ reports: any[] }>('/erp/stock/reports');
-  return <section className="yf-section"><h2>{t('Supervisor reports', 'سپروائزر رپورٹس')}</h2>
-    <Loaded res={list}>{data => {
-      const rows = data.reports || [];
-      const report = id ? rows.find(x => x.id === id) : undefined;
-      if (report) return <>
-        <button className="live-text-button" onClick={() => navigate('reports')}><ArrowLeft size={18} aria-hidden="true" />{t('All reports', 'تمام رپورٹس')}</button>
-        <dl className="yf-facts">
-          <div><dt>{t('Period', 'مدت')}</dt><dd>{report.period_from} – {report.period_to}</dd></div>
-          <div><dt>{t('Created by', 'تیار کردہ')}</dt><dd>{report.created_by_name}</dd></div>
-          <div><dt>{t('Sections', 'حصے')}</dt><dd><pre>{JSON.stringify(report.content, null, 2)}</pre></dd></div>
-          <div><dt>{t('Flagged items', 'نشان زد آئٹمز')}</dt><dd><pre>{JSON.stringify(report.flagged, null, 2)}</pre></dd></div>
-        </dl>
-      </>;
-      if (!rows.length) return <p className="live-empty">{t('No supervisor reports yet.', 'ابھی سپروائزر رپورٹ موجود نہیں۔')}</p>;
-      return <ul className="yf-admin-list">{rows.map(r => <li key={r.id}><button onClick={() => navigate('reports', r.id)}><span><strong>{r.period_from} – {r.period_to}</strong><small>{r.created_by_name} · {when.format(r.created_at, language)}</small></span><ArrowUpRight aria-hidden="true" /></button></li>)}</ul>;
-    }}</Loaded>
-  </section>;
+  return <section className="yf-section"><h2>{t('Saved reports', 'محفوظ رپورٹیں')}</h2><Loaded res={list}>{data => {
+    const rows = data.reports || [];
+    const report = id ? rows.find((item: any) => item.id === id) : undefined;
+    if (report) return <div className="yf-report-detail"><button className="live-text-button" onClick={() => navigate('reports')}><ArrowLeft size={18} aria-hidden="true" />{t('All reports', 'تمام رپورٹیں')}</button>
+      <h3>{dateOnly(report.period_from)} – {dateOnly(report.period_to)}</h3>
+      <KeyFacts items={[
+        { label: t('Created by', 'تیار کردہ'), value: report.created_by_name },
+        { label: t('Created', 'تاریخ'), value: when.format(report.created_at, language) },
+        { label: t('Confirmed rejections', 'تصدیق شدہ مسترد مقداریں'), value: report.content?.confirmedRejections?.length ?? 0 },
+        { label: t('Escalations', 'ایڈمن کو بھیجی گئی'), value: report.content?.escalations?.length ?? 0 },
+        { label: t('Adjustments', 'درستگیاں'), value: report.content?.adjustments?.length ?? 0 },
+        { label: t('Flagged items', 'نشان زد آئٹمز'), value: (report.flagged || []).length ? (report.flagged as any[]).map((item: any) => item.note).join(' · ') : t('None', 'کوئی نہیں') },
+      ]} />
+    </div>;
+    if (!rows.length) return <EmptyState emptyIso="inbox" message={t('No saved reports yet.', 'ابھی کوئی رپورٹ محفوظ نہیں۔')} />;
+    return <div className="yf-admin-rows">{rows.map((r: any) => <RowCard key={r.id} title={`${dateOnly(r.period_from)} – ${dateOnly(r.period_to)}`} detail={`${r.created_by_name} · ${when.format(r.created_at, language)}`} leading={<FileText aria-hidden="true" />} onClick={() => navigate('reports', r.id)} />)}</div>;
+  }}</Loaded></section>;
 }
 
 function Claims({ member, id, currency, navigate }: { member: Member; id: string; currency: string; navigate: Navigate }) {
@@ -316,45 +313,46 @@ function Claims({ member, id, currency, navigate }: { member: Member; id: string
     <Loaded res={list}>{data => {
       const rows = data.claims || [];
       const claim = id ? rows.find(c => c.id === id) : undefined;
-      if (claim) return <ClaimDetail key={claim.id} member={member} claim={claim} currency={currency} navigate={navigate} reload={list.reload} />;
-      if (!rows.length) return <p className="live-empty">{t('No claims have been raised.', 'کوئی دعویٰ درج نہیں ہوا۔')}</p>;
-      return <ul className="yf-admin-list">{rows.map(c => <li key={c.id}><button onClick={() => navigate('claims', c.id)}><span><strong>{c.supplier_name} · {c.product_name}</strong><small>{kg(c.rejected_milli)} · <StatusTag status={c.status} /></small></span><b>{money(c.calculated_minor, currency)}</b></button></li>)}</ul>;
+      if (!rows.length) return <EmptyState emptyIso="inbox" message={t('Nothing to approve', 'منظوری کے لیے کچھ نہیں')} />;
+      const visible = claim ? [claim] : rows;
+      return <div className="yf-claim-queue">{visible.map((c: any) => <ClaimDetail key={c.id} member={member} claim={c} currency={currency} navigate={id ? navigate : undefined} reload={list.reload} />)}</div>;
     }}</Loaded>
   </section>;
 }
 
-function ClaimDetail({ member, claim, currency, navigate, reload }: { member: Member; claim: any; currency: string; navigate: Navigate; reload: () => void }) {
+function ClaimDetail({ member, claim, currency, navigate, reload }: { member: Member; claim: any; currency: string; navigate?: Navigate; reload: () => void }) {
   const { t } = useLanguage();
   const [outcome, setOutcome] = useState('claim'), [amount, setAmount] = useState(''), [reason, setReason] = useState(''), [intervention, setIntervention] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const facts: [string, string, ReactNode][] = [
     ['Supplier', 'سپلائر', claim.supplier_name], ['Product', 'پروڈکٹ', claim.product_name], ['Rejected', 'رد شدہ', kg(claim.rejected_milli)],
     ['Rate', 'ریٹ', money(claim.po_rate_minor, currency)], ['Calculated', 'حسابی رقم', money(claim.calculated_minor, currency)], ['Status', 'حالت', <StatusTag status={claim.status} />],
   ];
-  async function decide() {
+  async function decide(nextOutcome = outcome) {
     setError('');
     const adjusted = amount.trim();
     if (adjusted && (!Number.isFinite(Number(adjusted)) || Number(adjusted) < 0)) { setError('Enter a valid adjusted amount.'); return; }
     if (adjusted && reason.trim().length < 5) { setError('Give a reason of at least 5 characters for an adjusted amount.'); return; }
     setBusy(true);
     try {
-      await portal('/qc/claims/decide', { id: claim.id, outcome, ...(adjusted ? { adjustedMinor: Math.round(Number(adjusted) * 100), reason } : {}), ...(member.role === 'admin' ? { interventionReason: intervention } : {}) });
+      await portal('/qc/claims/decide', { id: claim.id, outcome: nextOutcome, ...(adjusted ? { adjustedMinor: Math.round(Number(adjusted) * 100), reason } : {}), ...(member.role === 'admin' ? { interventionReason: intervention } : {}) });
       reload();
     } catch (e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   }
-  return <>
-    <button className="live-text-button" onClick={() => navigate('claims')}><ArrowLeft size={18} aria-hidden="true" />{t('All claims', 'تمام دعوے')}</button>
-    <h2>{t('Claim detail', 'دعوے کی تفصیل')}</h2>
+  return <article className="yf-approval-card yf-claim-card">
+    {navigate && <button className="live-text-button" onClick={() => navigate('claims')}><ArrowLeft size={18} aria-hidden="true" />{t('All claims', 'تمام دعوے')}</button>}
+    <div className="yf-request-head"><span className="yf-icon-chip" aria-hidden="true"><ClipboardCheck /></span>
+      <div className="yf-request-copy"><p className="yf-request-sentence">{claim.supplier_name} {t('asks for a claim for', 'کا دعویٰ')} {claim.product_name}, {kg(claim.rejected_milli)} {t('rejected', 'رد شدہ')}, {money(claim.calculated_minor, currency)}.</p></div></div>
     <dl className="yf-facts">{facts.map(([en, ur, value]) => <div key={en}><dt>{t(en, ur)}</dt><dd>{value}</dd></div>)}</dl>
     {claim.status !== 'decided' && <>
       <Field>{t('Outcome', 'نتیجہ')}<select value={outcome} onChange={e => setOutcome(e.target.value)}>{outcomes.map(([v, en, ur]) => <option key={v} value={v}>{t(en, ur)}</option>)}</select></Field>
       <Field>{t('Adjusted amount (optional)', 'تبدیل شدہ رقم (اختیاری)')}<input value={amount} onChange={e => setAmount(e.target.value)} inputMode="decimal" /></Field>
       <ReasonField label={t('Decision reason', 'فیصلے کی وجہ')} value={reason} onChange={setReason} required={!!amount.trim()} />
       <InterventionField member={member} owners={['admin']} value={intervention} onChange={setIntervention} />
-      <div className="live-actions"><button className="button primary" disabled={busy} onClick={() => void decide()}><ClipboardCheck size={18} aria-hidden="true" />{t('Save outcome', 'نتیجہ محفوظ کریں')}</button></div>
+      <div className="yf-approval-buttons"><button className="button primary" disabled={busy} onClick={() => void decide()}><Check size={20} aria-hidden="true" />{t('Approve', 'منظور کریں')}</button><button className="button" disabled={busy} onClick={() => void decide('return')}><X size={20} aria-hidden="true" />{t('Reject', 'مسترد کریں')}</button></div>
     </>}
     {error && <p role="alert" className="live-error">{t(error)}</p>}
-  </>;
+  </article>;
 }
 
 function Analytics() {

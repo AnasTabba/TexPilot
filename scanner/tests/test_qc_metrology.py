@@ -551,7 +551,5 @@ def test_failed_or_unstated_reference_verification_abstains(synthetic_double, wh
 def test_non_finite_zoom_cannot_pass_the_binding(synthetic_double):
     # Report R05 P2-1: NaN makes the abs(...) > 1e-6 comparison False.
     case = synthetic_double[0]()
-    case[3]["attestation"] = case[3]["attestation"].model_copy(
-        update={"zoom_factor": float("nan")}
-    )
+    case[3]["attestation"] = case[3]["attestation"].model_copy(update={"zoom_factor": float("nan")})
     assert_abstains(run(case), "DOMAIN_UNVALIDATED")

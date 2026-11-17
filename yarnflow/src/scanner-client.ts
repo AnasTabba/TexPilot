@@ -31,6 +31,16 @@ export interface ScanResult {
   yarn_advice?: string[];
   /** How long each model took on this scan, in ms (total, garment_detector, fabric_model, ...). */
   timings_ms?: Record<string, number>;
+  /** Fabric fault check; absent or null when the scanner serves no fault model. */
+  fault?: {
+    score: number;
+    is_fault: boolean;
+    threshold: number;
+    heatmap_png_b64: string | null;
+    model_version: string;
+    /** Set when the check did not run (e.g. the garment is too small in the photo). */
+    skipped_reason: string | null;
+  } | null;
   capture_quality: {
     blur: number | null;
     exposure: string | null;
@@ -47,34 +57,6 @@ export function topGuess(
   near: [string, number][] | undefined,
 ): [string, number] | null {
   return head ? [head.label, head.confidence] : near?.[0] ?? null;
-}
-/** Fibre -> family, mirrored from services/vision/taxonomy.py FIBRE_TO_FAMILY (the fibre head's 33 classes). */
-const FIBRE_FAMILY: Readonly<Record<string, string>> = {
-  ...Object.fromEntries("cotton flax_linen hemp jute ramie abaca sisal viscose_rayon modal lyocell cupro triacetate_acetate".split(" ").map((f) => [f, "cellulosic"])),
-  ...Object.fromEntries("wool silk cashmere mohair alpaca angora camel yak llama horse_hair fur leather suede milk_fiber soybean_fiber".split(" ").map((f) => [f, "protein"])),
-  ...Object.fromEntries("polyester nylon acrylic elastane_spandex polyolefin aramid".split(" ").map((f) => [f, "synthetic"])),
-};
-/** What the fabric is made of, from the photo: an accepted fibre answer; else the fibre family's top answer, named by
- * the fibre head's best guess inside that family (e.g. cotton within plant fibre), with the family's confidence. */
-export function madeOf(
-  r: Pick<ScanResult, "fibre_family" | "custom" | "candidates">,
-): { fibre: string | null; family: string | null; p: number } | null {
-  const sure = r.custom.fibre;
-  if (sure) return { fibre: sure.label, family: FIBRE_FAMILY[sure.label] ?? null, p: sure.confidence };
-  const family = topGuess(r.fibre_family, r.candidates.fibre_family);
-  if (!family) return null;
-  const fibre = (r.candidates.fibre ?? []).find(([f]) => FIBRE_FAMILY[f] === family[0]);
-  return { fibre: fibre?.[0] ?? null, family: family[0], p: family[1] };
-}
-/** Composition in the terms yarn is bought by: the blend head's answer (pure, stretch, CVC, PC) and the fibre it is
- * made of (madeOf). Without a blend head, the fibre alone. */
-export function composition(
-  r: Pick<ScanResult, "fibre_family" | "custom" | "candidates">,
-): { blend: string | null; fibre: string | null; p: number } | null {
-  const blend = topGuess(r.custom.blend, r.candidates.blend);
-  const made = madeOf(r);
-  if (blend) return { blend: blend[0], fibre: made?.fibre ?? null, p: blend[1] };
-  return made?.fibre ? { blend: null, fibre: made.fibre, p: made.p } : null;
 }
 export interface ModelInfo {
   ready: boolean;
@@ -121,7 +103,7 @@ export function normalizeEndpoint(value: string, securePage = true): string {
   )
     throw new ScanError("endpoint");
   if (securePage && url.protocol !== "https:") throw new ScanError("insecure");
-  return url.href.replace(/\/$/, "").replace(/\/api\/v1\/scan\/?$/, "");
+  return url.href.replace(/\/$/, "").replace(/\/api\/v1(\/(scan|model|spec))?\/?$/, "");
 }
 export function validateImage(
   file: Pick<File, "size" | "type" | "name">,
@@ -185,6 +167,22 @@ export function parseScanResult(value: unknown): ScanResult {
   if (
     value.timings_ms !== undefined &&
     !(record(value.timings_ms) && Object.values(value.timings_ms).every((x) => typeof x === "number" && Number.isFinite(x)))
+  )
+    throw new ScanError("response");
+  const fault = value.fault;
+  if (
+    fault != null &&
+    !(
+      record(fault) &&
+      typeof fault.score === "number" &&
+      Number.isFinite(fault.score) &&
+      typeof fault.threshold === "number" &&
+      Number.isFinite(fault.threshold) &&
+      typeof fault.is_fault === "boolean" &&
+      typeof fault.model_version === "string" &&
+      (fault.heatmap_png_b64 == null || (typeof fault.heatmap_png_b64 === "string" && /^[A-Za-z0-9+/=]+$/.test(fault.heatmap_png_b64))) &&
+      (fault.skipped_reason == null || typeof fault.skipped_reason === "string")
+    )
   )
     throw new ScanError("response");
   const composition = value.stated_composition;
@@ -260,12 +258,13 @@ export function parseScanResult(value: unknown): ScanResult {
     custom: custom as ScanResult["custom"],
   };
 }
-async function request(
+async function request<T>(
   url: string,
   init: RequestInit,
-  externalSignal?: AbortSignal,
-  timeout = 10000,
-): Promise<Response> {
+  externalSignal: AbortSignal | undefined,
+  timeout: number,
+  read: (response: Response) => Promise<T>,
+): Promise<T> {
   const controller = new AbortController();
   let timedOut = false;
   const abort = () => controller.abort();
@@ -276,17 +275,21 @@ async function request(
     controller.abort();
   }, timeout);
   try {
-    return await fetch(url, {
-      ...init,
-      signal: controller.signal,
-      // The published site's sign-in cookie goes only to its own /api/v1; never to another server.
-      credentials: "same-origin",
-      cache: "no-store",
-      redirect: "error",
-    });
+    // The body is read inside the timer too, so a response that stalls after its headers still times out.
+    return await read(
+      await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        // The published site's sign-in cookie goes only to its own /api/v1; never to another server.
+        credentials: "same-origin",
+        cache: "no-store",
+        redirect: "error",
+      }),
+    );
   } catch (e) {
     if (timedOut) throw new ScanError("timeout");
     if (controller.signal.aborted) throw new ScanError("aborted");
+    if (e instanceof ScanError) throw e;
     throw new ScanError("unreachable", e instanceof Error ? e.message : "");
   } finally {
     clearTimeout(timer);
@@ -297,26 +300,36 @@ export async function connectModel(
   endpoint: string,
   signal?: AbortSignal,
 ): Promise<ModelInfo> {
-  const response = await request(
+  const model = await request<{ status: number; ok: boolean; value: unknown }>(
     endpoint + "/api/v1/model",
     { method: "GET" },
     signal,
     120000, // A free serverless host may need to load the models after sleeping.
+    async (response) => ({
+      status: response.status,
+      ok: response.ok,
+      value: await response.json().catch(() => null),
+    }),
   );
-  if (response.status === 404) {
-    const health = await request(
+  if (model.status === 404) {
+    const health = await request<{ ok: boolean; value: unknown }>(
       endpoint + "/health",
       { method: "GET" },
       signal,
+      10000,
+      async (response) => ({
+        ok: response.ok,
+        value: await response.json().catch(() => null),
+      }),
     );
     if (!health.ok) throw new ScanError("server");
-    const payload: unknown = await health.json().catch(() => null);
+    const payload = health.value;
     if (!record(payload) || payload.status !== "ok")
       throw new ScanError("response");
     return { ready: true, model_version: "", mode: "unknown", verified: false };
   }
-  if (!response.ok) throw new ScanError("server");
-  const value: unknown = await response.json().catch(() => null);
+  if (!model.ok) throw new ScanError("server");
+  const value = model.value;
   if (
     !record(value) ||
     typeof value.ready !== "boolean" ||
@@ -350,14 +363,16 @@ export async function analyzeMaterial(
   form.append("surface_image", surface, surface.name);
   if (label) form.append("label_image", label, label.name);
   if (labelText.trim()) form.append("label_text", labelText.trim());
-  const response = await request(
+  return request<ScanResult>(
     endpoint + "/api/v1/scan",
     { method: "POST", body: form },
     signal,
     120000,
+    async (response) => {
+      if (!response.ok) return failure(response);
+      return parseScanResult(await body(response));
+    },
   );
-  if (!response.ok) return failure(response);
-  return parseScanResult(await body(response));
 }
 async function failure(response: Response): Promise<never> {
   let detail = "";
@@ -481,6 +496,8 @@ export async function analyzeSpec(
   signal?: AbortSignal,
 ): Promise<SpecResult> {
   validateScan(scan);
+  // The label is a care-label photo, so its size error names the label, not the fabric scan.
+  if (options.label && options.label.size > 10 * 1024 * 1024) throw new ScanError("too-large", "label");
   if (options.label) validateImage(options.label);
   const form = new FormData();
   form.append("scan_image", scan, scan.name);
@@ -490,14 +507,16 @@ export async function analyzeSpec(
   if (options.weight) form.append(options.unit === "oz" ? "oz" : "gsm", String(options.weight));
   if (options.labelText?.trim()) form.append("label_text", options.labelText.trim());
   if (options.label) form.append("label_image", options.label, options.label.name);
-  const response = await request(
+  return request<SpecResult>(
     endpoint + "/api/v1/spec",
     { method: "POST", body: form },
     signal,
     120000,
+    async (response) => {
+      if (!response.ok) return failure(response);
+      return parseSpecResult(await body(response));
+    },
   );
-  if (!response.ok) return failure(response);
-  return parseSpecResult(await body(response));
 }
 export function resultFilename(result: ScanResult) {
   return (

@@ -21,13 +21,13 @@ async function expectMotionSettled(page: Page) {
 
 type Language = 'en' | 'ur';
 const pinLabel = (language: Language) => language === 'ur' ? 'چار ہندسوں کا پن' : '4-digit PIN';
-const homeHeading = (language: Language) => language === 'ur' ? 'ڈیش بورڈ' : 'Dashboard';
+const homeHeading = (language: Language) => language === 'ur' ? 'گھر' : 'Home';
 
 async function signIn(page: Page, language: Language = 'en') {
   await page.goto('/');
   await page.waitForSelector('.yf-people');
   if (language === 'ur') {
-    if (await page.locator('html').getAttribute('lang') !== 'ur') await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
+    if (await page.locator('html').getAttribute('lang') !== 'ur') await page.getByRole('button', { name: 'اردو' }).click();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   }
   await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
@@ -37,7 +37,8 @@ async function signIn(page: Page, language: Language = 'en') {
 
 async function openPage(page: Page, hash: string, heading: string) {
   await page.evaluate(value => { location.hash = value; }, hash);
-  await expect(page.getByRole('heading', { name: heading, exact: true }).first()).toBeVisible();
+  // Stock and batch screens hide their in-page h1 by design; the top bar title carries the same name on every screen.
+  await expect(page.locator('.live-topbar-title')).toContainText(heading);
 }
 
 async function expectTarget(locator: Locator, label: string) {
@@ -94,7 +95,7 @@ async function expectPagesFit(page: Page, language: Language) {
   await expectNoHorizontalOverflow(page, `${prefix} Notifications`);
   await openPage(page, '#/inventory', language === 'ur' ? 'اسٹاک' : 'Stock');
   await expectNoHorizontalOverflow(page, `${prefix} Stock`);
-  await page.locator('.live-lot-row').first().click();
+  await page.locator('.yf-stock-row button').first().click();
   await expect(page.locator('[data-page="batch"]')).toBeVisible();
   await expectNoHorizontalOverflow(page, `${prefix} batch detail`);
   await openPage(page, '#/scanner', language === 'ur' ? 'اسکین' : 'Scan');
@@ -120,7 +121,7 @@ for (const language of ['en', 'ur'] as const) {
       await page.context().clearCookies();
       await page.goto('/');
       await page.waitForSelector('.yf-people');
-      if (language === 'ur' && await page.locator('html').getAttribute('lang') !== 'ur') await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
+      if (language === 'ur' && await page.locator('html').getAttribute('lang') !== 'ur') await page.getByRole('button', { name: 'اردو' }).click();
       await expectNoHorizontalOverflow(page, `${language} sign-in at ${viewport.name}`);
       await signIn(page, language);
       await expectPagesFit(page, language);
@@ -133,28 +134,28 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
   await page.goto('/');
   await page.waitForSelector('.yf-people');
 
-  for (const button of await page.locator('.yf-language button').all()) await expectTarget(button, 'sign-in language choice');
+  for (const button of await page.locator('.yf-signin-languages button').all()) await expectTarget(button, 'sign-in language choice');
   for (const button of await page.locator('.yf-person').all()) await expectTarget(button, 'sign-in person');
-  for (const link of await page.locator('.yf-supplier-entry').all()) await expectTarget(link, 'supplier or buyer sign-in link');
   await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
   await expectTarget(page.locator('.yf-signin-back'), 'back to people');
   await expectTarget(page.locator('.yf-keypad button').first(), 'PIN keypad key');
   await page.getByLabel('4-digit PIN').fill('2468');
-  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
 
-  await expectTarget(page.locator('.live-topbar .live-brand'), 'top bar brand');
+  await expectTarget(page.locator('.live-topbar .live-icon-button').first(), 'top bar notifications');
   await expectTarget(page.locator('.live-bottom-nav button').first(), 'bottom navigation');
-  await expectTarget(page.locator('.nw-card .nw-text-btn').filter({ hasText: 'See all' }), 'Dashboard See all');
-  await expectScreenTargets(page, 'Dashboard');
+  await expectTarget(page.locator('.wd-job').first(), 'Home start tile');
+  await expectScreenTargets(page, 'Home');
 
   await openPage(page, '#/inventory', 'Stock');
   await expectScreenTargets(page, 'Stock');
-  await page.locator('.live-lot-row').first().click();
-  await expectTarget(page.locator('.yf-back'), 'batch back');
+  await page.locator('.yf-stock-row button').first().click();
+  await expectTarget(page.locator('.yf-more-button'), 'batch more actions');
   await expectScreenTargets(page, 'batch detail');
 
   // A real confirmation notice: write off one kilogram, review, and save.
-  await page.getByRole('button', { name: 'Adjust stock', exact: true }).click();
+  await page.getByRole('button', { name: 'More actions', exact: true }).click();
+  await page.locator('.yf-sheet-action').filter({ hasText: 'Adjust stock' }).click();
   await page.getByLabel('Weight (kg)', { exact: true }).fill('1');
   await page.getByLabel('Reason', { exact: true }).fill('Counted one kilogram short');
   await page.getByLabel('Why are you stepping in?', { exact: true }).fill('Supervisor is away today');
@@ -171,7 +172,7 @@ test('measured controls reach 44 × 44 at 390 px, including the save notice', as
   await openPage(page, '#/team', 'Team');
   await expectScreenTargets(page, 'Team');
   await openPage(page, '#/profile', 'My profile');
-  await expectTarget(page.locator('.yf-language'), 'profile language switch');
+  for (const choice of await page.locator('.ui-choice').all()) await expectTarget(choice, 'profile language choice');
   await expectScreenTargets(page, 'My profile');
   await openPage(page, '#/notifications', 'Notifications');
   await expectScreenTargets(page, 'Notifications');
@@ -209,7 +210,7 @@ test.describe('safe-area tokens', () => {
 
     await page.getByRole('button', { name: new RegExp('^Anas\\b') }).click();
     await page.getByLabel('4-digit PIN').fill('2468');
-    await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
     const shell = await page.evaluate(() => {
       const read = (selector: string) => {
         const style = getComputedStyle(document.querySelector(selector)!);
@@ -221,9 +222,9 @@ test.describe('safe-area tokens', () => {
     });
     expect(shell.dir).toBe('ltr');
     expect(shell.topbar).toEqual({ top: 17, right: 23, bottom: 0, left: 37 });
-    expect(shell.content).toEqual({ top: 26, right: 29, bottom: 28, left: 37 });
+    expect(shell.content).toEqual({ top: 26, right: 29, bottom: 120, left: 37 });
     expect(shell.nav.right).toBeCloseTo(21, 0);
-    expect(shell.nav.bottom).toBeCloseTo(21, 0);
+    expect(shell.nav.bottom).toBeCloseTo(6 + 13, 0);
     expect(shell.nav.left).toBeCloseTo(29, 0);
     for (const [name, value] of shell.tokens) expect(value, `${name} is defined`).not.toBe('');
     expect(shell.tokens.find(([name]) => name === '--motion-fast')![1]).toMatch(/^100ms$|^\.?1s$/);
@@ -232,18 +233,19 @@ test.describe('safe-area tokens', () => {
 
     await page.locator('.live-bottom-nav button').last().click();
     const menu = await page.evaluate(() => {
-      const style = getComputedStyle(document.querySelector('.yf-mobile-menu')!);
+      const style = getComputedStyle(document.querySelector('.yf-phone-more-sheet .ui-sheet-panel')!);
       return { right: parseFloat(style.paddingRight), left: parseFloat(style.paddingLeft) };
     });
     expect(menu.right).toBeCloseTo(27, 0);
-    expect(menu.left).toBeCloseTo(16, 0);
+    // The More menu is a full-width bottom sheet, so both side insets apply.
+    expect(menu.left).toBeCloseTo(16 + 19, 0);
   });
 
   test('Urdu keeps the left inset on the physical left', async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     await page.goto('/');
     await page.waitForSelector('.yf-people');
-    await page.getByRole('button', { name: 'Switch language to Urdu' }).click();
+    await page.getByRole('button', { name: 'اردو' }).click();
     await page.evaluate(() => {
       document.documentElement.style.setProperty('--safe-left', '47px');
       document.documentElement.style.setProperty('--safe-right', '21px');
@@ -269,16 +271,16 @@ test.describe('safe-area tokens', () => {
     expect(shell.contentRight).toBeCloseTo(18 + 21, 0);
     expect(shell.navLeft).toBeCloseTo(10 + 47, 0);
     expect(shell.navRight).toBeCloseTo(10 + 21, 0);
-    expect(shell.navBottom).toBeCloseTo(8 + 21, 0);
+    expect(shell.navBottom).toBeCloseTo(6 + 21, 0);
     await expectNoHorizontalOverflow(page, 'Urdu landscape safe-area shell');
 
     await page.locator('.live-bottom-nav button').last().click();
     const menu = await page.evaluate(() => {
-      const style = getComputedStyle(document.querySelector('.yf-mobile-menu')!);
+      const style = getComputedStyle(document.querySelector('.yf-phone-more-sheet .ui-sheet-panel')!);
       return { left: parseFloat(style.paddingLeft), right: parseFloat(style.paddingRight) };
     });
     expect(menu.left).toBeCloseTo(16 + 47, 0);
-    expect(menu.right).toBeCloseTo(16, 0);
+    expect(menu.right).toBeCloseTo(16 + 21, 0);
   });
 });
 
@@ -301,7 +303,7 @@ test('reduced motion removes entrance animation and keeps state changes immediat
   expect(state.textButton.every(value => value <= 0.001)).toBe(true);
   expect(state.endlessThread).toBe('none');
 
-  await page.locator('.live-bottom-nav button').nth(1).click();
+  await page.locator('.live-bottom-nav button').filter({ hasText: 'Approvals' }).click();
   await expect(page.getByRole('heading', { name: 'Approvals', exact: true })).toBeVisible();
   await expectMotionSettled(page);
 });
@@ -334,7 +336,7 @@ test('numbers are tabular, headings balance, and supported squircle corners stay
     };
     return {
       body: style('body'),
-      weight: style('.live-row-weight'),
+      weight: style('.yf-stock-row .ui-row-value'),
       count: style('.yf-views b'),
       input: style('input[type="search"]'),
       pill: style('.yf-views button'),

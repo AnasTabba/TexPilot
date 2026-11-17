@@ -18,13 +18,17 @@ export default function CommandPalette({ items, open, onOpenChange }: { items: P
   const shown = useMemo(() => items.filter(item => !needle || item.text.toLowerCase().includes(needle)), [items, needle]);
   const current = Math.min(active, Math.max(shown.length - 1, 0));
 
+  // The shortcut reads the latest open state from a ref: a listener re-registered by an effect
+  // still saw the old value for a keypress right after the palette closed, and toggled it shut.
+  const openRef = useRef(open);
+  openRef.current = open;
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') { event.preventDefault(); onOpenChange(!open); }
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') { event.preventDefault(); onOpenChange(!openRef.current); }
     };
     window.addEventListener('keydown', shortcut);
     return () => window.removeEventListener('keydown', shortcut);
-  }, [open, onOpenChange]);
+  }, [onOpenChange]);
 
   useEffect(() => {
     const element = dialog.current;
@@ -42,7 +46,7 @@ export default function CommandPalette({ items, open, onOpenChange }: { items: P
     else if (event.key === 'Enter') { event.preventDefault(); if (shown[current]) pick(shown[current]); }
   };
 
-  return <dialog ref={dialog} className="yf-palette" aria-label={t('Search pages and batches')} onClose={() => onOpenChange(false)} onClick={event => { if (event.target === event.currentTarget) onOpenChange(false); }}>
+  return <dialog ref={dialog} className="yf-palette" aria-label={t('Search pages and batches')} onClose={() => { if (!dialog.current?.open) onOpenChange(false); }} onClick={event => { if (event.target === event.currentTarget) onOpenChange(false); }}>
     <div className="yf-palette-field"><Search size={20} aria-hidden="true" />
       <input ref={input} type="text" role="combobox" aria-expanded="true" aria-controls={listId} aria-autocomplete="list" aria-activedescendant={shown.length ? `${listId}-${current}` : undefined} value={query} onChange={event => { setQuery(event.target.value); setActive(0); }} onKeyDown={onKey} placeholder={t('Go to a page or batch…')} aria-label={t('Search pages and batches')} autoComplete="off" />
     </div>

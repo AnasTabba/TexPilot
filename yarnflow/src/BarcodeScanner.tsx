@@ -1,7 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Upload, ScanLine, Square, Search } from 'lucide-react';
+import { Camera, Upload, ScanLine, Square, Search, TriangleAlert } from 'lucide-react';
 import type { IScannerControls } from '@zxing/browser';
 import { useLanguage } from './i18n';
+import { InventoryError } from './inventory-client';
+import { RowCard } from './ui';
+import './spec-scan.css';
+
+/** Phone photos can be larger than the reader needs: draw them at most 2000 px on the long side first. */
+async function downscale(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height));
+  const canvas = Object.assign(document.createElement('canvas'), { width: Math.round(bitmap.width * scale), height: Math.round(bitmap.height * scale) });
+  canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return canvas.toDataURL('image/png');
+}
 
 export default function BarcodeScanner({ onFound }: { onFound: (code: string) => Promise<void> }) {
   const { t } = useLanguage();
@@ -9,6 +22,7 @@ export default function BarcodeScanner({ onFound }: { onFound: (code: string) =>
   const [opening, setOpening] = useState(false);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState(false);
   const [error, setError] = useState<{ english: string; urdu?: string } | null>(null);
   const video = useRef<HTMLVideoElement>(null);
   const controls = useRef<IScannerControls | null>(null);
@@ -31,9 +45,14 @@ export default function BarcodeScanner({ onFound }: { onFound: (code: string) =>
   }, []);
   async function lookup(value: string) {
     if (reading.current) return;
-    reading.current = true; stop(); setCode(value); setBusy(true); setError(null);
-    try { await onFoundRef.current(value.trim()); }
-    catch (error) { setError(error instanceof Error ? { english: error.message } : { english: 'Could not find this barcode.', urdu: 'یہ بارکوڈ نہیں ملا۔' }); }
+    reading.current = true; stop(); setCode(value); setBusy(true); setError(null); setFound(false);
+    try { await onFoundRef.current(value.trim()); setFound(true); }
+    catch (error) {
+      console.error(error);
+      setError(error instanceof InventoryError && error.status === 404
+        ? { english: 'No batch has this code. Check the code, or add the batch first.', urdu: 'اس کوڈ کا کوئی بیچ نہیں ملا۔ کوڈ جانچیں، یا پہلے بیچ شامل کریں۔' }
+        : { english: 'Could not look up this batch. Check the connection and try again.', urdu: 'اس بیچ کی تلاش نہیں ہو سکی۔ انٹرنیٹ جانچ کر دوبارہ کوشش کریں۔' });
+    }
     finally { reading.current = false; setBusy(false); }
   }
   async function start() {
@@ -62,30 +81,29 @@ export default function BarcodeScanner({ onFound }: { onFound: (code: string) =>
   async function photo(file: File | undefined) {
     if (!file) return;
     stop(); setError(null); setBusy(true);
-    if (file.size > 12 * 1024 * 1024) { setBusy(false); setError({ english: 'Choose a barcode photo smaller than 12 MB.', urdu: 'بارکوڈ کی تصویر 12 MB سے چھوٹی ہونی چاہیے۔' }); return; }
-    const url = URL.createObjectURL(file);
     try {
       const { BrowserMultiFormatReader } = await import('@zxing/browser');
-      const result = await new BrowserMultiFormatReader().decodeFromImageUrl(url);
+      const result = await new BrowserMultiFormatReader().decodeFromImageUrl(await downscale(file));
       setBusy(false); await lookup(result.getText());
     } catch { setError({ english: 'No readable barcode found. Try a sharp JPEG/PNG photo with the entire code visible, or type the code.', urdu: 'بارکوڈ پڑھا نہیں جا سکا۔ واضح JPEG/PNG تصویر دیں جس میں پورا کوڈ نظر آئے، یا کوڈ لکھیں۔' }); }
-    finally { URL.revokeObjectURL(url); setBusy(false); }
+    finally { setBusy(false); }
   }
   return <section className="live-panel barcode-panel" aria-label={t('Barcode scanner', 'بارکوڈ اسکینر')}>
-    <div className="live-panel-heading"><ScanLine aria-hidden="true" /><div><h2>{t('Find a batch by its label', 'لیبل سے بیچ تلاش کریں')}</h2><p>{t('Scan a Yarnflow QR label, a product barcode, or enter a batch number.', 'Yarnflow کا QR لیبل یا پروڈکٹ بارکوڈ اسکین کریں، یا بیچ نمبر درج کریں۔')}</p></div></div>
+    <div className="live-panel-heading"><div><h2>{t('Stock label', 'اسٹاک لیبل')}</h2></div></div>
+    <form onSubmit={event => { event.preventDefault(); void lookup(code); }} className="barcode-code-form">
+      <label htmlFor="barcode-code">{t('Or type the code', 'یا کوڈ لکھیں')}</label>
+      <div><input id="barcode-code" dir="ltr" value={code} onChange={event => setCode(event.target.value)} autoCapitalize="off" autoCorrect="off" maxLength={200} required /><button className="button primary" disabled={busy || !code.trim()}><Search size={18} />{busy ? t('Finding…', 'تلاش ہو رہا ہے…') : t('Find batch', 'بیچ تلاش کریں')}</button></div>
+    </form>
     <div className={`barcode-view ${active ? 'is-active' : ''}`}>
       <video ref={video} autoPlay muted playsInline aria-label={t('Barcode camera preview', 'بارکوڈ کیمرے کا منظر')} hidden={!active} />
-      {!active && <div><ScanLine size={48} aria-hidden="true" /><p>{t('Keep the whole code inside the camera view.', 'پورا کوڈ کیمرے کے اندر رکھیں۔')}</p></div>}
+      {!active && <div><ScanLine size={48} aria-hidden="true" /><p>{t('Camera ready', 'کیمرہ تیار ہے')}</p></div>}
       {opening && <span className="barcode-opening" role="status">{t('Opening camera…', 'کیمرہ کھل رہا ہے…')}</span>}
     </div>
     <div className="live-actions">
-      {active ? <button className="button" onClick={stop}><Square size={18} />{t('Stop camera', 'کیمرہ بند کریں')}</button> : <button className="button primary" onClick={() => void start()} disabled={busy || opening}><Camera size={18} />{t('Open barcode camera', 'بارکوڈ کیمرہ کھولیں')}</button>}
+      {active ? <button className="button" onClick={stop}><Square size={18} />{t('Stop camera', 'کیمرہ بند کریں')}</button> : <button className="button" onClick={() => void start()} disabled={busy || opening}><Camera size={18} />{t('Scan label', 'لیبل اسکین کریں')}</button>}
       <label className="button live-upload"><Upload size={18} />{t('Read barcode photo', 'بارکوڈ کی تصویر پڑھیں')}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={event => { void photo(event.target.files?.[0]); event.target.value = ''; }} disabled={busy} /></label>
     </div>
-    <form onSubmit={event => { event.preventDefault(); void lookup(code); }} className="barcode-code-form">
-      <label htmlFor="barcode-code">{t('Barcode or batch number', 'بارکوڈ یا بیچ نمبر')}</label>
-      <div><input id="barcode-code" dir="ltr" value={code} onChange={event => setCode(event.target.value)} autoCapitalize="off" autoCorrect="off" maxLength={200} required /><button className="button" disabled={busy || !code.trim()}><Search size={18} />{busy ? t('Finding…', 'تلاش ہو رہا ہے…') : t('Find batch', 'بیچ تلاش کریں')}</button></div>
-    </form>
-    {error && <p className="live-error" role="alert">{t(error.english, error.urdu)}</p>}
+    {found && <div className="barcode-found" role="status"><RowCard leading={<ScanLine aria-hidden="true" />} title={t('Code found', 'کوڈ مل گیا')} detail={t('Open the matching batch below.', 'متعلقہ بیچ نیچے کھولیں۔')} /></div>}
+    {error && <div className="barcode-error-wrap"><p className="live-error barcode-error" role="alert"><TriangleAlert size={18} aria-hidden="true" /> {t(error.english, error.urdu)}</p><button className="button" type="button" onClick={() => void lookup(code)} disabled={!code.trim() || busy}><Search size={18} />{t('Try again', 'دوبارہ کوشش کریں')}</button></div>}
   </section>;
 }

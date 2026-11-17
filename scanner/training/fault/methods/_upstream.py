@@ -3,6 +3,7 @@
 All callers using these repositories must share this context (including runtime imports).
 This serializes cooperating wrappers, not arbitrary third-party imports in other threads.
 """
+
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -12,12 +13,24 @@ _LOCK = RLock()
 _MODULES = {}
 _ACTIVE = []
 # Shared legacy roots, including encoder dependencies imported by vit_encoder.
-_ROOTS = frozenset(('models', 'utils', 'optimizers', 'dataset', 'datasets', 'dinov1',
-                    'dinov2', 'beit', 'aug_funcs', 'flops_profiler'))
+_ROOTS = frozenset(
+    (
+        "models",
+        "utils",
+        "optimizers",
+        "dataset",
+        "datasets",
+        "dinov1",
+        "dinov2",
+        "beit",
+        "aug_funcs",
+        "flops_profiler",
+    )
+)
 
 
 def _owned(name):
-    return name.split('.', 1)[0] in _ROOTS
+    return name.split(".", 1)[0] in _ROOTS
 
 
 @contextmanager

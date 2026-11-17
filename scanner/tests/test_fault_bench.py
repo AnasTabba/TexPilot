@@ -99,9 +99,9 @@ def test_run_benchmark_with_fake_method(tmp_path):
     timing = result["timing"]
     assert timing["train_tiles"] == 6
     assert timing["test_images"] == 8 and timing["test_tiles"] == 8
-    assert all(timing[key] >= 0 for key in (
-        "load_tile_seconds", "fit_seconds", "evaluation_seconds"
-    ))
+    assert all(
+        timing[key] >= 0 for key in ("load_tile_seconds", "fit_seconds", "evaluation_seconds")
+    )
     assert [r["category"] for r in rows] == ["carpet", "grid"]
     for r in rows:
         assert set(r) == ROW_KEYS

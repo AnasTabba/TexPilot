@@ -1,6 +1,6 @@
 /** Public Worker API only. No local decisions, private scanner calls, persistence or success cache. */
 import { qcDrafts, type QCDraftStore } from './qc-drafts.ts';
-import { isQCResult, isPurchaseSpec, isSamplingSelection, isConsentAuthority, isRelease, isReadiness, isErrorEnvelope, isQCStatus, isPurchaseOrderList, isSampleList, isRequestState, type QCResult, type QCStatus, type PurchaseOrderItem, type PurchaseSpec, type SamplingSelection, type ConsentAuthority, type SampleSummary, type RequestState, type Release, type ErrorBody, type AcquisitionAttestation, type CaptureRole, type Construction, type DensityUnit, type Axis, type Outcome } from './qc-types.ts';
+import { isQCResult, isPurchaseSpec, isSamplingSelection, isConsentAuthority, isRelease, isErrorEnvelope, isQCStatus, isPurchaseOrderList, isSampleList, isRequestState, type QCResult, type QCStatus, type PurchaseOrderItem, type PurchaseSpec, type SamplingSelection, type ConsentAuthority, type SampleSummary, type RequestState, type Release, type ErrorBody, type AcquisitionAttestation, type CaptureRole, type Construction, type DensityUnit, type Axis, type Outcome } from './qc-types.ts';
 import type { FailureCode } from './qc-reasons.ts';
 export const QC_SESSION_EXPIRED = 'yf-qc-session-expired';
 export class QCError extends Error {

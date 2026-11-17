@@ -1,0 +1,46 @@
+.spec-scan, .barcode-panel { color: var(--ink); line-height: 1.5; }
+.spec-scan .spec-result { order: -1; padding: 20px; border-radius: var(--r-field); background: var(--panel); }
+.spec-scan .spec-result h2 { margin: 0; font-size: 20px; }
+.spec-scan .spec-result > .ui-stat { margin-block: 8px 16px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-row); background: var(--ground); }
+.spec-scan .spec-result > .ui-stat strong { font-size: 32px; line-height: 1.25; }
+.spec-scan .spec-order-title { margin: 16px 0 0; font-size: 20px; }
+.spec-scan .spec-details { margin-block-start: 16px; border-block-start: 1px solid var(--line); }
+.spec-scan .spec-details summary { display: flex; align-items: center; min-height: 48px; font-weight: 600; cursor: pointer; }
+.spec-scan .spec-order { margin: 12px 0; padding-inline-start: 24px; font-size: 18px; font-weight: 700; }
+.spec-scan .spec-measures { margin: 16px 0 0; }
+.spec-scan .spec-measures > div { display: flex; justify-content: space-between; gap: 12px; padding-block: 10px; border-block-end: 1px solid var(--line); }
+.spec-scan .spec-measures dt { color: var(--ink-2); }
+.spec-scan .spec-measures dd { margin: 0; font-weight: 600; }
+.spec-scan .spec-basis, .spec-scan .spec-flags { color: var(--ink-2); }
+.spec-scan .spec-form { display: grid; gap: 16px; padding-block-end: 8px; }
+.spec-scan .spec-form label, .spec-scan .spec-more label { display: grid; gap: 8px; font-size: 16px; }
+.spec-scan .spec-form input:not([type=radio]), .spec-scan .spec-form select, .barcode-panel .barcode-code-form input { box-sizing: border-box; width: 100%; min-height: 48px; padding: 10px 12px; border: 1.5px solid var(--line-strong); border-radius: var(--r-control); background: var(--panel); color: var(--ink); font: inherit; }
+.spec-scan .spec-choice { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.spec-scan .spec-choice legend { margin-block-end: 8px; font-weight: 600; }
+.spec-scan .spec-choice label { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-row); background: var(--panel); }
+.spec-scan .spec-more, .spec-scan .spec-guide { border-block-start: 1px solid var(--line); padding-block: 12px; }
+.spec-scan .spec-more summary, .spec-scan .spec-guide summary { min-height: 48px; display: flex; align-items: center; font-weight: 600; cursor: pointer; }
+.spec-scan .spec-more[open] { display: grid; gap: 12px; }
+.spec-scan .spec-hint { margin: 0; color: var(--ink-2); font-size: 14px; }
+.spec-scan .spec-error, .barcode-panel .barcode-error { display: flex; align-items: flex-start; gap: 8px; padding: 14px; border-radius: var(--r-row); background: var(--bad-bg); color: var(--bad); font-size: 16px; }
+.barcode-panel .barcode-view { display: grid; place-items: center; min-height: 236px; margin-block: 8px; border: 1px solid var(--line); border-radius: var(--r-field); background: var(--sunken); color: var(--ink); overflow: hidden; }
+.barcode-panel .barcode-view video { width: 100%; height: 100%; object-fit: cover; }
+.barcode-panel .barcode-view > div { padding: 20px; text-align: center; }
+.barcode-panel .barcode-view > div p { margin: 8px 0 0; }
+.barcode-panel .live-actions { display: grid; gap: 8px; }
+.barcode-panel .live-actions .button, .barcode-panel .barcode-code-form button { min-height: 52px; justify-content: center; }
+.barcode-panel .live-upload { position: relative; overflow: hidden; }
+.barcode-panel .live-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.barcode-panel .barcode-code-form { display: grid; gap: 10px; margin-block-end: 8px; }
+.barcode-panel .barcode-code-form > label { font-size: 16px; font-weight: 600; }
+.barcode-panel .barcode-code-form > div { display: grid; gap: 8px; }
+.barcode-panel .barcode-error { margin-block-start: 16px; }
+.barcode-panel .barcode-error-wrap > .button { min-height: 48px; margin-block-start: 8px; }
+.barcode-panel .barcode-found { margin-block-start: 12px; }
+.barcode-panel :focus-visible, .spec-scan :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .barcode-panel .live-actions > .button:first-child { position: sticky; inset-block-end: calc(72px + var(--safe-bottom)); z-index: 20; min-height: 52px; background: var(--brand); color: var(--on-ink); }
+  .spec-scan .ui-action-bar { position: sticky; inset-block-end: calc(72px + var(--safe-bottom)); }
+}
+@media (min-width: 760px) { .barcode-panel .barcode-code-form > div { grid-template-columns: minmax(0, 1fr) auto; } }
+@media (prefers-reduced-motion: reduce) { .spec-scan *, .barcode-panel * { scroll-behavior: auto; transition-duration: .01ms !important; animation-duration: .01ms !important; } }

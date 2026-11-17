@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { CheckCircle2, Factory, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { CheckCheck, CheckCircle2, Factory, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { Field, errorMessage } from './forms';
+import { ActionBar, KeyFacts, NumberWithUnit } from './ui';
 import { useLanguage } from './i18n';
 import { ReasonField, portal } from './PortalCommon';
 import { gramsFromKg } from './inventory-client';
@@ -22,7 +23,7 @@ export default function ToProduction({ lotId, batch, productName, rawGrams, mode
   const id = useRef(crypto.randomUUID());
   const finishing = mode === 'finish';
   const [kg, setKg] = useState(kgText(rawGrams)), [note, setNote] = useState(''), [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [reviewing, setReviewing] = useState(false);
   useEffect(() => { const d = dialog.current; if (d && !d.open) d.showModal(); }, []);
   // Any change to the values makes a new request id, so an edited request is never mistaken for the old one.
   const edit = (change: () => void) => { id.current = crypto.randomUUID(); change(); };
@@ -56,19 +57,17 @@ export default function ToProduction({ lotId, batch, productName, rawGrams, mode
         {finishing && <p>{t('Move finished yarn out of work in progress.', 'تیار دھاگہ زیرِ کار اسٹاک سے نکال کر تیار اسٹاک میں ڈالیں۔')}</p>}
         <p>{productName} · {t('Batch', 'بیچ')} {batch}</p>
         <p>{finishing ? t('Work in progress available:', 'دستیاب زیرِ کار اسٹاک:') : t('Raw stock available:', 'دستیاب خام اسٹاک:')} <strong>{kgText(rawGrams)} kg</strong></p></header>
-      <fieldset disabled={busy} className="inspect-arrival-fields">
-        <Field>{finishing ? t('Finished yarn (kg)', 'تیار دھاگہ (کلوگرام)') : t('Raw stock to send (kg)', 'بھیجا جانے والا خام اسٹاک (کلوگرام)')}<input type="number" inputMode="decimal" dir="ltr" min="0.001" max={kgText(rawGrams)} step="0.001" value={kg} onChange={e => edit(() => setKg(e.target.value))} required /></Field>
+      <fieldset disabled={busy} className="inspect-arrival-fields" hidden={reviewing}>
+        <NumberWithUnit label={finishing ? t('Finished yarn', 'تیار دھاگہ') : t('Raw stock to send', 'بھیجا جانے والا خام اسٹاک')} unit="kg" value={kg} onChange={value => edit(() => setKg(value))} min={0.001} max={rawGrams / 1000} step={0.001} required />
         <div className="live-segments" role="group" aria-label={t('Quick amounts', 'فوری مقدار')}>
           {shares.map(([label, share]) => <button key={label} type="button" aria-pressed={kg === quick(share)} onClick={() => edit(() => setKg(quick(share)))}>{label}</button>)}
         </div>
         <Field>{t('Note (optional)', 'نوٹ (اختیاری)')}<textarea rows={2} maxLength={1000} value={note} onChange={e => edit(() => setNote(e.target.value))} /></Field>
         {isAdmin && <ReasonField label={t('Reason for this admin action', 'ایڈمن کارروائی کی وجہ')} value={reason} onChange={value => edit(() => setReason(value))} />}
       </fieldset>
+      {reviewing && <section className="live-review" aria-label={t('Entry summary', 'اندراج کا خلاصہ')}><h3>{t('Check before sending', 'بھیجنے سے پہلے جانچیں')}</h3><KeyFacts items={[{label:t('Material and batch', 'میٹیریل اور بیچ'),value:`${productName} · ${batch}`},{label:t('Amount', 'مقدار'),value:`${kg} kg`},{label:t('Note', 'نوٹ'),value:note || t('None', 'کوئی نہیں')}]}/></section>}
       {error && <p className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{error}</p>}
-      <div className="live-actions">
-        <button className="button primary" disabled={busy}>{busy ? <LoaderCircle className="live-spinning" size={20} aria-hidden="true" /> : finishing ? <CheckCircle2 size={20} aria-hidden="true" /> : <Factory size={20} aria-hidden="true" />}{busy ? t('Sending…', 'بھیجا جا رہا ہے…') : finishing ? t('Mark finished', 'تیار نشان زد کریں') : t('Send to production', 'پیداوار کے لیے بھیجیں')}</button>
-        <button type="button" className="button" disabled={busy} onClick={() => dialog.current?.close()}>{t('Cancel', 'منسوخ کریں')}</button>
-      </div>
+      <ActionBar primary={{label:busy?t('Sending…','بھیجا جا رہا ہے…'):reviewing?finishing?t('Mark finished','تیار نشان زد کریں'):t('Send to production','پیداوار کے لیے بھیجیں'):t('Review amount','مقدار کا جائزہ لیں'),icon:busy?<LoaderCircle className="live-spinning" size={20} aria-hidden="true"/>:reviewing?finishing?<CheckCircle2 size={20} aria-hidden="true"/>:<Factory size={20} aria-hidden="true"/>:<CheckCheck size={20} aria-hidden="true"/>,onClick:reviewing?()=>{}:()=>{setReviewing(true);setError('');},type:reviewing?'submit':'button',disabled:busy}} secondary={reviewing?{label:t('Edit amount','مقدار بدلیں'),onClick:()=>setReviewing(false),disabled:busy}:{label:t('Cancel','منسوخ کریں'),onClick:()=>dialog.current?.close(),disabled:busy}} />
     </form>
   </dialog>;
 }

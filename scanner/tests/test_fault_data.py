@@ -1,4 +1,5 @@
 """Fault dataset index: MVTec-layout and AITEX sets, fixed calibration split, CSV round-trip."""
+
 from pathlib import Path
 
 from training.fault.data import Sample, index_aitex, index_mvtec_layout, load_index, save_index

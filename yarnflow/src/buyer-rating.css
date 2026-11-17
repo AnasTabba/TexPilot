@@ -1,5 +1,45 @@
-.buyer-rating-history { list-style:none; margin:8px 0 0; padding:0; display:grid; gap:0; }
-.buyer-rating-history li { padding:12px 0; border-top:1px solid var(--line); }
-.buyer-rating-history p { margin:6px 0 0; }
-.buyer-rating-scores { display:flex; gap:14px; flex-wrap:wrap; font-size:14px; margin-top:4px; }
+.buyer-rating-history { list-style:none; margin:16px 0 0; padding:0; display:grid; gap:0; }
+.buyer-rating-history li { padding:16px 0; border-top:1px solid var(--line); }
+.buyer-rating-history li > .button { min-height:48px; margin-top:12px; }
+.buyer-rating-history li > div:first-child { font-size:14px; line-height:1.5; }
+.buyer-rating-history p { margin:8px 0 0; line-height:1.5; }
+.buyer-rating-scores { display:flex; gap:8px 16px; flex-wrap:wrap; font-size:14px; line-height:1.5; margin-top:8px; }
 .buyer-rating-scores strong { font-weight:600; }
+.erp-rating-row .erp-star-button { min-width:48px; min-height:48px; }
+.buyer-rating-word { min-height:24px; margin:2px 0 0; color:var(--ink-2); font-size:16px; font-weight:600; }
+.yf-buyer-tiles { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:20px 0 24px; }
+.yf-buyer-tiles button { display:flex; min-width:0; min-height:84px; align-items:center; gap:12px; padding:16px; border:1px solid var(--line); border-radius:var(--r-row); background:var(--panel); color:var(--brand); text-align:start; font-family:inherit; font-size:16px; font-weight:600; line-height:1.4; cursor:pointer; }
+.yf-buyer-tiles button svg { width:24px; height:24px; flex:none; }
+.yf-buyer-tiles button span { flex:1; }
+.yf-buyer-tiles button b { color:var(--ink-2); }
+.yf-buyer-list { display:grid; gap:8px; }
+.yf-buyer-detail { margin-top:24px; }
+.yf-buyer-detail .yf-detail-stack { display:grid; gap:16px; padding:16px; border:1px solid var(--line); border-radius:var(--r-row); background:var(--panel); }
+.yf-registration { max-width:620px; padding:20px; border:1px solid var(--line); border-radius:var(--r-row); background:var(--panel); }
+.yf-registration > h2 { margin:0 0 16px; font-size:20px; }
+.yf-registration .ui-steps { margin:0 0 20px; }
+.yf-registration-fields { display:grid; gap:16px; }
+.yf-registration-back { min-height:48px; border:0; background:transparent; color:var(--brand); font-family:inherit; font-size:16px; font-weight:600; cursor:pointer; }
+.yf-registration .ui-action-bar { margin-top:20px; }
+.yf-registration .ui-action-bar .ui-action { min-height:52px; }
+.yf-buyer .live-page-heading { align-items:flex-start; gap:16px; }
+.yf-buyer .live-page-heading h1 { line-height:1.35; }
+.yf-buyer .erp-status { align-items:center; gap:6px; min-height:30px; line-height:1.4; }
+.yf-buyer .erp-status svg { width:16px; height:16px; flex:none; }
+.yf-buyer .erp-status.is-ok { background:var(--ok-bg); color:var(--ok); }
+.yf-buyer .erp-status.is-bad { background:var(--bad-bg); color:var(--bad); }
+.yf-buyer .yf-buyer-optional { margin-top:12px; }
+.yf-buyer .yf-buyer-optional summary { min-height:48px; display:flex; align-items:center; cursor:pointer; font-weight:600; }
+.yf-buyer .yf-buyer-optional[open] summary { margin-bottom:12px; }
+.yf-buyer .yf-buyer-team-link { display:flex; align-items:center; justify-content:center; min-height:48px; margin-top:20px; }
+@media (max-width:640px) {
+  .yf-buyer-tiles { grid-template-columns:1fr; gap:8px; }
+  .yf-buyer-tiles button { min-height:64px; }
+  .yf-registration { padding:16px; }
+  .yf-buyer .live-page-heading { display:block; }
+  .yf-buyer .live-page-heading > .button { margin-top:12px; }
+  .yf-buyer .erp-portal-main { padding-bottom:32px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yf-buyer *, .buyer-rating-history * { scroll-behavior:auto !important; }
+}

@@ -16,7 +16,7 @@ const undoPath = { accepted: '/erp/qc/reports/undo', returned: '/erp/qc/reports/
 
 /** The supervisor's work: accept or return each inspection report, confirm, dismiss or escalate each rejection. Every action is one server decision. */
 export default function Review() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [reports, setReports] = useState<Submission[] | null>(null), [rejections, setRejections] = useState<Submission[]>([]), [currency, setCurrency] = useState('PKR');
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [form, setForm] = useState<Decision>(null), [busy, setBusy] = useState(false);
   const [reason, setReason] = useState(''), [outcome, setOutcome] = useState('re_inspect');
@@ -28,22 +28,22 @@ export default function Review() {
       const [acc, ret, dis] = await Promise.all([api<{ reports: Submission[] }>('/erp/qc/reports?status=accepted'), api<{ reports: Submission[] }>('/erp/qc/reports?status=returned'), api<{ rejections: Submission[] }>('/erp/qc/rejections?status=dismissed')]);
       setReports(a.reports); setRejections(b.rejections); setEscalated(c.rejections); setCurrency(b.currency); setError('');
       setDecided([...acc.reports.map(item => ({ kind: 'accepted' as const, item })), ...ret.reports.map(item => ({ kind: 'returned' as const, item })), ...dis.rejections.map(item => ({ kind: 'dismissed' as const, item }))]);
-    } catch (e) { setError(errorMessage(e)); }
-  }, []);
+    } catch (e) { setError(errorMessage(e, language)); }
+  }, [language]);
   useEffect(() => { void load(); }, [load]);
   const decide = async (path: string, body: Record<string, string>, message: string) => {
     setBusy(true); setError('');
-    try { await api(path, body); setNotice(message); setForm(null); setReason(''); await load(); } catch (e) { setError(errorMessage(e)); await load(); } finally { setBusy(false); }
+    try { await api(path, body); setNotice(message); setForm(null); setReason(''); await load(); } catch (e) { await load(); setError(errorMessage(e, language)); } finally { setBusy(false); }
   };
   const evidence = (i: Submission) => <><p>{i.supplier_name} · {t('submitted', 'جمع')} {factoryTime(i.submitted_at)}</p>{i.note && <p className="erp-multiline">{i.note}</p>}
     {i.photos.length > 0 && <div className="live-actions">{i.photos.map(p => <a key={p.id} href={`/api/erp/qc/photos/${p.id}`} target="_blank" rel="noreferrer"><img src={`/api/erp/qc/photos/${p.id}`} alt={t(`Photo taken ${factoryTime(p.taken_at)}`, `تصویر ${factoryTime(p.taken_at)}`)} width={96} height={96} loading="lazy" /></a>)}</div>}
-    {i.issues.map(x => <p key={x.id} className="erp-shipment"><strong>{x.type} · {x.severity}</strong> <span className="erp-multiline">{x.description}</span></p>)}</>;
+    {i.issues.map(x => <p key={x.id} className="erp-shipment"><strong>{x.type} · {t(x.severity, ({ minor: 'معمولی', major: 'بڑا', critical: 'سنگین' } as Record<string, string>)[x.severity])}</strong> <span className="erp-multiline">{x.description}</span></p>)}</>;
   const reasonForm = (i: Submission, kind: 'report-reject' | 'dismiss') => <AsyncForm title={kind === 'dismiss' ? t('Dismiss the rejection', 'مسترد کرنا خارج کریں') : t('Return the report', 'رپورٹ واپس کریں')} detail={i.lot_reference} submit={t('Save decision', 'فیصلہ محفوظ کریں')} onCancel={() => setForm(null)}
     onSubmit={() => decide(kind === 'dismiss' ? '/erp/qc/rejections/decide' : '/erp/qc/reports/decide', kind === 'dismiss' ? { inspectionId: i.id, decision: 'dismiss', dismissOutcome: outcome, reason } : { inspectionId: i.id, decision: 'reject', reason }, kind === 'dismiss' ? t('Rejection dismissed.', 'مسترد کرنا خارج ہو گیا۔') : t('Report returned for re-inspection.', 'رپورٹ دوبارہ معائنے کے لیے واپس کر دی گئی۔'))}>
     {kind === 'dismiss' && <Field>{t('What happens to the rejected quantity', 'مسترد مقدار کا کیا ہوگا')}<select value={outcome} onChange={e => setOutcome(e.target.value)}><option value="re_inspect">{t('Inspect it again', 'دوبارہ معائنہ')}</option><option value="accept_with_deviation">{t('Accept it with a deviation', 'انحراف کے ساتھ قبول کریں')}</option></select></Field>}
     <Field>{t('Reason', 'وجہ')}<textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} minLength={5} maxLength={1000} required /></Field>
   </AsyncForm>;
-  return <section className="live-panel"><div className="yf-head"><div><h2>{t('Inspection review', 'معائنے کا جائزہ')}</h2><p>{t('Accept the quantity the inspector approved, and decide what happens to every rejected quantity.', 'انسپکٹر کی قبول کردہ مقدار منظور کریں اور ہر مسترد مقدار کا فیصلہ کریں۔')}</p></div>
+  return <section className="live-panel yf-review"><div className="yf-head"><div><h2>{t('Inspection review', 'معائنے کا جائزہ')}</h2><p>{t('Accept the quantity the inspector approved, and decide what happens to every rejected quantity.', 'انسپکٹر کی قبول کردہ مقدار منظور کریں اور ہر مسترد مقدار کا فیصلہ کریں۔')}</p></div>
     <button className="button" onClick={() => void load()}><RefreshCw size={18} aria-hidden="true" />{t('Refresh', 'تازہ کریں')}</button></div>
     {error && <p className="live-error" role="alert"><TriangleAlert size={18} aria-hidden="true" />{t(error)}</p>}{notice && <p className="live-success" role="status">{notice}</p>}{!reports && !error && <p role="status">{t('Loading…', 'لوڈ ہو رہا ہے…')}</p>}
     <h3 className="live-subheading">{t('Reports to accept', 'قبولیت کی رپورٹس')}</h3>

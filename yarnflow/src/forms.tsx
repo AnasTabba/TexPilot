@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useId, Children, cloneElement, isValidElement, type ReactElement, type FormEvent, type ReactNode } from 'react';
 import { Check, CheckCheck, LoaderCircle, TriangleAlert, X } from 'lucide-react';
 import { translate, useLanguage } from './i18n';
+import { ActionBar, KeyFacts } from './ui';
 
 export const errorMessage = (error: unknown, language: 'en' | 'ur' = 'en') => {
   if (error instanceof Error) return translate(language, error.message,
@@ -49,13 +50,21 @@ export function AsyncForm({ title, detail, children, submit, onSubmit, onCancel,
     setBusy(true); setError(null);
     try { await onSubmit(); } catch (error) { setError({ cause: error }); } finally { setBusy(false); }
   }
+  const facts = review && isValidElement(review) && review.type === 'dl' ? Children.toArray((review.props as { children?: ReactNode }).children).flatMap(row => {
+    if (!isValidElement(row)) return [];
+    const cells = Children.toArray((row.props as { children?: ReactNode }).children);
+    const label = cells.find(cell => isValidElement(cell) && cell.type === 'dt');
+    const value = cells.find(cell => isValidElement(cell) && cell.type === 'dd');
+    if (!label || !value || !isValidElement(label) || !isValidElement(value)) return [];
+    return [{ label: Children.toArray((label.props as { children?: ReactNode }).children).join(''), value: (value.props as { children?: ReactNode }).children }];
+  }) : [];
   return <form className="live-panel live-form" ref={form} onSubmit={save} aria-label={t(title)}>
     <div className="live-panel-heading"><div><h2 ref={heading} tabIndex={-1}>{reviewing ? t('Review before saving', 'محفوظ کرنے سے پہلے جائزہ لیں') : t(title)}</h2>{detail && !reviewing && <p>{t(detail)}</p>}</div>{onCancel && <button className="live-icon-button" type="button" onClick={onCancel} disabled={busy} aria-label={t('Close form', 'فارم بند کریں')}><X aria-hidden="true" /></button>}</div>
     {review && <ol className="yf-steps yf-formsteps" aria-label={t('Entry steps', 'اندراج کے مراحل')}><li className={reviewing ? 'done' : 'current'} aria-current={reviewing ? undefined : 'step'}><span>{reviewing ? <Check size={14} aria-hidden="true" /> : 1}</span>{t('Details', 'تفصیلات')}</li><li className={reviewing ? 'current' : ''} aria-current={reviewing ? 'step' : undefined}><span>2</span>{t('Review and save', 'جائزہ لیں اور محفوظ کریں')}</li></ol>}
     <fieldset disabled={busy} hidden={reviewing}>{children}</fieldset>
-    {reviewing && <section className="live-review" aria-label={t('Entry summary', 'اندراج کا خلاصہ')}><h3>{t(title)}</h3>{review}<p>{t('Check these register values. Stock changes only after you save.', 'رجسٹر کی یہ تفصیلات جانچ لیں۔ اسٹاک صرف محفوظ کرنے کے بعد بدلے گا۔')}</p></section>}
+    {reviewing && <section className="live-review" aria-label={t('Entry summary', 'اندراج کا خلاصہ')}><h3>{t(title)}</h3>{facts.length ? <KeyFacts items={facts} /> : review}<p>{t('Check these register values. Stock changes only after you save.', 'رجسٹر کی یہ تفصیلات جانچ لیں۔ اسٹاک صرف محفوظ کرنے کے بعد بدلے گا۔')}</p></section>}
     {error && <p className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{errorMessage(error.cause, language)}</p>}
-    <div className="live-actions"><button className="button primary" disabled={busy}>{busy ? <LoaderCircle className="live-spinning" size={20} aria-hidden="true" /> : <CheckCheck size={20} aria-hidden="true" />}{busy ? t('Saving…', 'محفوظ ہو رہا ہے…') : review && !reviewing ? t('Review entry', 'اندراج کا جائزہ لیں') : t(submit)}</button>{reviewing && <button className="button" type="button" disabled={busy} onClick={() => { setReviewing(false); setError(null); }}>{t('Edit entry', 'اندراج بدلیں')}</button>}{onCancel && <button className="button" type="button" disabled={busy} onClick={onCancel}>{t('Cancel', 'منسوخ کریں')}</button>}</div>
+    <ActionBar primary={{ label: busy ? t('Saving…', 'محفوظ ہو رہا ہے…') : review && !reviewing ? t('Review entry', 'اندراج کا جائزہ لیں') : t(submit), icon: busy ? <LoaderCircle className="live-spinning" size={20} aria-hidden="true" /> : <CheckCheck size={20} aria-hidden="true" />, onClick: () => {}, type: 'submit', disabled: busy }} secondary={reviewing ? { label: t('Edit entry', 'اندراج بدلیں'), onClick: () => { setReviewing(false); setError(null); }, disabled: busy } : onCancel ? { label: t('Cancel', 'منسوخ کریں'), onClick: onCancel, disabled: busy } : undefined} />
     <p className="live-form-note">{note != null ? t(note) : review ? t('Review the entry before saving it.', 'محفوظ کرنے سے پہلے اندراج کا جائزہ لیں۔') : t('Saved for the whole team when confirmed.', 'تصدیق کے بعد پوری ٹیم کے لیے محفوظ ہوگا۔')}</p>
   </form>;
 }

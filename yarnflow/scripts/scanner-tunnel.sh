@@ -4,7 +4,9 @@
 # scanner is up and keep the window open while scanning; Ctrl-C closes the tunnel.
 set -euo pipefail
 cd "${0:A:h}/.."
-curl -sf -m 5 http://127.0.0.1:8000/api/v1/model >/dev/null || { echo "Start the TexPilot scanner on port 8000 first."; exit 1; }
+# A stub scanner also answers 200, so require the body to report a loaded model.
+ready() { curl -fs -m 15 "$1/api/v1/model" 2>/dev/null | grep -Eq '"ready"[[:space:]]*:[[:space:]]*true'; }
+ready http://127.0.0.1:8000 || { echo "Start the TexPilot scanner on port 8000 with a trained model loaded (it must report ready: true)."; exit 1; }
 log=$(mktemp -t yarnflow-tunnel)
 cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8000 >"$log" 2>&1 &
 tunnel=$!
@@ -13,7 +15,7 @@ url=""
 # A new tunnel answers only once it has registered and its address resolves: wait for both.
 for _ in {1..90}; do
   url=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$log" | head -1 || true)
-  [[ -n $url ]] && grep -q "Registered tunnel connection" "$log" && curl -sf -m 10 "$url/api/v1/model" >/dev/null && break
+  [[ -n $url ]] && grep -q "Registered tunnel connection" "$log" && ready "$url" && break
   url=""
   sleep 2
 done
@@ -21,4 +23,5 @@ done
 echo "Scanner tunnel: $url"
 npx wrangler secret put TEXPILOT_API_URL < <(print -rn -- "$url")
 echo "The published Yarnflow now scans through this Mac. Leave this window open."
-wait $tunnel
+wait $tunnel || true
+echo "Scanner tunnel stopped. The published site cannot scan until you run this again."

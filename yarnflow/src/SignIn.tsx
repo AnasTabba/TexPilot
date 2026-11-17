@@ -1,10 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowLeft, ChevronRight, Delete, LockKeyhole, LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react';
-import { Cone } from './Cone';
-import SignInScene from './iso/SignInScene';
 import { errorMessage } from './forms';
 import { InventoryError, inventoryRequest as api, roleLabel, type Role } from './inventory-client';
-import { LanguageSelect, useLanguage } from './i18n';
+import { useLanguage } from './i18n';
 import './auth.css';
 
 export function Avatar({ name, large = false }: { name: string; large?: boolean }) {
@@ -14,8 +12,8 @@ const pinInput = { type: 'password', inputMode: 'numeric', pattern: '[0-9]{4}', 
 type Step = { at: 'people' } | { at: 'pin'; name: string };
 
 /** Sign-in: choose your name, enter your 4-digit PIN. Admins create accounts. */
-export default function SignIn({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
-  const { t } = useLanguage();
+export default function SignIn({ onSignedIn, sessionEnded = false }: { onSignedIn: () => Promise<void>; sessionEnded?: boolean }) {
+  const { t, language, setLanguage } = useLanguage();
   const [list, setList] = useState<{ workspace: string; people: { name: string; role: Role }[] } | null>(null);
   const [loadError, setLoadError] = useState(''); const [retry, setRetry] = useState(0);
   const [step, setStep] = useState<Step>({ at: 'people' });
@@ -26,24 +24,20 @@ export default function SignIn({ onSignedIn }: { onSignedIn: () => Promise<void>
   const back = () => setStep({ at: 'people' });
   return <main className="yf-signin">
     <header className="yf-signin-rail">
-      <span className="live-brand"><Cone hue="#2f6fd6" size={30} />yarnflow</span>
-      <LanguageSelect />
-      <div className="yf-signin-cones" aria-hidden="true">{['#2f6fd6', '#c2417f', '#0f8a8a', '#4a4540', '#a4502a', '#5b6b7a'].map(hue => <Cone key={hue} hue={hue} size={84} />)}</div>
-      <p><strong>{list?.workspace}</strong>{t('Stock, scans and QC for the whole factory, shared by everyone who signs in.', 'پوری فیکٹری کا اسٹاک، اسکین اور کوالٹی چیک، سائن اِن کرنے والی پوری ٹیم کے لیے۔')}</p>
+      <span className="live-brand">yarnflow</span>
+      <div className="yf-signin-languages" role="group" aria-label={t('Language', 'زبان')} dir="ltr">
+        <button type="button" aria-pressed={language === 'en'} onClick={() => setLanguage('en')}>English</button>
+        <button type="button" aria-pressed={language === 'ur'} onClick={() => setLanguage('ur')}>اردو</button>
+      </div>
     </header>
     <section className="yf-signin-sheet">
-      <SignInScene />
       {step.at === 'people' && <div className="yf-signin-step" key="people">
-        <h1>{t('Who’s signing in?', 'کون سائن اِن کر رہا ہے؟')}</h1>
-        <p>{t('Choose your name, then enter your PIN.', 'اپنا نام چنیں، پھر پن درج کریں۔')}</p>
+        <h1>{t('Who are you?', 'آپ کون ہیں؟')}</h1>
+        <p className="yf-signin-welcome">{t('Choose your name to get started.', 'شروع کرنے کے لیے اپنا نام منتخب کریں۔')}</p>
+        {sessionEnded && <p className="live-warning" role="status">{t('Your session ended. Sign in again to continue.', 'آپ کا سیشن ختم ہو گیا۔ جاری رکھنے کے لیے دوبارہ سائن اِن کریں۔')}</p>}
         {loadError && <p className="live-error" role="alert"><TriangleAlert size={20} aria-hidden="true" />{t(loadError)}<button className="live-text-button" onClick={() => setRetry(n => n + 1)}><RefreshCw size={16} aria-hidden="true" />{t('Retry', 'دوبارہ کوشش کریں')}</button></p>}
         {!list && !loadError && <p role="status" className="live-muted">{t('Loading names…', 'نام لوڈ ہو رہے ہیں…')}</p>}
         {list && <ul className="yf-people">{list.people.map(({ name, role }) => <li key={name}><button className="yf-person" onClick={() => setStep({ at: 'pin', name })}><Avatar name={name} /><span><strong>{name}</strong><small>{t(...roleLabel[role])}</small></span><ChevronRight size={20} aria-hidden="true" /></button></li>)}</ul>}
-        <div className="yf-portal-entries">
-          <p className="yf-portal-label">{t('Supplier or buyer?', 'سپلائر یا خریدار؟')}</p>
-          <a className="yf-supplier-entry" href="#/supplier">{t('Supplier sign in or register', 'سپلائر سائن اِن یا رجسٹریشن')}<ChevronRight size={18} aria-hidden="true" /></a>
-          <a className="yf-supplier-entry" href="#/buyer">{t('Buyer sign in or register', 'خریدار سائن اِن یا رجسٹریشن')}<ChevronRight size={18} aria-hidden="true" /></a>
-        </div>
       </div>}
       {step.at === 'pin' && <PinPad key={step.name} name={step.name} onBack={back} onSignedIn={onSignedIn} />}
     </section>
@@ -68,12 +62,16 @@ function PinPad({ name, onBack, onSignedIn }: { name: string; onBack: () => void
     try { await api('/auth/login', { name, pin: digits }); await onSignedIn(); }
     catch (error) { setError(errorMessage(error)); setLocked(error instanceof InventoryError && error.status === 429); setPin(''); setShake(true); setBusy(false); }
   }
+  // The server states the minutes left in English; keep the number and translate the sentence around it.
+  const lockMessage = (text: string) => {
+    const minutes = text.match(/(\d+) min/)?.[1];
+    return minutes ? t(`Too many wrong PINs. Try again in ${minutes} min.`, `بہت زیادہ غلط پن درج ہوئے۔ ${minutes} منٹ بعد دوبارہ کوشش کریں۔`) : t(text);
+  };
   const state = busy ? 'busy' : locked ? 'locked' : error ? 'error' : undefined;
   return <form className="yf-signin-step yf-pin" data-state={state} onSubmit={event => { event.preventDefault(); void type(pin); }}>
     <button type="button" className="live-text-button yf-signin-back" onClick={onBack}><ArrowLeft size={18} aria-hidden="true" />{t(`Not ${name}?`, `آپ ${name} نہیں ہیں؟`)}</button>
-    <Avatar name={name} large />
-    <h1>{t(`Hi, ${name}`, `السلام علیکم، ${name}`)}</h1>
-    <p className="yf-pin-next">{t('Next: enter your 4-digit PIN. Signing in starts when you type the fourth digit.', 'اگلا قدم: اپنا چار ہندسوں کا پن درج کریں۔ چوتھا ہندسہ لکھتے ہی سائن اِن شروع ہو جائے گا۔')}</p>
+    <div className="yf-pin-person"><Avatar name={name} large /><h1>{name}</h1></div>
+    <p className="yf-pin-next">{t('Enter your 4-digit PIN.', 'اپنا چار ہندسوں کا پن درج کریں۔')}</p>
     <label className="yf-pin-dots" data-shake={shake || undefined} onAnimationEnd={() => setShake(false)}>
       <span className="control-label">{t('4-digit PIN', 'چار ہندسوں کا پن')}</span>
       <input ref={input} className="yf-pin-input" {...pinInput} required={false} value={pin} onChange={event => void type(event.target.value)} disabled={busy || locked} aria-invalid={!!error} aria-describedby={error ? errorId : undefined} />
@@ -81,7 +79,7 @@ function PinPad({ name, onBack, onSignedIn }: { name: string; onBack: () => void
     </label>
     <p className="yf-pin-status" data-state={state} role={error ? 'alert' : 'status'} id={errorId}>
       {busy ? <><LoaderCircle className="live-spinning" size={18} aria-hidden="true" />{t('Signing in…', 'سائن اِن ہو رہا ہے…')}</>
-        : locked ? <><LockKeyhole size={18} aria-hidden="true" />{t(error)}<button type="button" className="live-text-button" onClick={() => { setLocked(false); setError(''); }}><RefreshCw size={16} aria-hidden="true" />{t('Try again', 'دوبارہ کوشش کریں')}</button></>
+        : locked ? <><LockKeyhole size={18} aria-hidden="true" />{lockMessage(error)}<button type="button" className="live-text-button" onClick={() => { setLocked(false); setError(''); }}><RefreshCw size={16} aria-hidden="true" />{t('Try again', 'دوبارہ کوشش کریں')}</button></>
         : error && <><TriangleAlert size={18} aria-hidden="true" />{t(error)}</>}
     </p>
     <div className="yf-keypad" dir="ltr">{['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'delete'].map(key => key === ''

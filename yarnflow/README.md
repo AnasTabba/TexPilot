@@ -1,6 +1,8 @@
 # Yarnflow
 
-A stock and quality workspace for yarn inventory, with a visual dashboard. Inventory is stored in the browser on each device. Use Settings to download a backup and restore it when moving devices.
+The factory app for yarn and fabric stock, production, quality, sales and dispatch. Everyone signs
+in with a name and a 4-digit PIN; data lives in the shared Cloudflare D1 database `yarnflow-db`.
+English and Urdu, phone and desktop.
 
 ## Run locally
 
@@ -9,23 +11,37 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. The dashboard opens directly.
+Open the local URL printed by Vite and sign in.
 
-## Inventory workflows
+## What is in it
 
-Create materials and batches, receive stock, transfer between stages, approve or hold batches after inspection, dispatch approved stock, and reverse movements with a reason. The dashboard, stock register, reports, and activity history update from those entries. Stock balances are checked before dispatch or reversal.
+- **Stock:** materials, batches, receiving, stage transfers, holds, dispatch and reversals with a
+  reason. Balances are checked before dispatch or reversal.
+- **Quality:** incoming-fabric QC wizard (a supervisor checks every result), batch inspections.
+- **Buying and selling:** price requests to suppliers, purchase orders, sales orders, invoices,
+  buyer and supplier portals, shipment tracking.
+- **Scan:** one photo of a garment or fabric, optionally its care label. Shows the garment, fabric,
+  composition (from the label, or the photo model's group when it is confident; otherwise "Can't
+  tell from the photo. Scan the care label."), finish, and the fabric fault check with its heat map.
+- **Team:** roles, permissions, chat, notifications.
 
-Use **Settings → Download backup** regularly. **Restore backup** replaces the records in this browser. **Clear inventory** removes all inventory records from this browser after confirmation.
+Design rules are in [`DESIGN.md`](DESIGN.md) ("Denim": white cards, one deep indigo, status colour
+only with an icon and a word). Product scope is in [`PRODUCT.md`](PRODUCT.md).
 
 ## TexPilot scanner
 
-When TexPilot runs on the same laptop at `http://127.0.0.1:8000`, `npm run dev` forwards scanner requests to it automatically. Open **Material scanner → Fabric inspection** and check that the model is connected. For a different local port, start the app with `TEXPILOT_API_URL=http://127.0.0.1:PORT npm run dev`. Scan results use the generated outcome images included in this repository.
+With the scanner running at `http://127.0.0.1:8000`, `npm run dev` forwards scanner requests to it.
+Change the target with `TEXPILOT_API_URL=http://127.0.0.1:PORT`. The published app reaches the
+scanner through the Worker secret `TEXPILOT_API_URL` (see `../scanner/deployment/README.md`).
+Endpoints: `GET /api/v1/model`, `POST /api/v1/scan`, `POST /api/v1/spec` (yarn count).
 
-The scanner uses `GET /api/v1/model` and `POST /api/v1/scan`; the yarn-spec scan uses `POST /api/v1/spec`. A published HTTPS app needs an HTTPS scanner URL entered under **Model connection**. Barcode lookup and manual inspection work without model inference.
-
-## Verify
+## Verify and deploy
 
 ```sh
-npm test
+npm test               # unit tests
+npm run test:e2e       # Playwright, builds against dist/: run npm run build first
 npm run build
+npm run deploy:cloudflare
 ```
+
+Never write test entries to the live ledger.

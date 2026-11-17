@@ -58,7 +58,7 @@ Copy `docs/phone_ground_truth_template.csv` and add one row per garment:
 | `id` | e.g. `001_AT` |
 | `garment_type` | **one** of the 14 below, spelled exactly |
 | `label_text` | the composition **exactly as printed**, every language. Separate lines with ` / `. e.g. `SHELL: 80% POLYAMIDE 20% ELASTANE / LINING: 100% POLYESTER` |
-| `fabric_structure` | *optional.* One of the 27 fabric classes below, **only if you're sure** (e.g. it's obviously denim). Otherwise leave it empty; an empty cell is better than a guess |
+| `fabric_structure` | *optional.* One of the 24 fabric classes below, **only if you're sure** (e.g. it's obviously denim). Otherwise leave it empty; an empty cell is better than a guess |
 | `photographer` | your initials |
 | `phone_model` | e.g. `iPhone 13`, `Galaxy A54` |
 | `notes` | anything odd: two labels, faded text, worn by a person, a lining shown |
@@ -67,9 +67,9 @@ Copy `docs/phone_ground_truth_template.csv` and add one row per garment:
 `jacket`, `vest`, `pants`, `shorts`, `skirt`, `coat`, `dress`, `jumpsuit`, `cape`, `scarf`
 (jeans are `pants`; a hoodie is `top_tshirt_sweatshirt`; a dupatta or shawl is `scarf`).
 
-**Fabric classes (27, optional column):** canvas, chambray, chenille, chiffon, corduroy,
-crepe, denim, faux_fur, faux_leather, flannel, fleece, gingham, jersey, knit, lace, lawn,
-neoprene, organza, plush, satin, serge, taffeta, tulle, tweed, twill, velvet, vinyl.
+**Fabric classes (24, optional column):** chambray, chenille, chiffon, corduroy, crepe,
+denim, faux_fur, faux_leather, flannel, fleece, gingham, knit, lace, lawn, neoprene,
+organza, satin, serge, taffeta, tulle, tweed, twill, velvet, vinyl.
 
 ## Checklist before you upload
 

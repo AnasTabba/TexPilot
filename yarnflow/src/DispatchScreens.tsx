@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowRight, RefreshCw, TriangleAlert, Truck } from 'lucide-react';
+import { ArrowRight, RefreshCw, TriangleAlert } from 'lucide-react';
 import { AsyncForm, Field } from './forms';
 import { useLanguage } from './i18n';
 import { inventoryRequest, type Member, type WorkspaceState } from './inventory-client';
@@ -13,6 +13,63 @@ import './sales-ui.css';
 type Order = { id: string; reference: string; status: string; buyer_name: string; product_id: string | null; product_name: string | null; quantity_milli: number; remaining_milli: number };
 type Dispatch = { id: string; sales_order_id: string; lot_id: string; status: string; order_reference: string; buyer_name: string; product_name: string; lot_batch: string; quantity_milli: number; grams: number; vehicle: string; transporter: string; delivery_proof: string; hold_reason: string | null; approval_request_id: string | null; hold_notice_id: string | null; remaining_milli: number; created_at: number; dispatched_at: number | null; delivered_at: number | null };
 type Props = { member: Member; section: string; tab: string; id: string; navigate: (to: string) => void };
+
+/** One dispatch: its steps and the actions for its status. Mounted with `key={row.id}`, so its drafts start empty for each dispatch. */
+function DispatchDetail({ row, member, call }: { row: Dispatch; member: Member; call: (path: string, data: unknown, done: string, next?: string) => Promise<void> }) {
+  const { t } = useLanguage();
+  const [dispatchVehicle, setDispatchVehicle] = useState(''), [dispatchTransporter, setDispatchTransporter] = useState('');
+  const [proof, setProof] = useState(''), [holdReason, setHoldReason] = useState('');
+  const [issueDescription, setIssueDescription] = useState(''), [issueGrams, setIssueGrams] = useState(''), [issueKind, setIssueKind] = useState<'shortage' | 'mismatch'>('shortage');
+  const [issueIntervention, setIssueIntervention] = useState(''), [intervention, setIntervention] = useState('');
+  const adminIntervention = (value: string) => member.role === 'admin' && value ? { interventionReason: value } : {};
+  // Steps up to the current one are reached. A held dispatch shows only its request time; the later steps wait.
+  const current = row.status === 'on_hold' ? 0 : steps.indexOf(row.status as typeof steps[number]);
+  const stepTimes = [row.created_at, null, row.dispatched_at, row.delivered_at];
+  return <section className="live-panel">
+    <div className="live-panel-heading"><div><h2>{row.order_reference} · {row.buyer_name}</h2><p>{row.product_name} · {row.lot_batch} · {kg(row.grams)}</p></div><StatusTag status={row.status} /></div>
+    <div className="yf-dispatch-thread" aria-label={t('Dispatch status history', 'ڈسپیچ کی حالت کی تاریخ')}><ol>{steps.map((step, i) => <li key={step} className={i <= steps.indexOf(row.status as typeof steps[number]) ? 'done' : ''} aria-current={row.status === step ? 'step' : undefined}><StageIcon name={stepIcons[i]} state={stageState(i, steps.indexOf(row.status as typeof steps[number]))} />
+      <strong>{t(['Packed', 'Approved', 'On the way', 'Delivered'][i], ['تیار', 'منظور شدہ', 'راستے میں', 'پہنچا دیا'][i])}</strong> · {i > current ? t('Waiting', 'منتظر') : stepTimes[i] != null ? when(stepTimes[i]) : t('Complete', 'مکمل')}
+    </li>)}</ol></div>
+    {row.status === 'on_hold' && <p className="live-warning"><StatusTag status="on_hold" /> · {row.hold_reason}</p>}
+    {(row.vehicle || row.transporter) && <p>{t('Vehicle', 'گاڑی')}: {row.vehicle || '—'} · {t('Transporter', 'ٹرانسپورٹر')}: {row.transporter || '—'}</p>}
+    {row.status === 'delivered' && row.delivery_proof && <p>{t('Delivery proof', 'ترسیل کا ثبوت')}: {row.delivery_proof}</p>}
+    {row.status === 'on_hold' && <AsyncForm title={t('Re-request dispatch approval', 'ڈسپیچ کی منظوری دوبارہ مانگیں')} submit={t('Re-request approval', 'دوبارہ منظوری مانگیں')}
+      onSubmit={() => call('/request', { dispatchId: row.id, ...adminIntervention(intervention) }, 'Approval requested again.')}>
+      <InterventionField member={member} owners={['dispatch']} value={intervention} onChange={setIntervention} />
+    </AsyncForm>}
+    {row.status === 'approved' && row.hold_notice_id && <AsyncForm title={t('A sales manager sent a hold notice', 'سیلز مینیجر نے روکنے کا نوٹس بھیجا')} submit={t('Place dispatch on hold', 'ڈسپیچ روکیں')}
+      onSubmit={() => call('/hold', { dispatchId: row.id, noticeId: row.hold_notice_id, reason: holdReason, ...adminIntervention(intervention) }, 'Dispatch placed on hold.')}>
+      <ReasonField label={t('Reason', 'وجہ')} value={holdReason} onChange={setHoldReason} />
+      <InterventionField member={member} owners={['dispatch']} value={intervention} onChange={setIntervention} />
+    </AsyncForm>}
+    {row.status === 'approved' && <AsyncForm title={t('Record dispatch', 'روانگی درج کریں')} submit={t('Mark dispatched', 'روانہ درج کریں')}
+      onSubmit={() => call('/dispatched', { dispatchId: row.id, vehicle: dispatchVehicle, transporter: dispatchTransporter, ...adminIntervention(intervention) }, 'Dispatch recorded; finished stock was deducted.')}>
+      <Field>{t('Vehicle', 'گاڑی')}<input value={dispatchVehicle} onChange={event => setDispatchVehicle(event.target.value)} maxLength={100} /></Field>
+      <Field>{t('Transporter', 'ٹرانسپورٹر')}<input value={dispatchTransporter} onChange={event => setDispatchTransporter(event.target.value)} maxLength={100} /></Field>
+      <InterventionField member={member} owners={['dispatch']} value={intervention} onChange={setIntervention} />
+    </AsyncForm>}
+    {row.status === 'dispatched' && <AsyncForm title={t('Confirm delivery', 'ترسیل کی تصدیق')} submit={t('Mark delivered', 'پہنچائی گئی درج کریں')}
+      onSubmit={() => call('/delivered', { dispatchId: row.id, deliveryProof: proof, ...adminIntervention(intervention) }, 'Delivery confirmed.')}>
+      <Field>{t('Delivery proof (optional)', 'ترسیل کا ثبوت (اختیاری)')}<textarea value={proof} onChange={event => setProof(event.target.value)} maxLength={500} /></Field>
+      <InterventionField member={member} owners={['dispatch']} value={intervention} onChange={setIntervention} />
+    </AsyncForm>}
+    {row.status === 'dispatched' && <ReverseControl label={t('Undo dispatch', 'ڈسپیچ واپس لیں')} confirm={t('Undo dispatch', 'ڈسپیچ واپس لیں')} isAdmin={member.role === 'admin'}
+      impact={t(`Puts ${kg(row.grams)} back into Finished stock, batch ${row.lot_batch}, and returns this dispatch to approved.`, `بیچ ${row.lot_batch} کا ${kg(row.grams)} واپس تیار اسٹاک میں جائے گا، اور یہ ڈسپیچ منظور شدہ ہو جائے گی۔`)}
+      run={async ({ id, reason, interventionReason }) => { await call('/dispatched/reverse', { id, dispatchId: row.id, reason, ...(interventionReason ? { interventionReason } : {}) }, 'Dispatch undone. Its stock is back in finished goods.'); }} />}
+    {['pending_approval', 'approved', 'on_hold'].includes(row.status) && <details className="live-panel">
+      <summary><TriangleAlert size={18} aria-hidden="true" /> {t('Raise a stock issue', 'اسٹاک کا مسئلہ درج کریں')}</summary>
+      <AsyncForm title={t('Stock shortage or mismatch', 'اسٹاک کی کمی یا فرق')} submit={t('Send issue to supervisor', 'سپروائزر کو بھیجیں')}
+        onSubmit={() => call('/stock-issues', { id: crypto.randomUUID(), dispatchId: row.id, lotId: row.lot_id, stage: 'finished', kind: issueKind, differenceGrams: Math.round(Number(issueGrams) * 1000), description: issueDescription, ...(member.role === 'admin' && issueIntervention ? { interventionReason: issueIntervention } : {}) }, 'Stock issue sent to the supervisor.')}>
+        <Field>{t('Issue type', 'مسئلے کی قسم')}<select value={issueKind} onChange={event => setIssueKind(event.target.value as typeof issueKind)}><option value="shortage">{t('Shortage', 'کمی')}</option><option value="mismatch">{t('Mismatch', 'فرق')}</option></select></Field>
+        <Field>{t('Difference (kg)', 'فرق (کلوگرام)')}<input type="number" min="0.001" step="0.001" value={issueGrams} onChange={event => setIssueGrams(event.target.value)} required /></Field>
+        <Field>{t('Describe the mismatch', 'فرق کی تفصیل')}<textarea minLength={5} maxLength={2000} value={issueDescription} onChange={event => setIssueDescription(event.target.value)} required /></Field>
+        <InterventionField member={member} owners={['dispatch']} value={issueIntervention} onChange={setIssueIntervention} />
+      </AsyncForm>
+    </details>}
+    {row.status === 'pending_approval' && row.hold_notice_id && <p className="live-warning">{t('The sales manager sent a hold notice. Review it before proceeding.', 'سیلز مینیجر نے روکنے کا نوٹس بھیجا ہے۔ پہلے اسے دیکھیں۔')}</p>}
+    {row.status === 'pending_approval' && <p>{t('Waiting for the sales manager to approve this request.', 'سیلز مینیجر کی منظوری کا انتظار ہے۔')}</p>}
+  </section>;
+}
 
 /** Sections this screen renders; LiveApp routes these to DispatchScreens for the dispatch role and admin. */
 export const DISPATCH_SECTIONS = ['dashboard', 'new-dispatch', 'dispatches', 'history'];
@@ -31,10 +88,7 @@ export function DispatchScreens({ member, section, tab, id, navigate }: Props) {
   const [rows, setRows] = useState<Dispatch[]>([]), [orders, setOrders] = useState<Order[]>([]), [stock, setStock] = useState<WorkspaceState | null>(null);
   const [busy, setBusy] = useState(true), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [orderId, setOrderId] = useState(''), [lotId, setLotId] = useState(''), [quantity, setQuantity] = useState(''), [vehicle, setVehicle] = useState(''), [transporter, setTransporter] = useState('');
-  const [dispatchVehicle, setDispatchVehicle] = useState(''), [dispatchTransporter, setDispatchTransporter] = useState('');
-  const [proof, setProof] = useState(''), [holdReason, setHoldReason] = useState('');
-  const [issueDescription, setIssueDescription] = useState(''), [issueGrams, setIssueGrams] = useState(''), [issueKind, setIssueKind] = useState<'shortage' | 'mismatch'>('shortage');
-  const [issueIntervention, setIssueIntervention] = useState(''), [intervention, setIntervention] = useState('');
+  const [intervention, setIntervention] = useState('');
   const allowed = member.role === 'dispatch' || member.role === 'admin';
 
   const load = useCallback(async () => {
@@ -112,51 +166,6 @@ export function DispatchScreens({ member, section, tab, id, navigate }: Props) {
     </AsyncForm> : <p className="live-empty">{t('No confirmed sales are open for dispatch.', 'ڈسپیچ کے لیے کوئی تصدیق شدہ فروخت موجود نہیں۔')}</p>}
   </section>;
 
-  const detailView = (row: Dispatch) => <section className="live-panel">
-    <div className="live-panel-heading"><div><h2>{row.order_reference} · {row.buyer_name}</h2><p>{row.product_name} · {row.lot_batch} · {kg(row.grams)}</p></div><StatusTag status={row.status} /></div>
-    <div className="yf-dispatch-thread" aria-label={t('Dispatch status history', 'ڈسپیچ کی حالت کی تاریخ')}><ol>{steps.map((step, i) => <li key={step} className={i <= steps.indexOf(row.status as typeof steps[number]) ? 'done' : ''} aria-current={row.status === step ? 'step' : undefined}><StageIcon name={stepIcons[i]} state={stageState(i, steps.indexOf(row.status as typeof steps[number]))} />
-      <StatusTag status={step} /> · {i === 0 ? when(row.created_at) : i === 2 ? when(row.dispatched_at) : i === 3 ? when(row.delivered_at) : row.status === 'approved' || row.status === 'dispatched' || row.status === 'delivered' ? t('Complete', 'مکمل') : t('Waiting', 'منتظر')}
-    </li>)}</ol></div>
-    {row.status === 'on_hold' && <p className="live-warning"><StatusTag status="on_hold" /> · {row.hold_reason}</p>}
-    {(row.vehicle || row.transporter) && <p>{t('Vehicle', 'گاڑی')}: {row.vehicle || '—'} · {t('Transporter', 'ٹرانسپورٹر')}: {row.transporter || '—'}</p>}
-    {row.status === 'delivered' && row.delivery_proof && <p>{t('Delivery proof', 'ترسیل کا ثبوت')}: {row.delivery_proof}</p>}
-    {row.status === 'on_hold' && <AsyncForm title={t('Re-request dispatch approval', 'ڈسپیچ کی منظوری دوبارہ مانگیں')} submit={t('Re-request approval', 'دوبارہ منظوری مانگیں')}
-      onSubmit={() => call('/request', { dispatchId: row.id, ...adminIntervention(intervention) }, 'Approval requested again.')}>
-      <InterventionField member={member} owners={['dispatch']} value={intervention} onChange={setIntervention} />
-    </AsyncForm>}
-    {row.status === 'approved' && row.hold_notice_id && <AsyncForm title={t('A sales manager sent a hold notice', 'سیلز مینیجر نے روکنے کا نوٹس بھیجا')} submit={t('Place dispatch on hold', 'ڈسپیچ روکیں')}
-      onSubmit={() => call('/hold', { dispatchId: row.id, noticeId: row.hold_notice_id, reason: holdReason, ...adminIntervention(intervention) }, 'Dispatch placed on hold.')}>
-      <ReasonField label={t('Reason', 'وجہ')} value={holdReason} onChange={setHoldReason} />
-      <InterventionField member={member} owners={['dispatch']} value={intervention} onChange={setIntervention} />
-    </AsyncForm>}
-    {row.status === 'approved' && <AsyncForm title={t('Record dispatch', 'روانگی درج کریں')} submit={t('Mark dispatched', 'روانہ درج کریں')}
-      onSubmit={() => call('/dispatched', { dispatchId: row.id, vehicle: dispatchVehicle, transporter: dispatchTransporter, ...adminIntervention(intervention) }, 'Dispatch recorded; finished stock was deducted.')}>
-      <Field>{t('Vehicle', 'گاڑی')}<input value={dispatchVehicle} onChange={event => setDispatchVehicle(event.target.value)} maxLength={100} /></Field>
-      <Field>{t('Transporter', 'ٹرانسپورٹر')}<input value={dispatchTransporter} onChange={event => setDispatchTransporter(event.target.value)} maxLength={100} /></Field>
-      <InterventionField member={member} owners={['dispatch']} value={intervention} onChange={setIntervention} />
-    </AsyncForm>}
-    {row.status === 'dispatched' && <AsyncForm title={t('Confirm delivery', 'ترسیل کی تصدیق')} submit={t('Mark delivered', 'پہنچائی گئی درج کریں')}
-      onSubmit={() => call('/delivered', { dispatchId: row.id, deliveryProof: proof, ...adminIntervention(intervention) }, 'Delivery confirmed.')}>
-      <Field>{t('Delivery proof (optional)', 'ترسیل کا ثبوت (اختیاری)')}<textarea value={proof} onChange={event => setProof(event.target.value)} maxLength={500} /></Field>
-      <InterventionField member={member} owners={['dispatch']} value={intervention} onChange={setIntervention} />
-    </AsyncForm>}
-    {row.status === 'dispatched' && <ReverseControl label={t('Undo dispatch', 'ڈسپیچ واپس لیں')} confirm={t('Undo dispatch', 'ڈسپیچ واپس لیں')} isAdmin={member.role === 'admin'}
-      impact={t(`Puts ${kg(row.grams)} back into Finished stock, batch ${row.lot_batch}, and returns this dispatch to approved.`, `بیچ ${row.lot_batch} کا ${kg(row.grams)} واپس تیار اسٹاک میں جائے گا، اور یہ ڈسپیچ منظور شدہ ہو جائے گی۔`)}
-      run={async ({ id, reason, interventionReason }) => { await call('/dispatched/reverse', { id, dispatchId: row.id, reason, ...(interventionReason ? { interventionReason } : {}) }, 'Dispatch undone. Its stock is back in finished goods.'); }} />}
-    {['pending_approval', 'approved', 'on_hold'].includes(row.status) && <details className="live-panel">
-      <summary><TriangleAlert size={18} aria-hidden="true" /> {t('Raise a stock issue', 'اسٹاک کا مسئلہ درج کریں')}</summary>
-      <AsyncForm title={t('Stock shortage or mismatch', 'اسٹاک کی کمی یا فرق')} submit={t('Send issue to supervisor', 'سپروائزر کو بھیجیں')}
-        onSubmit={() => call('/stock-issues', { id: crypto.randomUUID(), dispatchId: row.id, lotId: row.lot_id, stage: 'finished', kind: issueKind, differenceGrams: Math.round(Number(issueGrams) * 1000), description: issueDescription, ...(member.role === 'admin' && issueIntervention ? { interventionReason: issueIntervention } : {}) }, 'Stock issue sent to the supervisor.')}>
-        <Field>{t('Issue type', 'مسئلے کی قسم')}<select value={issueKind} onChange={event => setIssueKind(event.target.value as typeof issueKind)}><option value="shortage">{t('Shortage', 'کمی')}</option><option value="mismatch">{t('Mismatch', 'فرق')}</option></select></Field>
-        <Field>{t('Difference (kg)', 'فرق (کلوگرام)')}<input type="number" min="0.001" step="0.001" value={issueGrams} onChange={event => setIssueGrams(event.target.value)} required /></Field>
-        <Field>{t('Describe the mismatch', 'فرق کی تفصیل')}<textarea minLength={5} maxLength={2000} value={issueDescription} onChange={event => setIssueDescription(event.target.value)} required /></Field>
-        <InterventionField member={member} owners={['dispatch']} value={issueIntervention} onChange={setIssueIntervention} />
-      </AsyncForm>
-    </details>}
-    {row.status === 'pending_approval' && row.hold_notice_id && <p className="live-warning">{t('The sales manager sent a hold notice. Review it before proceeding.', 'سیلز مینیجر نے روکنے کا نوٹس بھیجا ہے۔ پہلے اسے دیکھیں۔')}</p>}
-    {row.status === 'pending_approval' && <p>{t('Waiting for the sales manager to approve this request.', 'سیلز مینیجر کی منظوری کا انتظار ہے۔')}</p>}
-  </section>;
-
   // Dispatches are a split view: the list filters by status and the chosen dispatch's steps and actions sit beside it.
   const splitView = () => {
     const history = section === 'history';
@@ -166,7 +175,7 @@ export function DispatchScreens({ member, section, tab, id, navigate }: Props) {
       tab={currentTab} onTab={next => navigate('dispatches/' + next)}
       items={filtered.map(row => ({ id: row.id, title: `${row.order_reference} · ${row.buyer_name}`, meta: `${row.product_name} · ${row.lot_batch} · ${kg(row.grams)} · ${when(row.created_at)}`, status: <StatusTag status={row.status} /> }))}
       selectedId={id} onSelect={next => navigate(next ? `${basePath}/${next}` : basePath)}
-      renderDetail={rowId => { const row = rows.find(item => item.id === rowId); return row ? detailView(row) : <p className="split-none">{t('This dispatch is not in the list.', 'یہ ڈسپیچ فہرست میں نہیں۔')}</p>; }}
+      renderDetail={rowId => { const row = rows.find(item => item.id === rowId); return row ? <DispatchDetail key={row.id} row={row} member={member} call={call} /> : <p className="split-none">{t('This dispatch is not in the list.', 'یہ ڈسپیچ فہرست میں نہیں۔')}</p>; }}
       empty={t('No dispatches in this view.', 'اس حصے میں کوئی ڈسپیچ نہیں۔')} emptyDetail={t('Choose a dispatch to see its steps and next action.', 'مراحل اور اگلا کام دیکھنے کے لیے ڈسپیچ منتخب کریں۔')} />;
   };
 

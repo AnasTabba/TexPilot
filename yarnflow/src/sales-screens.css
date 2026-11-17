@@ -51,7 +51,7 @@
   border-radius: 50%; background: var(--panel); color: var(--ink-2); font-weight: 700; font-size: 12px;
 }
 .yf-dispatch-thread li:not(:last-child)::after {
-  content: ""; position: absolute; left: 52px; right: 8px; top: 19px; height: 2px; border-radius: 2px; background: var(--line-strong);
+  content: ""; position: absolute; inset-inline-start: 52px; inset-inline-end: 8px; top: 19px; height: 2px; border-radius: 2px; background: var(--line-strong);
 }
 .yf-dispatch-thread li.done > span[aria-hidden="true"] { border-color: var(--brand); background: var(--brand); color: var(--brand-ink); }
 .yf-dispatch-thread li.done:not(:last-child)::after { background: var(--brand); }

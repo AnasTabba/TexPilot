@@ -54,6 +54,8 @@ export async function inventoryRequest<T>(path: string, data?: unknown, signal?:
     return result as T;
   } catch (error) {
     if (error instanceof InventoryError) throw error;
+    // Reads and sign-in save nothing, so they must not say a save is unconfirmed.
+    if (data === undefined || path === '/auth/login') throw new InventoryError('No connection. Check the network and try again.');
     throw new InventoryError('Could not confirm a save. Check the connection and retry with the same values; duplicate requests are safe.');
   } finally {
     clearTimeout(timer); signal?.removeEventListener('abort', abort);

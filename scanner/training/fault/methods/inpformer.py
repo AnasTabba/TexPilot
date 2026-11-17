@@ -44,6 +44,7 @@ _FUSE_DECODER = [[0, 1, 2, 3], [4, 5, 6, 7]]
 
 # ---- copied from the INP-Former repo (see module docstring) ----------------------------------
 
+
 def modify_grad_v2(x, factor):
     factor = factor.expand_as(x)
     x *= factor
@@ -62,8 +63,7 @@ def global_cosine_hm_adaptive(a, b, y=3):
         # Exact reconstruction has zero distance: avoid 0/0 in the backward hook.
         denominator = torch.where(mean_dist == 0, torch.ones_like(mean_dist), mean_dist)
         factor = (point_dist / denominator) ** (y)
-        loss += torch.mean(1 - cos_loss(a_.reshape(a_.shape[0], -1),
-                                        b_.reshape(b_.shape[0], -1)))
+        loss += torch.mean(1 - cos_loss(a_.reshape(a_.shape[0], -1), b_.reshape(b_.shape[0], -1)))
         partial_func = partial(modify_grad_v2, factor=factor)
         b_.register_hook(partial_func)
 
@@ -81,7 +81,7 @@ def cal_anomaly_maps(fs_list, ft_list, out_size=224):
         ft = ft_list[i]
         a_map = 1 - F.cosine_similarity(fs, ft)
         a_map = torch.unsqueeze(a_map, dim=1)
-        a_map = F.interpolate(a_map, size=out_size, mode='bilinear', align_corners=True)
+        a_map = F.interpolate(a_map, size=out_size, mode="bilinear", align_corners=True)
         a_map_list.append(a_map)
     anomaly_map = torch.cat(a_map_list, dim=1).mean(dim=1, keepdim=True)
     return anomaly_map, a_map_list
@@ -93,23 +93,26 @@ def get_gaussian_kernel(kernel_size=3, sigma=2, channels=1):
     y_grid = x_grid.t()
     xy_grid = torch.stack([x_grid, y_grid], dim=-1).float()
 
-    mean = (kernel_size - 1) / 2.
-    variance = sigma ** 2.
+    mean = (kernel_size - 1) / 2.0
+    variance = sigma**2.0
 
-    gaussian_kernel = (1. / (2. * math.pi * variance)) * \
-                      torch.exp(
-                          -torch.sum((xy_grid - mean) ** 2., dim=-1) / \
-                          (2 * variance)
-                      )
+    gaussian_kernel = (1.0 / (2.0 * math.pi * variance)) * torch.exp(
+        -torch.sum((xy_grid - mean) ** 2.0, dim=-1) / (2 * variance)
+    )
 
     gaussian_kernel = gaussian_kernel / torch.sum(gaussian_kernel)
 
     gaussian_kernel = gaussian_kernel.view(1, 1, kernel_size, kernel_size)
     gaussian_kernel = gaussian_kernel.repeat(channels, 1, 1, 1)
 
-    gaussian_filter = torch.nn.Conv2d(in_channels=channels, out_channels=channels,
-                                      kernel_size=kernel_size, groups=channels,
-                                      bias=False, padding=kernel_size // 2)
+    gaussian_filter = torch.nn.Conv2d(
+        in_channels=channels,
+        out_channels=channels,
+        kernel_size=kernel_size,
+        groups=channels,
+        bias=False,
+        padding=kernel_size // 2,
+    )
 
     gaussian_filter.weight.data = gaussian_kernel
     gaussian_filter.weight.requires_grad = False
@@ -118,16 +121,17 @@ def get_gaussian_kernel(kernel_size=3, sigma=2, channels=1):
 
 
 class WarmCosineScheduler(_LRScheduler):
-
-    def __init__(self, optimizer, base_value, final_value, total_iters, warmup_iters=0,
-                 start_warmup_value=0):
+    def __init__(
+        self, optimizer, base_value, final_value, total_iters, warmup_iters=0, start_warmup_value=0
+    ):
         self.final_value = final_value
         self.total_iters = total_iters
         warmup_schedule = np.linspace(start_warmup_value, base_value, warmup_iters)
 
         iters = np.arange(total_iters - warmup_iters)
         schedule = final_value + 0.5 * (base_value - final_value) * (
-            1 + np.cos(np.pi * iters / len(iters)))
+            1 + np.cos(np.pi * iters / len(iters))
+        )
         self.schedule = np.concatenate((warmup_schedule, schedule))
 
         super().__init__(optimizer)
@@ -141,6 +145,7 @@ class WarmCosineScheduler(_LRScheduler):
 
 # ---- wrapper ---------------------------------------------------------------------------------
 
+
 def _to_tensor(tiles: np.ndarray, device: str) -> torch.Tensor:
     """uint8 N×H×W×3 → normalised float N×3×H×W (ToTensor + Normalize, no resize or crop)."""
     x = torch.as_tensor(tiles).to(device).permute(0, 3, 1, 2).float() / 255.0
@@ -151,8 +156,12 @@ def _to_tensor(tiles: np.ndarray, device: str) -> torch.Tensor:
 
 def _repo_commit(repo: Path) -> str:
     try:
-        out = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
-                             capture_output=True, text=True, check=True)
+        out = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
         return out.stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
@@ -161,9 +170,16 @@ def _repo_commit(repo: Path) -> str:
 class INPFormer:
     """Trains INP-Former on good tiles (one unified model) and scores tiles by anomaly map."""
 
-    def __init__(self, repo_dir: str, backbone: str = "dinov2reg_vit_base_14", iters: int = 10000,
-                 batch_size: int = 16, inp_num: int = 6, device: str | None = None,
-                 seed: int = 2026) -> None:
+    def __init__(
+        self,
+        repo_dir: str,
+        backbone: str = "dinov2reg_vit_base_14",
+        iters: int = 10000,
+        batch_size: int = 16,
+        inp_num: int = 6,
+        device: str | None = None,
+        seed: int = 2026,
+    ) -> None:
         size = next((s for s in _DIMS if s in backbone), None)
         if size is None:
             raise ValueError(f"backbone must name small or base, got {backbone!r}")
@@ -208,21 +224,45 @@ class INPFormer:
         encoder.requires_grad_(False)  # frozen; main() only ran it under no_grad
         norm = partial(nn.LayerNorm, eps=1e-8)
 
-        bottleneck = nn.ModuleList([Mlp(embed_dim, embed_dim * 4, embed_dim, drop=0.)])
+        bottleneck = nn.ModuleList([Mlp(embed_dim, embed_dim * 4, embed_dim, drop=0.0)])
         inp = nn.ParameterList(
-            [nn.Parameter(torch.randn(self.inp_num, embed_dim)) for _ in range(1)])
-        extractor = nn.ModuleList([
-            Aggregation_Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=4.,
-                              qkv_bias=True, norm_layer=norm)
-            for _ in range(1)])
-        decoder = nn.ModuleList([
-            Prototype_Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=4.,
-                            qkv_bias=True, norm_layer=norm)
-            for _ in range(8)])
-        model = INP_Former(encoder=encoder, bottleneck=bottleneck, aggregation=extractor,
-                           decoder=decoder, target_layers=_TARGET_LAYERS, remove_class_token=True,
-                           fuse_layer_encoder=_FUSE_ENCODER, fuse_layer_decoder=_FUSE_DECODER,
-                           prototype_token=inp).to(self.device)
+            [nn.Parameter(torch.randn(self.inp_num, embed_dim)) for _ in range(1)]
+        )
+        extractor = nn.ModuleList(
+            [
+                Aggregation_Block(
+                    dim=embed_dim,
+                    num_heads=num_heads,
+                    mlp_ratio=4.0,
+                    qkv_bias=True,
+                    norm_layer=norm,
+                )
+                for _ in range(1)
+            ]
+        )
+        decoder = nn.ModuleList(
+            [
+                Prototype_Block(
+                    dim=embed_dim,
+                    num_heads=num_heads,
+                    mlp_ratio=4.0,
+                    qkv_bias=True,
+                    norm_layer=norm,
+                )
+                for _ in range(8)
+            ]
+        )
+        model = INP_Former(
+            encoder=encoder,
+            bottleneck=bottleneck,
+            aggregation=extractor,
+            decoder=decoder,
+            target_layers=_TARGET_LAYERS,
+            remove_class_token=True,
+            fuse_layer_encoder=_FUSE_ENCODER,
+            fuse_layer_decoder=_FUSE_DECODER,
+            prototype_token=inp,
+        ).to(self.device)
 
         trainable = nn.ModuleList([bottleneck, decoder, extractor, inp])
         for m in trainable.modules():
@@ -244,8 +284,14 @@ class INPFormer:
         with upstream_repo(self.repo_dir):
             from optimizers import StableAdamW
 
-        return StableAdamW([{"params": params}], lr=1e-3, betas=(0.9, 0.999), weight_decay=1e-4,
-                           amsgrad=True, eps=1e-10)
+        return StableAdamW(
+            [{"params": params}],
+            lr=1e-3,
+            betas=(0.9, 0.999),
+            weight_decay=1e-4,
+            amsgrad=True,
+            eps=1e-10,
+        )
 
     # Method protocol
 
@@ -259,8 +305,9 @@ class INPFormer:
         # The script trains by epochs with drop_last=True. This trains by iterations: each step
         # draws a random batch, with replacement only when there are fewer tiles than batch_size.
         optimizer = self._optimizer(list(self.trainable.parameters()))
-        scheduler = WarmCosineScheduler(optimizer, base_value=1e-3, final_value=1e-4,
-                                        total_iters=self.iters, warmup_iters=100)
+        scheduler = WarmCosineScheduler(
+            optimizer, base_value=1e-3, final_value=1e-4, total_iters=self.iters, warmup_iters=100
+        )
         self.model.train()
         for it in range(self.iters):
             idx = rng.choice(n, size=self.batch_size, replace=n < self.batch_size)
@@ -285,7 +332,7 @@ class INPFormer:
         maps: list[np.ndarray] = []
         with torch.no_grad():
             for s in range(0, len(tiles), self.batch_size):
-                x = _to_tensor(np.stack(tiles[s:s + self.batch_size]), self.device)
+                x = _to_tensor(np.stack(tiles[s : s + self.batch_size]), self.device)
                 en, de, _ = self.model(x)
                 amap, _ = cal_anomaly_maps(en, de, TILE)
                 amap = kernel(amap)
@@ -297,8 +344,16 @@ class INPFormer:
     def save(self, path: str | Path) -> None:
         if self.trainable is None:
             raise RuntimeError("nothing to save: call fit() first")
-        torch.save({"name": self.name, "backbone": self.backbone, "repo_commit": self.repo_commit,
-                    "inp_num": self.inp_num, "trainable": self.trainable.state_dict()}, path)
+        torch.save(
+            {
+                "name": self.name,
+                "backbone": self.backbone,
+                "repo_commit": self.repo_commit,
+                "inp_num": self.inp_num,
+                "trainable": self.trainable.state_dict(),
+            },
+            path,
+        )
 
     def load(self, path: str | Path) -> None:
         ck = torch.load(path, map_location=self.device)

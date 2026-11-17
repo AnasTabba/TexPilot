@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { LanguageSelect, useLanguage } from './i18n';
+import { Languages, Moon, Sun, Laptop } from 'lucide-react';
+import { useLanguage } from './i18n';
+import { ChoiceTiles, Section } from './ui';
 
 /** Per-device app preferences. 'system' follows the device's light or dark setting. */
 export type Theme = 'light' | 'dark' | 'system';
@@ -46,26 +48,15 @@ const options: [Theme, string, string][] = [
 ];
 
 export default function AppSettings() {
-  const { t } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
   const [theme, setTheme] = useState<Theme>(readTheme);
   const choose = (next: Theme) => { setTheme(next); saveTheme(next); };
   return <div className="yf-app-settings">
-    <section className="live-panel">
-      <h2>{t('Appearance', 'ظاہری شکل')}</h2>
-      <fieldset className="yf-theme">
-        <legend className="control-label">{t('Appearance', 'ظاہری شکل')}</legend>
-        <div className="yf-theme-options">
-          {options.map(([value, label, urdu]) => <label key={value} className={theme === value ? 'is-on' : undefined}>
-            <input type="radio" name="yf-theme" value={value} checked={theme === value} onChange={() => choose(value)} />
-            <span>{t(label, urdu)}</span>
-          </label>)}
-        </div>
-      </fieldset>
-      <p className="live-muted">{t('Saved on this device only.', 'یہ ترتیب صرف اس آلے پر محفوظ ہوتی ہے۔')}</p>
-    </section>
-    <section className="live-panel yf-language-settings">
-      <h2>{t('Language', 'زبان')}</h2>
-      <LanguageSelect />
-    </section>
+    <Section title={t('Appearance', 'ظاہری شکل')}>
+      <ChoiceTiles label={t('Choose appearance', 'ظاہری شکل منتخب کریں')} value={theme} onChange={v => choose(v as Theme)} options={options.map(([value,label,urdu],i) => ({value,title:t(label,urdu),icon:[<Sun/>,<Moon/>,<Laptop/>][i]}))} />
+    </Section>
+    <Section title={t('Language', 'زبان')}>
+      <ChoiceTiles label={t('Choose a language', 'زبان منتخب کریں')} value={language} onChange={v => setLanguage(v as 'en'|'ur')} options={[{value:'en',title:'English',icon:<Languages/>},{value:'ur',title:'اردو',icon:<Languages/>}]} />
+    </Section>
   </div>;
 }

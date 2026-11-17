@@ -281,10 +281,7 @@ def _reserve_cohort(report: ReleaseReport, registry: str) -> bool:
         )
         db.executemany(
             "INSERT OR IGNORE INTO groups_seen VALUES (?, ?)",
-            (
-                (group, f"release:{report.release_cohort_sha256}")
-                for group in sorted(groups - {""})
-            ),
+            ((group, f"release:{report.release_cohort_sha256}") for group in sorted(groups - {""})),
         )
         db.executemany(
             "INSERT OR IGNORE INTO groups_seen VALUES (?, ?)",
@@ -364,8 +361,7 @@ def evaluate_release(report: ReleaseReport, authority: Authority) -> GateResult:
             reasons.append("AUDIT_HASH_MISMATCH")
         if not audit.promotable:
             reasons.append(
-                "AUDIT_BLOCKING:"
-                + ",".join(sorted({f.code for f in audit.findings if f.blocking}))
+                "AUDIT_BLOCKING:" + ",".join(sorted({f.code for f in audit.findings if f.blocking}))
             )
     if report.release_cohort_reused is not False:
         reasons.append("RELEASE_COHORT_REUSED")
@@ -423,9 +419,7 @@ def evaluate_release(report: ReleaseReport, authority: Authority) -> GateResult:
                 reasons.append("ALPHA_ALLOCATION_EXCEEDS_FAMILY")
             for d in report.domains:
                 p = planned.get(d.domain_id)
-                actual = {
-                    (r.selection_id, group_key(r.independent_group_id)) for r in d.outcomes
-                }
+                actual = {(r.selection_id, group_key(r.independent_group_id)) for r in d.outcomes}
                 if p is not None and (
                     not p.enrollments
                     or {(sid, group_key(g)) for sid, g in p.enrollments} != actual

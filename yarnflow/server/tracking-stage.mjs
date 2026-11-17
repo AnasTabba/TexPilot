@@ -29,9 +29,10 @@ export function stageOf(status, normalized) {
     at: timeOf(e?.at), title: text(e?.title), code: text(e?.code), location: text(e?.location),
   })));
   const latest = events[0] ?? null;
-  const locations = events.map(e => e.location).filter(Boolean);
-  const destination = text(data?.destination) || locations[0] || null;
-  if (data?.empty === true) return 'delivered';
+  // Destination comes only from the provider; an event's location is not a route end.
+  const destination = text(data?.destination) || null;
+  // No provider data at all: unknown, never delivered. Same rule as src/tracking.ts.
+  if (data?.empty === true) return 'not_checked';
   if (latest) return stageOfEvent(latest, destination) ?? 'booked';
   if (status === 'error') return 'error';
   if (status === 'tracked') return 'booked';

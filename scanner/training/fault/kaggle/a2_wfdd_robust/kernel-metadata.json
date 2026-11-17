@@ -1,0 +1,17 @@
+{
+  "id": "anastabba/texpilot-a2-wfdd-robust",
+  "title": "texpilot-a2-wfdd-robust",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "machine_shape": "NvidiaTeslaT4",
+  "enable_internet": true,
+  "dataset_sources": [
+    "anastabba/texpilot-fault-code/9",
+    "hodinhtrieu/the-woven-fabric-defect-detection-wfdd/1"
+  ],
+  "competition_sources": [],
+  "kernel_sources": ["anastabba/texpilot-a2-wfdd-export"]
+}

@@ -55,7 +55,7 @@ def run_spec(
     card_mm: float | None = None,
 ) -> SpecResult:
     import numpy as np
-    from PIL import Image
+    from PIL import Image, ImageOps
 
     from services.vision.marker import MARKER_MM, find_card
     from services.vision.threads import (
@@ -79,7 +79,7 @@ def run_spec(
         )
 
     try:
-        im = Image.open(io.BytesIO(scan))
+        im = ImageOps.exif_transpose(Image.open(io.BytesIO(scan)))
         if im.width * im.height > MAX_PIXELS:
             raise UnsupportedImage("scan too large: crop it to the swatch")
         file_dpi = (im.info.get("dpi") or (None,))[0]
@@ -104,9 +104,8 @@ def run_spec(
                 "the card fills about a quarter of the photo's width"
             )
         raise UnsupportedImage(
-            "scan resolution unknown or below 300 dpi: scan the swatch flat on a flatbed scanner "
-            "at 600-1200 dpi, or lay the printed TexPilot card on the fabric and photograph both, "
-            "or pass the dpi you scanned at"
+            "Scan resolution is unknown or under 300 dpi. Scan the swatch flat at 600 dpi. "
+            "Or lay the printed TexPilot card on the fabric and photograph both."
         )
 
     max_tpi = min(200.0, dpi / MIN_PERIOD_PX)

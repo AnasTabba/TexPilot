@@ -31,7 +31,7 @@ def test_present_but_unloadable_fault_artifact_never_means_ready(tmp_path, monke
         )
     )
     monkeypatch.setenv("TEXPILOT_FAULT_MODEL", str(tmp_path))
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(Exception):  # noqa: B017 -- any load failure; the bytes are not a checkpoint
         FaultDetector(tmp_path, "cpu")
     assert not qc_pipeline.qc_readiness().ready
     assert next(s for s in qc_pipeline.qc_readiness().stages if s.name == "defects").state != "OK"

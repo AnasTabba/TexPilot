@@ -179,9 +179,7 @@ def normalise_identifier(value: str | None) -> str:
     if not isinstance(value, str):
         return ""
     text = unicodedata.normalize("NFKC", value)
-    text = "".join(
-        ch for ch in text if unicodedata.category(ch) != "Cf" and not ch.isspace()
-    )
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Cf" and not ch.isspace())
     return text.casefold()
 
 
@@ -249,16 +247,15 @@ def known_identifier(value: str | None) -> bool:
 
 
 def _utc(value: str) -> datetime:
-    if not isinstance(value, str) or re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z", value
-    ) is None:
+    if (
+        not isinstance(value, str)
+        or re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z", value) is None
+    ):
         raise ValueError("trusted UTC timestamp required")
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-def consent_issues(
-    source: SourceRecord, purpose: str, as_of: str | None = None
-) -> tuple[str, ...]:
+def consent_issues(source: SourceRecord, purpose: str, as_of: str | None = None) -> tuple[str, ...]:
     """Why this source may not be used for ``purpose``; empty only for a current grant.
 
     A source that declares it needs consent must present an authority for it. Missing,

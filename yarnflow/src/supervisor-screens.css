@@ -1,4 +1,28 @@
-/* Supervisor requests and report screens. Shared list, record and form rules live in erp.css and yarnflow.css. */
-.yf-section { min-width: 0; }
-.live-check { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
-.live-check input { width: 20px; height: 20px; flex: none; }
+/* Supervisor layouts use the shared Denim kit for controls and rows. */
+.yf-section,.yf-supervisor-screen,.yf-report-flow { min-width: 0; }
+.yf-supervisor-screen > .live-panel-heading { align-items: center; gap: 12px; }
+.yf-supervisor-screen .live-muted { max-width: 65ch; line-height: 1.5; }
+.yf-report-flow { display: grid; gap: 20px; padding-bottom: 88px; }
+.yf-report-flow form { display: grid; gap: 16px; min-width: 0; }
+.yf-report-flow .live-fields { margin-block: 0; }
+.yf-report-flow .yf-section { margin-top: 12px; }
+.yf-report-flow .erp-records { display: grid; gap: 8px; }
+.yf-report-flow .erp-record { padding: 16px; border: 1px solid var(--line); border-radius: var(--r-row); background: var(--paper); }
+.yf-report-flow .erp-record > h3 { margin: 0 0 8px; font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; }
+.yf-report-flow .erp-record > h4 { margin: 0 0 8px; }
+.yf-report-flow .ui-choice-group { margin-block: 16px; }
+.yf-request-flow { display: grid; gap: 20px; min-width: 0; padding-bottom: 24px; }
+.yf-request-list { display: grid; gap: 8px; min-width: 0; }
+.yf-request-selected { display: grid; gap: 8px; }
+.yf-request-detail { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-row); background: var(--paper); }
+.yf-request-detail .erp-record { border: 0; padding: 0; }
+.yf-request-detail form { display: grid; gap: 12px; }
+.yf-request-detail .live-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.yf-report-history { display: grid; gap: 8px; list-style: none; padding: 0; }
+.yf-report-history li { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r-row); background: var(--paper); line-height: 1.5; }
+.yf-supervisor-screen .button { min-height: 48px; }
+@media (max-width: 640px) {
+  .yf-report-flow { gap: 16px; padding-bottom: 96px; }
+  .yf-report-flow form > .button { width: 100%; justify-content: center; }
+  .yf-request-detail .live-actions { grid-template-columns: 1fr; }
+}

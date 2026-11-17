@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Camera, ChevronRight, Factory, FileText, Package, Send, Truck, UserRound, ClipboardCheck, X } from 'lucide-react';
-import { Avatar } from './SignIn';
 import { errorMessage } from './forms';
 import { portal } from './PortalCommon';
 import { useLanguage } from './i18n';
-import { roleLabel, type Member, type Role, type WorkspaceState } from './inventory-client';
+import { type Member, type Role, type WorkspaceState } from './inventory-client';
 import { downloadInvoicePdf, invoiceDocData, type BuyerSource, type InvoiceSource, type SaleLineSource } from './invoice-pdf';
 import './chat.css';
 
@@ -24,7 +23,6 @@ const clock = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour:
 const dayOf = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' });
 const shortDate = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', day: 'numeric', month: 'short' });
 const stamp = (ms: number) => dayOf.format(ms) === dayOf.format(Date.now()) ? clock.format(ms) : shortDate.format(ms);
-const quickReplies: [string, string][] = [['Done', 'ہو گیا'], ['On my way', 'آ رہا ہوں'], ['Need help', 'مدد چاہیے'], ['Stock arrived', 'مال آ گیا'], ['Check this', 'یہ دیکھیں']];
 const photoUrl = (id: string) => `/api/erp/chat/photo/${id}`;
 const shareTypes: { id: RefType; en: string; ur: string; Icon: typeof FileText }[] = [
   { id: 'invoice', en: 'Invoices', ur: 'انوائسز', Icon: FileText },
@@ -35,13 +33,6 @@ const shareTypes: { id: RefType; en: string; ur: string; Icon: typeof FileText }
   { id: 'lot', en: 'Stock batches', ur: 'اسٹاک بیچ', Icon: Factory },
 ];
 type T = (english: string, urdu?: string) => string;
-
-function preview(message: Message | null, t: T) {
-  if (!message) return t('No messages yet', 'ابھی کوئی پیغام نہیں');
-  if (message.body) return message.body.replace(/\s+/g, ' ');
-  if (message.photo) return t('📷 Photo', '📷 تصویر');
-  return message.ref?.label ?? '';
-}
 
 function draftKey(workspaceId: string, userId: string, threadId: string) {
   return `yf-chat-draft:${workspaceId}:${userId}:${threadId}`;
@@ -173,8 +164,8 @@ function SharePicker({ available, onShare, onRetry, retryAvailable, onClose, err
 
   return <Sheet title={t('Share a factory record', 'فیکٹری کا ریکارڈ شیئر کریں')} onClose={onClose} className="yf-chat-share-sheet">
     <div className="yf-chat-sheet-body">
-      <div className="yf-chat-share-types" role="tablist" aria-label={t('Record type', 'ریکارڈ کی قسم')}>
-        {available.map(({ id, en, ur, Icon }) => <button key={id} role="tab" aria-selected={type === id} className={type === id ? 'is-active' : ''} onClick={() => { setType(id); setQuery(''); }}>
+      <div className="yf-chat-share-types" role="group" aria-label={t('Record type', 'ریکارڈ کی قسم')}>
+        {available.map(({ id, en, ur, Icon }) => <button key={id} aria-pressed={type === id} className={type === id ? 'is-active' : ''} onClick={() => { setType(id); setQuery(''); }}>
           <Icon size={17} aria-hidden="true" />{t(en, ur)}
         </button>)}
       </div>
@@ -193,9 +184,9 @@ function SharePicker({ available, onShare, onRetry, retryAvailable, onClose, err
   </Sheet>;
 }
 
-interface ThreadProps { member: Member; state: WorkspaceState; threadId: string; people: Person[]; title: string }
+interface ThreadProps { member: Member; state: WorkspaceState; threadId: string; people: Person[]; title: string; unread: number }
 
-function Thread({ member, state, threadId, people, title }: ThreadProps) {
+function Thread({ member, state, threadId, title }: ThreadProps) {
   const { t, language } = useLanguage();
   const key = draftKey(state.workspace.id, member.user_id, threadId);
   const attemptKey = `${key}:pending`;
@@ -316,7 +307,9 @@ function Thread({ member, state, threadId, people, title }: ThreadProps) {
     if (await transmit({ id: crypto.randomUUID(), payload: { ref } })) setSheet(false);
   };
   const onKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void sendDraft(); }
+    // On touch keyboards Enter makes a new line; the Send button sends.
+    const touch = window.matchMedia?.('(pointer: coarse)').matches === true;
+    if (!touch && event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void sendDraft(); }
   };
   const uploadPhoto = async (attempt: PhotoAttempt) => {
     setBusy(true); setFailure(null);
@@ -342,28 +335,29 @@ function Thread({ member, state, threadId, people, title }: ThreadProps) {
     else if (pendingPhoto && !busy) await uploadPhoto(pendingPhoto);
   };
   const failureText = failure === null ? '' : errorMessage(failure, language);
-  const roster = [...people.filter(person => person.id !== member.user_id), { id: member.user_id, name: member.name, role: member.role }]
-    .sort((a, b) => a.name.localeCompare(b.name, language));
+  const today = dayOf.format(Date.now());
+  const yesterday = dayOf.format(Date.now() - 86400000);
+  const dayLabel = (ms: number) => {
+    const day = dayOf.format(ms);
+    if (day === today) return t('Today', 'آج');
+    if (day === yesterday) return t('Yesterday', 'کل');
+    return shortDate.format(ms);
+  };
 
   return <section className="yf-chat-thread" aria-label={title}>
-    <header className="yf-chat-bar">
-      <span className="yf-chat-room-icon"><Factory size={20} aria-hidden="true" /></span>
-      <div className="yf-chat-room-heading"><h2>{title}</h2><small>{t(`${roster.length} active team members`, `${roster.length} فعال ٹیم ممبران`)}</small></div>
-    </header>
-    <div className="yf-chat-roster" aria-label={t('Active team members', 'فعال ٹیم ممبران')}>
-      {roster.map(person => <span className="yf-chat-roster-person" key={person.id}><Avatar name={person.name} /><span><strong>{person.name}</strong><small>{t(...roleLabel[person.role])}{person.id === member.user_id ? ` · ${t('You', 'آپ')}` : ''}</small></span></span>)}
-    </div>
+    <header className="yf-chat-bar"><h2>{title}</h2></header>
     <div className="yf-chat-log" ref={log} role="log" aria-live="polite">
       {!ready && failure === null && <p className="yf-chat-note" role="status">{t('Loading messages…', 'پیغامات لوڈ ہو رہے ہیں…')}</p>}
       {ready && messages.length === 0 && <p className="yf-chat-note">{t('No messages yet. Say hello.', 'ابھی کوئی پیغام نہیں۔ سلام کہیں۔')}</p>}
       {ready && hasMore && <button className="yf-chat-older" disabled={loadingEarlier} onClick={() => void loadEarlier()}>
         {loadingEarlier ? t('Loading earlier messages…', 'پرانے پیغامات لوڈ ہو رہے ہیں…') : t('Load earlier messages', 'پرانے پیغامات دیکھیں')}
       </button>}
-      {messages.map(message => {
+      {messages.map((message, index) => {
         const mine = message.user_id === member.user_id;
+        const newDay = index === 0 || dayOf.format(messages[index - 1].created_at) !== dayOf.format(message.created_at);
         const invoiceDocument = message.ref ? sharedInvoiceDocument(message.ref) : null;
-        return <div key={message.id} className={`yf-chat-msg${mine ? ' is-mine' : ''}`}>
-          {!mine && <span className="yf-chat-sender">{message.sender_name}</span>}
+        return <Fragment key={message.id}>{newDay && <div className="yf-chat-day">{dayLabel(message.created_at)}</div>}<div className={`yf-chat-msg${mine ? ' is-mine' : ''}`}>
+          <span className="yf-chat-sender">{message.sender_name}{mine ? ` · ${t('You', 'آپ')}` : ''}</span>
           <div className="yf-chat-bubble">
             {message.photo && <button className="yf-chat-photo" onClick={() => setViewing(message)} aria-label={t('Open photo', 'تصویر کھولیں')}><img src={photoUrl(message.id)} alt="" loading="lazy" /></button>}
             {message.body && <p className="yf-chat-text">{message.body}</p>}
@@ -375,7 +369,7 @@ function Thread({ member, state, threadId, people, title }: ThreadProps) {
             </div>}
           </div>
           <time dateTime={new Date(message.created_at).toISOString()}>{stamp(message.created_at)}</time>
-        </div>;
+        </div></Fragment>;
       })}
     </div>
     {(failureText || pending || pendingPhoto) && <div className="yf-chat-inline-error" role="alert"><p>{failureText || t('A previous send was not confirmed.', 'پچھلے پیغام کی تصدیق نہیں ہو سکی۔')}</p>
@@ -383,16 +377,13 @@ function Thread({ member, state, threadId, people, title }: ThreadProps) {
       {!pending && !pendingPhoto && hasMore && <button className="button" disabled={loadingEarlier} onClick={() => void loadEarlier()}>{t('Retry loading history', 'تاریخ دوبارہ لوڈ کریں')}</button>}
     </div>}
     <div className="yf-chat-composer">
-      <div className="yf-chat-quick" role="group" aria-label={t('Quick replies', 'فوری جوابات')}>
-        {quickReplies.map(([en, ur]) => <button key={en} className="yf-chat-chip" disabled={busy || !!pending || !!pendingPhoto} onClick={() => void transmit({ id: crypto.randomUUID(), payload: { body: t(en, ur) } })}>{t(en, ur)}</button>)}
-      </div>
-      <textarea value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={onKey} rows={1} maxLength={2000} disabled={busy || !!pending || !!pendingPhoto}
+      <div className="yf-chat-compose-row"><textarea value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={onKey} rows={1} maxLength={2000} disabled={busy || !!pending || !!pendingPhoto}
         placeholder={t('Type a message', 'پیغام لکھیں')} aria-label={t('Message', 'پیغام')} />
+        <button className="button primary yf-chat-send" aria-label={t('Send', 'بھیجیں')} disabled={busy || !!pending || !!pendingPhoto || !draft.trim()} onClick={() => void sendDraft()}><Send size={20} aria-hidden="true" /></button></div>
       <div className="yf-chat-actions">
         <button className="button" disabled={busy || !!pending || !!pendingPhoto} onClick={() => fileInput.current?.click()}><Camera size={18} aria-hidden="true" />{t('Photo', 'تصویر')}</button>
         <input ref={fileInput} type="file" accept="image/*" capture="environment" hidden onChange={event => void onPhoto(event)} />
         <button className="button" disabled={busy || !!pending || !!pendingPhoto} onClick={() => setSheet(true)}><Package size={18} aria-hidden="true" />{t('Share a record', 'ریکارڈ شیئر کریں')}</button>
-        <button className="button primary yf-chat-send" disabled={busy || !!pending || !!pendingPhoto || !draft.trim()} onClick={() => void sendDraft()}><Send size={18} aria-hidden="true" />{t('Send', 'بھیجیں')}</button>
       </div>
     </div>
     {sheet && <SharePicker available={shareTypes.filter(option => {
@@ -436,16 +427,9 @@ export default function Chat({ member, state, navigate, onUnread }: { member: Me
   useEffect(() => { if (team) unreadRef.current?.(0); }, [team?.id]);
   if (failure !== null && !list) return <section className="yf-chat" aria-label={t('Chat', 'چیٹ')}><p className="live-error" role="alert">{errorMessage(failure, language)}</p><button className="button" onClick={() => void loadList()}>{t('Try again', 'دوبارہ کوشش')}</button></section>;
   if (!list || !team) return <section className="yf-chat" aria-label={t('Chat', 'چیٹ')}><p className="yf-chat-note" role="status">{t('Opening the Factory room…', 'فیکٹری روم کھل رہا ہے…')}</p></section>;
-  // Two panes: conversations on the left, the open thread on the right. Stacked on phones (see chat.css).
-  return <section className="yf-chat yf-chat-split" aria-label={t('Chat', 'چیٹ')}>
-    <aside className="yf-chat-side" aria-label={t('Conversations', 'گفتگو')}>
-      <h2 className="yf-chat-side-title">{t('Conversations', 'گفتگو')}</h2>
-      <ul className="yf-chat-list"><li><div className="yf-chat-row is-active" aria-current="true">
-        <span className="yf-chat-team"><Factory size={18} aria-hidden="true" /></span>
-        <span className="yf-chat-row-text"><strong>{t('Factory room', 'فیکٹری روم')}</strong><small>{preview(team.last, t)}</small></span>
-        <span className="yf-chat-row-meta">{team.last && <time dateTime={new Date(team.last.created_at).toISOString()}>{stamp(team.last.created_at)}</time>}{team.unread > 0 && <span className="yf-chat-unread">{team.unread}</span>}</span>
-      </div></li></ul>
-    </aside>
-    <Thread key={team.id} member={member} state={state} threadId={team.id} title={t('Factory room', 'فیکٹری روم')} people={list.people} />
+  // The Factory room is the only conversation, so its thread takes the full width.
+  return <section className="yf-chat" aria-label={t('Chat', 'چیٹ')}>
+    {failure !== null && <p className="live-error" role="alert">{errorMessage(failure, language)}</p>}
+    <Thread key={team.id} member={member} state={state} threadId={team.id} title={t('Factory room', 'فیکٹری روم')} people={list.people} unread={team.unread} />
   </section>;
 }
