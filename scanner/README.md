@@ -48,12 +48,16 @@ make test
 make api       # http://127.0.0.1:8000/docs, stub predictor
 ```
 
-The real scanner on an Apple Silicon Mac:
+The real scanner (any machine; Apple Silicon or an NVIDIA GPU is fastest):
 
 ```bash
 make setup-ml          # once, large download
-make api-scanner       # ~2 GB of models, then serves on :8000
+make models            # once, ~2.3 GB of trained models from the team Drive
+make api-scanner       # serves on :8000 (base encoders download from the Hugging Face Hub on first start)
 ```
+
+Label OCR uses Apple Vision, so it runs only on macOS. On Windows or Linux the scanner starts
+without OCR; pass the label text in `label_text` instead.
 
 ```bash
 curl -s -F "surface_image=@any.jpg" -F "label_text=60% COTTON 40% POLYESTER" \

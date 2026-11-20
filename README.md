@@ -12,6 +12,8 @@ Yarnflow's scanner screen calls the scanner's HTTP API (`GET /api/v1/model`, `PO
 `POST /api/v1/spec`). The published site reaches it through the Worker secret `TEXPILOT_API_URL`.
 See [`scanner/deployment/README.md`](scanner/deployment/README.md).
 
+Continuing the project (person or coding agent)? Start with [`AGENTS.md`](AGENTS.md).
+
 ## Quick start (each line from the repository root)
 
 ```bash

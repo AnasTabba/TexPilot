@@ -49,3 +49,6 @@ mlruns/
 build/
 dist/
 .token-savior-cache.json
+
+# Local tool output
+graphify-out/
