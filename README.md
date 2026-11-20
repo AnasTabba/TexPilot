@@ -1,32 +1,31 @@
 # TexPilot
 
-Final Year Project, CSE 493/494 — IBA, School of Mathematics and Computer Science.
-Two projects live in this repository:
+Final Year Project, CSE 493/494, IBA (School of Mathematics and Computer Science).
 
-| Folder | Project | Stack |
+| Folder | What | Stack |
 |---|---|---|
-| [`yarnflow/`](yarnflow/) | **Yarnflow**: the factory app for yarn stock, production, quality and dispatch. A web app on a Cloudflare Worker with D1, plus a native SwiftUI iPhone app in `yarnflow/ios/`. | React, TypeScript, Vite, Cloudflare Workers, Swift |
-| [`scanner/`](scanner/) | **TexPilot scanner**: from one photo, the garment, fabric, composition group and fabric faults; checks them against the care label and returns PASS, FLAG or INSUFFICIENT_EVIDENCE. Results: [`scanner/docs/results.md`](scanner/docs/results.md). | Python, FastAPI, PyTorch |
+| [`yarnflow/`](yarnflow/) | **Yarnflow**, the factory app: yarn and fabric stock, production, quality, sales, dispatch and the scanner screen. Web app on a Cloudflare Worker with D1, plus an iPhone app in `ios/`. | React, TypeScript, Vite, Cloudflare Workers, Swift |
+| [`scanner/`](scanner/) | **TexPilot scanner**. Takes one photo, optionally with the care label. Returns the garment, the fabric structure, the composition group and any fabric faults, then checks them against the label: PASS, FLAG or INSUFFICIENT_EVIDENCE. | Python, FastAPI, PyTorch |
 
-Yarnflow's scanner screen calls the scanner's HTTP API (`GET /api/v1/model`, `POST /api/v1/scan`,
-`POST /api/v1/spec`). The published site reaches it through the Worker secret `TEXPILOT_API_URL`.
-See [`scanner/deployment/README.md`](scanner/deployment/README.md).
+Yarnflow calls the scanner's HTTP API (`GET /api/v1/model`, `POST /api/v1/scan`, `POST /api/v1/spec`).
+The live app reaches it through the Worker secret `TEXPILOT_API_URL`.
 
-Continuing the project (person or coding agent)? Start with [`AGENTS.md`](AGENTS.md).
-
-## Quick start (each line from the repository root)
+## Quick start
 
 ```bash
-cd yarnflow && npm install && npm run dev     # the app
-cd scanner && make setup && make api          # the scanner API at http://127.0.0.1:8000/docs
+cd yarnflow && npm install && npm run dev              # the app
+cd scanner && make setup-ml && make models && make api-scanner   # the scanner on :8000
 ```
 
-## Milestones
+Full setup, rules and current state: [`AGENTS.md`](AGENTS.md). Measured results:
+[`scanner/docs/results.md`](scanner/docs/results.md).
 
-| | When | Deliverable |
-|---|---|---|
-| M1 | early Nov 2026 | Scanner working on a phone against real garments |
-| M2 | late Dec 2026 | Scanner complete, goods-in bridge, tactical MILP solving |
-| M3 | Jan 2027 | External Open House |
-| M4 | Apr 2027 | Operational CP-SAT, on-device inference, real-conditions validation |
-| M5 | May 2027 | Final defence + paper |
+## Current models
+
+| Task | Model | Test macro F1 |
+|---|---|---:|
+| Fabric structure (24 classes) | SigLIP 2 + LoRA, `scanner-v8` | 0.767 |
+| Composition group (8 groups) | linear head, `custom/mix` | 0.714 |
+| Fabric fault | Dinomaly on DINOv2, `fault-wfdd-v1` (WFDD) | 0.871 |
+
+These are catalogue or benchmark test sets, not phone photos.

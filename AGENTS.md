@@ -88,7 +88,3 @@ tar -xzf fabric.tar.gz -C scanner/data && tar -xzf fibre.tar.gz -C scanner/data
 - Not done: iPhone WebKit e2e run, scanner hosting (`scanner/deployment/README.md`, not deployed).
 - The live app reaches a scanner through the Worker secret `TEXPILOT_API_URL`; deploying needs the
   Cloudflare account (`npm run deploy:cloudflare`).
-
-## Milestones
-
-M2 late Dec 2026: scanner complete. M3 Jan 2027: Open House. M5 May 2027: final defence and paper.
