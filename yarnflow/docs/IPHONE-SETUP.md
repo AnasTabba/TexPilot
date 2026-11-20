@@ -65,7 +65,7 @@ Scanner startup: see [`scanner/deployment/README.md`](../../scanner/deployment/R
 
 ## Local development
 
-From `yarn-erp/`, use Node 24+:
+From `yarnflow/`, use Node 24+:
 
 ```sh
 npm ci

@@ -32,7 +32,7 @@ Scanning: the Scan page opens on the capture flow, with **Fabric / garment** and
 
 ## Capabilities and Constraints
 
-- Every scan answer shows its top result with the model's own confidence as a colour-coded %. There is no "not sure" state; the % carries the doubt. Closest alternatives, the analysed photo and per-model timings sit under Details.
+- Every scan answer shows its top result with the model's own confidence as a colour-coded %. The top result always shows: there is no abstain state. Confidence carries the doubt as Very sure (85%+, green), Fairly sure (60-84%, amber) or Not sure (under 60%, red), per DESIGN.md. Closest alternatives, the analysed photo and per-model timings sit under Details.
 - Composition is said in trade terms (cotton, PC, CVC, polyester, with stretch where present); garments use local names (T-shirt, dupatta).
 - Scan output includes model predictions, label reads, translated display labels and measurements. Some results also use label-guided family mappings and illustrative artwork.
 - A scan never approves a batch by itself. QC approval is an owner action.
