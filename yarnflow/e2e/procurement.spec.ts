@@ -1,6 +1,20 @@
-import { test, expect, devices } from '@playwright/test';
+import { test, expect, devices, type Page } from '@playwright/test';
 import { origin, signIn } from './helpers';
 test.use({ serviceWorkers: 'block', reducedMotion: 'reduce' });
+// On a phone the detail sheet covers the page. Its Close button must sit above the top bar (regression proof), and is used before reaching the list behind it.
+const phone = (page: Page) => (page.viewportSize()?.width ?? 1024) < 760;
+const closeSheetOnPhone = async (page: Page) => {
+ const sheet = page.locator('.pb-sheet');
+ if (!phone(page) || !(await sheet.isVisible())) return false;
+ const close = sheet.getByRole('button', { name: 'Close', exact: true });
+ await expect(close).toBeVisible();
+ expect(await close.evaluate(el => { const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return !!hit && el.contains(hit); })).toBe(true);
+ await close.click(); await expect(sheet).toBeHidden();
+ return true;
+};
+const refresh = async (page: Page) => { await closeSheetOnPhone(page); await page.getByRole('button', { name: 'Refresh', exact: true }).click(); };
+// Inspections and Review are the inspector's and supervisor's queue tab on the phone bottom bar, and sit in the sidebar on desktop.
+const openPage = (page: Page, name: RegExp) => page.getByRole('navigation', { name: phone(page) ? 'Phone navigation' : 'Main navigation' }).getByRole('button', { name }).click();
 test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
 
 test('supplier registers, admin approves, RFQ is bid and awarded, and supplier records its B/L', async ({ page, browser, baseURL }, info) => {
@@ -58,7 +72,7 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await supplier.getByLabel('Note (optional)', { exact: true }).fill('30 days after delivery; freight and taxes included');
   await supplier.getByRole('button', { name: 'Send price', exact: true }).click();
   await expect(supplier.getByRole('button', { name: 'Change price', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refresh(page);
   await page.getByRole('tab', { name: /^Bids\b/ }).click();
   await page.locator('[data-stage="bids"]').getByRole('button', { name: /Test supplier mill/ }).click();
   await page.getByRole('button', { name: 'Review and accept bid' }).click();
@@ -75,15 +89,17 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   await supplier.getByRole('button', { name: 'Save dispatch notice' }).click();
   // The supplier portal does not show the bill of lading back; the purchase side checks it below.
   await expect(supplier.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refresh(page);
   await page.getByRole('tab', { name: /^Arriving\b/ }).click();
   await page.locator('[data-stage="incoming"]').getByRole('button', { name: /Test supplier mill/ }).click();
-  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  if (await closeSheetOnPhone(page)) { await page.getByRole('button', { name: 'Refresh', exact: true }).click(); await page.locator('[data-stage="incoming"]').getByRole('button', { name: /Test supplier mill/ }).click(); } else await refresh(page);
   await expect(page.getByText('Bill of lading: TESTBOL-1001').first()).toBeVisible();
+  await closeSheetOnPhone(page);
   await page.getByRole('button', { name: 'Tracking', exact: true }).click();
   await expect(page.getByText('Tracking is off.', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Buying', exact: true }).click();
   await page.locator('[data-stage="po"], [data-stage="incoming"]').getByRole('button', { name: /Test supplier mill/ }).click();
+  await closeSheetOnPhone(page);
   // The supplier's dispatch notice already carries the bill of lading, so the purchase manager has nothing left to attach.
   await page.locator('[data-stage="incoming"]').getByRole('button', { name: /Test supplier mill/ }).click();
   await page.getByRole('button', { name: 'Register arrival', exact: true }).click();
@@ -104,7 +120,7 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   const inspector = await inspectorContext.newPage();
   try {
    await signIn(inspector, 'Qasim');
-   await inspector.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /^Inspections/ }).click();
+   await openPage(inspector, /^Inspections/);
    await expect(inspector.getByRole('heading', { level: 1, name: 'Inspections', exact: true })).toBeVisible();
    await expect(inspector.getByText('ERP-RCV-001 ·').first()).toBeVisible();
    await inspector.getByRole('button', { name: 'Record inspection', exact: true }).click();
@@ -137,7 +153,7 @@ test('supplier registers, admin approves, RFQ is bid and awarded, and supplier r
   const supervisor = await supervisorContext.newPage();
   try {
    await signIn(supervisor, 'Saima');
-   await supervisor.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /^Review/ }).click();
+   await openPage(supervisor, /^Review/);
    await expect(supervisor.getByRole('heading', { level: 1, name: 'Review', exact: true })).toBeVisible();
    await supervisor.getByRole('button', { name: 'Accept report', exact: true }).click();
    await expect(supervisor.getByRole('status').filter({ hasText: 'Report accepted' })).toBeVisible();
@@ -194,7 +210,7 @@ test('admin legacy purchasing forms require intervention on every mutation, and 
  const rfq = (await (await page.request.get('/api/erp/procurement')).json()).rfqs[0];
  const bid = await post('/portal/bids', { id: crypto.randomUUID(), rfqId: rfq.id, version: 0, quantityMilli: rfq.quantity_milli, priceMinor: 125000, currency: 'PKR', paymentTerms: 'Net 30 after delivery', deliveryAt: Date.now() + 7 * 86400000, validUntil: Date.now() + 3 * 86400000, note: '' });
  expect(bid.status).toBe(201);
- await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+ await refresh(page);
  await page.getByRole('tab', { name: /^Bids\b/ }).click();
  await page.locator('[data-stage="bids"]').getByRole('button', { name: /Gate mill/ }).click();
  await page.getByRole('button', { name: 'Review and accept bid' }).click();

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { ScanResult } from "../src/scanner-client";
-import { signIn } from "./helpers";
+import { signIn, analyzeAgain } from "./helpers";
 
 // Route fixtures must reach the test rather than the production offline worker.
 test.use({ serviceWorkers: "block" });
@@ -51,7 +51,7 @@ test("model responses choose illustrations; abstentions ignore candidates and la
 
   result = { ...result, scan_id: "artwork-fixture-2", verdict: "FLAG", structure: head("corduroy"),
     garment: { label: "pants", confidence: 0.95, box: [0, 0, 1, 1] } };
-  await analyze.click();
+  await analyzeAgain(page);
   await expect(fabricArt).toHaveAttribute("data-artwork-id", "corduroy");
   await expect(page.locator('[data-artwork-kind="garment"]')).toHaveAttribute("data-artwork-id", "denim");
   await expect(page.locator('[data-artwork-kind="verdict"]')).toHaveAttribute("data-artwork-id", "flag");
@@ -62,7 +62,7 @@ test("model responses choose illustrations; abstentions ignore candidates and la
     candidates: { structure: [["denim", 0.49]], fibre_family: [["synthetic", 0.45]], garment_type: [["kurta", 0.6]] },
     stated_composition: { source: "care_label", fibers: [{ name: "cotton", pct: 100 }], ocr_confidence: 0.99, section: null },
     custom: { garment_type: null } };
-  await analyze.click();
+  await analyzeAgain(page);
   await expect(page.locator(".scan-garment-hero h3")).toHaveText("Kurta");
   await expect(fabricArt).toHaveAttribute("data-artwork-id", "denim");
   await expect(page.locator(".scan-rows")).toContainText("49%");
@@ -71,13 +71,13 @@ test("model responses choose illustrations; abstentions ignore candidates and la
   // No label and the mix head abstained: no photo guess at composition, only the honest line.
   result = { ...result, scan_id: "artwork-fixture-4", stated_composition: { source: null, fibers: [], ocr_confidence: null, section: null },
     candidates: { ...result.candidates, mix: [["cotton:100", 0.96]] }, custom: { mix: null } };
-  await analyze.click();
+  await analyzeAgain(page);
   await expect(page.locator(".scan-rows")).toContainText("Can't tell from the photo. Scan the care label.");
   await expect(page.locator(".scan-rows")).not.toContainText("100% Cotton");
 
   // A grouped composition head answers with a group name.
   result = { ...result, scan_id: "artwork-fixture-5", custom: { mix: head("polyester") } };
-  await analyze.click();
+  await analyzeAgain(page);
   await expect(page.locator(".scan-rows")).toContainText("Polyester");
   await expect(page.locator(".scan-rows")).toContainText("93%");
   await expect(page.locator('[data-artwork-kind="verdict"]')).toHaveAttribute("data-artwork-id", "insufficient_evidence");

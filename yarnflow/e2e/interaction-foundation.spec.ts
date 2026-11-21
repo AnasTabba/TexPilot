@@ -323,7 +323,8 @@ test('numbers are tabular, headings balance, and supported squircle corners stay
   expect(home.heading!.wrap).toBe('balance');
   if (home.supportsSquircle) {
     expect(home.panel!.corner).toMatch(/^(squircle|superellipse\(2\))$/);
-    expect(home.panel!.radius).not.toBe('0px');
+    // The phone layout runs the shell edge to edge on purpose (yarnflow.css: .live-main-shell radius 0 at phone width).
+    if (!(await page.locator('nav.live-bottom-nav').isVisible())) expect(home.panel!.radius).not.toBe('0px');
   }
 
   await openPage(page, '#/inventory', 'Stock');

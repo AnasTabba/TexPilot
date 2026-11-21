@@ -89,6 +89,6 @@ tar -xzf fabric.tar.gz -C scanner/data && tar -xzf fibre.tar.gz -C scanner/data
   no labels, so no accuracy yet. The fault check judged 121 of them `self_relative`. See `scanner/docs/results.md`.
 - The live Worker is NOT redeployed with these changes; the owner runs `npm run deploy:cloudflare`.
   The Modal recipe now ships the fault model; it is not deployed.
-- Not done: iPhone WebKit e2e run, scanner hosting (`scanner/deployment/README.md`, not deployed).
+- iPhone WebKit e2e runs and passes (21 Nov). Not done: scanner hosting (`scanner/deployment/README.md`, not deployed).
 - The live app reaches a scanner through the Worker secret `TEXPILOT_API_URL`; deploying needs the
   Cloudflare account (`npm run deploy:cloudflare`).

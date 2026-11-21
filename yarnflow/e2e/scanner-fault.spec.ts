@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { ScanResult } from "../src/scanner-client";
-import { signIn } from "./helpers";
+import { signIn, analyzeAgain } from "./helpers";
 
 // Route fixtures must reach the test rather than the production offline worker.
 test.use({ serviceWorkers: "block" });
@@ -38,27 +38,27 @@ test("the fault check shows fault, no fault, not run and nothing at all, without
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
   result = { ...base, fault: { ...fault, score: 0.2, is_fault: false } };
-  await analyze.click();
+  await analyzeAgain(page);
   await expect(block).toContainText("No fabric fault found");
   await expect(block).toHaveClass(/pass/);
 
   result = { ...base, fault: { ...fault, score: 0.3, is_fault: false, reference: "self_relative" } };
-  await analyze.click();
+  await analyzeAgain(page);
   await expect(block).toContainText("check by eye");
   await expect(block).not.toContainText("No fabric fault found");
   await expect(page.locator(".scan-details")).toContainText("This photo's own level");
 
   result = { ...base, fault: { ...fault, reference: "self_relative" } };
-  await analyze.click();
+  await analyzeAgain(page);
   await expect(block).toContainText("Unusual area marked");
   await expect(block).not.toContainText("No fabric fault found");
 
   result = { ...base, fault: { ...fault, score: 0, is_fault: false, heatmap_png_b64: null, skipped_reason: "garment too small for a close-up fault check" } };
-  await analyze.click();
+  await analyzeAgain(page);
   await expect(block).toHaveCount(0); // a skipped check shows nothing
 
   result = { ...base, fault: null }; // a scanner serving no fault model
-  await analyze.click();
+  await analyzeAgain(page);
   await expect(page.locator(".scan-rows")).toBeVisible();
   await expect(block).toHaveCount(0);
 });

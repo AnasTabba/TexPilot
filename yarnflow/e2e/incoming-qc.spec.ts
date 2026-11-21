@@ -35,10 +35,12 @@ async function openSampleDetails(page: Page) {
 }
 async function signOut(page: Page, name: string) {
  await page.goto('/#/profile');
- if (await page.locator('.live-bottom-nav').isVisible()) await page.getByRole('button', { name: 'More', exact: true }).click();
+ const phone = await page.locator('.live-bottom-nav').isVisible();
+ if (phone) await page.getByRole('button', { name: 'More', exact: true }).click();
  // The app asks window.confirm before signing out; Playwright dismisses unhandled dialogs, which would keep the session.
  page.once('dialog', dialog => dialog.accept());
- await page.getByRole('button', { name: 'Sign out ' + name }).filter({ visible: true }).click();
+ // Desktop names the button after the user; the phone More sheet has a plain "Sign out" entry.
+ await page.getByRole('button', { name: phone ? /^Sign out/ : 'Sign out ' + name }).filter({ visible: true }).click();
  await expect(page.getByRole('heading', { name: 'Who are you?', exact: true })).toBeVisible();
 }
 async function confirmSpec(page: Page, orderId: string) {
@@ -86,9 +88,11 @@ async function prepareSample(page: Page) {
  return { result, consentDouble, order };
 }
 async function tabTo(page: Page, target: Locator) {
+ // macOS WebKit (Safari) Tab skips buttons and file inputs by default; Option+Tab walks every control.
+ const next = (page.context().browser()?.browserType().name() === 'webkit') ? 'Alt+Tab' : 'Tab';
  for (let i = 0; i < 100; i++) {
   if (await target.evaluate(el => el === document.activeElement)) return;
-  await page.keyboard.press('Tab');
+  await page.keyboard.press(next);
  }
  throw new Error('Keyboard could not reach ' + await target.getAttribute('aria-label'));
 }
@@ -269,6 +273,8 @@ test.describe('real incoming QC workflow', () => {
 
 test.describe('production service worker', () => {
  test.use({ serviceWorkers: 'allow', reducedMotion: 'reduce' });
+ // WebKit does not route service-worker-originated fetches through Playwright (context.route is Chromium-only for workers), so the worker's install fetch hits the dev server's no-store responses and caches nothing.
+ test.skip(({ browserName }) => browserName === 'webkit', 'Playwright cannot route service-worker fetches in WebKit');
  test('built worker controls the page, purges obsolete shell caches and never caches real private originals', async ({ page, context }) => {
  test.setTimeout(60000);
  await page.request.post('/__test/reset');

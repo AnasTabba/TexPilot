@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { signOutAs } from './helpers';
 
 test.use({ serviceWorkers: 'block', reducedMotion: 'reduce' });
 test.beforeEach(async ({ page }) => { await page.request.post('/__test/reset'); });
@@ -35,9 +36,8 @@ test('backgrounding and closing a tab keep the session active', async ({ page, c
 
 test('explicit sign-out revokes the shared server session', async ({ page, context }) => {
   await signIn(page);
-  if (await page.locator('.live-bottom-nav').isVisible()) await page.getByRole('button', { name: /More pages/ }).click();
   page.once('dialog', (d) => void d.accept());
-  await page.getByRole('button', { name: 'Sign out Anas' }).filter({ visible: true }).click();
+  await signOutAs(page);
   await expect(page.getByRole('heading', { name: 'Who are you?', exact: true })).toBeVisible();
   await expect.poll(async () => (await page.request.get('/api/workspace')).status()).toBe(401);
   const second = await context.newPage();
