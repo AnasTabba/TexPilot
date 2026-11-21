@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -84,6 +85,8 @@ class FaultModel(BaseModel):
     heatmap_png_b64: str | None = None  # JET overlay, <= 512 px long side
     model_version: str
     skipped_reason: str | None = None
+    # Which rule judged the photo; None on older scanners or when the check was skipped.
+    reference: Literal["trained", "self_relative"] | None = None
 
 
 class ScanResult(BaseModel):

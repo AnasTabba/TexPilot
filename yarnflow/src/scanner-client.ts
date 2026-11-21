@@ -40,6 +40,8 @@ export interface ScanResult {
     model_version: string;
     /** Set when the check did not run (e.g. the garment is too small in the photo). */
     skipped_reason: string | null;
+    /** Which rule judged the photo: the fixed trained limit, or the photo's own level. Absent on older scanners. */
+    reference?: "trained" | "self_relative" | null;
   } | null;
   capture_quality: {
     blur: number | null;
@@ -181,7 +183,8 @@ export function parseScanResult(value: unknown): ScanResult {
       typeof fault.is_fault === "boolean" &&
       typeof fault.model_version === "string" &&
       (fault.heatmap_png_b64 == null || (typeof fault.heatmap_png_b64 === "string" && /^[A-Za-z0-9+/=]+$/.test(fault.heatmap_png_b64))) &&
-      (fault.skipped_reason == null || typeof fault.skipped_reason === "string")
+      (fault.skipped_reason == null || typeof fault.skipped_reason === "string") &&
+      (fault.reference == null || fault.reference === "trained" || fault.reference === "self_relative")
     )
   )
     throw new ScanError("response");

@@ -340,3 +340,59 @@ def test_unknown_method_is_a_value_error(tmp_path):
     _write_cfg(d, cfg)
     with pytest.raises(ValueError, match="bogus"):
         FaultDetector(d, "cpu")
+
+
+def _gated(tmp_path, gate):
+    d = _model_dir(tmp_path)
+    cfg = json.loads((d / "config.json").read_text())
+    (d / "config.json").write_text(json.dumps(cfg | {"max_map_median": gate, "relative_z": 7.5}))
+    return d
+
+
+def _raised_fabric(spot=False):
+    rng = np.random.default_rng(0)
+    img = np.full((300, 400, 3), 120, np.uint8)
+    img[:, :, 0] = rng.integers(115, 126, (300, 400))
+    if spot:
+        img[100:160, 200:260, 0] = 255
+    return img
+
+
+def test_relative_branch_reports_self_relative(tmp_path):
+    d = _gated(tmp_path, 0.2)
+    assert StubDetector(d).detect(_raised_fabric(), None).reference == "self_relative"
+    assert StubDetector(d).detect(_raised_fabric(spot=True), None).reference == "self_relative"
+
+
+def test_trained_branch_reports_trained(tmp_path):
+    d0 = _model_dir(tmp_path)
+    assert StubDetector(d0).detect(_hot_square_image(), None).reference == "trained"
+    d = _gated(tmp_path / "g", 0.9)  # map median 0.12 is below the gate
+    assert StubDetector(d).detect(_hot_square_image(), None).reference == "trained"
+
+
+def test_skipped_check_has_no_reference(tmp_path):
+    out = StubDetector(_model_dir(tmp_path)).detect(_hot_square_image(), (0.0, 0.0, 0.01, 0.01))
+    assert out.skipped_reason and out.reference is None
+
+
+def test_reference_does_not_change_the_numbers(tmp_path):
+    # trained: stub map is red/255, hot square = 1.0, fixed threshold 0.5
+    out = StubDetector(_model_dir(tmp_path)).detect(_hot_square_image(), None)
+    assert (out.score, out.threshold, out.is_fault) == (1.0, 0.5, True)
+    assert len(out.regions) == 1 and out.regions[0].score == 1.0
+    # relative: threshold = median + 7.5 * 1.4826 * MAD of the same map, worked out by hand
+    img = _raised_fabric(spot=True)
+    amap = img[:, :, 0].astype(np.float32) / 255.0
+    med = float(np.median(amap))
+    mad = float(np.median(np.abs(amap - med)))
+    out = StubDetector(_gated(tmp_path / "r", 0.2)).detect(img, None)
+    assert out.score == pytest.approx(1.0)
+    assert out.threshold == pytest.approx(med + 7.5 * 1.4826 * mad, abs=0.01)
+    assert out.is_fault and len(out.regions) == 1
+    assert out.regions[0].score == pytest.approx(1.0)
+
+
+def test_uniform_photo_on_relative_branch_is_not_a_fault(tmp_path):
+    out = StubDetector(_gated(tmp_path, 0.2)).detect(np.full((300, 400, 3), 120, np.uint8), None)
+    assert out.reference == "self_relative" and out.is_fault is False

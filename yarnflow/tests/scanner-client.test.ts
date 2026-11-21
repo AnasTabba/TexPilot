@@ -339,6 +339,10 @@ test("Fault check: absent, null and well-formed results pass; malformed ones are
     "fault",
   ])
     assert.throws(() => parseScanResult({ ...fixture, fault: bad }), ScanError);
+  for (const ok of ["trained", "self_relative", null, undefined])
+    assert.equal(parseScanResult({ ...fixture, fault: { ...fault, reference: ok } }).fault?.reference, ok);
+  for (const bad of ["relative", 1, "<img src=x>"])
+    assert.throws(() => parseScanResult({ ...fixture, fault: { ...fault, reference: bad } }), ScanError);
 });
 test("Spec label photo over 10 MB is named as the label, not the fabric scan", async () => {
   const scan = new File([new Uint8Array([73, 73, 42, 0])], "swatch.tif", { type: "image/tiff" });

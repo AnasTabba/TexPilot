@@ -201,7 +201,9 @@ class FaultDetector:
         amap = _stitch(maps, boxes, wh, ww)
         score = float(amap.max())
         med = float(np.median(amap))
+        reference = "trained"
         if self.max_map_median is not None and med > self.max_map_median:
+            reference = "self_relative"
             # A fabric unlike the trained ones: the whole map is raised, so judge each spot against
             # this photo's own level instead. A fault is a spot ``relative_z`` robust deviations
             # above the photo's median; 7.5 flags 4.4 % of WFDD good photos (chosen there).
@@ -239,6 +241,7 @@ class FaultDetector:
             regions=tuple(regions[:MAX_REGIONS]),
             heatmap_png_b64=_heatmap_b64(image, (cx0, cy0, cx1, cy1), amap, thr),
             model_version=self.version,
+            reference=reference,
         )
 
 

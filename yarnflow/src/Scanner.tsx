@@ -34,6 +34,7 @@ import {
   type ModelInfo,
   type HeadPrediction,
 } from "./scanner-client";
+import { faultHeadline } from "./scan-fault-text";
 import ScannerArtwork from "./ScannerArtwork";
 import { ActionBar, Steps, Step, StatusTag, Confidence } from "./ui";
 import "./scan.css";
@@ -879,14 +880,13 @@ export default function Scanner({
                       </li>
                   )}
                 </ul>
-                {/* Shown only when the fault check ran: a skipped check (unknown fabric, garment too small) shows nothing. */}
-                {result.fault && !result.fault.skipped_reason && (
-                  <div className={`scan-fault ${result.fault.is_fault ? "flag" : "pass"}`}>
-                    <strong>
-                      {result.fault.is_fault
-                        ? t("Possible fabric fault: look at the marked area", "کپڑے میں ممکنہ خرابی: نشان زد حصے کو دیکھیں")
-                        : t("No fabric fault found", "کپڑے میں کوئی خرابی نہیں ملی")}
-                    </strong>
+                {/* Shown only when the fault check ran: a skipped check (garment too small) shows nothing. */}
+                {(() => {
+                  const h = faultHeadline(result.fault);
+                  if (!h || !result.fault) return null;
+                  return (
+                  <div className={`scan-fault ${h.tone === "check" ? "flag check" : h.tone}`}>
+                    <strong>{t(h.en, h.ur)}</strong>
                     {result.fault.heatmap_png_b64 && (
                       <>
                         <div className="scan-fault-images">
@@ -905,7 +905,8 @@ export default function Scanner({
                       </>
                     )}
                   </div>
-                )}
+                  );
+                })()}
                 <div className={`scan-verdict ${result.verdict.toLowerCase()}`}>
                   <span className="scan-verdict-icon">
                     <ScannerArtwork kind="verdict" label={result.verdict} />
@@ -985,6 +986,16 @@ export default function Scanner({
                         <dd>
                           {result.fault.score.toFixed(3)} · {t("limit", "حد")} {result.fault.threshold.toFixed(3)}
                         </dd>
+                        {result.fault.reference && (
+                          <>
+                            <dt>{t("Fault rule", "جانچ کا طریقہ")}</dt>
+                            <dd>
+                              {result.fault.reference === "trained"
+                                ? t("Fixed limit (trained fabrics)", "مقررہ حد (سیکھے ہوئے کپڑے)")
+                                : t("This photo's own level", "اسی تصویر کی اپنی سطح")}
+                            </dd>
+                          </>
+                        )}
                       </div>
                     )}
                     {result.timings_ms?.total !== undefined && (

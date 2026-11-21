@@ -88,6 +88,37 @@ def test_a_skipped_fault_check_adds_no_flag(state):
     assert "FAULT_DETECTED" not in {f["code"] for f in body["flags"]}
 
 
+def test_reference_round_trips_and_defaults_to_none(state):
+    fault = FaultOutput(0.3, False, 0.5, (), None, "fault-1", None, "self_relative")
+    state["predictor"] = FakePredictor(VisionOutput(None, None, None, fault=fault))
+    assert _scan().json()["fault"]["reference"] == "self_relative"
+    fault = FaultOutput(0.3, False, 0.5, (), None, "fault-1")
+    state["predictor"] = FakePredictor(VisionOutput(None, None, None, fault=fault))
+    assert _scan().json()["fault"]["reference"] is None
+
+
+def test_self_relative_fault_flag_says_check_by_eye(state):
+    fault = FaultOutput(
+        0.7, True, 0.5, (FaultRegion((0, 0, 1, 1), 0.7),), None, "fault-1", None, "self_relative"
+    )
+    state["predictor"] = FakePredictor(VisionOutput(None, None, None, fault=fault))
+    [flag] = [f for f in _scan().json()["flags"] if f["code"] == "FAULT_DETECTED"]
+    assert flag == {
+        "code": "FAULT_DETECTED",
+        "message": "Unusual area: check by eye (score 0.70)",
+        "severity": "medium",
+    }
+
+
+def test_trained_fault_flag_keeps_old_wording(state):
+    fault = FaultOutput(
+        0.7, True, 0.5, (FaultRegion((0, 0, 1, 1), 0.7),), None, "fault-1", None, "trained"
+    )
+    state["predictor"] = FakePredictor(VisionOutput(None, None, None, fault=fault))
+    [flag] = [f for f in _scan().json()["flags"] if f["code"] == "FAULT_DETECTED"]
+    assert flag["message"] == "Possible fabric fault: unknown type (score 0.70)"
+
+
 # --- config: the fallback needs the real build_scanner, with its loaders faked ---
 
 

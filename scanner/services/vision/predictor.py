@@ -49,6 +49,7 @@ class FaultOutput:
     heatmap_png_b64: str | None  # JET overlay, <= 512 px long side
     model_version: str
     skipped_reason: str | None = None
+    reference: str | None = None  # "trained" | "self_relative"; None when the check did not run
 
 
 @dataclass(frozen=True)

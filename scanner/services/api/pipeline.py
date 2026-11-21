@@ -61,12 +61,16 @@ def _fault(out: FaultOutput | None) -> FaultModel | None:
         heatmap_png_b64=out.heatmap_png_b64,
         model_version=out.model_version,
         skipped_reason=out.skipped_reason,
+        reference=out.reference,
     )
 
 
 def _fault_flags(out: FaultOutput | None) -> list[FlagModel]:
     if out is None or not out.is_fault:
         return []
+    if out.reference == "self_relative":
+        message = f"Unusual area: check by eye (score {out.score:.2f})"
+        return [FlagModel(code="FAULT_DETECTED", message=message, severity="medium")]
     top = max(out.regions, key=lambda r: r.score, default=None)
     kind = top.type if top is not None and top.type else "unknown type"
     message = f"Possible fabric fault: {kind} (score {out.score:.2f})"
