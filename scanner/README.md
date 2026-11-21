@@ -36,6 +36,13 @@ judged against its own level instead: a fault is a spot 7.5 robust deviations ab
 median (`max_map_median` and `relative_z` in `models/fault-wfdd-v1/config.json`). See
 `services/vision/fault.py`.
 
+The result's `reference` field says which rule judged the photo: `trained` (fixed threshold, WFDD-like
+fabric) or `self_relative` (other fabric). The scan page says "check by eye" for `self_relative`.
+The Incoming QC (v2) `defects` stage runs the fault model on flat-swatch captures. It answers only on
+`trained` fabric; otherwise it abstains (`OOD`), and it is disabled when the fault model is not installed.
+Real-upload scripts (`scripts/real_uploads.py`, `label_sheet.py`, `eval_real_set.py`) measure answer
+coverage on the stored uploads and score human labels; see `docs/results.md`. They write only to `runs/`.
+
 ## Results
 
 Measured numbers, with their test sets and evidence files, are in [`docs/results.md`](docs/results.md).

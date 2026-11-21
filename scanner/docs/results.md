@@ -48,8 +48,58 @@ WFDD test split, 444 photos (241 defect, 203 good), with the served rule (fixed 
 | Image AUROC (peak score) | 0.972 |
 
 Per category macro F1: grid_cloth 0.927, yellow_cloth 0.921, grey_cloth 0.871, pink_flower 0.598.
-On 195 real garment scans the plain threshold flagged all 195; the relative rule flags 11 (5.6%).
+The WFDD table has no evidence path: the WFDD images were not on the machine used for this update, so it was not re-run (the figures are from the earlier measurement).
+The rule that judged each photo is returned as `reference` (`trained` or `self_relative`). On real uploads, see the next section.
 No labelled real-garment defect set exists, so accuracy on real garments is not measured.
+(The earlier "195 real garment scans" figure was not deduplicated and had no evidence path; it is replaced below.)
+
+## Calibration of the structure head (catalogue photos)
+
+Served structure head (`models/scanner-v8` Head A), TextileNet catalogue test split, evidence
+`docs/agent1-abstain-results.md`: coverage 0.8201, accuracy of answered photos 0.8952, macro F1 of answered photos 0.8540.
+Test ECE 0.0567 uncalibrated (T=1), 0.0214 with T fitted on validation.
+
+## Real uploaded photos (coverage, not accuracy)
+
+Photos uploaded to the scanner by app users. These are not catalogue photos and no human labels exist yet, so this
+section measures how often each head answers, not whether it is right.
+Evidence: `scanner/runs/real_uploads/2026-11-22/` (`coverage.md`, `coverage.json`, `run_info.json`; gitignored, not in git).
+Run: scanner-v8 with the fault model `fault-wfdd-v1`, photo only (no label text), CPU, 21 Nov 2026.
+
+- 135 unique uploads; 10 excluded as web formats (6 PNG, 4 WEBP); 125 evaluated; 118 near-duplicate groups; 0 scanner errors.
+- Sources of the 125: 2 camera photos with EXIF, 123 in-app JPEGs without EXIF. The in-app camera strips EXIF, so
+  the 123 may be phone photos but this cannot be proved from the files. Do not call them "phone photos" without this caveat.
+- Counts are per image; near-duplicates make them correlated.
+
+Answer rate (answered / 125):
+
+| Head | Answered | Rate | Catalogue reference |
+|---|---:|---:|---|
+| structure | 50 | 40.0% | 0.8201 coverage, catalogue test (`docs/agent1-abstain-results.md`) |
+| fibre_family | 37 | 29.6% | none |
+| treatment | 0 | 0.0% | none |
+| garment | 97 | 77.6% | none |
+| custom.blend | 98 | 78.4% | none |
+| custom.fibre | 3 | 2.4% | none |
+| custom.finish | 102 | 81.6% | none |
+| custom.garment_type | 98 | 78.4% | none |
+| custom.local_fabric | 55 | 44.0% | none |
+| custom.mix | 60 | 48.0% | 53.2% answers given, catalogue test (table above) |
+
+Fault check by rule (the flag rate is within each bucket; it is not a false-alarm rate, because no photo is labelled):
+
+| Rule | n | Flagged |
+|---|---:|---:|
+| self_relative (fabric unlike WFDD) | 121 | 13 (10.7%) |
+| trained (WFDD-like fabric) | 1 | 1 (100%) |
+| skipped | 3 | none |
+
+Composition is not measurable here: only 2 photos came with label text.
+
+Labels pending: there is no real-photo accuracy yet. To get one, a person labels the photos blind
+(`cd scanner && ../.venv/bin/python scripts/label_sheet.py --out runs/real_uploads/2026-11-22`, then save the downloaded CSV in `labels/`)
+and `scripts/eval_real_set.py --out runs/real_uploads/2026-11-22` scores it from human labels only.
+Rebuild the report with `scripts/real_uploads.py triage|rerun|report`.
 
 ## Other evaluations
 

@@ -32,12 +32,13 @@ Scanning: the Scan page opens on the capture flow, with **Fabric / garment** and
 
 ## Capabilities and Constraints
 
-- Every scan answer shows its top result with the model's own confidence as a colour-coded %. The top result always shows: there is no abstain state. Confidence carries the doubt as Very sure (85%+, green), Fairly sure (60-84%, amber) or Not sure (under 60%, red), per DESIGN.md. Closest alternatives, the analysed photo and per-model timings sit under Details.
+- Every scan answer shows its top result with the model's own confidence as a colour-coded %. Every row shows its top answer. When a head is below its threshold the row shows the closest candidate, and the colour band carries the doubt: Very sure (85%+, green), Fairly sure (60-84%, amber) or Not sure (under 60%, red), per DESIGN.md. Closest alternatives, the analysed photo and per-model timings sit under Details.
 - Composition is said in trade terms (cotton, PC, CVC, polyester, with stretch where present); garments use local names (T-shirt, dupatta).
-- Scan output includes model predictions, label reads, translated display labels and measurements. Some results also use label-guided family mappings and illustrative artwork.
+- Scan output includes model predictions, label reads, translated display labels and measurements. Some results also use label-guided family mappings and a fixed drawing per predicted class (`artwork/scanner-outcomes`), never made from the photo.
+- The fault check says "check by eye" when the photo is of fabric unlike the fabrics the fault model learned (`reference: self_relative`): marked spots are only unusual areas. On WFDD-like fabric it says "Possible fabric fault" or "No fabric fault found".
 - A scan never approves a batch by itself. QC approval is an owner action.
 - No wash-type model or wash result is currently available.
-- Stock and accounts live in one shared Cloudflare D1 database. Everyone signs in with a name and PIN and sees the same stock; admins choose recording permissions. Draft forms and the language preference are local convenience state. The live database contains real entries only. Inspection photo upload is not implemented yet.
+- Stock and accounts live in one shared Cloudflare D1 database. Everyone signs in with a name and PIN and sees the same stock; admins choose recording permissions. Draft forms and the language preference are local convenience state. The live database contains real entries only. Inspection photos upload from the Inspections page (`/api/erp/qc/photos`), and Incoming Fabric QC uploads its capture originals for analysis.
 - English and اردو are selectable on sign-in and in Settings. The choice persists locally; Urdu uses right-to-left layout while PINs, quantities and identifiers keep their intended order.
 - `ios/` holds a separate native iOS Yarnflow app from the team's 25 Oct work; this record covers the web app.
 
