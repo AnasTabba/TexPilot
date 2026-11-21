@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from services.api.config import Settings, browser_origins, build_ocr, build_predictor, build_store
 from services.api.pipeline import run_scan
-from services.api.qc import QCErrorBoundary, qc_app
+from services.api.qc import QCErrorBoundary, get_qc_predictor, qc_app
 from services.api.schemas import FlagModel, ScanResult, SpecResult
 from services.api.spec import run_spec
 from services.api.uploads import check_upload
@@ -40,6 +40,7 @@ async def lifespan(_: FastAPI):
         model_version=version,
         store=build_store(settings),
     )
+    get_qc_predictor()  # warm: the fault model must not load inside the first QC request's deadline
     yield
 
 

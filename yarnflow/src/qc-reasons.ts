@@ -7,7 +7,7 @@
  * until a named reviewer signs them off, and the screen says so while Urdu is selected. Numbers,
  * units, IDs and tolerances are never translated; they are rendered left-to-right in Latin digits.
  */
-import type { CaptureRole, DecisionStatus, ErrorCode, Outcome, Reason, StageName, StageState } from './qc-types.ts';
+import type { CaptureRole, DecisionStatus, DefectValue, ErrorCode, Outcome, Reason, Stage, StageName, StageState } from './qc-types.ts';
 
 export const URDU_REVIEWED = false;
 export type Pair = readonly [english: string, urdu: string];
@@ -70,6 +70,31 @@ export const STATE_TEXT: Record<StageState, Pair> = {
   OK: ['Completed', 'مکمل'], ABSTAINED: ['Could not tell', 'نتیجہ نہیں نکل سکا'], FAILED: ['Failed to run', 'چل نہیں سکی'],
   DISABLED: ['Not available', 'دستیاب نہیں'], NOT_RUN: ['Not run', 'نہیں چلائی گئی'],
 };
+/** Reasons listed under a stage. The defect stage's OOD is said once, in defectSummary, so it is dropped here. */
+export const stageReasons = (name: StageName, stage: { reasons: Reason[] }): Reason[] =>
+  name === 'defects' ? stage.reasons.filter(r => r !== 'OOD') : stage.reasons;
+/** One plain sentence for the defect stage. Never reads as a pass: only OK says anything about the photos, and only "no defect marked". */
+export function defectSummary(stage: Stage<DefectValue>): Pair {
+  const eye: Pair = ['Look for faults by eye.', 'نقص ہاتھ اور آنکھ سے دیکھیں۔'];
+  const has = (r: Reason) => stage.reasons.includes(r);
+  switch (stage.state) {
+    case 'OK':
+      return has('DEFECT_SUSPECTED')
+        ? ['Possible defect in the marked areas. The supervisor decides.', 'نشان زد حصوں میں ممکنہ نقص ہے۔ فیصلہ سپروائزر کرے گا۔']
+        : ['No defect marked in the checked photos. This covers only the photographed area.', 'جانچی گئی تصاویر میں کوئی نقص نشان زد نہیں ہوا۔ یہ صرف تصویر میں آنے والے حصے کے بارے میں ہے۔'];
+    case 'DISABLED':
+      return [`The defect check is not installed on this scanner. ${eye[0]}`, `اس اسکینر میں نقص کی جانچ لگی ہوئی نہیں ہے۔ ${eye[1]}`];
+    case 'FAILED':
+      return [`The defect check failed to run. ${eye[0]}`, `نقص کی جانچ چل نہیں سکی۔ ${eye[1]}`];
+    case 'NOT_RUN':
+      return [`The defect check did not run. ${eye[0]}`, `نقص کی جانچ نہیں چلائی گئی۔ ${eye[1]}`];
+    case 'ABSTAINED':
+      if (has('OOD')) return [`This fabric is unlike the fabrics the defect check learned, so it gave no result. ${eye[0]}`, `یہ کپڑا ان کپڑوں سے مختلف ہے جن پر نقص جانچنے والا ماڈل سکھایا گیا، اس لیے کوئی نتیجہ نہیں آیا۔ ${eye[1]}`];
+      if (has('QUALITY_FRAMING')) return ['The photo did not show enough fabric for the defect check. Retake it closer.', 'تصویر میں نقص کی جانچ کے لیے کافی کپڑا نہیں آیا۔ قریب سے دوبارہ لیں۔'];
+      if (has('STAGE_UNAVAILABLE')) return [`The defect check ran out of time. ${eye[0]}`, `نقص کی جانچ کا وقت ختم ہو گیا۔ ${eye[1]}`];
+      return [`The defect check gave no result. ${eye[0]}`, `نقص کی جانچ سے کوئی نتیجہ نہیں آیا۔ ${eye[1]}`];
+  }
+}
 export const ROLE_TEXT: Record<CaptureRole, { name: Pair; instruction: Pair }> = {
   overview: { name: ['Overview photo', 'مجموعی تصویر'], instruction: ['Stand back so the whole sampled area and its position on the roll are visible. Fabric flat, even light.', 'پیچھے ہٹیں تاکہ نمونے کا پورا حصہ اور رول پر اس کی جگہ نظر آئے۔ کپڑا سیدھا، روشنی یکساں۔'] },
   structure: { name: ['Close-up of the weave', 'بُنائی کی قریبی تصویر'], instruction: ['Hold the phone steady and square to the fabric, close enough to see single threads. No digital zoom.', 'فون کو ساکن اور کپڑے کے بالکل سامنے رکھیں، اتنا قریب کہ ایک ایک دھاگا نظر آئے۔ ڈیجیٹل زوم نہیں۔'] },

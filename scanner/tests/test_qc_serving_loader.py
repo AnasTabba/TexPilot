@@ -1,4 +1,5 @@
-"""Pin honest artifact readiness; real fault parity remains external gate G6."""
+"""Pin honest artifact readiness. The fault serving path exists (config._load_fault); real
+parity on WFDD images is evidenced in docs/results.md, but the images are not in the repo (G6)."""
 
 import json
 
@@ -104,6 +105,62 @@ def test_missing_local_encoder_refuses_before_any_model_or_download(monkeypatch,
         config.build_qc_predictor(config.Settings(vision="scanner", bundle=tmp_path))
 
 
-@pytest.mark.skip(reason="Not yet collected / external gate G6: no loadable real fault checkpoint")
+@pytest.mark.skip(
+    reason="Needs WFDD images (Drive only); parity evidenced in docs/results.md"
+)
 def test_real_checkpoint_evaluation_serving_score_and_box_parity():
     """Requires the selected-format loader, real weights, preprocessing and target proof."""
+
+
+def _fault_settings(tmp_path):
+    return config.Settings(vision="scanner", bundle=tmp_path, fault_model=tmp_path / "fault")
+
+
+def _heads_predictor(monkeypatch):
+    from tests.test_qc_pipeline import FlatSwatchPredictorDouble
+
+    base = qc_pipeline.FlatSwatchPredictor(
+        FlatSwatchPredictorDouble().heads, "a" * 64, "fabric24-head_a"
+    )
+    monkeypatch.setattr(config, "_load_qc_heads", lambda _s: base)
+    return base
+
+
+def test_fault_model_loads_with_digest_that_tracks_config_bytes(monkeypatch, tmp_path):
+    _heads_predictor(monkeypatch)
+    (tmp_path / "fault").mkdir()
+    cfg = tmp_path / "fault/config.json"
+    cfg.write_text("{}")
+    monkeypatch.setattr(config, "_load_fault", lambda s: object())
+    p = config.build_qc_predictor(_fault_settings(tmp_path))
+    assert p.fault is not None and len(p.qc_fault_artifact_sha256) == 64
+    first = p.qc_fault_artifact_sha256
+    cfg.write_text('{"a": 1}')
+    assert config.build_qc_predictor(_fault_settings(tmp_path)).qc_fault_artifact_sha256 != first
+
+
+def test_fault_loader_failure_keeps_fabric_heads(monkeypatch, tmp_path):
+    base = _heads_predictor(monkeypatch)
+
+    def boom(_s):
+        raise ImportError("no torch")
+
+    monkeypatch.setattr(config, "_load_fault", boom)
+    p = config.build_qc_predictor(_fault_settings(tmp_path))
+    assert p.fault is None and p.heads is base.heads and p.qc_artifact_sha256 == "a" * 64
+
+
+def test_unset_fault_model_never_calls_loader(monkeypatch, tmp_path):
+    _heads_predictor(monkeypatch)
+    monkeypatch.setattr(config, "_load_fault", lambda _s: pytest.fail("loader invoked"))
+    p = config.build_qc_predictor(config.Settings(vision="scanner", bundle=tmp_path))
+    assert p.fault is None
+
+
+def test_readiness_with_fault_digest_is_ok_but_not_ready():
+    p = qc_pipeline.FlatSwatchPredictor(
+        None, "a" * 64, "t", fault=object(), qc_fault_artifact_sha256="d" * 64
+    )
+    ready = qc_pipeline.qc_readiness(p)
+    row = next(s for s in ready.stages if s.name == "defects")
+    assert (row.state, row.artifact_sha256) == ("OK", "d" * 64) and not ready.ready

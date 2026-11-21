@@ -6,6 +6,8 @@ stops the server with a message. Misconfiguration must be loud.
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -112,10 +114,48 @@ def _load_qc_heads(s: Settings):
     return load_flat_swatch_predictor(s)
 
 
+def _load_fault(s: Settings):
+    from services.vision.fault import FaultDetector
+    from services.vision.runtime import pick_device
+
+    return FaultDetector(s.fault_model, pick_device(s.device))
+
+
+def _fault_digest(model_dir: Path) -> str:
+    """Hash of every file the loader reads, so a changed model changes the stage's artifact."""
+    from services.api.qc_schemas import content_sha256, sha256_hex
+
+    cfg_path = model_dir / "config.json"
+    files = [cfg_path, model_dir / "weights.pt"]
+    encoder = json.loads(cfg_path.read_bytes()).get("encoder_file")
+    if encoder:
+        files.append(model_dir / encoder)
+    files += sorted((model_dir / "Dinomaly/backbones/weights").glob("*.pth"))
+    return content_sha256(
+        {
+            "files": {
+                str(p.relative_to(model_dir)): sha256_hex(p.read_bytes())
+                for p in files
+                if p.is_file()
+            }
+        }
+    )
+
+
 def build_qc_predictor(s: Settings):
     """Independent v2 flat-swatch factory: never constructs the v1 garment detector."""
     if s.vision == "stub":
         return StubPredictor()
     if s.vision != "scanner":
         raise ValueError("unsupported QC vision configuration")
-    return _load_qc_heads(s)
+    predictor = _load_qc_heads(s)
+    if s.fault_model is None:
+        return predictor
+    try:
+        fault = _load_fault(s)
+        digest = _fault_digest(s.fault_model)
+    except Exception as e:  # noqa: BLE001 -- the defects stage is optional; fabric must still serve
+        log.warning("QC fault model not loaded from %s: %s: %s", s.fault_model, type(e).__name__, e)
+        return predictor
+    # ponytail: v1 and v2 load separate fault model copies (~0.6 GB); share one if memory matters.
+    return dataclasses.replace(predictor, fault=fault, qc_fault_artifact_sha256=digest)

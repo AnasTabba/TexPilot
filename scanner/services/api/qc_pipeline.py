@@ -19,6 +19,9 @@ from services.api.qc_schemas import (
     AnalysisBinding,
     AnalysisCandidate,
     AnalyzeRequest,
+    DefectRegion,
+    DefectValue,
+    DefectView,
     DomainManifest,
     EvaluationContext,
     Evidence,
@@ -35,11 +38,17 @@ from services.api.qc_schemas import (
     fabric_artifact_sha256,
     sha256_hex,
 )
+from services.api.qc_service_auth import timestamp
 from services.consistency import qc_policy
 from services.vision.predictor import StubPredictor, VisionOutput
 from services.vision.qc_imageio import DecodedOriginal, derivative
 from services.vision.qc_metrology import measure_construction
 from services.vision.qc_quality import ArtifactStore, QualityView, assess_capture_set
+
+wall_time = time.time  # monkeypatch point, same pattern as qc.py
+# ponytail: calibration knob, CPU seconds per view. Measured 21 Nov 2026 on this Mac (nice 10,
+# cpu, fault-wfdd-v1, synthetic 1600x1200): 4.7 s and 4.9 s per detect(). 10 s leaves 2x headroom.
+DEFECT_VIEW_BUDGET_S = 10.0
 
 
 @dataclass(frozen=True)
@@ -122,6 +131,66 @@ def _fabric(batch: CaptureBatch, predictor) -> Stage:
     )
 
 
+def _defects(batch: CaptureBatch, predictor, deadline_at: str) -> Stage:
+    """Fault model on flat-swatch captures. One view it cannot judge makes the stage abstain."""
+    fault = getattr(predictor, "fault", None)
+    digest = getattr(predictor, "qc_fault_artifact_sha256", None)
+    if fault is None or digest is None:
+        return unavailable()
+    # The scale card is a foreign object the map would mark by design: never scored (plan D1).
+    views = [v for v in batch.captures if v.capture.role == "defect"] or [
+        v for v in batch.captures if v.capture.role in ("overview", "structure")
+    ]
+    if not views:
+        return unavailable("ABSTAINED", "QUALITY_FRAMING")
+    clamp = lambda x: min(1.0, max(0.0, float(x)))  # noqa: E731
+    # float rounding in the photo-space mapping can land a hair outside [0, 1]
+    unit_box = lambda b: tuple(clamp(c) for c in b)  # noqa: E731
+    seen, regions, flagged = [], [], False
+    for view in views:
+        if timestamp(deadline_at) - wall_time() < DEFECT_VIEW_BUDGET_S:
+            return unavailable("ABSTAINED", "STAGE_UNAVAILABLE")
+        rgb, _ = derivative(batch.originals[view.capture.id].rgb, 1600, "qc-defect")
+        out = fault.detect(rgb, None)  # flat swatch: no garment box
+        if getattr(out, "reference", None) != "trained":
+            return unavailable("ABSTAINED", "OOD")
+        cid, tid = view.capture.id, "qc-defect-max1600"
+        seen.append(
+            DefectView(
+                capture_id=cid,
+                capture_sha256=view.verified_sha256,
+                transform_id=tid,
+                score=clamp(out.score),
+                observed_area_cm2=None,
+            )
+        )
+        regions += [
+            DefectRegion(
+                capture_id=cid,
+                transform_id=tid,
+                box=b,
+                score=clamp(r.score),
+                label=getattr(r, "type", None),
+            )
+            for r in out.regions
+            for b in [unit_box(r.box)]
+            if b[0] < b[2] and b[1] < b[3]
+        ]
+        flagged = flagged or bool(out.is_fault)
+    return Stage[DefectValue](
+        state="OK",
+        value=DefectValue(
+            score=max(v.score for v in seen),
+            regions=regions,
+            observed_area_cm2=0.0,  # no physical scale on a defect view
+            views=seen,
+        ),
+        reasons=["DEFECT_SUSPECTED"] if flagged else [],
+        artifact_sha256=digest,
+        duration_ms=0.0,
+    )
+
+
 def _metrology(batch, spec, domain, artifacts, context):
     stages = []
     for view in batch.captures:
@@ -179,9 +248,7 @@ def run_qc_analysis(
         )
     )
     fabric = _independent(lambda: _fabric(captures, predictor))
-    # FaultDetector._load_model is NotImplementedError today. Neither a configured path
-    # nor a legacy fault-like object proves a real loadable/validated artifact (G6).
-    defects = _independent(unavailable)
+    defects = _independent(lambda: _defects(captures, predictor, context.deadline_at))
     metrology = _independent(lambda: _metrology(captures, spec, domain, artifacts, context))
     # A request's manifest is not a released domain-assessment executable artifact.
     domain_stage = _independent(lambda: unavailable("DISABLED", "DOMAIN_UNVALIDATED"))
@@ -229,9 +296,11 @@ def run_qc_analysis(
 def qc_readiness(predictor=None) -> Readiness:
     """Usable artifacts, never an authority claim. No missing stage can become ready."""
     artifact = getattr(predictor, "qc_artifact_sha256", None)
+    fault = getattr(predictor, "qc_fault_artifact_sha256", None)
     rows = []
     for name in STAGE_NAMES:
-        state, digest = ("OK", artifact) if name == "fabric" and artifact else ("DISABLED", None)
+        digest = {"fabric": artifact, "defects": fault}.get(name)
+        state = "OK" if digest else "DISABLED"
         reason = "DOMAIN_UNVALIDATED" if name == "domain" else "STAGE_UNAVAILABLE"
         rows.append(
             ReadinessStage(
@@ -265,6 +334,8 @@ class FlatSwatchPredictor:
     heads: _SelectedStructureHeads
     qc_artifact_sha256: str
     qc_taxonomy_version: str
+    fault: object | None = None
+    qc_fault_artifact_sha256: str | None = None
 
 
 def load_flat_swatch_predictor(settings) -> FlatSwatchPredictor:
