@@ -31,7 +31,8 @@ available regional capacity; there is no configured Oracle account here.
 
 ## What is deployed
 
-`modal_scanner.py` uploads only `services/`, scanner-v8 and the six taught heads in
+`modal_scanner.py` uploads only `services/`, scanner-v8, the fault model
+(`models/fault-wfdd-v1`, with its `training/fault/methods` code) and the six taught heads in
 `models/custom` (all on v8's encoder since 27 Oct, so one encoder pass per scan). It does not upload the repository's data,
 training images, ledger, environment files or credentials. Public detector/DINO
 weights and OCR assets are cached during image build. It retains v8; the completed
@@ -107,3 +108,5 @@ and remove `TEXPILOT_API_TOKEN` with `wrangler secret delete TEXPILOT_API_TOKEN`
 - Scanner-client test covers a real-model readiness response after a simulated
   30-second cold start; the old 10-second timeout failed this case.
 - Remote container build and real hosted inference remain blocked on account access.
+
+Not deployed. Remaining step: owner runs `modal deploy` with their account; the image build was not run here.

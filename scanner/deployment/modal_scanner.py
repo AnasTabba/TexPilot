@@ -22,6 +22,8 @@ def warm_models():
     predictor, version = build_predictor(settings)
     ocr = build_ocr(settings)
     assert predictor.heads.version == 8 and "stub" not in version
+    # Misconfiguration must be loud: a build without the fault model fails here.
+    assert getattr(predictor, "fault", None) is not None and "+fault=" in version
     if hasattr(ocr, "close"):
         ocr.close()
 
@@ -44,6 +46,7 @@ image = (
             "TEXPILOT_VISION": "scanner",
             "TEXPILOT_MODEL_BUNDLE": "/app/models/scanner-v8",
             "TEXPILOT_CUSTOM_HEADS": "/app/models/custom",
+            "TEXPILOT_FAULT_MODEL": "/app/models/fault-wfdd-v1",
             "TEXPILOT_GARMENT_DETECTOR": "owlv2",
             "TEXPILOT_OCR_BACKEND": "paddle",
             "TEXPILOT_DEVICE": "cpu",
@@ -57,6 +60,24 @@ image = (
     .add_local_dir(ROOT / "services", "/app/services", copy=True, ignore=["**/__pycache__/**"])
     .add_local_dir(ROOT / "models/scanner-v8", "/app/models/scanner-v8", copy=True)
     .add_local_dir(ROOT / "models/custom", "/app/models/custom", copy=True)
+    # Whole folder: weights.pt plus Dinomaly/backbones/weights/*.pth (the encoder).
+    .add_local_dir(
+        ROOT / "models/fault-wfdd-v1",
+        "/app/models/fault-wfdd-v1",
+        copy=True,
+        ignore=["**/__pycache__/**"],
+    )
+    # Code that services/vision/fault.py imports; training/fault/kaggle is not needed.
+    .add_local_file(ROOT / "training/__init__.py", "/app/training/__init__.py", copy=True)
+    .add_local_file(
+        ROOT / "training/fault/__init__.py", "/app/training/fault/__init__.py", copy=True
+    )
+    .add_local_dir(
+        ROOT / "training/fault/methods",
+        "/app/training/fault/methods",
+        copy=True,
+        ignore=["**/__pycache__/**"],
+    )
     .run_function(warm_models, cpu=2, memory=12288, timeout=1200, include_source=False)
 )
 
