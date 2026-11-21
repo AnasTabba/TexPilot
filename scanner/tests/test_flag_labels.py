@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+pytest.importorskip("torch")
 np = pytest.importorskip("numpy")
 from scripts.flag_labels import available_rows  # noqa: E402
 from training.textilenet.feature_cache import FeatureCache  # noqa: E402

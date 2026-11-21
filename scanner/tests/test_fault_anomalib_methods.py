@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-import torch
 
-from training.fault.methods import anomalib_methods as am
+torch = pytest.importorskip("torch")
+
+from training.fault.methods import anomalib_methods as am  # noqa: E402
 
 
 def _tiles(n: int) -> list[np.ndarray]:

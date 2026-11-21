@@ -5,8 +5,10 @@ import importlib.util
 from pathlib import Path
 
 import numpy as np
+import pytest
 
-from training.textilenet.splits import class_index
+pytest.importorskip("torch")
+from training.textilenet.splits import class_index  # noqa: E402
 
 SPEC = importlib.util.spec_from_file_location(
     "score_verified", Path(__file__).parents[1] / "scripts" / "score_verified.py"

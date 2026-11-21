@@ -17,7 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # QC v2 evidence code needs these vision packages without torch.
-qc = ["numpy>=1.26", "opencv-python-headless>=4.9", "pillow>=10.4"]
+qc = ["numpy>=1.26", "opencv-python-headless>=4.9", "pillow>=10.4", "scipy>=1.10,<1.15", "scikit-learn>=1.4"]
 # Heavy. Only needed to train or run the vision model: `make setup-ml`
 ml = [
     "torch>=2.4",

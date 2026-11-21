@@ -6,13 +6,17 @@ from functools import partial
 from pathlib import Path
 
 import pytest
-import torch
-import torch.distributed as dist
-from torch import nn
-from torch.multiprocessing import spawn
-from torch.nn.parallel import DistributedDataParallel
 
-from training.fault.methods.dinomaly import Dinomaly, distributed_cosine_hm_percent
+torch = pytest.importorskip("torch")
+import torch.distributed as dist  # noqa: E402
+from torch import nn  # noqa: E402
+from torch.multiprocessing import spawn  # noqa: E402
+from torch.nn.parallel import DistributedDataParallel  # noqa: E402
+
+from training.fault.methods.dinomaly import (  # noqa: E402
+    Dinomaly,
+    distributed_cosine_hm_percent,
+)
 
 
 def upstream_loss():
