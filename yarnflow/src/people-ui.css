@@ -57,6 +57,8 @@
   .pb-col { scroll-snap-align: start; }
   .pb-layout.has-sheet { grid-template-columns: minmax(0, 1fr); }
   .pb-sheet { position: fixed; inset: 0; z-index: 40; max-height: none; border: 0; border-radius: 0; animation-name: pb-sheet-up; }
+  /* .live-content isolates, which traps the full-screen sheet under the sticky top bar and its Close button. */
+  .live-content:has(.pb-sheet) { isolation: auto; }
   .pb-sheet-head { padding-top: calc(env(safe-area-inset-top, 0px) + 14px); }
   .pb-supplier { margin-inline-start: 0; }
 }
